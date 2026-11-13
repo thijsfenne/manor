@@ -1,0 +1,40 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  server:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+      # Server tests import client-runtime sources, so the server needs the full workspace too.
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @manor/contracts typecheck
+      - run: pnpm --filter @manor/server typecheck
+      - run: pnpm --filter @manor/contracts test
+      - run: pnpm --filter @manor/server test
+
+  clients:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # No sign in state, local settings file or private notes are tracked.
+      - run: scripts/check-public.sh
+      # High and critical fail. Advisories with no patched release are ignored by GHSA in pnpm-workspace.yaml.
+      - run: pnpm audit --audit-level=high
+      - run: pnpm --filter @manor/client-runtime --filter @manor/web --filter @manor/desktop --filter @manor/mobile typecheck
+      - run: pnpm --filter @manor/client-runtime --filter @manor/web --filter @manor/desktop --filter @manor/mobile --if-present test
+      - run: pnpm --filter @manor/web build

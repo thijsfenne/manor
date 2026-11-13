@@ -1,0 +1,196 @@
+import path from 'node:path'
+import { app, BrowserWindow, ipcMain } from 'electron'
+import { BROWSER_PREVIEW_CHANNEL, BROWSER_SHORTCUT_CHANNEL, BROWSER_STATE_CHANNEL } from './browserChannels'
+import { BROWSER_WEBVIEWS_CHANNEL } from './browserWebviews'
+import { CHOOSE_FOLDER_CHANNEL } from './folderDialog'
+import { LOCAL_ACCESS_CHANNEL } from './localAccess'
+import { NOTIFY_ACTIVATE_CHANNEL } from './notifyChannels'
+import { PRESENCE_CHANNEL } from './presence'
+import { FULLSCREEN_CHANNEL, ZOOM_CHANNEL } from './zoomChannels'
+
+/**
+ * The preload is the whole capability. If it throws, `window.manorDesktop` is simply
+ * absent, the renderer decides the desktop host is not there, and Manor hides the
+ * browser rail item — a feature that disappears with no error anywhere on screen.
+ * Sandboxed preloads only get a polyfilled `require` for `electron` and a few Node
+ * built-ins, so this smoke exists to catch the day one of them gains an import.
+ */
+const EXPECTED = [
+  'show', 'hide', 'webviews', 'close', 'endAgentUse', 'interruptAgentInput', 'navigate', 'snapshot', 'click', 'type', 'press', 'scroll',
+  'configure', 'hardReload', 'openDevTools', 'openPreviewWindow', 'clearCookies', 'clearCache', 'setSiteAdblock', 'history', 'bookmarks', 'toggleBookmark', 'onShortcut',
+  'screenshot', 'tabs', 'newTab', 'closeTab', 'pinTab', 'goBack', 'goForward', 'reload', 'stopLoading',
+  'startPreview', 'stopPreview', 'onPreview', 'clearData', 'browserImportStatus', 'setBrowserImport', 'selectPageContext', 'onState',
+]
+const EXPECTED_NOTIFY = ['show', 'badge', 'onActivate']
+const EXPECTED_FILES = ['open', 'save']
+
+app.whenReady().then(async () => {
+  const failures: string[] = []
+  const window = new BrowserWindow({
+    show: false,
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      nodeIntegration: false,
+      contextIsolation: true,
+      sandbox: true,
+    },
+  })
+  window.webContents.on('preload-error', (_event, preloadPath, error) => {
+    failures.push(`${path.basename(preloadPath)}: ${error.message}`)
+  })
+  try {
+    await window.loadURL('about:blank')
+    const exposed = await window.webContents.executeJavaScript(
+      'Object.keys(globalThis.manorDesktop?.browser ?? {})',
+    ) as string[]
+    if (failures.length > 0) throw new Error(`The preload did not run. ${failures.join(' ')}`)
+    const missing = EXPECTED.filter((name) => !exposed.includes(name))
+    if (missing.length > 0) throw new Error(`The bridge is missing ${missing.join(', ')}.`)
+
+    const webviews = await window.webContents.executeJavaScript('Object.keys(manorDesktop.browser.webviews)') as string[]
+    if (['list', 'attach', 'presented', 'onChange'].some((method) => !webviews.includes(method))) throw new Error('Incomplete guest bridge.')
+    await window.webContents.executeJavaScript(`(() => {
+      globalThis.__guestsHeard = new Promise(resolve => {
+        const off = manorDesktop.browser.webviews.onChange(snapshot => { off(); resolve(snapshot) })
+      })
+    })()`)
+    window.webContents.send(BROWSER_WEBVIEWS_CHANNEL, { revision: 7, surfaces: [] })
+    if ((await window.webContents.executeJavaScript('globalThis.__guestsHeard')).revision !== 7) throw new Error('Guest push channel mismatch.')
+
+    await window.webContents.executeJavaScript(`(() => {
+      globalThis.__previewHeard = new Promise((resolve) => {
+        const unsubscribe = globalThis.manorDesktop.browser.onPreview((update) => {
+          unsubscribe()
+          resolve(update)
+        })
+      })
+    })()`)
+    window.webContents.send(BROWSER_PREVIEW_CHANNEL, { chatId: 'smoke', subscriptionId: 'preview', status: 'stopped' })
+    const preview = await window.webContents.executeJavaScript('globalThis.__previewHeard') as { subscriptionId: string }
+    if (preview.subscriptionId !== 'preview') throw new Error('Preview push channel mismatch.')
+
+    await window.webContents.executeJavaScript(`(() => {
+      globalThis.__shortcutHeard = new Promise(resolve => {
+        const off = manorDesktop.browser.onShortcut(shortcut => { off(); resolve(shortcut) })
+      })
+    })()`)
+    window.webContents.send(BROWSER_SHORTCUT_CHANNEL, 'new-tab')
+    if (await window.webContents.executeJavaScript('globalThis.__shortcutHeard') !== 'new-tab') {
+      throw new Error('Browser shortcut channel mismatch.')
+    }
+
+    const exposedNotify = await window.webContents.executeJavaScript(
+      'Object.keys(globalThis.manorDesktop?.notify ?? {})',
+    ) as string[]
+    const missingNotify = EXPECTED_NOTIFY.filter((name) => !exposedNotify.includes(name))
+    if (missingNotify.length > 0) throw new Error(`The notify bridge is missing ${missingNotify.join(', ')}.`)
+    const exposedFiles = await window.webContents.executeJavaScript(
+      'Object.keys(globalThis.manorDesktop?.files ?? {})',
+    ) as string[]
+    const missingFiles = EXPECTED_FILES.filter((name) => !exposedFiles.includes(name))
+    if (missingFiles.length > 0) throw new Error(`The files bridge is missing ${missingFiles.join(', ')}.`)
+
+    // The folder dialog channel is a string main and preload both spell out; a stub
+    // handler proves the preload's end reaches the name main registers.
+    ipcMain.handle(CHOOSE_FOLDER_CHANNEL, () => '/smoke/folder')
+    if (await window.webContents.executeJavaScript('globalThis.manorDesktop?.chooseFolder?.()') !== '/smoke/folder') {
+      throw new Error('Folder dialog channel mismatch.')
+    }
+    ipcMain.handle(LOCAL_ACCESS_CHANNEL, () => 'smoke-key')
+    if (await window.webContents.executeJavaScript('globalThis.manorDesktop?.localAccess?.()') !== 'smoke-key') {
+      throw new Error('Local access channel mismatch.')
+    }
+
+    // The push channel is the one string main and preload must agree on, and the
+    // preload cannot import it. A disagreement is a tab strip that never updates.
+    // Parked on a global first: `send` from this process would otherwise race the
+    // renderer getting round to registering the listener at all.
+    await window.webContents.executeJavaScript(`(() => {
+      globalThis.__manorHeard = new Promise((resolve, reject) => {
+        globalThis.manorDesktop.browser.onState(resolve)
+        setTimeout(() => reject(new Error('no state arrived')), 5000)
+      })
+      return true
+    })()`)
+    window.webContents.send(BROWSER_STATE_CHANNEL, { chatId: 'smoke', tabs: [], activeTabId: null })
+    const state = await window.webContents.executeJavaScript('globalThis.__manorHeard') as { chatId: string }
+    if (state.chatId !== 'smoke') throw new Error(`The state channel delivered ${JSON.stringify(state)}.`)
+
+    // The notify bridge's own literal, checked the same way. Drift here is a
+    // notification that appears, is clicked, and opens nothing.
+    await window.webContents.executeJavaScript(`(() => {
+      globalThis.__manorActivated = new Promise((resolve, reject) => {
+        globalThis.manorDesktop.notify.onActivate(resolve)
+        setTimeout(() => reject(new Error('no activation arrived')), 5000)
+      })
+      return true
+    })()`)
+    window.webContents.send(NOTIFY_ACTIVATE_CHANNEL, 'smoke-chat')
+    const activated = await window.webContents.executeJavaScript('globalThis.__manorActivated') as string
+    if (activated !== 'smoke-chat') throw new Error(`The activate channel delivered ${JSON.stringify(activated)}.`)
+
+    // Presence uses the same literal-in-preload rule. Drift is a phone that buzzes
+    // beside a Mac in use, with nothing failing anywhere to say why.
+    await window.webContents.executeJavaScript(`(() => {
+      globalThis.__manorPresence = new Promise((resolve, reject) => {
+        globalThis.manorDesktop.presence.onChange(resolve)
+        setTimeout(() => reject(new Error('no presence arrived')), 5000)
+      })
+      return true
+    })()`)
+    window.webContents.send(PRESENCE_CHANNEL, true)
+    if (await window.webContents.executeJavaScript('globalThis.__manorPresence') !== true) {
+      throw new Error('Presence channel mismatch.')
+    }
+
+    const exposedHost = await window.webContents.executeJavaScript(
+      'Object.keys(globalThis.manorDesktop ?? {})',
+    ) as string[]
+    const missingHost = ['onZoomFactor', 'onFullscreen', 'platform'].filter((name) => !exposedHost.includes(name))
+    if (missingHost.length > 0) throw new Error(`The host bridge is missing ${missingHost.join(', ')}.`)
+
+    // Zoom and fullscreen use the same literal-in-preload rule. Drift is icons
+    // under the traffic lights, or a reserved corner in native fullscreen.
+    await window.webContents.executeJavaScript(`(() => {
+      globalThis.__manorZoom = new Promise((resolve, reject) => {
+        globalThis.manorDesktop.onZoomFactor(resolve)
+        setTimeout(() => reject(new Error('no zoom arrived')), 5000)
+      })
+      return true
+    })()`)
+    window.webContents.send(ZOOM_CHANNEL, 1.25)
+    const zoom = await window.webContents.executeJavaScript('globalThis.__manorZoom') as number
+    if (zoom !== 1.25) throw new Error(`The zoom channel delivered ${JSON.stringify(zoom)}.`)
+
+    await window.webContents.executeJavaScript(`(() => {
+      globalThis.__manorFullscreen = new Promise((resolve, reject) => {
+        globalThis.manorDesktop.onFullscreen(resolve)
+        setTimeout(() => reject(new Error('no fullscreen arrived')), 5000)
+      })
+      return true
+    })()`)
+    window.webContents.send(FULLSCREEN_CHANNEL, true)
+    const fullscreen = await window.webContents.executeJavaScript('globalThis.__manorFullscreen') as boolean
+    if (fullscreen !== true) throw new Error(`The fullscreen channel delivered ${JSON.stringify(fullscreen)}.`)
+
+    console.log(JSON.stringify({
+      exposed,
+      exposedNotify,
+      exposedHost,
+      stateChannel: BROWSER_STATE_CHANNEL,
+      activateChannel: NOTIFY_ACTIVATE_CHANNEL,
+      zoomChannel: ZOOM_CHANNEL,
+      fullscreenChannel: FULLSCREEN_CHANNEL,
+      received: state,
+      activated,
+      zoom,
+      fullscreen,
+    }, null, 2))
+  } finally {
+    window.destroy()
+    app.quit()
+  }
+}).catch((error: unknown) => {
+  console.error(error)
+  app.exit(1)
+})

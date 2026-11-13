@@ -1,0 +1,62 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": ".claude/hooks/session-context.sh"
+          },
+          {
+            "type": "command",
+            "command": ".claude/hooks/capture-review-turn.sh"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": ".claude/hooks/check-colors.sh"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": ".claude/hooks/auto-review.sh"
+          }
+        ]
+      }
+    ]
+  },
+  "permissions": {
+    "allow": [
+      "Read",
+      "Edit",
+      "Bash(pnpm run *)",
+      "Bash(pnpm -r *)",
+      "Bash(pnpm --filter *)",
+      "Bash(pnpm test*)",
+      "Bash(pnpm typecheck*)",
+      "Bash(npx tsc *)",
+      "Bash(npx vitest *)",
+      "Bash(git diff:*)",
+      "Bash(git status)",
+      "Bash(git log:*)",
+      "Bash(.claude/hooks/record-review.sh:*)",
+      "Bash(cat *)",
+      "Bash(ls *)",
+      "Bash(find *)",
+      "Bash(mkdir *)"
+    ]
+  }
+}

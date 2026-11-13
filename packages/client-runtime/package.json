@@ -1,0 +1,59 @@
+{
+  "name": "@manor/client-runtime",
+  "private": true,
+  "version": "0.0.1",
+  "type": "module",
+  "exports": {
+    "./commands": "./src/commands.ts",
+    "./solid-icons": "./src/solidIcons.ts",
+    "./chat-commands": "./src/chatCommands.ts",
+    "./connection": "./src/connection.ts",
+    "./frame-queue": "./src/frameQueue.ts",
+    "./history-window": "./src/historyWindow.ts",
+    "./plain-preview": "./src/plainPreview.ts",
+    "./state": "./src/state.ts",
+    "./session-overview-ui": "./src/sessionOverviewUI.ts",
+    "./usage": "./src/usage.ts",
+    "./turn-labels": "./src/turnLabels.ts",
+    "./turn-trace": "./src/turnTrace.ts",
+    "./blob-shapes": "./src/blobShapes.ts",
+    "./busy-face": "./src/busyFace.ts",
+    "./accent-hue": "./src/accentHue.ts",
+    "./avatar-bubble": "./src/avatarBubble.ts",
+    "./project-icons": "./src/projectIcons.ts",
+    "./runtimes": "./src/runtimes.ts",
+    "./scheduled": "./src/scheduled.ts",
+    "./runtime-choices": "./src/runtimeChoices.ts",
+    "./context-meter": "./src/contextMeter.ts",
+    "./changed-files": "./src/changedFiles.ts",
+    "./diff": "./src/diff.ts",
+    "./file-tree": "./src/fileTree.ts",
+    "./vault-notes": "./src/vaultNotes.ts",
+    "./reminders": "./src/reminders.ts",
+    "./highlight": "./src/highlight.ts",
+    "./mentions": "./src/mentions.ts",
+    "./message-quotes": "./src/messageQuotes.ts",
+    "./composer-formatting": "./src/composerFormatting.ts",
+    "./attachments": "./src/attachments.ts",
+    "./auth": "./src/auth.ts",
+    "./slack-draft-formatting": "./src/slackDraftFormatting.ts",
+    "./outbound-draft-edits": "./src/outboundDraftEdits.ts",
+    "./work-proposals": "./src/workProposals.ts",
+    "./suggestions": "./src/suggestions.ts"
+  },
+  "scripts": {
+    "generate:solid-icons": "node scripts/generate-solid-icons.mjs",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@hugeicons/core-free-icons": "4.3.0",
+    "@manor/blobatar": "workspace:*",
+    "@manor/contracts": "workspace:*"
+  },
+  "devDependencies": {
+    "pathkit-wasm": "1.0.0",
+    "typescript": "^5.6.0",
+    "vitest": "^4.1.11"
+  }
+}

@@ -1,0 +1,220 @@
+import { memo, useEffect, useMemo, useRef, useState, type CSSProperties, type RefObject } from 'react'
+import { ArrowDown01Icon, AtIcon, Copy01Icon, File01Icon, MoreHorizontalIcon } from '@hugeicons/core-free-icons'
+import { splitPath, splitRows, type DiffViewFile, type DiffViewRow } from '../../diffView'
+import { FileMark } from '../fileMark'
+import { Icon } from '../Icon'
+import { ContextMenu, type ContextMenuItem } from '../ui/ContextMenu'
+
+export type DiffLayout = 'stacked' | 'split'
+
+/** One rendered line: the height a placeholder reserves before its body is drawn. */
+const ROW_PX = 18
+/** How far outside the view a body is drawn ahead of the scroll. */
+const AHEAD = '1600px 0px'
+
+const ADDED = 'bg-[color-mix(in_srgb,var(--color-ok)_14%,transparent)]'
+const REMOVED = 'bg-[color-mix(in_srgb,var(--color-danger)_14%,transparent)]'
+/** The edge mark of a changed line: solid for an addition, dashed for a removal, as Synara draws them. */
+const ADDED_EDGE = 'bg-ok'
+const REMOVED_EDGE = 'bg-[repeating-linear-gradient(to_bottom,var(--color-danger)_0_3px,transparent_3px_5px)]'
+
+interface DiffFileCardProps {
+  file: DiffViewFile
+  layout: DiffLayout
+  collapsed: boolean
+  /** The pane's scroller: bodies are drawn once they come near it. */
+  scrollRoot: RefObject<HTMLElement>
+  onToggle: (key: string) => void
+  /** Registers the card for the marker strip and previous and next file. */
+  cardRef: (key: string, element: HTMLElement | null) => void
+  onOpenFile?: (panelPath: string) => void
+  onReference?: (panelPath: string) => void
+  onCopyPath: (path: string) => void
+}
+
+/**
+ * One file of a diff: a header that stays at the top while its lines scroll under it,
+ * and the lines themselves, drawn only once the card comes near the view so a diff of
+ * a thousand files opens as fast as one of ten.
+ */
+export const DiffFileCard = memo(function DiffFileCard({
+  file, layout, collapsed, scrollRoot, onToggle, cardRef, onOpenFile, onReference, onCopyPath,
+}: DiffFileCardProps) {
+  const { name, folder } = splitPath(file.path)
+  const [menu, setMenu] = useState<{ x: number; y: number } | null>(null)
+  const items: ContextMenuItem[] = [
+    ...(file.panelPath !== undefined && onOpenFile !== undefined && file.status !== 'deleted'
+      ? [{ label: 'Open in files panel', icon: File01Icon, onSelect: () => onOpenFile(file.panelPath!) }] : []),
+    ...(file.panelPath !== undefined && onReference !== undefined
+      ? [{ label: 'Reference in chat', icon: AtIcon, onSelect: () => onReference(file.panelPath!) }] : []),
+    { label: 'Copy path', icon: Copy01Icon, onSelect: () => onCopyPath(file.path) },
+  ]
+  const headingId = `diff-file-${file.key.replace(/[^A-Za-z0-9_-]/g, '-')}`
+
+  return (
+    <section
+      ref={(element) => cardRef(file.key, element)}
+      aria-labelledby={headingId}
+      data-diff-file={file.key}
+      // `clip`, not `hidden`: hidden makes the card a scroller, and a sticky header
+      // inside one sticks to the card instead of to the pane.
+      className="rounded-lg border border-line bg-stage [overflow:clip]"
+    >
+      {/* Square corners: stuck mid-card, rounded ones would show the lines passing
+          under it; at the card's top the card's own clip rounds them. */}
+      <div className="sticky top-0 z-[2] flex min-h-10 min-w-0 items-center gap-1 border-b border-line bg-stage py-1 pr-1 pl-1.5">
+        <button
+          type="button"
+          aria-expanded={!collapsed}
+          onClick={() => onToggle(file.key)}
+          className="flex min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-md border-0 bg-transparent px-1.5 py-1 text-left hover:bg-surface-2"
+        >
+          <FileMark path={file.path} size={14} />
+          <span id={headingId} className="min-w-0 truncate text-[13px]" title={file.oldPath === undefined ? file.path : `${file.oldPath} → ${file.path}`}>
+            <span className="text-text">{name}</span>
+            {folder === '' ? null : <span className="text-dim"> {folder}</span>}
+          </span>
+          {file.oldPath !== undefined ? <span className="flex-none text-meta text-dim">renamed</span>
+            : file.status === 'deleted' ? <span className="flex-none text-meta text-dim">deleted</span> : null}
+          <span className="ml-auto flex flex-none items-center gap-1.5 pl-2 text-meta tabular-nums">
+            <span className="text-ok">+{file.added}</span>
+            <span className="text-danger">−{file.removed}</span>
+          </span>
+        </button>
+        <button
+          type="button"
+          aria-label={`More for ${name}`}
+          aria-haspopup="menu"
+          aria-expanded={menu !== null}
+          title="More"
+          onClick={(event) => {
+            const rect = event.currentTarget.getBoundingClientRect()
+            setMenu((current) => current === null ? { x: rect.right - 184, y: rect.bottom + 4 } : null)
+          }}
+          className={`grid h-7 w-7 flex-none cursor-pointer place-items-center rounded-button-sm border-0 ${menu === null ? 'bg-transparent text-muted hover:bg-icon-fill hover:text-text' : 'bg-icon-fill text-text'}`}
+        >
+          <Icon icon={MoreHorizontalIcon} size={15} />
+        </button>
+        <button
+          type="button"
+          aria-label={collapsed ? `Expand ${name}` : `Collapse ${name}`}
+          title={collapsed ? 'Expand' : 'Collapse'}
+          onClick={() => onToggle(file.key)}
+          className="grid h-7 w-7 flex-none cursor-pointer place-items-center rounded-button-sm border-0 bg-transparent text-muted hover:bg-icon-fill hover:text-text"
+        >
+          <Icon icon={ArrowDown01Icon} size={13} className={`duration-200 ease-out motion-safe:transition-transform ${collapsed ? '-rotate-90' : ''}`} />
+        </button>
+        {menu === null ? null : <ContextMenu x={menu.x} y={menu.y} items={items} onClose={() => setMenu(null)} />}
+      </div>
+      {collapsed ? null : <FileBody file={file} layout={layout} scrollRoot={scrollRoot} />}
+    </section>
+  )
+})
+
+/** The lines, or what stands in for them until they are near enough to draw. */
+function FileBody({ file, layout, scrollRoot }: { file: DiffViewFile; layout: DiffLayout; scrollRoot: RefObject<HTMLElement> }) {
+  const box = useRef<HTMLDivElement>(null)
+  const near = useNear(box, scrollRoot)
+  const estimate = Math.max(1, file.rows.length) * ROW_PX + 8
+  // The widest number, plus the padding either side of it inside its own column.
+  const gutter = useMemo(() => `calc(${String(file.rows.reduce((widest, row) =>
+    row.kind === 'gap' ? widest : Math.max(widest, row.kind === 'added' ? row.newNo ?? 0 : row.kind === 'removed' ? row.oldNo ?? 0 : Math.max(row.oldNo ?? 0, row.newNo ?? 0)), 0)).length}ch + 20px)`, [file.rows])
+
+  if (file.rows.length === 0) {
+    return (
+      <p className="m-0 px-3 py-2.5 text-label text-dim">
+        {file.binary ? 'Binary file, no lines to show.'
+          : file.truncated ? 'Too large to show here. Open it in the files panel to read all of it.'
+            : file.status === 'deleted' ? 'Deleted.' : 'No line changes.'}
+      </p>
+    )
+  }
+  return (
+    <div
+      ref={box}
+      className="py-1 font-mono text-meta leading-[18px]"
+      // Drawn once, then skipped by the browser whenever it is out of view.
+      style={{ '--diff-gutter': gutter, contentVisibility: 'auto', containIntrinsicSize: `auto ${estimate}px`, ...(near ? {} : { height: estimate }) } as CSSProperties}
+    >
+      {near ? (layout === 'split' ? <SplitLines rows={file.rows} /> : <StackedLines rows={file.rows} />) : null}
+      {file.truncated && near ? <p className="m-0 px-3 pt-1.5 pb-1 font-sans text-label text-warn">Part of this file’s diff is left out.</p> : null}
+    </div>
+  )
+}
+
+/** Lines the diff leaves out between two hunks, counted where Git says how many. */
+function Gap({ count }: { count?: number }) {
+  return (
+    <div className="my-1 select-none bg-surface-2 px-3 py-1.5 font-sans text-label text-dim">
+      {count === undefined ? 'Unmodified lines' : `${count} unmodified ${count === 1 ? 'line' : 'lines'}`}
+    </div>
+  )
+}
+
+/** Wraps rather than scrolls sideways, as every diff in Manor does. */
+const TEXT = 'min-w-0 whitespace-pre-wrap wrap-anywhere pr-3'
+const NUMBER = 'select-none pr-3 pl-2 text-right text-dim diff-quiet'
+
+/** The 3px mark at a changed line's edge, and nothing on a line that did not change. */
+function Edge({ kind }: { kind: DiffViewRow['kind'] | undefined }) {
+  return <span aria-hidden className={kind === 'added' ? ADDED_EDGE : kind === 'removed' ? REMOVED_EDGE : ''} />
+}
+
+/** One column of numbers: the new line's, or the old one's for a line that is gone. */
+function StackedLines({ rows }: { rows: readonly DiffViewRow[] }) {
+  return (
+    <>
+      {rows.map((row, index) => row.kind === 'gap' ? <Gap key={index} {...(row.count === undefined ? {} : { count: row.count })} /> : (
+        <div key={index} className={`grid grid-cols-[3px_var(--diff-gutter)_minmax(0,1fr)] ${
+          row.kind === 'added' ? `${ADDED} text-text` : row.kind === 'removed' ? `${REMOVED} text-text` : 'text-muted'}`}>
+          <Edge kind={row.kind} />
+          <span className={NUMBER}>{row.kind === 'removed' ? row.oldNo : row.newNo}</span>
+          <span className={TEXT}>{row.text === '' ? ' ' : row.text}</span>
+        </div>
+      ))}
+    </>
+  )
+}
+
+function SplitLines({ rows }: { rows: readonly DiffViewRow[] }) {
+  const pairs = useMemo(() => splitRows(rows), [rows])
+  return (
+    <>
+      {pairs.map((pair, index) => pair.kind === 'gap' ? <Gap key={index} {...(pair.count === undefined ? {} : { count: pair.count })} /> : (
+        <div key={index} className="grid grid-cols-[3px_var(--diff-gutter)_minmax(0,1fr)_3px_var(--diff-gutter)_minmax(0,1fr)]">
+          <Edge kind={pair.left?.kind} />
+          <span className={`${NUMBER} ${pair.left?.kind === 'removed' ? REMOVED : ''}`}>{pair.left?.oldNo}</span>
+          <span className={`${TEXT} border-r border-line ${pair.left === undefined ? 'bg-surface-2' : pair.left.kind === 'removed' ? `${REMOVED} text-text` : 'text-muted'}`}>
+            {pair.left === undefined ? ' ' : pair.left.text === '' ? ' ' : pair.left.text}
+          </span>
+          <Edge kind={pair.right?.kind} />
+          <span className={`${NUMBER} ${pair.right?.kind === 'added' ? ADDED : ''}`}>{pair.right?.newNo}</span>
+          <span className={`${TEXT} ${pair.right === undefined ? 'bg-surface-2' : pair.right.kind === 'added' ? `${ADDED} text-text` : 'text-muted'}`}>
+            {pair.right === undefined ? ' ' : pair.right.text === '' ? ' ' : pair.right.text}
+          </span>
+        </div>
+      ))}
+    </>
+  )
+}
+
+/** True once the element has come within `AHEAD` of the scroller's view, and from then on. */
+function useNear(element: RefObject<HTMLElement>, root: RefObject<HTMLElement>) {
+  const [near, setNear] = useState(false)
+  useEffect(() => {
+    const target = element.current
+    if (near || target === null) return
+    if (typeof IntersectionObserver === 'undefined') {
+      setNear(true)
+      return
+    }
+    const observer = new IntersectionObserver((entries) => {
+      if (!entries.some((entry) => entry.isIntersecting)) return
+      setNear(true)
+      observer.disconnect()
+    }, { root: root.current, rootMargin: AHEAD })
+    observer.observe(target)
+    return () => observer.disconnect()
+  }, [near, element, root])
+  return near
+}

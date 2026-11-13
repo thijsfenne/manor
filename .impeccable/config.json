@@ -1,0 +1,73 @@
+{
+  "buildPath": "code",
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "design-system-color",
+        "value": "#6fa8a0",
+        "createdAt": "2026-08-24T07:21:41.083Z",
+        "reason": "Persona roster colors are runtime data and test fixtures are explicitly exempt in the Manor color hook."
+      },
+      {
+        "rule": "bounce-easing",
+        "value": "cubic-bezier(0.34, 1.36, 0.64, 1)",
+        "createdAt": "2026-08-24T08:00:48.209Z",
+        "reason": "Existing Manor motion token is explicitly limited to tiny chevron rotations"
+      },
+      {
+        "rule": "design-system-font-size",
+        "value": "12px",
+        "createdAt": "2026-08-24T08:02:08.554Z",
+        "reason": "Manor DESIGN.md defines Metadata as the 12px readability floor"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "#7c8da6",
+        "createdAt": "2026-08-24T15:39:59.971Z",
+        "reason": "Agent: fixed Side chat voice accent is persona identity data, which DESIGN.md explicitly exempts from chrome palette tokens"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "#8b5cf6",
+        "createdAt": "2026-08-24T15:44:54.624Z",
+        "reason": "Manor DESIGN.md exempts runtime persona colors; this value is an existing roster test fixture"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "#7aa2f7",
+        "createdAt": "2026-08-24T17:11:40.544Z"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "#d08a3e",
+        "createdAt": "2026-08-24T17:11:40.640Z"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "#08090a",
+        "createdAt": "2026-08-25T21:10:08.003Z",
+        "reason": "Agent: native semantic fallback mirrors Manor's existing --color-bg token"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "#26262b",
+        "createdAt": "2026-08-25T21:10:36.583Z",
+        "reason": "Agent: native semantic fallback mirrors Manor's existing --color-user-bg token"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "#f3f4f6",
+        "createdAt": "2026-08-25T22:15:43.691Z",
+        "reason": "Manor DESIGN.md defines #f3f4f6 as the light Night Canvas token."
+      },
+      {
+        "rule": "design-system-color",
+        "value": "#eceef2",
+        "createdAt": "2026-08-25T22:15:43.738Z",
+        "reason": "Manor DESIGN.md defines #eceef2 as the light Inhabited Fill token."
+      }
+    ]
+  }
+}

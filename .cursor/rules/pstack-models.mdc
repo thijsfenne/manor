@@ -1,0 +1,29 @@
+---
+description: pstack model map for Manor cloud and desktop agents
+alwaysApply: true
+---
+
+# pstack models
+
+Use this map when a brief requests `/architect` or another pstack role. It does not require architect on ordinary work. If a named writer is unavailable, use the closest listed writer default and say so.
+
+For all reviewer roles below, use the newest allowed and available GPT Sol at high, then native Grok at high, then Grok through Cursor at high. A GPT lead tries native Grok, Cursor Grok, then Sol. Never use Astra or Claude, including Cursor-hosted Claude, for review. If none is available at high within Settings, report a blocker and do not widen the allowlist. Name the fallback. GPT and Grok review code better, and Claude Opus writes the nicest code. Send a full rewrite requested by review to the newest allowed Opus as writer, keeping review on Sol or Grok.
+
+- feature, refactoring: cursor-grok-4.6-xhigh-fast
+- bug-fix: gpt-5.6-sol-high
+- perf-issue: gpt-5.6-sol-high
+- hillclimb: gpt-5.6-sol-high
+- judgment and prose: claude-fable-5-thinking-high
+- hardest tasks: claude-fable-5-thinking-high
+- how explorer: cursor-grok-4.6-xhigh-fast
+- how explainer: claude-fable-5-thinking-high
+- how critics: reviewer order above
+- why investigators: cursor-grok-4.6-xhigh-fast
+- why synthesizer: claude-fable-5-thinking-high
+- reflect tooling: gpt-5.6-sol-high
+- reflect judgment, divergent, synthesizer: claude-fable-5-thinking-high
+- arena runners: claude-fable-5-thinking-high, gpt-5.6-sol-high, cursor-grok-4.6-xhigh-fast, claude-opus-5-thinking-xhigh
+- arena cross-judge pool: reviewer order above
+- swarm workers: cursor-grok-4.6-xhigh-fast
+- architect runners: claude-fable-5-thinking-high, gpt-5.6-sol-high, cursor-grok-4.6-xhigh-fast, claude-opus-5-thinking-xhigh
+- interrogate reviewers: reviewer order above

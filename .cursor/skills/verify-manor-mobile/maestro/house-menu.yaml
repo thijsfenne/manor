@@ -1,0 +1,4 @@
+appId: com.thijsfenne.manor
+---
+- tapOn: "Open het menu"
+- tapOn: "Agents"

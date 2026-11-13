@@ -1,0 +1,167 @@
+import { useEffect, useRef, useState } from 'react'
+import { NEW_SINGLE_CHAT_DEFAULT, type Project, type ProjectIcon, type ProjectMemoryScope, type SingleRuntime } from '@manor/contracts'
+import { readSingleRuntime } from '../../runtimeChoices'
+import type { DirBrowse, Notice } from '../../state'
+import { useRequest, type RequestEvents } from '../../useRequest'
+import { draftOf, emptyDraft, normaliseProjectColor, ProjectDialog, type ProjectDraft } from './ProjectDialog'
+
+/**
+ * Which project the dialog is about, and therefore what saving it means. `armDelete`
+ * opens the edit form with its delete question already up, for a sidebar row's
+ * Delete project… entry, so that menu shares the dialog's one confirmation.
+ */
+export type ProjectDialogState =
+  // `onCreated` is for an opener that wants the project it asked for, such as the
+  // new-session stage, which puts its draft in it.
+  | { mode: 'create'; onCreated?: (projectId: string) => void }
+  | { mode: 'edit'; projectId: string; armDelete?: boolean }
+
+interface ProjectDialogHostProps {
+  dialog: ProjectDialogState
+  projects: Project[]
+  notice: Notice | null
+  requestEvents: RequestEvents
+  dirs: DirBrowse
+  onNewProject: (
+    name: string,
+    repoPaths: string[],
+    icon: ProjectIcon,
+    color: string,
+    memoryScope: ProjectMemoryScope,
+    requestId: string,
+    threadRuntime: SingleRuntime,
+  ) => boolean
+  onUpdateProject: (
+    projectId: string,
+    name: string,
+    repoPaths: string[],
+    icon: ProjectIcon,
+    color: string,
+    memoryScope: ProjectMemoryScope,
+    requestId: string,
+  ) => boolean
+  onListDirs: (path?: string) => void
+  onCloseDirs: () => void
+  onDismissNotice: () => void
+  onClose: () => void
+  onDeleteProject: (projectId: string, requestId: string) => boolean
+}
+
+/**
+ * The project form and the whole life of one opening of it. It lives above the
+ * sidebar rather than inside it because two places now ask for it: the sidebar's
+ * own new-project button and the new-chat stage's project picker. Mounted only
+ * while a dialog is open and keyed on which project it is about, so every opening
+ * starts from a freshly seeded draft instead of the last one's leftovers.
+ */
+export function ProjectDialogHost({
+  dialog,
+  projects,
+  notice,
+  requestEvents,
+  dirs,
+  onNewProject,
+  onUpdateProject,
+  onListDirs,
+  onCloseDirs,
+  onDismissNotice,
+  onClose,
+  onDeleteProject,
+}: ProjectDialogHostProps) {
+  const editing = dialog.mode === 'edit' ? projects.find((project) => project.id === dialog.projectId) : undefined
+  const [draft, setDraft] = useState<ProjectDraft>(() =>
+    dialog.mode === 'create' || editing === undefined ? emptyDraft : draftOf(editing),
+  )
+  const request = useRequest(requestEvents)
+  // The create this form sent and the project the server made for it.
+  const sentId = useRef<string | null>(null)
+  const createdId = useRef<string | null>(null)
+  useEffect(
+    () => requestEvents.subscribe((response) => {
+      if (response.type === 'project_created' && response.requestId === sentId.current) createdId.current = response.projectId
+    }),
+    [requestEvents],
+  )
+
+  const close = () => {
+    request.cancel()
+    onCloseDirs()
+    onClose()
+  }
+
+  useEffect(() => {
+    // The project being edited was deleted from under the dialog.
+    if (dialog.mode === 'edit' && editing === undefined && !request.pending) {
+      onCloseDirs()
+      onClose()
+    }
+  }, [dialog, editing, request.pending, onCloseDirs, onClose])
+
+  const finish = () => {
+    onCloseDirs()
+    onClose()
+  }
+
+  const submitDraft = () => {
+    const name = draft.name.trim()
+    if (name === '') return
+    if (dialog.mode === 'create') {
+      const { onCreated } = dialog
+      request.start(
+        (requestId) => {
+          sentId.current = requestId
+          return onNewProject(name, draft.repoPaths, draft.icon, normaliseProjectColor(draft.color), draft.memoryScope, requestId,
+            readSingleRuntime(draft.threadRuntime, NEW_SINGLE_CHAT_DEFAULT))
+        },
+        {
+          onAck: () => {
+            if (createdId.current !== null) onCreated?.(createdId.current)
+            finish()
+          },
+        },
+      )
+      return
+    }
+    if (editing === undefined) return
+    request.start(
+      (requestId) => onUpdateProject(
+        dialog.projectId,
+        name,
+        draft.repoPaths,
+        draft.icon,
+        normaliseProjectColor(draft.color),
+        draft.memoryScope,
+        requestId,
+      ),
+      { onAck: finish },
+    )
+  }
+
+  return (
+    <ProjectDialog
+      mode={dialog.mode}
+      draft={draft}
+      onDraft={(next) => {
+        onDismissNotice()
+        setDraft(next)
+      }}
+      dirs={dirs}
+      notice={notice}
+      busy={request.pending}
+      onListDirs={onListDirs}
+      onSubmit={submitDraft}
+      onCancel={close}
+      onClose={close}
+      {...(dialog.mode === 'edit'
+        ? {
+            initialArmed: dialog.armDelete === true,
+            // The deleted-from-under-us effect above sees the row vanish and closes.
+            onDelete: () => request.start(
+              (requestId) => onDeleteProject(dialog.projectId, requestId),
+              { onAck: finish },
+            ),
+          }
+        : {})}
+    />
+  )
+}

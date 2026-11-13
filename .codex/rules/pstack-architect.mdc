@@ -1,0 +1,12 @@
+---
+description: When the brief explicitly says /architect, run pstack in this thread
+alwaysApply: false
+---
+
+# /architect only when asked
+
+Run `/architect` (pstack: ground, then arena at least two structurally distinct sketches internally, then implement the synthesized sketch) **only when the brief explicitly says `/architect`**.
+
+Small diffs and routine fixes skip it. Do not treat every product change as an architect job.
+
+When `/architect` is requested: stay in one cloud-agent thread, run the arena internally, do not spawn extra cloud agents. Use `.cursor/rules/pstack-models.mdc` for the role map.

@@ -1,0 +1,7 @@
+{
+  "name": "manor-image-paste",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Manor's iOS composer image-paste bridge",
+  "main": "src/index.ts"
+}

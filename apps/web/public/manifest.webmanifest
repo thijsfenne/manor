@@ -1,0 +1,29 @@
+{
+  "name": "Manor",
+  "short_name": "Manor",
+  "description": "Your house of AI personas.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0c0d0e",
+  "theme_color": "#0f1011",
+  "icons": [
+    {
+      "src": "./icons/manor-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "./icons/manor-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    },
+    {
+      "src": "./icons/manor-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

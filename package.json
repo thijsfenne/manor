@@ -1,0 +1,47 @@
+{
+  "name": "manor",
+  "private": true,
+  "version": "0.0.1",
+  "scripts": {
+    "dev": "pnpm --parallel --filter @manor/server --filter @manor/web dev",
+    "dev:web": "VITE_MANOR_WS=ws://localhost:43179/ws pnpm --filter @manor/web dev",
+    "dev:stable": "pnpm --filter @manor/web build && pnpm stable:serve",
+    "desktop:dev": "pnpm --filter @manor/desktop dev",
+    "desktop:package": "pnpm --filter @manor/web build && pnpm --filter @manor/desktop package:mac",
+    "desktop:install": "bash apps/desktop/scripts/install-mac.sh",
+    "desktop:fresh": "bash apps/desktop/scripts/fresh-mac.sh",
+    "desktop:spike": "MANOR_DESKTOP_URL=http://127.0.0.1:43180 pnpm --filter @manor/desktop dev",
+    "desktop:spike-server": "VITE_MANOR_AUTH=off VITE_MANOR_WS=ws://127.0.0.1:43180/ws pnpm --filter @manor/web build && MANOR_STORE=memory MANOR_AUTH=off MANOR_DRIVER=mock MANOR_DATA_DIR=/tmp/manor-electron-spike MANOR_HOST=127.0.0.1 MANOR_PORT=43180 MANOR_WEB_DIST=../web/dist pnpm --filter @manor/server start",
+    "desktop:agent-test-server": "VITE_MANOR_AUTH=off VITE_MANOR_WS=ws://127.0.0.1:43180/ws pnpm --filter @manor/web build && MANOR_STORE=memory MANOR_AUTH=off MANOR_DATA_DIR=/tmp/manor-electron-agent-test MANOR_HOST=127.0.0.1 MANOR_PORT=43180 MANOR_WEB_DIST=../web/dist pnpm --filter @manor/server start",
+    "desktop:start": "pnpm --filter @manor/desktop start",
+    "stable:serve": "MANOR_HOST=127.0.0.1 MANOR_PORT=43179 MANOR_WEB_DIST=../web/dist pnpm --filter @manor/server start",
+    "stable:install": "bash apps/server/scripts/install-stable-agent.sh",
+    "stable:start": "launchctl bootstrap gui/$(id -u) $HOME/Library/LaunchAgents/com.thijsfenne.manor.plist",
+    "stable:stop": "launchctl bootout gui/$(id -u) $HOME/Library/LaunchAgents/com.thijsfenne.manor.plist",
+    "stable:restart": "bash apps/server/scripts/stable-restart.sh",
+    "test": "pnpm -r test",
+    "typecheck": "pnpm -r typecheck",
+    "prepare": "git config core.hooksPath .githooks 2>/dev/null || true"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.0",
+    "@types/react-dom": "^18.3.0"
+  },
+  "packageManager": "pnpm@10.32.1",
+  "pnpm": {
+    "packageExtensions": {
+      "@hugeicons/react@*": {
+        "peerDependencies": {
+          "@types/react": "*"
+        }
+      }
+    },
+    "onlyBuiltDependencies": [
+      "electron",
+      "esbuild"
+    ],
+    "overrides": {
+      "node-forge@<1.4.1": "^1.4.1"
+    }
+  }
+}

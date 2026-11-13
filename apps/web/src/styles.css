@@ -1,0 +1,1788 @@
+@import 'tailwindcss';
+
+/* Geist, self-hosted. No CDN reaches the VPS and the app stays offline-safe.
+   It is the fallback now, so the browser only pulls it where SF Pro Rounded is absent. */
+@import '@fontsource-variable/geist';
+@import '@fontsource-variable/geist/wght-italic.css';
+@import '@fontsource-variable/geist-mono';
+
+/* Figtree on trial as the UI face. Instrument Sans stays imported so dropping
+   these two lines and its --font-sans entry hands the room back. */
+@import '@fontsource-variable/figtree';
+@import '@fontsource-variable/figtree/wght-italic.css';
+@import '@fontsource-variable/instrument-sans';
+@import '@fontsource-variable/instrument-sans/wght-italic.css';
+
+/* These layers are also consumed by the guest registry's inline styles. */
+@theme static {
+  --z-browser-controls: 6;
+  /* A dragged tile's landing preview, over the browser page it may be aimed at. */
+  --z-panel-drag: 10;
+  /* Settings over the whole workspace, browser pages included; dialogs stay above it. */
+  --z-settings: 11;
+}
+
+@theme {
+
+  /* Draft chrome stays visible; only the message body consumes this budget. */
+  --spacing-outbound-dock-max: 45dvh;
+  --spacing-outbound-input-max: 16rem;
+  /* The bar of Session cards waiting above the composer: three rows and the top of a fourth. */
+  --spacing-work-dock-max: 8.75rem;
+
+  /* Plugins and Scheduled tasks pages: 920px of content inside their 32px gutters (`max-w-page`). */
+  --container-page: 984px;
+
+  /* One thumb size also aligns the stops and filled track of stepped sliders. */
+  --spacing-slider-thumb: 36px;
+
+  /* SF Pro Rounded, never shipped: Apple's licence does not cover serving the files, and
+     every device this runs on already has it. macOS resolves the family name in any browser
+     (Apple's SF download installs it system-wide); iOS hides the name but exposes the face
+     through `ui-rounded`, which is Safari-only and harmless everywhere else. */
+  --font-sans: 'Figtree Variable', 'Instrument Sans Variable', 'SF Pro Rounded', ui-rounded, 'Geist Variable', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  /* Page and sidebar titles. The same family as the UI, in its own token so a
+     display face can be tried again by changing one line. */
+  --font-display: 'Figtree Variable', 'Instrument Sans Variable', 'SF Pro Rounded', ui-rounded, system-ui, -apple-system, sans-serif;
+  --font-mono: 'Geist Mono Variable', ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* Two weights in the whole house, 400 and 500. Emphasis nudges rather than shouts, so
+     `font-semibold` resolves to the same 500 as `font-medium` instead of adding a third
+     voice; the utility keeps its name because it marks intent, not a number. Headings
+     earn their rank from size, so a heavier cut is not needed even where the face has
+     one. Never introduce --font-weight-bold, it would put 700 back within reach. */
+  --font-weight-medium: 500;
+  --font-weight-semibold: 500;
+
+  /* Compact text still has to be read, not merely fit. Metadata is the floor;
+     labels cover field names, hints, tooltips and supporting explanations. Named
+     roles keep those decisions consistent instead of scattering tiny px values. */
+  --text-meta: 12px;
+  --text-meta--line-height: 1rem;
+  --text-label: 13px;
+  --text-label--line-height: 1.125rem;
+
+  /* The width every bare `border` (and `divide`) utility draws, Tailwind reads this
+     token instead of its own 1px default. 0.5px is a true hairline only on a 2x
+     display; on 1x the browser rounds it, so this is tuned for the Mac it runs on.
+     Numbered widths (`border-2`) and the 2px focus outline do not follow this. */
+  --default-border-width: 0.5px;
+
+  /* Every corner in the app, stated at the size Tailwind draws it and run through two
+     multipliers that each answer a different question. --radius-scale is how round the
+     house is and applies everywhere; --corner-scale is shape compensation and only moves
+     where squircles land. Tailwind's own steps are restated rather than extended so one
+     knob moves all of them; `chip`, `panel` and `composer` are the three sizes the app
+     draws that the default scale has no name for. Px, not rem, because this codebase
+     states every size in px and a radius that tracked the browser's font setting while
+     its box did not would drift. */
+  --radius-xs: calc(2px * var(--radius-scale) * var(--corner-scale));
+  --radius-sm: calc(4px * var(--radius-scale) * var(--corner-scale));
+  --radius-chip: calc(5px * var(--radius-scale) * var(--corner-scale));
+  --radius-md: calc(6px * var(--radius-scale) * var(--corner-scale));
+  --radius-lg: calc(8px * var(--radius-scale) * var(--corner-scale));
+  --radius-panel: calc(10px * var(--radius-scale) * var(--corner-scale));
+
+  /* Buttons sit off the scale on purpose: they read tight against surfaces of their own
+     size at `md`/`lg`, and they are the one control the eye tracks while it hunts for
+     the act to take. Two steps, one per button size, so a small button does not wear a
+     medium button's corner on half the height. */
+  --radius-button-sm: calc(8px * var(--radius-scale) * var(--corner-scale));
+  --radius-button: calc(10px * var(--radius-scale) * var(--corner-scale));
+  --radius-xl: calc(12px * var(--radius-scale) * var(--corner-scale));
+  --radius-2xl: calc(16px * var(--radius-scale) * var(--corner-scale));
+  --radius-composer: calc(22px * var(--radius-scale) * var(--corner-scale));
+  /* A docked panel's corner, and the Browser place's card: 2px inside `2xl`, 18px on
+     screen at the house's scale (2026-10-08). */
+  --radius-dock: calc(var(--radius-2xl) - 2px * var(--corner-scale));
+  /* The inset's corners, concentric with a docked panel's: the panel's own corner plus
+     the 8px it keeps from the inset's edge (DOCK_PANEL_GAP). The gap is scaled by the
+     shape factor alone, so a squircle lands where the arc of the sum would. */
+  --radius-frame: calc(var(--radius-dock) + 8px * var(--corner-scale));
+
+  /* Depth is luminance, not shadow: each step up the stack lifts the surface a little.
+     These are the dark values, which are also the defaults; the light theme below
+     re-points the same tokens rather than adding a parallel set, so every utility
+     in the app is written once and themed in one place. */
+  --color-bg: #0c0d0e;
+  --color-surface: #0f1011;
+  --color-surface-2: #191a1b;
+  /* An icon button that is hovered or open. Equals surface-2 in the dark room, where
+     one step up already reads; light needs the deeper selected grey because these
+     buttons sit on the canvas, and a surface-2 step there is barely visible. */
+  --color-icon-fill: #191a1b;
+  --color-tree-hover: #191a1b;
+  --color-user-bg: #26262b;
+  /* The picked row or tile inside a floating menu. A glass card sits a few steps above
+     the canvas, so `user-bg` there reads as hover, not as a choice. This lifts the pick
+     off the card by the same distance the sidebar's active row lifts off the sidebar;
+     `user-bg` stays the hover. */
+  --color-menu-selected: #38383e;
+  /* The user's outgoing clouds. Dark equals user-bg so the night room does not
+     move. Light sits one notch darker than the incoming cloud, and is the
+     darkest fill that still clears AA for `dim`. */
+  --color-user-bubble: #26262b;
+  /* Incoming clouds. Dark equals surface-2. Light stays one step off the
+     canvas after the canvas moved toward the sidebar. */
+  --color-bubble: #191a1b;
+
+  /* What floats: menus and popovers. Identical to surface-2 here, because on a
+     dark canvas a lift and a fill are the same move. They part company in light,
+     where a floating thing goes white and a fill has to go grey — which is the
+     whole reason this token exists apart from surface-2. */
+  --color-raised: #191a1b;
+
+  /* The composer card. A hair darker than raised so the night room does not
+     lift the input quite as far off the canvas. Light stays white with raised. */
+  --color-composer: #171819;
+  /* The composer's edge, and the dock above it that wears the same one. The hairline
+     here; light needs a firmer one, because the card is white on a white stage. */
+  --color-composer-line: var(--color-line);
+
+  /* Checkout tray, Changed files and the desktop sidebar. One step up from surface,
+     still short of the #141516 lift that read as its own bar. Light goes a grey step
+     below its white stage instead. */
+  --color-composer-tray: #121314;
+
+  /* The window's L-frame and the two surfaces in its inset: the frame is the lightest
+     step in dark (surface-2), the stage the darkest (surface), and the sidebar sits
+     between them on the composer tray's step. Light keeps that order with its own
+     frame: grey frame, grey-white sidebar, white stage. The seam between sidebar and
+     stage is the frame's own colour. */
+  --color-frame: var(--color-surface-2);
+  --color-sidebar: var(--color-composer-tray);
+  --color-stage: var(--color-surface);
+  /* A hovered or picked control on the frame. One step up from the frame in dark; light
+     goes a step down, deep enough that a rail door's fill reads against the grey. */
+  --color-frame-fill: var(--color-user-bg);
+
+  /* A chip that is on, against `user-bg` for one that is off. Two fills rather than a
+     border and a fill: thirty outlined pills read as a grid to scan, where two solid
+     steps read as a state you can see from across the dialog. Dark lifts the picked
+     one out of the panel; light does the same move in its own direction, which is
+     what a raised surface means there. Solved, not picked: 2.99 against the idle fill
+     is the 3:1 non-text floor to the pixel, and it is as light as this can go before
+     `text` on top drops under AA (4.73 here, 4.5 required). */
+  --color-picked: #6b6f78;
+
+  /* A role is context, not a selected control. In the dark room it sits one step
+     deeper into the surface behind it. */
+  --color-role-badge: color-mix(in srgb, var(--color-picked) 42%, var(--color-bg));
+
+  /* A translucent hairline reads against whatever surface sits behind it. */
+  --color-line: rgb(255 255 255 / 8%);
+
+  --color-text: #f7f8f8;
+  --color-muted: #8a8f98;
+  --color-dim: #62666d;
+
+  /* The interaction colour: white, so the one loud thing on screen is the act
+     you are meant to take. Persona colours stay chromatic, this does not. */
+  --color-primary: #f7f8f8;
+  --color-primary-hover: #ffffff;
+  --color-on-primary: #08090a;
+
+  /* The fill a native checkbox paints when it is checked. Its own token because the
+     browser picks the tick colour from it, so it has to stay dark enough in light
+     mode to keep a white tick, which rules out following any surface. */
+  --color-control: #26262b;
+
+  /* Skills are invoked knowledge, not a generic control. Purple gives that compact
+     inline marker its own identity without competing with a persona's accent. */
+  --color-skill: #a78bfa;
+
+  /* A Session that works in its own git worktree. Same hue family as a skill, but its
+     own token so the two meanings can drift apart without a hunt through the call sites. */
+  --color-worktree: #a78bfa;
+
+  --color-ok: #10b981;
+  --color-warn: #f2c94c;
+  /* Bars, rings and dots in caution. Same as the text value here; light mode needs its own. */
+  --color-warn-fill: #f2c94c;
+  --color-danger: #eb5757;
+
+  /* Work in flight. Its own token rather than a persona accent, because a chat's
+     status has to read the same whichever agent happens to be running in it. */
+  --color-busy: #4a9eff;
+
+  /* A found match: the message the ⌘K palette scrolled to. The caution fill at a wash,
+     the colour a find highlight has everywhere; it follows the light theme's deeper fill. */
+  --color-find: color-mix(in srgb, var(--color-warn-fill) 24%, transparent);
+
+  /* Usage series, one per provider, shared by the chart, the share bars and the
+     limit bars so the Usage views read as one. Claude wears its brand coral and Codex
+     the text colour; the rest take quieter distinct steps. */
+  --color-series-claude: #d97757;
+  --color-series-codex: var(--color-text);
+  --color-series-grok: color-mix(in oklab, var(--color-text) 55%, var(--color-bg));
+  --color-series-cursor: #5b9bbd;
+  --color-series-unknown: var(--color-dim);
+
+  /* File-type marks. The one place colour carries identity rather than state: a
+     `.tsx` is blue because React is blue, and in a list of twelve filenames the eye
+     sorts on that before it reads a word. Brand hues, pulled toward the surface so a
+     column of icons stays quieter than the names beside it. Tokens rather than hexes
+     at the call site, because the luminous ones have to come down in light. */
+  --color-lang-react: #4fc3e8;
+  --color-lang-ts: #4a8fe0;
+  --color-lang-js: #d9b800;
+  --color-lang-css: #a78bfa;
+  --color-lang-html: #e07a52;
+  --color-lang-py: #5a9fd4;
+  --color-lang-doc: #4ade80;
+  --color-lang-data: #e0a63a;
+  --color-lang-sql: #38bdf8;
+  --color-lang-shell: #8f96a3;
+  --color-lang-media: #f472b6;
+
+  /* Source code follows Synara's GitHub Dark grammar rather than the house chrome. */
+  --color-syntax-comment: #6a737d;
+  --color-syntax-keyword: #f97583;
+  --color-syntax-string: #9ecbff;
+  --color-syntax-number: #79b8ff;
+  --color-syntax-type: #b392f0;
+  --color-syntax-function: #b392f0;
+  --color-syntax-property: #79b8ff;
+  --color-syntax-operator: #e1e4e8;
+
+  /* Chrome laid over an image, where the picture is the background and the theme has
+     no say. Same in both themes on purpose. */
+  --color-media-scrim: rgb(0 0 0 / 70%);
+  --color-on-media: #ffffff;
+
+  /* A web page's own canvas: the plate under a browser guest and the page miniatures
+     that stand for one. Same in both themes, because a page is white unless it paints. */
+  --color-page: #ffffff;
+  --color-on-page: #0c0d0e;
+
+  /* The dimmed room behind a dialog. Enough to push the page back a step, not
+     enough to black it out: the card's own ring and shadow do the separating. */
+  --color-scrim: rgb(0 0 0 / 55%);
+
+  /*
+   * Deliberately one indirection out to --elevation-*, which live in :root below.
+   * Tailwind reads a literal shadow here and compiles it into its own shadow-colour
+   * machinery, baking the alpha into the utility — which would leave the light theme
+   * overriding a token nothing reads any more. Handed a var() there is no colour to
+   * extract, so the value survives to runtime where a theme can still move it.
+   */
+  --shadow-sticky: var(--elevation-sticky);
+  --shadow-pill: var(--elevation-pill);
+  --shadow-popover: var(--elevation-popover);
+  --shadow-menu: var(--elevation-menu);
+  --shadow-composer: var(--elevation-composer);
+
+  /*
+   * Motion, named for what a move does rather than for its curve. Before these existed
+   * the app ran four out-curves at once: the keyframes below use
+   * cubic-bezier(0.16, 1, 0.3, 1), the CSS `ease-out` keyword is a second curve,
+   * Tailwind's `ease-out` utility a third, and a `transition-transform` with no ease
+   * falls back to a fourth. The same chevron flipped differently depending on whether
+   * its author was writing a stylesheet or a class name.
+   *
+   * In @theme rather than :root so Tailwind mints `ease-arrive`, `ease-fade`,
+   * `ease-leave` and `ease-overshoot` utilities from them and a class site can say the
+   * same word the stylesheet does. Durations deliberately stay at the call site: like
+   * the elevations below, each was tuned to its own distance, and folding 130, 140 and
+   * 150 into one token would move several surfaces to settle a naming itch.
+   */
+
+  /* Something arriving where it was always going. Every travel and settle in the app. */
+  --ease-arrive: cubic-bezier(0.16, 1, 0.3, 1);
+
+  /* Opacity on its own, where there is no distance for a curve to describe. */
+  --ease-fade: ease-out;
+
+  /* Anything getting out of the way. An exit starts fast because it has been read. */
+  --ease-leave: ease-in;
+
+  /* The CSS stand-in for SPRING_CHEVRON in `motion.ts`: a mark that swings a touch past
+     its stop and comes back. For the small rotations that are not worth a spring. */
+  --ease-overshoot: cubic-bezier(0.34, 1.36, 0.64, 1);
+
+  /* Ambient motion that loops, where neither end is an arrival: it eases out of the
+     start and into the finish in equal measure, so a cycle has no beat to count. The
+     three above all describe something getting somewhere and would put a landing in
+     the middle of a loop. */
+  --ease-drift: cubic-bezier(0.3, 0.7, 0.3, 1);
+
+  /* A working glyph's turn. Tailwind's own spin rounds once a second, which reads
+     frantic at badge size; same loop, calmer pace. */
+  --animate-spin-calm: spin-calm 1.5s linear infinite;
+
+  @keyframes spin-calm {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+}
+
+:root {
+  /* Per-persona hex, set inline on anything a persona owns. Chrome no persona
+     owns (focus rings, login, stray links) falls back to the house colour. */
+  --accent: var(--color-primary);
+
+  /* One elevation per floating thing, rather than one shared shadow: each was tuned to
+     its own size and distance from the page, and collapsing them would move several
+     surfaces to fix a naming itch. */
+  --elevation-pill: 0 6px 18px rgb(0 0 0 / 45%);
+  --elevation-popover: 0 10px 28px rgb(0 0 0 / 50%);
+  --elevation-menu: 0 12px 32px rgb(0 0 0 / 45%);
+  --elevation-composer: 0 18px 55px rgb(0 0 0 / 38%);
+
+  /* The one a bar that stays put casts over the list sliding under it. Shallower and
+     tighter than anything above: it separates two things that touch, it does not lift
+     one off the page. Only painted once something has actually scrolled beneath. */
+  --elevation-sticky: 0 6px 14px rgb(0 0 0 / 34%);
+
+  /* Names the theme to the browser too, so scrollbars, spellcheck underlines and
+     native form chrome follow the app instead of fighting it. */
+  color-scheme: dark;
+
+  /* How round the house is. The radius scale is stated at Tailwind's sizes and lifted
+     from here, so this is the one place to make the whole app softer or crisper, in
+     every browser. Independent of --corner-scale below, which answers a different
+     question and only applies where the shape changed. */
+  --radius-scale: 1.25;
+
+  /* The corner radii are drawn as circular arcs, which is what their numbers were
+     picked against. The @supports block below is the only thing that moves this. */
+  --corner-scale: 1;
+
+  /* The macOS shell's zoom factor. The top bar reserves the traffic lights' corner in
+     window points (84px at zoom 1), so the first control does not drift on X when
+     Cmd+− fires. */
+  --desktop-zoom: 1;
+  /* The phone header's top-left clearance. The desktop draws the window's controls in
+     the top bar, so nothing below it clears the traffic lights any more. */
+  --titlebar-inset: 0px;
+  --titlebar-row-pad: 12px;
+}
+
+/*
+ * The macOS shell hides the title bar, which takes the drag handle with it. Anything
+ * wearing `drag-region` gives it back and every control inside one needs `no-drag`, or
+ * it becomes a place to pick the window up rather than a button. Scoped to the attribute
+ * so a browser tab, where these properties mean nothing, never sees them at all.
+ */
+:root[data-titlebar='inset'] .drag-region {
+  -webkit-app-region: drag;
+}
+
+:root[data-titlebar='inset'] .no-drag {
+  -webkit-app-region: no-drag;
+}
+
+/* The top bar is one drag handle with controls in it. Every control in it stays a
+   control, whichever component drew it into the bar. */
+:root[data-titlebar='inset'] .drag-region :is(button, a, input, select, textarea, [role='button'], [role='tab']) {
+  -webkit-app-region: no-drag;
+}
+
+/*
+ * The L-frame's chrome: the rail and the top bar sit on `frame`, which in the dark room
+ * is surface-2 itself. Inside it the hover, open and picked fills all take `frame-fill`,
+ * or a hovered door would vanish into the bar it sits on. A dot's cut-out ring is the frame.
+ */
+.frame-chrome {
+  --color-surface-2: var(--color-frame-fill);
+  --color-icon-fill: var(--color-frame-fill);
+  --color-user-bg: var(--color-frame-fill);
+  --color-surface: var(--color-frame);
+}
+
+/*
+ * The inset that holds the sidebar and the stage. Everything in it was drawn against
+ * `bg` as its canvas, gradients and scrims included, so the canvas is re-pointed once
+ * here rather than at every call site. The sidebar paints its own `sidebar` fill.
+ */
+.stage-canvas {
+  --color-bg: var(--color-stage);
+}
+
+/*
+ * A side of the stage on the sidebar's step: the left sidebar and the panels docked
+ * right. What was drawn against the stage as its canvas (fades, sticky bars, fields, a
+ * dot's cut-out) takes the side's own fill instead. A document inside one that has to
+ * stay on white asks for `stage`.
+ */
+.sidebar-surface {
+  --color-bg: var(--color-sidebar);
+  --color-surface: var(--color-sidebar);
+}
+
+/*
+ * Light puts that step a grey below the white stage, so the hover and picked fills drawn
+ * for a white canvas go one deeper on it (1.09 and 1.15:1), the move the frame makes,
+ * and a Changed files card goes white to stay a card. Dark's side already sits under
+ * its fills.
+ */
+:root[data-theme='light'] .sidebar-surface {
+  --color-surface-2: #e8eaee;
+  --color-tree-hover: #e8eaee;
+  --color-user-bg: #e3e5e9;
+  --color-icon-fill: #e3e5e9;
+  --color-composer-tray: #ffffff;
+}
+
+/*
+ * Squircle corners: continuous curvature instead of an arc, the shape Apple and Figma
+ * draw. `corner-shape` is Chromium 139+, so the query is the whole feature gate —
+ * anywhere it fails, nothing in here applies and the app keeps its plain arcs at their
+ * original sizes.
+ *
+ * The radius has to grow with the shape, which is why the scale rides on a variable at
+ * all. A superellipse hugs the corner far tighter than an arc does, so the same number
+ * reads visibly less round once it lands; 1.5 is the factor that puts a squircled corner
+ * back where the circular one looked, and it sits between what the two obvious
+ * measurements ask for (1.30 matching the corner inset, 1.72 matching the area cut off).
+ * It is one number: turn it down if the corners start reading soft.
+ *
+ * `rounded-full` opts back out. It is already a circle or a pill, and a superellipse
+ * pressed onto one only makes it lumpy.
+ */
+@supports (corner-shape: squircle) {
+  :root {
+    --corner-scale: 1.5;
+  }
+
+  *,
+  *::before,
+  *::after {
+    corner-shape: squircle;
+  }
+
+  .rounded-full {
+    corner-shape: round;
+  }
+
+  /*
+   * The tickbox opts out too. A ticked box has an opaque border in the colour of its
+   * fill, and under an opaque border Chromium shrinks the fill by half the border width
+   * and builds that inset squircle as a separate path. The scaled corner (7.5px) is wider
+   * than half the 14px box, and for a corner that large the inset path loses its
+   * top-left curve once the box sits far down a long scroller, from about 8,200px. The
+   * fill is then cut to a straight line there: a dark triangle inside an intact border,
+   * on a card deep in a long thread and never on one near the top. Measured in the
+   * desktop app's Chromium (150), the same with Skia Graphite on and off, so it is the
+   * path and not the GPU. A squircle whose corner fits the box, a translucent border or
+   * no border are all drawn whole, which is why an unticked box never showed it. The
+   * verify spike's Chromium (151) draws the old box whole even at that depth, so this
+   * needs the desktop app's own Chromium to see.
+   *
+   * A plain arc is filled as a rounded rectangle and never takes that path. 4px is the
+   * arc that lands on the squircle it replaces, at both box sizes, so the box looks the
+   * same. A new small box with an opaque border and a corner over half its size needs
+   * the same opt-out.
+   */
+  .checkbox-box {
+    corner-shape: round;
+    border-radius: 4px;
+  }
+}
+
+/*
+ * Light is not dark inverted. Inverting would put the sidebar and the floating
+ * surfaces *above* white, and there is nothing above white — so the axis flips
+ * instead: white is the top of the stack, and everything below it is a shade of the
+ * room rather than a lift out of it. The semantics survive that flip unchanged,
+ * which is why no component had to learn a second set of class names.
+ *
+ * Every value here was solved rather than picked, against the ratio the same pair
+ * scores in dark. The theme clears WCAG AA on 208 of the 209 foreground/background
+ * pairs the app can render, and regresses on none of them. The holdout is `dim` on
+ * a user bubble, where dark manages 2.61 and this manages 4.13.
+ */
+:root[data-theme='light'] {
+  /* The canvas sits close to white, but white cards on it still read (1.06:1 plus
+     their shadow). Every fill is darker than the canvas, never lighter: surface-2
+     1.07 on it, hover a step deeper, the selected fill (`user-bg`) 1.13. The user's own
+     bubble stays the darkest fill (1.19) and an agent's sits well above it (1.07),
+     so who spoke reads before what was said. */
+  --color-bg: #f7f8fa;
+  --color-surface: #ffffff;
+  --color-surface-2: #eef0f3;
+  --color-icon-fill: #e8eaee;
+  --color-tree-hover: #eceef1;
+  --color-raised: #ffffff;
+  --color-composer: #ffffff;
+  --color-composer-line: rgb(0 0 0 / 18%);
+  /* The stage is white, so the tray, the Changed files card and the sidebar that shares
+     their step go one grey down from it (1.10:1). The frame a step further (1.08:1 below
+     the sidebar), so the inset's corner still reads; its fills deeper again (1.14:1). */
+  --color-composer-tray: #f3f4f6;
+  --color-frame: #e9ebef;
+  --color-frame-fill: #d9dde3;
+  --color-user-bg: #e8eaee;
+  --color-menu-selected: #dcdfe4;
+  --color-user-bubble: #e3e5e9;
+  --color-bubble: #eff1f4;
+
+  /* Just dark enough to keep a picked chip visible on white without making a
+     selected set read as a wall of controls. */
+  --color-picked: #d2d6dd;
+  /* Light keeps the established role fill; only the dark room needed more depth. */
+  --color-role-badge: color-mix(in srgb, var(--color-picked) 55%, var(--color-bg));
+
+  --color-line: rgb(0 0 0 / 11%);
+
+  --color-text: #16181b;
+  --color-muted: #565b66;
+  --color-dim: #616773;
+
+  /* Still "the one loud thing", still achromatic; the room changed, not the rule. */
+  --color-primary: #16181b;
+  --color-primary-hover: #000000;
+  --color-on-primary: #ffffff;
+
+  --color-control: #3d4451;
+  --color-skill: #7c4ddb;
+  --color-worktree: #7c4ddb;
+
+  /* Darkened until each clears AA both on a surface and on the 15% wash of itself
+     that a diff row paints behind it. The dark values are far too luminous to read
+     on white; these are the same hues brought down to where they can be. */
+  --color-ok: #056b4b;
+  --color-warn: #8a5d00;
+  /* Text has to stay gold to read on white, which made every bar and ring look brown.
+     Fills carry no words, so they can be the brighter yellow at 3:1 on the surface. */
+  --color-warn-fill: #b58800;
+  --color-danger: #b02c24;
+  --color-busy: #1155cc;
+
+  /* The same hues on a white page. Yellow and cyan are the two that vanish there, so
+     they travel furthest; the rest only need enough to stop glowing. */
+  --color-lang-react: #0e8fb4;
+  --color-lang-ts: #2f6fbf;
+  --color-lang-js: #8a6d00;
+  --color-lang-css: #7c4ddb;
+  --color-lang-html: #c2410c;
+  --color-lang-py: #2f6fbf;
+  --color-lang-doc: #15803d;
+  --color-lang-data: #a16207;
+  --color-lang-sql: #0369a1;
+  --color-lang-shell: #565b66;
+  --color-lang-media: #be185d;
+
+  --color-syntax-comment: #6a737d;
+  --color-syntax-keyword: #d73a49;
+  --color-syntax-string: #032f62;
+  --color-syntax-number: #005cc5;
+  --color-syntax-type: #6f42c1;
+  --color-syntax-function: #6f42c1;
+  --color-syntax-property: #005cc5;
+  --color-syntax-operator: #24292e;
+
+  /* A light room needs a thinner veil: 80% black over a white page reads as a
+     blackout, and the dialog's own shadow is doing the separating anyway. */
+  --color-scrim: rgb(24 26 31 / 32%);
+
+  /* Every elevation gains a tight contact layer. On a dark canvas a diffuse shadow is
+     enough because the surface above it is lighter; on a light one only the contact
+     edge tells you the thing is off the page at all. */
+  --elevation-pill:
+    0 1px 2px rgb(16 18 27 / 6%),
+    0 6px 18px rgb(16 18 27 / 12%);
+  --elevation-popover:
+    0 1px 2px rgb(16 18 27 / 6%),
+    0 10px 28px rgb(16 18 27 / 13%);
+  --elevation-menu:
+    0 1px 2px rgb(16 18 27 / 6%),
+    0 12px 32px rgb(16 18 27 / 13%);
+  --elevation-composer:
+    0 1px 2px rgb(16 18 27 / 5%),
+    0 18px 55px rgb(16 18 27 / 10%);
+  --elevation-sticky: 0 6px 14px rgb(16 18 27 / 10%);
+
+  color-scheme: light;
+}
+
+/*
+ * A persona's hex is chosen to glow on a near-black canvas, so on a light one it has
+ * to come down to where it can be read: every seed colour in the roster fails AA on
+ * white as picked, the pale green at 1.9:1. `--accent-fg` is that landing place, and
+ * anything using an accent as a *foreground* reads it instead of `--accent` — the
+ * washes and rings keep the raw hex, because a tint is where the persona's actual
+ * colour still gets to show.
+ *
+ * Declared on every element rather than once on :root, because a custom property
+ * substitutes var() at the point it is declared: on :root it would freeze to the
+ * house colour and no persona's inline --accent would ever reach it.
+ */
+*,
+::before,
+::after {
+  --accent-fg: var(--accent);
+}
+
+/*
+ * Only the lightness is capped. Hue and chroma survive untouched, so a persona stays
+ * recognisably itself instead of becoming a different colour in the other theme.
+ * 0.45 is the highest ceiling that clears AA everywhere, including the two stacked
+ * tints of an @mention chip inside a user bubble, which is the binding case.
+ */
+:root[data-theme='light'],
+:root[data-theme='light'] *,
+:root[data-theme='light'] ::before,
+:root[data-theme='light'] ::after {
+  --accent-fg: oklch(from var(--accent) min(l, 0.45) c h);
+}
+
+/* Bare `rounded` is the one radius Tailwind hardcodes instead of reading a token, so it
+   would sit at a fixed 4px while the scale around it grew. Unlayered, which is all it
+   takes to beat a utility. */
+.rounded {
+  border-radius: var(--radius-sm);
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+@supports (height: 100dvh) {
+  html,
+  body,
+  #root {
+    height: 100dvh;
+  }
+}
+
+/* What floats over content: menus, popovers, hover cards. The raised fill goes
+   translucent and frosts whatever it covers, so a menu over the transcript still
+   reads as lifted without hiding where it is. Use it in place of `bg-raised` on a
+   floating sheet; the border and shadow stay the caller's. At 20px and 74% the text behind smeared into nothing on the dark canvas,
+   so the frost never showed. */
+@utility surface-floating {
+  background-color: color-mix(in srgb, var(--color-raised) 70%, transparent);
+  backdrop-filter: blur(16px) saturate(1.08);
+}
+
+/* The miniature Manor on each Appearance theme card. A card shows its own theme
+   whichever one is on screen, so these cannot follow `data-theme`; they restate the
+   dark defaults and the light block above, and move with them when the palette does.
+   The card reads them as `bg-(--preview-canvas)` and so on. */
+@utility theme-preview-dark {
+  --preview-sidebar: #121314;
+  --preview-canvas: #0f1011;
+  --preview-bubble: #191a1b;
+  --preview-own: #26262b;
+  --preview-composer: #171819;
+  --preview-line: rgb(255 255 255 / 8%);
+}
+
+@utility theme-preview-light {
+  --preview-sidebar: #f7f8fa;
+  --preview-canvas: #ffffff;
+  --preview-bubble: #eff1f4;
+  --preview-own: #e3e5e9;
+  --preview-composer: #ffffff;
+  --preview-line: rgb(0 0 0 / 11%);
+}
+
+/* Native guests must not take the pointer from the shell during a panel drag. */
+body:has([data-panel-resizing]) [data-browser-webview] {
+  pointer-events: none !important;
+}
+
+/* Hidden webviews remain paintable behind the opaque app, without a stacking context. */
+#root {
+  background: var(--color-bg);
+}
+
+body {
+  margin: 0;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font: 16px/1.6 var(--font-sans);
+  /*
+   * The size dial for the whole app, because every component states its size in px and
+   * there are two hundred of them. This normalises on x-height instead: 0.53 is Geist's
+   * own ratio (upright and mono both), so the fallback path is untouched, while SF Pro
+   * Rounded's 0.508 gets scaled up past Geist's native size. The deliberate 0.55 target
+   * makes both faces about 4% larger than Geist originally rendered; it is the one dial.
+   */
+  font-size-adjust: ex-height 0.55;
+  /* Tracking scales with size, so headings compress the way the body does. */
+  letter-spacing: -0.011em;
+  -webkit-font-smoothing: antialiased;
+}
+
+button {
+  font-family: inherit;
+}
+
+/* Lexical owns the list structure; the composer owns a visible, aligned gutter.
+   The explicit bullet avoids the reset stylesheet or an overflow container silently
+   swallowing the browser's outside marker. */
+.composer-editor ol,
+.composer-editor ul {
+  padding-inline-start: calc(var(--spacing) * 6);
+}
+
+.composer-editor ol {
+  list-style: decimal;
+}
+
+.composer-editor ol > li::marker {
+  color: var(--color-muted);
+}
+
+.composer-editor ul {
+  list-style: none;
+}
+
+.composer-editor ul > li {
+  position: relative;
+}
+
+.composer-editor ul > li::before {
+  position: absolute;
+  inset-inline-start: calc(var(--spacing) * -4);
+  color: var(--color-muted);
+  content: '•';
+}
+
+@media (hover: none) and (max-width: 600px) {
+  .ask-card-touch-controls button {
+    width: 44px !important;
+    height: 44px !important;
+  }
+
+  .ask-card-actions button {
+    min-height: 44px;
+  }
+}
+
+/* xAI supplies separate untouched marks for dark and light surfaces. */
+.provider-mark-grok-dark {
+  display: none;
+}
+
+:root[data-theme='light'] .provider-mark-grok-light {
+  display: none;
+}
+
+:root[data-theme='light'] .provider-mark-grok-dark {
+  display: block;
+}
+
+/*
+ * A diff's gutter numbers and its +/- signs are deliberately quiet, and quiet is
+ * spelled with opacity. That is the one dimming trick a theme cannot inherit: fading
+ * a dark glyph toward a light page eats far more contrast than fading a light glyph
+ * toward a dark one, so the same 60% that leaves dark's gutter at 1.9:1 drops light's
+ * marks below it instead of matching. A little more of themselves in light puts both
+ * themes back on the same footing. Dark keeps the original 60% exactly.
+ */
+.diff-quiet {
+  opacity: 0.6;
+}
+
+:root[data-theme='light'] .diff-quiet {
+  opacity: 0.8;
+}
+
+/*
+ * A ```mermaid block drawn by pele. Pele paints through these variables rather than
+ * baked colours, so a theme switch recolours every diagram with no second render.
+ * Node borders need more than the 8% hairline, so they take the text at 28%.
+ */
+.manor-diagram {
+  --pele-bg: var(--color-surface);
+  --pele-fg: var(--color-text);
+  --pele-muted: var(--color-muted);
+  --pele-line: var(--color-muted);
+  --pele-surface: var(--color-surface-2);
+  --pele-surface-alt: var(--color-user-bg);
+  --pele-border: color-mix(in srgb, var(--color-text) 28%, transparent);
+  --pele-accent: var(--color-busy);
+  --pele-critical: var(--color-danger);
+  --pele-error: var(--color-danger);
+  --pele-font: var(--font-sans);
+  --pele-font-mono: var(--font-mono);
+  --pele-radius: var(--radius-md);
+  --pele-series-1: var(--color-busy);
+  --pele-series-2: var(--color-ok);
+  --pele-series-3: var(--color-warn);
+  --pele-series-4: var(--color-danger);
+  --pele-series-5: var(--color-skill);
+  --pele-series-6: var(--color-lang-react);
+  --pele-series-7: var(--color-lang-media);
+  --pele-series-8: var(--color-lang-data);
+}
+
+/* Pele marks titles and headings bold; this app has two weights and 500 is the top one. */
+.manor-diagram [font-weight] {
+  font-weight: 500;
+}
+
+/*
+ * A scroller with no bar. The transcript spans the whole stage, so on "always show
+ * scrollbars" its bar sits against the window's edge for the entire day, next to a
+ * thread that already says where it is with the bottom fade and the jump-to-latest
+ * button. Both properties are needed: `scrollbar-width` is the standard one, the
+ * `-webkit-` pseudo-element is what Safari reads. Scrolling itself is untouched, and
+ * so is the keyboard: the element keeps its own focusability and its scroll keys.
+ */
+.scrollbar-hidden {
+  scrollbar-width: none;
+}
+
+.scrollbar-hidden::-webkit-scrollbar {
+  display: none;
+}
+
+/*
+ * The runtime panel's drill-down. One view at a time, each entering from the side
+ * it came from, so going into a persona and coming back read as opposite moves.
+ * One shot on mount and then still: nothing here repaints after it settles.
+ */
+@media (prefers-reduced-motion: no-preference) {
+  .panel-enter-forward {
+    animation: panel-enter-forward 150ms var(--ease-fade);
+  }
+
+  .panel-enter-back {
+    animation: panel-enter-back 150ms var(--ease-fade);
+  }
+}
+
+@keyframes panel-enter-forward {
+  from {
+    opacity: 0;
+    transform: translateX(14px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes panel-enter-back {
+  from {
+    opacity: 0;
+    transform: translateX(-14px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/*
+ * Motion belongs to the active list. The row slides sideways while its grid track
+ * and inter-row space collapse, so the other work starts filling the coming gap at
+ * the same moment. Unsettling expands that room and slides the row back through the
+ * inverse. The compact settled list changes quietly. Reduced motion skips the delay.
+ */
+@media (prefers-reduced-motion: no-preference) {
+  .inbox-row-settle-out {
+    pointer-events: none;
+    animation: inbox-row-settle-out 140ms var(--ease-leave) forwards;
+  }
+
+  .inbox-row-settle-out > .inbox-row-body {
+    animation: inbox-row-content-settle-out 140ms var(--ease-leave) forwards;
+  }
+
+  .inbox-row-unsettle-in {
+    animation: inbox-row-unsettle-in 180ms var(--ease-arrive);
+  }
+
+  .inbox-row-unsettle-in > .inbox-row-body {
+    animation: inbox-row-content-unsettle-in 180ms var(--ease-arrive);
+  }
+}
+
+@keyframes inbox-row-settle-out {
+  to {
+    grid-template-rows: 0fr;
+    margin-bottom: 0;
+  }
+}
+
+@keyframes inbox-row-unsettle-in {
+  from {
+    grid-template-rows: 0fr;
+    margin-bottom: 0;
+  }
+}
+
+@keyframes inbox-row-content-settle-out {
+  to {
+    opacity: 0;
+    transform: translateX(12px) scale(0.98);
+  }
+}
+
+@keyframes inbox-row-content-unsettle-in {
+  from {
+    opacity: 0;
+    transform: translateX(12px) scale(0.98);
+  }
+}
+
+/*
+ * The sidebar's project card arriving and leaving. A few percent of scale out of the
+ * edge nearest its row, not a slide: the card opens under a pointer that is already
+ * reading, so it may announce itself but must never be waited for. Leaving is quicker
+ * and shallower than arriving, because a card being dismissed has already been read.
+ * One shot each way, and the row unmounts it when the exit has run.
+ */
+@keyframes project-card-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes project-card-out {
+  from {
+    opacity: 1;
+    transform: scale(1);
+  }
+
+  to {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+}
+
+/*
+ * A dialog arriving. The room dims while the card comes up the last few pixels and
+ * settles, one shot each, and then nothing repaints. Deliberately no exit: the card
+ * is portalled and the caller unmounts it the instant it answers, so an exit would
+ * mean every dialog holding itself open to play one, and a dismissed dialog has
+ * already been read.
+ */
+@media (prefers-reduced-motion: no-preference) {
+  .modal-scrim-in {
+    animation: modal-scrim-in 130ms var(--ease-fade);
+  }
+
+  .modal-card-in {
+    /* Decelerating hard rather than easing evenly: the card should look like it is
+       arriving where it was always going, not like it is being pushed there. */
+    animation: modal-card-in 190ms var(--ease-arrive);
+  }
+
+  .image-zoom-from-trigger {
+    transform-origin: center;
+    animation: image-zoom-from-trigger 260ms var(--ease-arrive);
+  }
+}
+
+@keyframes modal-scrim-in {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes modal-card-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.97);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/*
+ * A dock that has to float because the chat reached its width floor. Adapted from
+ * transitions.dev's panel reveal: the same cross-blur and decelerating arrival,
+ * travelling from the edge it is attached to rather than up from nowhere.
+ */
+.dock-panel-reveal {
+  transform: translateX(12px);
+  opacity: 0;
+  filter: blur(2px);
+  pointer-events: none;
+  transition:
+    transform 160ms var(--ease-arrive),
+    opacity 160ms var(--ease-arrive),
+    filter 160ms var(--ease-arrive);
+  will-change: transform, opacity, filter;
+}
+
+.dock-panel-reveal[data-open='true'] {
+  transform: translateX(0);
+  opacity: 1;
+  filter: blur(0);
+  pointer-events: auto;
+  transition-duration: 200ms;
+}
+
+/* Focus mode (⌘., `focusMode.ts`): the answer and nothing around it. The turn's
+   trace, status and changed files go, and so does a wrapper holding only them; the
+   column narrows to a reading measure. The panel region is hidden, not closed, so
+   what it holds (an unsaved file edit) survives. */
+[data-focus-mode] [data-chrome],
+[data-focus-mode] div:has(> [data-chrome]:only-child),
+[data-focus-mode] [data-chat-panel-region] {
+  display: none;
+}
+
+[data-focus-mode] [data-reading-column] {
+  max-width: 680px;
+  --msg-size: 16px;
+  --card-size: 16px;
+  /* The stage starts under the empty bar; the first message still clears it. */
+  padding-top: calc(var(--top-bar-height) + 2rem);
+}
+
+/* The composer waits out of sight and out of the pointer's way (`Composer`'s
+   `focusMode`): out of flow, so the strip it leaves holds only the ask and draft
+   cards and Jump to latest stays clickable under it. Still rendered, so typing can
+   focus into it, which brings it back. 20px past the column, as on the stage. */
+[data-focus-composer] {
+  max-width: 700px;
+  transition: opacity 160ms var(--ease-fade);
+}
+
+[data-focus-composer]:not(:focus-within) {
+  position: absolute;
+  inset-inline: 0;
+  bottom: 0;
+  margin-inline: auto;
+  opacity: 0;
+}
+
+[data-focus-composer]:not(:focus-within),
+[data-focus-composer]:not(:focus-within) * {
+  pointer-events: none;
+}
+
+/* While the composer is away the thread runs down to the foot of the pane: its space
+   and the fade under it go. Typing gives both back, and the pinned thread follows. */
+[data-focus-mode]:not(:has([data-focus-composer]:focus-within)) :is([data-reading-column], [data-jump-latest]) {
+  --composer-dock: 0px;
+}
+
+[data-focus-mode]:not(:has([data-focus-composer]:focus-within)) [data-composer-fade] {
+  display: none;
+}
+
+/* The pane's header lives in the top bar, so the scrim covers the whole pane. */
+.split-focus-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  pointer-events: none;
+  background: color-mix(in srgb, var(--color-bg) 24%, transparent);
+}
+
+@starting-style {
+  .dock-panel-reveal[data-open='true'] {
+    transform: translateX(12px);
+    opacity: 0;
+    filter: blur(2px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dock-panel-reveal {
+    transition: none !important;
+  }
+}
+
+/* transitions.dev card-resize (01). The new-chat Single picker collapses to
+   nothing when Auto turns on, so the Auto strip moves into that space. */
+:root {
+  --resize-dur: 300ms;
+  --resize-ease: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.t-resize {
+  transition:
+    width  var(--resize-dur) var(--resize-ease),
+    height var(--resize-dur) var(--resize-ease);
+  will-change: width, height;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .t-resize { transition: none !important; }
+}
+
+/* The DM portrait keeps a spatial relationship with its header avatar. Separate x
+   and y scales also make the motion exact if a future caller uses a non-square crop. */
+@keyframes image-zoom-from-trigger {
+  from {
+    transform: translate(var(--image-zoom-from-x), var(--image-zoom-from-y))
+      scale(var(--image-zoom-from-scale-x), var(--image-zoom-from-scale-y));
+  }
+
+  to {
+    transform: translate(0, 0) scale(1);
+  }
+}
+
+/* A word that has said what it came to say. Used by the note editor's "Saved", which
+   sits for a beat and then leaves rather than staying until something else moves. */
+/* The message the ⌘K palette opened: washed as the scroll lands, gone by 1.5s
+   (SEARCH_HIT_MS in Transcript.tsx). An inset shadow tints over a bubble's own fill
+   without replacing it, and the spread lets bare reply text breathe inside the wash. */
+[data-search-hit] {
+  border-radius: var(--radius-lg);
+  animation: search-hit 1500ms var(--ease-fade) both;
+}
+@media (prefers-reduced-motion: reduce) {
+  /* Still marked for the same 1.5s, without the fade: the attribute's removal ends it. */
+  [data-search-hit] { animation: none; box-shadow: 0 0 0 6px var(--color-find), inset 0 0 0 100vmax var(--color-find); }
+}
+@keyframes search-hit {
+  0%, 100% { box-shadow: 0 0 0 6px transparent, inset 0 0 0 100vmax transparent; }
+  15%, 65% { box-shadow: 0 0 0 6px var(--color-find), inset 0 0 0 100vmax var(--color-find); }
+}
+
+/*
+ * In `base`, not unlayered, which is the whole point: an unlayered rule outranks every
+ * utility, so `outline-none` on a control silently did nothing and two components had
+ * already worked around it with an inline style. Layered, a component can opt out the
+ * ordinary way.
+ */
+@layer base {
+  :focus-visible {
+    /* The landed accent, so a focus ring on a persona-scoped control stays visible
+       against a light surface instead of dissolving into it. */
+    outline: 2px solid var(--accent-fg);
+    outline-offset: 2px;
+  }
+
+  /* The selected sidebar row already carries the travelling selection fill. */
+  button[data-sidebar-section][aria-current='page']:focus-visible {
+    outline: none;
+  }
+
+  /*
+   * Text entry is the exception. A field already draws a border, and lifting that border
+   * to `dim` on focus says the same thing from inside the shape the field already has —
+   * where the ring drew a second rectangle around a box that was never the shape of the
+   * thing it was ringing. Tickboxes, radios and the colour swatch keep the ring: nothing
+   * is typed into them and they have no border of their own to lift. Ranges keep the
+   * ring for the same reason. Every field that
+   * carries the border on a wrapper rather than on itself lifts it with
+   * `focus-within:border-dim`.
+   */
+  input:not([type='checkbox'], [type='radio'], [type='color'], [type='range']):focus-visible,
+  textarea:focus-visible,
+  select:focus-visible {
+    outline: none;
+  }
+}
+
+/*
+ * Ticking a box is one act, so it is drawn as one. The mark is stroked on rather
+ * than faded in (a box that fills and then has a glyph appear on top of it reads
+ * as two events), and the fill runs underneath it at the same time.
+ *
+ * The dash length is 21 because Tick02Icon's path measures 20.16 units in its
+ * 24-unit box (M5 14 → L8.5 17.5 → L19 6.5, so 3.5√2 + √231.25). Just over the
+ * real length is the number to use: under it leaves a stub of the tick showing in
+ * an unticked box, and far over it spends the first half of the draw on nothing.
+ * If the glyph is ever swapped, re-measure.
+ */
+/*
+ * The ring the base layer keeps for tickboxes, re-hung on the box that is actually
+ * drawn. The input it belongs to is transparent so the pointer can land on it, and
+ * an outline on a transparent element is a transparent outline, so a keyboard user
+ * would have had a 1px border shift and nothing else. Same 2px and same offset as
+ * every other ring in the app; this only changes which element wears it.
+ */
+input:focus-visible + .checkbox-box {
+  outline: 2px solid var(--accent-fg);
+  outline-offset: 2px;
+}
+
+.checkbox-tick path {
+  stroke-dasharray: 21;
+  stroke-dashoffset: 21;
+}
+
+.checkbox-tick[data-checked='true'] path {
+  stroke-dashoffset: 0;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  /* The mark being drawn is the whole press. The box used to scale under it too. That
+     was dropped on the belief that the transform caused the missing top-left corner,
+     which it did not: the corner stayed missing without it. The real cause sits with
+     `.checkbox-box` under the squircle rules. */
+  .checkbox-tick path {
+    transition: stroke-dashoffset 180ms var(--ease-arrive);
+  }
+}
+
+/*
+ * Anything in the sidebar that folds: a project's chats, the Routines nav, Settled. The
+ * list grows out of the header rather than appearing beside it, so the row above
+ * stays put and everything below is pushed by the thing that actually arrived.
+ * Same grid-track collapse the inbox rows use, for the same reason: it needs no
+ * measured height, so a project with three chats and one with thirty open at the
+ * same speed. Drawn here rather than per section, because three sidebar folds
+ * that each time themselves are three folds that drift apart.
+ *
+ * `0fr` only collapses because the child hides its overflow. A grid item's
+ * automatic minimum size is its content until `overflow` stops being visible, and
+ * without that the track would sit at full height and never move.
+ *
+ * Closing is quicker than opening. A list being folded away has been read, and
+ * the only question it still has to answer is where it went.
+ */
+.fold {
+  display: grid;
+  grid-template-rows: 0fr;
+}
+
+/*
+ * The rows stay mounted through the collapse, which is what lets it animate at
+ * all, but a clipped row is still a tab stop, so a closed fold would hand the
+ * keyboard a list nobody can see. `visibility` is the fix rather than `inert`,
+ * which React 18 has no prop for, and it takes AT with it for free. It flips at
+ * the end of the fold and at the start of the unfold, never during either.
+ */
+.fold > * {
+  overflow: hidden;
+  visibility: hidden;
+}
+
+.fold[data-open='true'] {
+  grid-template-rows: 1fr;
+}
+
+.fold[data-open='true'] > * {
+  visibility: visible;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .fold {
+    transition: grid-template-rows 160ms var(--ease-leave);
+  }
+
+  .fold[data-open='true'] {
+    transition: grid-template-rows 220ms var(--ease-arrive);
+  }
+
+  /* The rows fade with the box rather than sliding independently: at this size a
+     per-row stagger reads as the list stuttering, not as it arriving. */
+  .fold > * {
+    opacity: 0;
+    transition:
+      opacity 120ms var(--ease-leave),
+      visibility 0s linear 160ms;
+  }
+
+  .fold[data-open='true'] > * {
+    opacity: 1;
+    transition:
+      opacity 180ms var(--ease-fade) 60ms,
+      visibility 0s;
+  }
+}
+
+@property --clamp-fade {
+  syntax: '<length>';
+  inherits: false;
+  initial-value: 0px;
+}
+
+/*
+ * The typed text of a DM bubble filled with the face they are talking to
+ * (`avatarBubbleTint`). Every theme token the text and its inline chips read becomes
+ * white, which clears AA on the darkened fill in both themes, and a chip's fill
+ * becomes the wash, which only ever moves away from the ink. Unlayered so it
+ * beats the chips' own colour utilities.
+ */
+.bubble-ink {
+  --color-text: var(--bubble-ink);
+  --color-muted: var(--bubble-ink);
+  --color-dim: var(--bubble-ink);
+  --color-skill: var(--bubble-ink);
+  --color-control: var(--bubble-ink);
+  /* Code and rules in what the user wrote sit on the wash, the fill's own darker step: the
+     page surfaces are light grey and the ink is white, so code on them vanished. */
+  --color-surface: var(--bubble-wash);
+  --color-surface-2: var(--bubble-wash);
+  --color-line: var(--bubble-wash);
+  color: var(--bubble-ink);
+}
+
+/* A link the user wrote takes the ink too: the accent is the fill's own hue, and on it the
+   accent's foreground sits at whatever contrast it happens to get. Set on the link
+   itself, because `--accent-fg` is redeclared on every element and would not inherit. */
+.bubble-ink a {
+  color: var(--bubble-ink);
+}
+
+/*
+ * The rows above the text of a tinted bubble: the reply row, an attached file, page
+ * context. White ink on a low white veil (`BubbleTint.chip`), so they read as part of
+ * the fill instead of as the dark page surface they would otherwise take. The border
+ * goes with the surface, because the veil is the whole edge.
+ */
+.bubble-chips {
+  --color-text: var(--bubble-ink);
+  --color-muted: var(--bubble-ink);
+  --color-dim: var(--bubble-ink);
+  --color-surface-2: var(--bubble-chip);
+  --color-raised: var(--bubble-chip);
+  --color-line: transparent;
+  /* File-type colours and the partly-read warning have no contrast promise on the fill,
+     so inside the veil they are ink too, as on the phone. */
+  --color-warn: var(--bubble-ink);
+  --color-lang-css: var(--bubble-ink);
+  --color-lang-data: var(--bubble-ink);
+  --color-lang-doc: var(--bubble-ink);
+  --color-lang-html: var(--bubble-ink);
+  --color-lang-js: var(--bubble-ink);
+  --color-lang-media: var(--bubble-ink);
+  --color-lang-py: var(--bubble-ink);
+  --color-lang-react: var(--bubble-ink);
+  --color-lang-shell: var(--bubble-ink);
+  --color-lang-sql: var(--bubble-ink);
+  --color-lang-ts: var(--bubble-ink);
+  color: var(--bubble-ink);
+}
+
+/* `align-middle` centres a pill on the x-height, which reads low beside capitals in a
+   sent message; the composer's editor keeps its own line and stays put. A persona pill
+   already stands taller on its face, so it is centred without the lift. */
+[data-inline-chip]:not([data-agent-chip]):not([data-composer-editor] *) {
+  position: relative;
+  top: -2px;
+}
+
+.bubble-ink [data-inline-chip] {
+  background-color: var(--bubble-wash);
+  color: var(--bubble-ink);
+}
+
+/* What a message carries stays blue on any fill, so the blue is the fill here: blue ink
+   on a face's colour has no contrast promise, and `on-primary` flips with the theme. */
+.bubble-ink [data-quote-ref],
+.bubble-ink [data-image-ref] {
+  background-color: var(--color-busy);
+  color: var(--color-on-primary);
+}
+
+/*
+ * A pasted brief cut back to the first few lines, with the way out sitting on the
+ * fade. The height is stated in `lh` rather than pixels so the cut always lands
+ * between two lines, at whatever `--msg-size` the column happens to be reading at:
+ * the side panel runs two points smaller than the stage and would otherwise slice
+ * a line in half.
+ *
+ * `max-content` is the open state, and `interpolate-size` is the only reason it
+ * animates at all. Nothing could transition to an intrinsic height before it, which
+ * is why collapses of this shape used to be either instant or measured in JS.
+ */
+.clamp {
+  overflow: hidden;
+  /* How many lines survive the cut, and how much of the tail dissolves into it.
+     Ten is the chat bubble, which is what this was written for; a caller that cuts
+     harder (the memory card's three) sets both, because a 2.6-line fade across a
+     three-line block would leave almost nothing solid. */
+  --clamp-lines: 10;
+  --clamp-fade-lines: 2.6;
+  max-height: calc(var(--clamp-lines) * 1lh);
+
+  /*
+   * The last lines dissolve rather than disappearing behind a scrim of bubble
+   * colour. A scrim is the usual move and it was the first one here, but it paints
+   * a solid slab over live text: the eye reads the slab, finds the edge where its
+   * ramp ends, and the message looks like it is sitting under a panel. Masking the
+   * glyphs themselves has nothing to find an edge in, because there is no second
+   * surface, only the words getting thinner. Stops are eased, not linear, so the
+   * first line in the zone barely dims and the last one is already gone.
+   */
+  --clamp-fade: 0px;
+  mask-image: linear-gradient(
+    to bottom,
+    black calc(100% - var(--clamp-fade)),
+    color-mix(in srgb, black 78%, transparent) calc(100% - var(--clamp-fade) * 0.7),
+    color-mix(in srgb, black 40%, transparent) calc(100% - var(--clamp-fade) * 0.4),
+    color-mix(in srgb, black 14%, transparent) calc(100% - var(--clamp-fade) * 0.18),
+    transparent 100%
+  );
+}
+
+/*
+ * Only what is actually cut fades. Ten lines is a cut on a narrow panel and often
+ * not one on the wide stage, and a message fading out at the bottom while its last
+ * word is right there reads as a rendering fault. Same measurement the link hangs
+ * on, so the two can never disagree.
+ */
+.clamp[data-clipped='true'] {
+  --clamp-fade: calc(var(--clamp-fade-lines) * 1lh);
+}
+
+/* After the clipped rule on purpose: same specificity, and open wins. */
+.clamp[data-open='true'] {
+  max-height: max-content;
+  --clamp-fade: 0px;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .clamp {
+    interpolate-size: allow-keywords;
+    transition:
+      max-height 180ms var(--ease-leave),
+      --clamp-fade 180ms var(--ease-leave);
+  }
+
+  /* Same asymmetry as the fold above: opening is the move that has to be read. The
+     fade lifts a touch ahead of the height so the words are already whole by the
+     time the box stops growing, rather than sharpening after it has settled. */
+  .clamp[data-open='true'] {
+    transition:
+      max-height 260ms var(--ease-arrive),
+      --clamp-fade 200ms var(--ease-fade);
+  }
+}
+
+/*
+ * Text arriving in a live reply. Only the words marked new settle in; the rest are
+ * wrapped identically and stay still, which is what keeps a paragraph from
+ * flashing back in when the markdown around it restructures mid-stream. See
+ * `revealWords.ts` for why element identity cannot carry that on its own.
+ *
+ * Deliberately no stagger, because a delta can be one word or a whole paragraph, and a
+ * per-word delay would make the long ones crawl in at a speed that has nothing to
+ * do with how fast the agent is actually talking.
+ *
+ * `overflow-wrap` is restated because these are inline-block: the transcript's own
+ * `anywhere` reaches inline text, but each of these is its own box, and without it
+ * a pasted URL or a long hash would push the column wide instead of breaking.
+ */
+@media (prefers-reduced-motion: no-preference) {
+  .reveal-word {
+    display: inline-block;
+    overflow-wrap: anywhere;
+  }
+
+  .reveal-word-new {
+    animation: reveal-word 220ms var(--ease-arrive);
+  }
+}
+
+@keyframes reveal-word {
+  from {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/*
+ * A label that is waiting on something. `transitions.dev`'s shimmer (15-shimmer-text):
+ * a highlight band walks the glyphs of a copy of the string laid over the real one, so
+ * the text underneath stays legible the whole time and the sweep only ever brightens.
+ * `data-text` has to carry the same string the element renders, because the band is
+ * painted onto that duplicate and clipped to its shapes.
+ *
+ * Base and highlight are the muted and full text colours rather than the snippet's
+ * greys, so the sweep is the same distance in both themes. Applied by state, never by
+ * role: a shimmer on a settled label is a lie about work in flight.
+ */
+.shimmer-text {
+  position: relative;
+  display: inline-block;
+  color: var(--color-muted);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .shimmer-text::before {
+    content: attr(data-text);
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background-image: linear-gradient(
+      90deg,
+      transparent 0%,
+      transparent 40%,
+      var(--color-text) 50%,
+      transparent 60%,
+      transparent 100%
+    );
+    background-repeat: no-repeat;
+    background-size: 400% 100%;
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    -webkit-text-fill-color: transparent;
+    /* A text-clipped background cannot move on the compositor, so every changed frame is
+       a repaint. Stepping holds it at 20 paints a second instead of the display's 120,
+       which the soft band hides; smooth `linear` kept the GPU helper above 100% CPU. */
+    animation: shimmer-text 2s steps(40) infinite;
+  }
+}
+
+/*
+ * The same sweep over prose that is being rewritten: a note's own words while the AI
+ * works on them. The label version lays a copy of the string over itself, which needs
+ * one line and a `data-text`; a paragraph wraps, so here the band is clipped to the
+ * real glyphs instead. Same band, same timing, same keyframes.
+ */
+.shimmer-prose,
+.shimmer-prose * {
+  color: var(--color-muted);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .shimmer-prose {
+    background-image: linear-gradient(
+      90deg,
+      var(--color-muted) 0%,
+      var(--color-muted) 40%,
+      var(--color-text) 50%,
+      var(--color-muted) 60%,
+      var(--color-muted) 100%
+    );
+    background-repeat: no-repeat;
+    background-size: 400% 100%;
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    animation: shimmer-text 2s steps(40) infinite;
+  }
+}
+
+/* Accepted AI text in a note: the proposal's tint lets go once the text is the note's own. */
+@keyframes note-ai-settle {
+  from {
+    background-color: color-mix(in srgb, var(--color-ok) 13%, transparent);
+  }
+
+  to {
+    background-color: transparent;
+  }
+}
+
+@keyframes shimmer-text {
+  from {
+    background-position: 100% 0;
+  }
+
+  to {
+    background-position: 0% 0;
+  }
+}
+
+/* Only the still working face moves fully. Every other face, the busy face and a
+   sidebar face whose chat is working included, only blinks under whatever drives its
+   eyes: breathe and bob are imperceptible at avatar size, and a screen of fully moving
+   faces kept the GPU busy all day. */
+[data-avatar='blobatar']:not([data-working]) .mo-root,
+[data-avatar='blobatar']:not([data-working]) .mo-breathe,
+[data-avatar='blobatar']:not([data-working]) .mo-bob,
+[data-avatar='blobatar']:not([data-working]) .mo-eyes,
+[data-avatar='blobatar']:not([data-working]) .mo-eye {
+  animation: none;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  [data-avatar='blobatar']:not([data-working]) .mo-eye > * {
+    animation-name: mo-blink;
+    animation-duration: calc(var(--mo-blink, 4800ms) * var(--mo-rate, 1));
+    animation-delay: calc(var(--mo-blink-phase, 0ms) * var(--mo-rate, 1));
+  }
+}
+
+/* A sidebar face holds still on hover too. */
+[data-avatar='blobatar'][data-sidebar-working='true'] .mo-root:hover {
+  transform: none;
+}
+
+.thought-dots {
+  position: absolute;
+  top: calc(var(--face) * -0.1875);
+  left: calc(var(--face) * 0.75);
+  display: flex;
+  align-items: flex-end;
+  gap: calc(var(--face) * 0.0625);
+  pointer-events: none;
+}
+
+.thought-dots i {
+  width: calc(var(--face) * 0.125);
+  height: calc(var(--face) * 0.125);
+  border-radius: 999px;
+  background: var(--dot);
+}
+
+.thought-dots i:nth-child(2) {
+  width: calc(var(--face) * 0.15625);
+  height: calc(var(--face) * 0.15625);
+}
+
+.thought-dots i:nth-child(3) {
+  width: calc(var(--face) * 0.1875);
+  height: calc(var(--face) * 0.1875);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .thought-dots i {
+    animation: thought-dot 1.5s var(--ease-drift) infinite backwards;
+  }
+
+  .thought-dots i:nth-child(2) {
+    animation-delay: 180ms;
+  }
+
+  .thought-dots i:nth-child(3) {
+    animation-delay: 360ms;
+  }
+}
+
+@keyframes thought-dot {
+  0% {
+    opacity: 0;
+    transform: translateY(calc(var(--face) * 0.125)) scale(0.5);
+  }
+
+  30% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+
+  75% {
+    opacity: 1;
+  }
+
+  100% {
+    opacity: 0;
+    transform: translateY(calc(var(--face) * -0.15625)) scale(0.7);
+  }
+}
+
+/*
+ * The settings switch. `transitions.dev`'s toggle (27-toggle): the thumb runs a pixel
+ * past its stop, swings back and settles, which is what makes a sixteen-pixel trip read
+ * as a switch being thrown rather than a dot sliding. The curve is `--ease-overshoot`,
+ * already the house's, and that snippet's curve to the second decimal.
+ *
+ * The travel is a number here because keyframes cannot read a Tailwind class. It is the
+ * track less the thumb and both insets, so resizing the switch lands here too.
+ * `data-touched`, which React only sets once the thing has been pressed, is what keeps
+ * every switch on a settings page from playing its return bounce at mount.
+ *
+ * The track and the thumb's own colour are deliberately not transitioned: the fill
+ * answers the press immediately and the thumb catches up, which is the snippet's own
+ * tuning and reads as the switch obeying rather than considering it.
+ */
+.switch-thumb {
+  --switch-travel: 16px;
+
+  translate: 0 0;
+}
+
+.switch[data-on='true'] .switch-thumb {
+  translate: var(--switch-travel) 0;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .switch[data-touched='true'][data-on='true'] .switch-thumb {
+    animation: switch-thumb-on 350ms var(--ease-overshoot) both;
+  }
+
+  .switch[data-touched='true'][data-on='false'] .switch-thumb {
+    animation: switch-thumb-off 350ms var(--ease-overshoot) both;
+  }
+}
+
+.switch[data-mixed='true'] .switch-thumb {
+  translate: calc(var(--switch-travel) / 2) 0;
+  animation: none;
+}
+
+@keyframes switch-thumb-on {
+  0% {
+    translate: 0 0;
+  }
+
+  55% {
+    translate: calc(var(--switch-travel) + 1px) 0;
+  }
+
+  80% {
+    translate: var(--switch-travel) 0;
+  }
+
+  100% {
+    translate: var(--switch-travel) 0;
+  }
+}
+
+@keyframes switch-thumb-off {
+  0% {
+    translate: var(--switch-travel) 0;
+  }
+
+  55% {
+    translate: -1px 0;
+  }
+
+  80% {
+    translate: 0 0;
+  }
+
+  100% {
+    translate: 0 0;
+  }
+}
+
+.stepped-slider {
+  --slider-inset: calc(var(--spacing-slider-thumb) / 2 + var(--spacing));
+}
+
+.stepped-slider-stops {
+  inset-inline: var(--slider-inset);
+}
+
+.stepped-slider-fill {
+  width: calc(var(--slider-inset) + (100% - 2 * var(--slider-inset)) * var(--slider-progress));
+}
+
+.stepped-slider-input::-webkit-slider-runnable-track {
+  background: transparent;
+}
+
+.stepped-slider-input::-webkit-slider-thumb {
+  appearance: none;
+  width: var(--spacing-slider-thumb);
+  height: var(--spacing-slider-thumb);
+  border: 0;
+  border-radius: 50%;
+  background: var(--color-primary);
+}
+
+.stepped-slider-input::-moz-range-track {
+  background: transparent;
+}
+
+.stepped-slider-input::-moz-range-thumb {
+  width: var(--spacing-slider-thumb);
+  height: var(--spacing-slider-thumb);
+  border: 0;
+  border-radius: 50%;
+  background: var(--color-primary);
+}

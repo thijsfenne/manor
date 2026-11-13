@@ -1,0 +1,77 @@
+{
+  "expo": {
+    "name": "Manor",
+    "slug": "manor-mobile",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
+    "scheme": "manor",
+    "userInterfaceStyle": "automatic",
+    "ios": {
+      "icon": {
+        "light": "./assets/images/icon.png",
+        "dark": "./assets/images/icon-dark.png",
+        "tinted": "./assets/images/icon-tinted.png"
+      },
+      "supportsTablet": true,
+      "bundleIdentifier": "com.thijsfenne.manor",
+      "appleTeamId": "T4R3P9CTKL"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#08090A",
+        "foregroundImage": "./assets/images/android-icon-foreground.png"
+      },
+      "package": "com.thijsfenne.manor",
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "output": "static",
+      "favicon": "./assets/images/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#FFFFFF",
+          "image": "./assets/images/splash-icon.png",
+          "imageWidth": 96,
+          "dark": {
+            "backgroundColor": "#000000",
+            "image": "./assets/images/splash-icon.png"
+          }
+        }
+      ],
+      "expo-secure-store",
+      "expo-notifications",
+      [
+        "expo-image-picker",
+        {
+          "cameraPermission": "Manor uses the camera when you take a photo yourself to attach to a message.",
+          "photosPermission": false,
+          "microphonePermission": false
+        }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "enableSceneSupport": true
+          }
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true,
+      "reactCompiler": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "73d48116-d299-4557-a75d-f0442338d586"
+      }
+    },
+    "owner": "thijsfenne"
+  }
+}

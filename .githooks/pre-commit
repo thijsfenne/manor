@@ -1,0 +1,50 @@
+#!/bin/sh
+# Runs the tests of every workspace package this commit touches, and of the packages
+# that depend on them, so a change to shared code cannot break a test elsewhere
+# unnoticed until the pre-push hook runs everything. Tests see only the commit's
+# index, never other Sessions' working files. Typecheck stays at pre-push.
+set -e
+cd "$(git rev-parse --show-toplevel)"
+
+# Read what the commit carries before the env is cleared: `git commit --only` (Manor's
+# Commit and Confirm) hands the hook a temporary index through GIT_INDEX_FILE.
+staged=$(git diff --cached --name-only --no-renames)
+
+filters=$(printf '%s\n' "$staged" | grep -v '\.md$' | sed -nE 's#^((apps|packages)/[^/]+)/.*#\1#p' | sort -u | sed 's#.*#--filter=...{./&}#')
+[ -z "$filters" ] && exit 0
+
+if ! command -v pnpm >/dev/null 2>&1; then
+  echo "pre-commit: pnpm is required. Install it and retry; do not bypass the hook." >&2
+  exit 1
+fi
+
+# Export the effective index while GIT_INDEX_FILE still points at commit --only's
+# temporary index. No stash, reset, shared worktree registration or live-file copy.
+snapshot=$(mktemp -d "${TMPDIR:-/tmp}/manor-pre-commit.XXXXXX")
+trap 'rm -rf "$snapshot"' 0
+trap 'exit 1' 1 2 15
+git checkout-index --all --prefix="$snapshot/"
+
+# A linked worktree hands the hook GIT_DIR, and every `git init` the tests run in a temp
+# dir would then re-initialise this repository instead. See pre-push.
+unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE
+cd "$snapshot"
+
+# Install from the staged lockfile, offline and without lifecycle scripts. Symlinking
+# live node_modules would resolve workspace imports back to other Sessions' source.
+# The whole workspace installs, not the test scope's dependency closure. A filtered
+# install leaves every package outside that closure without node_modules, so a test
+# importing one by relative path fails on module resolution rather than on the commit.
+# apps/server's suites did exactly that until the dependency was declared; the full
+# install keeps the next undeclared import from reading as a broken commit. The cost
+# is a few seconds from a warm store, against a failure that looks like someone else's.
+echo "pre-commit: testing the commit index in an isolated snapshot." >&2
+if ! pnpm install --offline --frozen-lockfile --ignore-scripts 1>&2; then
+  echo "pre-commit: snapshot install failed. Populate the pnpm store with pnpm install, or fix the staged lockfile, then retry." >&2
+  exit 1
+fi
+
+# --stream prefixes every line with its package, also when only one runs, so Manor
+# can name the failing files. Output goes to stderr, where git sends hook output.
+# shellcheck disable=SC2086
+pnpm --stream $filters test 1>&2

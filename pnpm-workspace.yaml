@@ -1,0 +1,19 @@
+packages:
+  - apps/*
+  - packages/*
+
+# Advisories ignored by ID only. Remove a line once its fix is in the lockfile.
+auditConfig:
+  ignoreGhsas:
+    # zod <4.6.6 can exhaust memory on an oversized collection. Fixed only in zod 4, and
+    # Manor is on zod 3. The schemas parse what the user's own client and the local
+    # provider tools send, over localhost. Remove with the move to zod 4.
+    - GHSA-mrhx-c7xc-m3w5
+    # Phone companion only.
+    # decode-uri-component <=0.5.0 is slow on long runs of percent signs. expo-router's query-string pins 0.2, and
+    # the fix is in 0.5.1 only. The phone parses its own links.
+    - GHSA-qr28-fpjm-wq7f
+    # node-forge <=1.4.0 RSA signature check, via expo>@expo/cli (dev server only, not shipped in the app).
+    - GHSA-86w9-cpqp-85rv
+    # braces <=3.0.3 nested-pattern stack overflow, via @expo/cli>@expo/metro-file-map>micromatch (dev bundler, patterns are ours).
+    - GHSA-vfj7-8cjw-p6xm

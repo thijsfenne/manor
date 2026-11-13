@@ -1,0 +1,9 @@
+{
+  "name": "verify-manor",
+  "private": true,
+  "type": "module",
+  "description": "Isolated control CLI for driving the Manor spike instance",
+  "dependencies": {
+    "playwright": "^1.55.0"
+  }
+}

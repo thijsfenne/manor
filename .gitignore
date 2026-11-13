@@ -1,0 +1,39 @@
+node_modules/
+dist/
+# Where stable-restart.sh stages a web build; left behind only by a build that died.
+dist.next/
+dist.old/
+.mcp-build/
+.bundle/
+data/
+apps/desktop/release/
+.env
+*.local
+.DS_Store
+
+# Agent tooling is shared (hooks, agents, settings, .codex), the working files
+# under it are not. Plans and ideas are session scratch, launch.json is per-machine.
+.claude/.last-review-*
+.claude/launch.json
+.claude/settings.local.json
+.claude/plans/*
+!.claude/plans/.gitkeep
+.claude/ideas/*
+!.claude/ideas/.gitkeep
+
+# Review probes: a reviewer's tests under any test/.review/, kept out of the suite and commits
+.review/
+
+# Local font trials, never commit
+apps/web/public/fonts/
+
+# verify-manor: keep the skill, not the run or the captured proof binaries
+.cursor/skills/verify-manor/node_modules/
+.cursor/skills/verify-manor/.run/
+.cursor/skills/verify-manor/evidence/**
+!.cursor/skills/verify-manor/evidence/.gitkeep
+.cursor/skills/verify-manor-mobile/evidence/**
+!.cursor/skills/verify-manor-mobile/evidence/.gitkeep
+
+# The maintainer's screenshot tools live outside the repository; a local copy may sit here.
+docs/portfolio-screenshots/

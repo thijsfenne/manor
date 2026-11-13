@@ -1,0 +1,26 @@
+diff --git a/libs/cua-driver/rust/crates/platform-macos/src/tools/mod.rs b/libs/cua-driver/rust/crates/platform-macos/src/tools/mod.rs
+index 5b2ce9ed5..cff87f9f9 100644
+--- a/libs/cua-driver/rust/crates/platform-macos/src/tools/mod.rs
++++ b/libs/cua-driver/rust/crates/platform-macos/src/tools/mod.rs
+@@ -321,10 +321,19 @@ pub(crate) async fn finish_window_observation(
+         drop(snapshot);
+         crate::window_change_detector::Changes::no_change()
+     } else {
+-        snapshot.detect_async().await
++        // Manor: new windows and focus changes from a click land within ~200ms,
++        // so the post-action watch is bounded at 350ms instead of a full second
++        // (after Synara's native revision 6). No-change actions paid the whole second.
++        tokio::task::spawn_blocking(move || {
++            snapshot.detect_with(MANOR_ACTION_OBSERVATION, std::time::Duration::from_millis(25))
++        })
++        .await
++        .unwrap_or_else(|_| crate::window_change_detector::Changes::no_change())
+     }
+ }
+-
++
++const MANOR_ACTION_OBSERVATION: std::time::Duration = std::time::Duration::from_millis(350);
++
+ #[cfg(test)]
+ mod interactive_observation_tests {
+     use super::*;

@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "skills": {
+    "composio": {
+      "source": "ComposioHQ/composio",
+      "sourceType": "github",
+      "skillPath": "skills/composio/SKILL.md",
+      "computedHash": "60d7d3cf79e25c061030309af40eaa2a9de6df8f6b87977932996a9909232886"
+    },
+    "trees": {
+      "source": "pierrecomputer/pierre",
+      "sourceType": "github",
+      "skillPath": "skills/trees/SKILL.md",
+      "computedHash": "7132a04dc1cb869f53db7fc01f34805d7c78a1089608d9df9b4839647e34b13a"
+    }
+  }
+}

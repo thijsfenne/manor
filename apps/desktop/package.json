@@ -1,0 +1,70 @@
+{
+  "name": "@manor/desktop",
+  "productName": "Manor",
+  "private": true,
+  "version": "0.0.2",
+  "description": "Manor personal multi-agent workspace",
+  "author": "Thijs Fenne",
+  "main": "dist/main.js",
+  "scripts": {
+    "build": "node ../web/scripts/browser-cursor-appearance.mjs && tsc -p tsconfig.json && node dist/runtimeImportsSmoke.js",
+    "bundle:app": "pnpm --filter @manor/web build && node ../server/scripts/build-bundle.mjs",
+    "package:mac": "pnpm bundle:app && pnpm build && electron-builder --mac dir && pnpm sign:mac",
+    "sign:mac": "codesign --force --deep --sign - release/mac-arm64/Manor.app && codesign --verify --strict release/mac-arm64/Manor.app && codesign -dv release/mac-arm64/Manor.app 2>&1 | grep -q 'Identifier=com.thijsfenne.manor'",
+    "dev": "pnpm build && env -u ELECTRON_RUN_AS_NODE MANOR_DESKTOP_URL=${MANOR_DESKTOP_URL:-http://localhost:5173} electron .",
+    "start": "pnpm build && env -u ELECTRON_RUN_AS_NODE electron .",
+    "smoke:preload": "pnpm build && env -u ELECTRON_RUN_AS_NODE electron dist/preloadSmoke.js",
+    "smoke:browser": "pnpm build && env -u ELECTRON_RUN_AS_NODE electron dist/browserSmoke.js",
+    "smoke:browser-preview": "pnpm build && env -u ELECTRON_RUN_AS_NODE electron dist/browserPreviewSmoke.js",
+    "smoke:browser-interactions": "pnpm build && env -u ELECTRON_RUN_AS_NODE electron dist/browserInteractionSmoke.js",
+    "smoke:browser-passwords": "pnpm build && env -u ELECTRON_RUN_AS_NODE electron dist/browserPasswordSmoke.js",
+    "smoke:browser-keys": "pnpm build && env -u ELECTRON_RUN_AS_NODE electron dist/browserKeySmoke.js",
+    "smoke:browser-adblock": "pnpm build && env -u ELECTRON_RUN_AS_NODE electron dist/browserAdblockSmoke.js",
+    "smoke:browser-gestures": "pnpm build && env -u ELECTRON_RUN_AS_NODE electron dist/browserGestureSmoke.js",
+    "test": "vitest run --dir src",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@ghostery/adblocker": "2.20.1",
+    "@ghostery/adblocker-electron": "2.20.1",
+    "@ghostery/adblocker-electron-preload": "2.20.1",
+    "@manor/contracts": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "electron": "43.8.8",
+    "electron-builder": "^26.16.1",
+    "typescript": "^5.6.0",
+    "vitest": "^4.1.11"
+  },
+  "build": {
+    "appId": "com.thijsfenne.manor",
+    "asar": true,
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "!dist/**/*.test.js",
+      "!dist/**/*Smoke.js",
+      "!dist/browserSmokeWindow.js",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "../server/.bundle",
+        "to": "server"
+      },
+      {
+        "from": "../web/dist",
+        "to": "web"
+      }
+    ],
+    "mac": {
+      "target": "dir",
+      "category": "public.app-category.productivity",
+      "icon": "assets/icon.icon",
+      "identity": null
+    }
+  }
+}
