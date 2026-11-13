@@ -1,11 +1,13 @@
 import type { AgentConfig, AgentDraft, ProviderConnection } from '@manor/contracts'
-import { defaultModel } from '@manor/client-runtime/runtimes'
-import { emptyDraft } from '../../persona'
+import { draftToCreate, newAgentDraft } from '../agents/newAgent'
 
 type Provider = ProviderConnection['provider']
 
 /** Which provider the first agent runs on when several are ready. */
 const PREFERENCE: readonly Provider[] = ['claude', 'codex', 'grok', 'cursor']
+
+/** What routing reads for a first agent whose job the user left blank. */
+const CATCH_ALL = 'Takes anything not addressed to someone specific.'
 
 const inState = (connections: readonly ProviderConnection[], state: ProviderConnection['state']): Provider[] =>
   PREFERENCE.filter((provider) => connections.some((row) => row.provider === provider && row.state === state))
@@ -20,40 +22,16 @@ export const usableProviders = (connections: readonly ProviderConnection[]): Pro
   [...inState(connections, 'ready'), ...inState(connections, 'attention')]
 
 /**
- * The instructions the first agent starts with. They follow the name the user types
- * until the user writes their own.
- */
-export const firstAgentCharacter = (name: string): string =>
-  `You are ${name.trim() || 'an assistant'} in this workspace. Every message that is not addressed to someone else comes to you. Answer directly and completely, in plain language. Say so when you are unsure, and ask one question when a request is unclear.`
-
-/**
- * The first agent with everything filled in except who it is: the name and the role
- * are the user's to invent. It takes every unaddressed message, because a workspace
- * with one agent needs somebody to.
+ * The first agent: the short New agent form's draft, plus the two things a workspace
+ * with one agent needs. It takes every unaddressed message, and it has memory, which
+ * is what the standing files and the daily log hang on.
  */
 export function firstAgentDraft(agents: AgentConfig[], driver: Provider): AgentDraft {
-  const model = defaultModel(driver)
-  return {
-    ...emptyDraft(agents),
-    description: 'Takes anything not addressed to someone specific.',
-    character: firstAgentCharacter(''),
-    driver,
-    ...(model === undefined ? {} : { model }),
-    isCos: true,
-    // Memory is what the standing files and the daily log hang on; a first agent has it.
-    memoryScope: true,
-  }
+  return { ...newAgentDraft(agents, driver), isCos: true, memoryScope: true }
 }
 
-/** Moves the draft to another provider, with that provider's default model. */
-export function withProvider(draft: AgentDraft, driver: Provider): AgentDraft {
-  const { model: _model, ...rest } = draft
-  const model = defaultModel(driver)
-  return { ...rest, driver, ...(model === undefined ? {} : { model }) }
-}
-
-/** Renames the agent, and its instructions with it while they are still the starter text. */
-export function withName(draft: AgentDraft, name: string): AgentDraft {
-  const followsName = draft.character === firstAgentCharacter(draft.name)
-  return { ...draft, name, ...(followsName ? { character: firstAgentCharacter(name) } : {}) }
+/** What Create sends for the first agent: a blank job falls back to the catch-all line. */
+export function firstAgentToCreate(draft: AgentDraft): AgentDraft {
+  const created = draftToCreate(draft)
+  return created.description === '' ? { ...created, description: CATCH_ALL } : created
 }

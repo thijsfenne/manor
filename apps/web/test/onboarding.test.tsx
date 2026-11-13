@@ -2,10 +2,11 @@ import { DEFAULT_USER_PROFILE, type AgentDraft, type ProviderConnection } from '
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { describe, expect, it, vi } from 'vitest'
 import { Onboarding, type OnboardingProps } from '../src/components/onboarding/Onboarding'
-import { firstAgentCharacter, firstAgentDraft, usableProviders, withName, withProvider } from '../src/components/onboarding/firstAgent'
+import { firstAgentDraft, firstAgentToCreate, usableProviders } from '../src/components/onboarding/firstAgent'
 
 vi.mock('motion/react', () => ({
   motion: { div: ({ initial: _initial, animate: _animate, transition: _transition, ...rest }: Record<string, unknown>) => <div {...rest} /> },
+  AnimatePresence: ({ children }: { children: React.ReactNode }) => <>{children}</>,
   useReducedMotion: () => true,
 }))
 // The suite runs without a DOM; an EventTarget is all the focus listener needs.
@@ -24,13 +25,12 @@ describe('the first agent', () => {
     expect(firstAgentDraft([], 'codex')).toMatchObject({ name: '', role: '', driver: 'codex', isCos: true, memoryScope: true })
   })
 
-  it('writes the name into its starter instructions, and leaves instructions the user wrote alone', () => {
-    const named = withName(firstAgentDraft([], 'claude'), 'Iris')
-    expect(named.character).toBe(firstAgentCharacter('Iris'))
-    expect(named.character).toContain('You are Iris')
-    const own = withName({ ...named, character: 'Be brief.' }, 'Juno')
-    expect(own).toMatchObject({ name: 'Juno', character: 'Be brief.' })
-    expect(withProvider(named, 'codex').model).not.toBe(named.model)
+  it('starts with instructions from its name, and a blank job routes as the catch-all', () => {
+    const created = firstAgentToCreate({ ...firstAgentDraft([], 'claude'), name: ' Iris ' })
+    expect(created).toMatchObject({ name: 'Iris', description: 'Takes anything not addressed to someone specific.' })
+    expect(created.character).toContain('You are Iris')
+    expect(created.character).toContain('Every message that is not addressed to someone else comes to you.')
+    expect(created.character).not.toContain('Takes anything')
   })
 })
 
@@ -82,14 +82,16 @@ describe('onboarding', () => {
     expect(button(page, 'Create agent').props.disabled).toBe(true)
     act(() => submit())
     expect(first.onSaveAgent).not.toHaveBeenCalled()
-    const [nameField, roleField] = page.root.findAllByType('input')
+    // Four things only: a face, a name, a job and a model. No Role field any more.
+    const nameField = page.root.findAllByType('input').find((node) => node.props.type !== 'color')
     expect(nameField?.props.value).toBe('')
     act(() => nameField?.props.onChange({ target: { value: 'Iris' } }))
-    act(() => roleField?.props.onChange({ target: { value: 'Researcher' } }))
+    act(() => page.root.findByType('textarea').props.onChange({ target: { value: 'Research and reading lists.' } }))
     act(() => submit())
     const [draft] = (first.onSaveAgent as ReturnType<typeof vi.fn>).mock.calls[0] as [AgentDraft, string]
-    expect(draft).toMatchObject({ name: 'Iris', role: 'Researcher', driver: 'codex', isCos: true })
+    expect(draft).toMatchObject({ name: 'Iris', role: '', description: 'Research and reading lists.', driver: 'codex', isCos: true, memoryScope: true })
     expect(draft.character).toContain('You are Iris')
+    expect(draft.character).toContain('Research and reading lists.')
     // Saving ends the onboarding; leaving must not trip over what the check action returned.
     expect(() => act(() => page.unmount())).not.toThrow()
   })
@@ -102,7 +104,7 @@ describe('onboarding', () => {
     act(() => page.root.findByType('form').props.onSubmit({ preventDefault: () => undefined }))
     expect(button(page, 'Continue').props.disabled).toBe(false)
     act(() => button(page, 'Continue').props.onClick())
-    act(() => page.root.findAllByType('input')[0]?.props.onChange({ target: { value: 'Iris' } }))
+    act(() => page.root.findAllByType('input').find((node) => node.props.type !== 'color')?.props.onChange({ target: { value: 'Iris' } }))
     act(() => page.root.findByType('form').props.onSubmit({ preventDefault: () => undefined }))
     const [draft] = (silent.onSaveAgent as ReturnType<typeof vi.fn>).mock.calls[0] as [AgentDraft, string]
     expect(draft.driver).toBe('grok')

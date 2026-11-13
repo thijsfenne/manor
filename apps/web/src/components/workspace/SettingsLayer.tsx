@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo } from 'react'
 import type { SettingsLocation } from '../settings/sections'
 import { isSettingsShortcut } from '../settings/sections'
-import { NEW_AGENT, NEW_SESSION_AGENT, selectedAgentOf } from '../settings/AgentsPage'
+import { NEW_SESSION_AGENT, selectedAgentOf } from '../settings/AgentsPage'
 import { ViewBoundary, retryableLazy } from '../RecoveryBoundary'
 import { differsFromRoster, runtimeLabel } from '../../runtimeChoices'
 import type { SettingsController } from '../../useSettings'
@@ -13,11 +13,13 @@ const SettingsHost = retryableLazy(() => import('../settings/SettingsHost').then
 
 /**
  * Settings, from the account popover, ⌘, or one of the doors into a page: the Auto
- * mode gear, and the Agents view's New agent and Edit agent. Each page reads what it
- * shows on the way in, so a stale copy is never what a form saves back. Also owns ⌘,
- * itself, which opens Settings as on any Mac app and inside Settings changes nothing.
+ * mode gear, and the Agents view's Edit agent. Each page reads what it shows on the
+ * way in, so a stale copy is never what a form saves back. New agent is not a page:
+ * it leaves Settings (asking about an unsaved edit) and opens the short form over the
+ * workspace. Also owns ⌘, itself, which opens Settings as on any Mac app and inside
+ * Settings changes nothing.
  */
-export function useSettingsDoors(settings: SettingsController, dismissNotice: () => void) {
+export function useSettingsDoors(settings: SettingsController, dismissNotice: () => void, openNewAgent: () => void) {
   const openSettings = useCallback(() => {
     dismissNotice()
     settings.open('general')
@@ -28,7 +30,6 @@ export function useSettingsDoors(settings: SettingsController, dismissNotice: ()
     settings.open('auto')
   }, [dismissNotice, settings.open])
   const editAgent = useCallback((agentId: string) => settings.open('agents', agentId), [settings.open])
-  const newAgent = useCallback(() => settings.open('agents', NEW_AGENT), [settings.open])
   const newSessionAgent = useCallback(() => settings.open('agents', NEW_SESSION_AGENT), [settings.open])
 
   useEffect(() => {
@@ -54,6 +55,8 @@ export function useSettingsDoors(settings: SettingsController, dismissNotice: ()
     [settings.location, settings.guard, settings.dismiss],
   )
 
+  const newAgent = useMemo(() => leaveSettingsThen(openNewAgent), [leaveSettingsThen, openNewAgent])
+
   return { openSettings, openUsageSettings, openAutoRules, editAgent, newAgent, newSessionAgent, leaveSettingsThen }
 }
 
@@ -67,6 +70,7 @@ export function SettingsLayer({
   manor,
   theme,
   account,
+  onNewAgent,
   onDialogChange,
 }: {
   location: SettingsLocation
@@ -74,6 +78,7 @@ export function SettingsLayer({
   manor: Manor
   theme: ReturnType<typeof useTheme>
   account: { onSignOut: () => void } | undefined
+  onNewAgent: () => void
   onDialogChange: (open: boolean) => void
 }) {
   const hostAuto = useHostAuto()
@@ -115,6 +120,7 @@ export function SettingsLayer({
         {...(account === undefined ? {} : { account })}
         providerUpdates={workspace.providerUpdates}
         {...(dmRuntime === undefined ? {} : { dmRuntime })}
+        onNewAgent={onNewAgent}
         onDialogChange={onDialogChange}
       />
     </ViewBoundary>

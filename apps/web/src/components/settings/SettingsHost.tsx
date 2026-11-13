@@ -28,6 +28,8 @@ interface SettingsHostProps {
   providerUpdates: readonly ProviderUpdate[]
   /** The selected agent's DM pin, loaded by the workspace. */
   dmRuntime?: string
+  /** The New agent door, which leaves Settings for the short form. */
+  onNewAgent: () => void
   /** Dialogs inside the reused registry views own the shared notice while open. */
   onDialogChange: (open: boolean) => void
 }
@@ -41,6 +43,7 @@ export function SettingsHost({
   account,
   providerUpdates,
   dmRuntime,
+  onNewAgent,
   onDialogChange,
 }: SettingsHostProps) {
   const { workspace } = manor
@@ -86,6 +89,7 @@ export function SettingsHost({
             {...(dmRuntime === undefined ? {} : { dmRuntime })}
             requestEvents={manor.requestEvents}
             onSelect={(agentId) => settings.open('agents', agentId)}
+            onNewAgent={onNewAgent}
             onSaveAgent={manor.saveAgent}
             onDeleteAgent={manor.deleteAgent}
             onSaveSubagentPolicy={manor.saveSubagentPolicy}

@@ -1,17 +1,15 @@
 import { useEffect, useState } from 'react'
 import { motion, useReducedMotion } from 'motion/react'
 import { DEFAULT_USER_PROFILE, type AgentConfig, type AgentDraft, type ProviderConnection, type UserProfile } from '@manor/contracts'
-import { MODELS, PROVIDERS } from '@manor/client-runtime/runtimes'
-import { cleanDraft, PERSONA_COLOR_OPTIONS } from '../../persona'
+import { PROVIDERS } from '@manor/client-runtime/runtimes'
 import { useRequest, type RequestEvents } from '../../useRequest'
-import { Avatar } from '../Avatar'
-import { Modal, ModalFooter } from '../Modal'
+import { withRuntime } from '../agents/newAgent'
+import { NewAgentFields } from '../agents/NewAgentFields'
 import { ProviderMark } from '../ProviderMark'
 import { ProviderConnectionStatus } from '../settings/SystemPages'
 import { Button } from '../ui/Button'
 import { FormField, formInputClass } from '../ui/FormField'
-import { Select } from '../ui/Select'
-import { firstAgentDraft, usableProviders, withName, withProvider } from './firstAgent'
+import { firstAgentDraft, firstAgentToCreate, usableProviders } from './firstAgent'
 
 type Provider = ProviderConnection['provider']
 
@@ -53,7 +51,6 @@ export function Onboarding({ profile, connections, agents, requestEvents, onSave
   const [name, setName] = useState<string | null>(null)
   const [showMore, setShowMore] = useState(false)
   const [draft, setDraft] = useState<AgentDraft | null>(null)
-  const [editing, setEditing] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   // A login can change outside Manor, so the rows are asked for again on the way in
@@ -73,7 +70,7 @@ export function Onboarding({ profile, connections, agents, requestEvents, onSave
   // signs out while the card is open must not stay on the card.
   const agent = draft !== null && ready.includes(draft.driver as Provider)
     ? draft
-    : ready[0] === undefined ? null : draft === null ? firstAgentDraft(agents, ready[0]) : withProvider(draft, ready[0])
+    : ready[0] === undefined ? null : draft === null ? firstAgentDraft(agents, ready[0]) : withRuntime(draft, ready[0])
 
   const saveName = () => {
     const trimmed = typed.trim()
@@ -85,7 +82,7 @@ export function Onboarding({ profile, connections, agents, requestEvents, onSave
   const create = () => {
     if (agent === null || agent.name.trim() === '') return
     setError(null)
-    const sent = start((requestId) => onSaveAgent(cleanDraft(agent), requestId), { onNotice: (notice) => setError(notice.text) })
+    const sent = start((requestId) => onSaveAgent(firstAgentToCreate(agent), requestId), { onNotice: (notice) => setError(notice.text) })
     if (!sent) setError('Manor is not connected. Try again in a moment.')
   }
 
@@ -157,27 +154,11 @@ export function Onboarding({ profile, connections, agents, requestEvents, onSave
 
           {step === 3 ? (
             <form className="contents" onSubmit={(event) => { event.preventDefault(); create() }}>
-              <Heading title="Create your first agent" text="Give it a name. Everything else is filled in and can change later." />
+              <Heading title="Create your first agent" text="Give it a face, a name and a job. Everything else can change later." />
               {agent === null ? <p className="m-0 text-label text-muted">No provider is signed in any more. Go back and connect one.</p> : (
-                <div className="flex flex-col gap-4">
-                  <div className="flex items-center gap-3.5">
-                    <Avatar name={agent.name} color={agent.color} size={44} />
-                    <div className="grid min-w-0 flex-1 grid-cols-2 gap-3 @max-[420px]:grid-cols-1">
-                      <FormField label="Name">
-                        <input className={formInputClass} value={agent.name} onChange={(event) => setDraft(withName(agent, event.target.value))} placeholder="Name your agent" autoFocus maxLength={60} />
-                      </FormField>
-                      <FormField label="Role" optional>
-                        <input className={formInputClass} value={agent.role ?? ''} onChange={(event) => setDraft({ ...agent, role: event.target.value })} placeholder="Assistant, researcher…" />
-                      </FormField>
-                    </div>
-                  </div>
-                  <div className="flex items-center justify-between gap-3 rounded-xl border border-line bg-surface px-3.5 py-2.5">
-                    <span className="flex min-w-0 items-center gap-2 text-label text-muted">
-                      <ProviderMark driver={agent.driver} size={14} />
-                      <span className="truncate">Runs on {providerName(agent.driver as Provider)}</span>
-                    </span>
-                    <Button size="compact" onClick={() => setEditing(true)}>More options</Button>
-                  </div>
+                <div className="flex flex-col gap-2">
+                  <NewAgentFields draft={agent} providers={ready} disabled={pending} onChange={setDraft} />
+                  <p className="m-0 text-label text-dim">Your first agent also takes every message you don't address to someone else.</p>
                 </div>
               )}
               {error === null ? null : <p className="m-0 text-label text-danger" role="alert">{error}</p>}
@@ -189,9 +170,6 @@ export function Onboarding({ profile, connections, agents, requestEvents, onSave
           ) : null}
         </motion.div>
       </div>
-      {editing && agent !== null ? (
-        <FirstAgentDialog initial={agent} providers={ready} onClose={() => setEditing(false)} onSave={(next) => { setDraft(next); setEditing(false) }} />
-      ) : null}
     </main>
   )
 }
@@ -204,56 +182,3 @@ const Heading = ({ title, text }: { title: string; text: string }) => (
 )
 
 const Footer = ({ children }: { children: React.ReactNode }) => <div className="flex items-center justify-between gap-3">{children}</div>
-
-/**
- * What the first agent is told and what it runs on, for the user who wants to look.
- * Tools, placement and memory keep their defaults here and live in Settings, where
- * the full agent form is.
- */
-function FirstAgentDialog({ initial, providers, onClose, onSave }: {
-  initial: AgentDraft
-  providers: readonly Provider[]
-  onClose: () => void
-  onSave: (draft: AgentDraft) => void
-}) {
-  const [draft, setDraft] = useState(initial)
-  const driver = draft.driver as Provider
-  const usable = draft.character.trim() !== ''
-  return (
-    <Modal title="More options" subtitle="Filled in for you. Every field can change." onClose={onClose}>
-      <div className="flex items-center gap-3.5">
-        <Avatar name={draft.name} color={draft.color} size={44} />
-        <div className="flex flex-wrap gap-2" role="group" aria-label="Agent colour">
-          {PERSONA_COLOR_OPTIONS.map((option) => (
-            <button
-              key={option.value}
-              type="button"
-              aria-label={option.label}
-              aria-pressed={option.value === draft.color}
-              title={option.label}
-              className={`size-[22px] cursor-pointer rounded-full border-2 ${option.value === draft.color ? 'border-text' : 'border-transparent'}`}
-              style={{ backgroundColor: option.value }}
-              onClick={() => setDraft({ ...draft, color: option.value })}
-            />
-          ))}
-        </div>
-      </div>
-      <FormField label="Instructions">
-        <textarea className={`${formInputClass} min-h-[110px] resize-y`} value={draft.character} onChange={(event) => setDraft({ ...draft, character: event.target.value })} />
-      </FormField>
-      <div className="grid grid-cols-2 gap-3 @max-[420px]:grid-cols-1">
-        <FormField label="Provider" custom>
-          <Select label="Provider" value={driver} options={providers.map((provider) => ({ value: provider, label: providerName(provider) }))} onChange={(next) => setDraft(withProvider(draft, next))} />
-        </FormField>
-        <FormField label="Model" custom>
-          <Select label="Model" value={draft.model ?? ''} options={MODELS[driver]} onChange={(model) => setDraft({ ...draft, model })} placeholder="Choose…" />
-        </FormField>
-      </div>
-      <p className="m-0 text-label text-dim">Tools, placement and memory are in Settings, under Agents.</p>
-      <ModalFooter>
-        <Button variant="ghost" onClick={onClose}>Cancel</Button>
-        <Button variant="primary" disabled={!usable} onClick={() => onSave(draft)}>Save</Button>
-      </ModalFooter>
-    </Modal>
-  )
-}

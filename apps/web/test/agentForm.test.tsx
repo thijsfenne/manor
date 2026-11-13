@@ -152,7 +152,7 @@ describe('a save in flight', () => {
   const onSaveAgent = vi.fn<(draft: AgentDraft, requestId: string) => boolean>(() => true)
   const page = (agents: AgentConfig[]) => (
     <AgentsPage agents={agents} agentId="saved-agent" registry={[]} skills={[]} subagentPolicy={null} notice={null}
-      requestEvents={events} onSelect={() => {}} onSaveAgent={onSaveAgent} onDeleteAgent={() => true} onSaveSubagentPolicy={() => true}
+      requestEvents={events} onSelect={() => {}} onNewAgent={() => {}} onSaveAgent={onSaveAgent} onDeleteAgent={() => true} onSaveSubagentPolicy={() => true}
       onRequestSubagentPolicy={() => {}} onDismissNotice={() => {}} onDirtyChange={() => {}} />
   )
   const role = () => tree.root.findByProps({ placeholder: 'Engineer' })

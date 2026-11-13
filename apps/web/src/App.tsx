@@ -16,6 +16,7 @@ import { WorkspaceNavRail } from './components/workspace/WorkspaceNavRail'
 import { ExternalLinkProvider } from './components/ExternalLink'
 import { Login } from './components/Login'
 import { Onboarding } from './components/onboarding/Onboarding'
+import { NewAgentDialog } from './components/agents/NewAgentDialog'
 import { AutoRulesConfigProvider } from './components/settings/AutoRulesPage'
 import { ViewBoundary } from './components/RecoveryBoundary'
 import { RepoFileLinkProvider } from './components/RepoFileLink'
@@ -448,10 +449,13 @@ function Workspace({
    * A modal owns the screen. The server keeps one notice at a time, and an open
    * dialog is where that notice belongs.
    */
+  const [newAgentOpen, setNewAgentOpen] = useState(false)
+  const openNewAgent = () => setNewAgentOpen(true)
+  const closeNewAgent = () => setNewAgentOpen(false)
   const dialogOpen =
-    editingSettings || settingsOpen || projectDialog !== null || groupDialog !== null || searchOpen
+    editingSettings || settingsOpen || projectDialog !== null || groupDialog !== null || searchOpen || newAgentOpen
 
-  const settingsDoors = useSettingsDoors(settings, manor.dismissNotice)
+  const settingsDoors = useSettingsDoors(settings, manor.dismissNotice, openNewAgent)
   const { openAutoRules, editAgent, newAgent, newSessionAgent } = settingsDoors
   const [managingAgents, setManagingAgents] = useState(false)
   const manageAgents = () => setManagingAgents(true)
@@ -796,6 +800,19 @@ function Workspace({
       </SplitDragContext.Provider>
       <SplitDragLayer drag={splitDrag} />
 
+      {newAgentOpen ? (
+        <NewAgentDialog
+          agents={workspace.agents}
+          requestEvents={manor.requestEvents}
+          onSaveAgent={manor.saveAgent}
+          onCreated={(agentId) => {
+            closeNewAgent()
+            openDm(agentId)
+          }}
+          onClose={closeNewAgent}
+        />
+      ) : null}
+
       <WorkspaceDialogs
         manor={manor}
         chatRows={chatRows}
@@ -885,6 +902,7 @@ function Workspace({
           manor={manor}
           theme={theme}
           account={account}
+          onNewAgent={newAgent}
           onDialogChange={setEditingSettings}
         />
       )}

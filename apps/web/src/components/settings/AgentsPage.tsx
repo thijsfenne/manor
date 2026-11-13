@@ -11,10 +11,10 @@ import { Button } from '../ui/Button'
 import { Select } from '../ui/Select'
 import { SelectionMarker } from '../ui/SelectionMarker'
 
-/** A blank form for an agent not created yet. */
-export const NEW_AGENT = 'new'
-/** The blank form again, already set to a Session agent: the door a Session with nobody to seat opens. */
+/** A blank full form set to a Session agent: the door a Session with nobody to seat opens. */
 export const NEW_SESSION_AGENT = 'new-session'
+/** The narrow picker's row for the New agent door, which is not a location here. */
+const NEW_AGENT_ROW = 'new'
 
 const ROW_MARKER = 'settings-agent-row'
 
@@ -23,7 +23,7 @@ const ROW_MARKER = 'settings-agent-row'
  * first in the list. Shared with the workspace, which loads that agent's DM pin.
  */
 export function selectedAgentOf(agents: readonly AgentConfig[], agentId: string | undefined): AgentConfig | null {
-  if (agentId === NEW_AGENT || agentId === NEW_SESSION_AGENT) return null
+  if (agentId === NEW_SESSION_AGENT) return null
   return agents.find((agent) => agent.id === agentId) ?? listOrder(agents)[0] ?? null
 }
 
@@ -46,6 +46,8 @@ interface AgentsPageProps {
   requestEvents: RequestEvents
   /** Guarded one level up: an unsaved edit is asked about before another agent opens. */
   onSelect: (agentId: string) => void
+  /** Opens the short New agent form over the workspace. */
+  onNewAgent: () => void
   onSaveAgent: (draft: AgentDraft, requestId: string) => boolean
   onDeleteAgent: (agentId: string, requestId: string) => boolean
   onSaveSubagentPolicy: (policy: SubagentPolicy, requestId: string) => boolean
@@ -68,6 +70,7 @@ export function AgentsPage({
   notice,
   requestEvents,
   onSelect,
+  onNewAgent,
   onSaveAgent,
   onDeleteAgent,
   onSaveSubagentPolicy,
@@ -81,7 +84,7 @@ export function AgentsPage({
   // so the form takes its new baseline from exactly what the server stored.
   const [saves, setSaves] = useState(0)
   const selected = selectedAgentOf(agents, agentId)
-  const creating = agentId === NEW_AGENT || agentId === NEW_SESSION_AGENT
+  const creating = agentId === NEW_SESSION_AGENT
   const ordered = listOrder(agents)
   const chatAgents = ordered.filter((agent) => agent.placement !== 'session')
   const sessionAgents = ordered.filter((agent) => agent.placement === 'session')
@@ -187,7 +190,7 @@ export function AgentsPage({
               Chat and Session agents in one list. The Agents view opens the same form.
             </p>
           </div>
-          <Button variant="primary" className="inline-flex flex-none items-center gap-2" onClick={() => onSelect(NEW_AGENT)}>
+          <Button variant="primary" className="inline-flex flex-none items-center gap-2" onClick={onNewAgent}>
             <Icon icon={PlusSignIcon} size={14} />
             New agent
           </Button>
@@ -207,12 +210,13 @@ export function AgentsPage({
             <div className="hidden px-8 pb-4 @max-[720px]:block @max-[560px]:px-5">
               <Select
                 label="Agent"
-                value={creating ? NEW_AGENT : selected?.id ?? NEW_AGENT}
+                value={creating ? NEW_SESSION_AGENT : selected?.id ?? NEW_AGENT_ROW}
                 options={[
                   ...ordered.map((agent) => ({ value: agent.id, label: agent.placement === 'session' ? `${agent.name} · Session` : agent.name })),
-                  { value: NEW_AGENT, label: 'New agent' },
+                  ...(creating ? [{ value: NEW_SESSION_AGENT, label: 'New Session agent' }] : []),
+                  { value: NEW_AGENT_ROW, label: 'New agent' },
                 ]}
-                onChange={onSelect}
+                onChange={(value) => value === NEW_AGENT_ROW ? onNewAgent() : onSelect(value)}
               />
             </div>
             <div className="max-w-[760px] px-8 pb-12 @max-[560px]:px-5">
@@ -221,9 +225,9 @@ export function AgentsPage({
               ) : (
                 <AgentForm
                   key={creating ? agentId : selected?.id ?? ''}
-                  initial={agentId === NEW_SESSION_AGENT
+                  initial={creating || selected === null
                     ? { ...emptyDraft(agents), placement: 'session', isCos: false, pinned: false, railPinned: false }
-                    : creating || selected === null ? emptyDraft(agents) : draftOf(selected)}
+                    : draftOf(selected)}
                   agents={agents}
                   registry={registry}
                   skills={skills}
