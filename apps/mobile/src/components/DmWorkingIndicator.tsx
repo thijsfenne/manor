@@ -7,7 +7,7 @@ import Animated, { Easing, Keyframe, LayoutAnimationConfig, ReduceMotion } from 
 
 import { Blobatar } from '@/components/Blobatar'
 import { ShimmerText } from '@/components/ShimmerText'
-import { colors, fonts } from '@/theme'
+import { colors, fonts, spacing } from '@/theme'
 
 /** A label stays at least this long, so a run of quick calls cannot make it flicker. */
 const LABEL_HOLD_MS = 2_500
@@ -103,8 +103,9 @@ function useHeldLabel(label: string): string {
 }
 
 const styles = StyleSheet.create({
-  // Tucked toward the bubble above, as the Mac tucks it.
-  indicator: { minHeight: 32, marginTop: -12, flexDirection: 'row', alignItems: 'center', gap: 6 },
+  // The list cancels its last row's gap, so the footer brings the feed's own gap: the
+  // distance a reply keeps from the bubble above it.
+  indicator: { minHeight: 32, marginTop: spacing.xl, flexDirection: 'row', alignItems: 'center', gap: 6 },
   face: { marginLeft: -4 },
   label: { flex: 1, minWidth: 0, flexDirection: 'row' },
   text: { color: colors.muted, fontFamily: fonts.sans, fontSize: 15 },
