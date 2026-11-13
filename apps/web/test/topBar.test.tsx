@@ -135,7 +135,7 @@ describe('the top bar groups', () => {
       </TopBarSlotContext.Provider>,
     )
 
-    expect(html).toContain('aria-label="Edit Iris"')
+    expect(html).toContain('aria-label="Agent settings for Iris"')
     expect(html).toContain('Design critic')
     expect(html).toContain('width:20px')
     expect(html).not.toContain('>/<')

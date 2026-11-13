@@ -286,6 +286,23 @@ export const WorkflowSuggestionSchema = z.object({
 })
 export type WorkflowSuggestion = z.infer<typeof WorkflowSuggestionSchema>
 
+/**
+ * Every persona's built-in tools since tool groups went (2026-11-13). The Claude Code
+ * set, each name read off the installed CLI because one it does not resolve is
+ * silently dropped. Grok maps the names to its own built-ins; Codex and Cursor cannot
+ * pick per tool, and a non-empty list puts them in their acting mode. Connections stay
+ * per persona, and the effect broker still asks before an outside write.
+ */
+export const PERSONA_TOOLS: readonly string[] = [
+  'Read', 'Write', 'Edit', 'NotebookEdit', 'Glob', 'Grep',
+  'Bash',
+  'WebSearch', 'WebFetch',
+  'Agent', 'Skill', 'SendMessage', 'Monitor', 'ToolSearch',
+  'TaskCreate', 'TaskGet', 'TaskList', 'TaskOutput', 'TaskUpdate', 'TaskStop',
+  'CronCreate', 'CronList', 'CronDelete', 'ScheduleWakeup', 'PushNotification', 'RemoteTrigger',
+  'Artifact', 'Workflow', 'ReportFindings', 'DesignSync', 'EnterWorktree', 'ExitWorktree',
+]
+
 export const AgentConfigSchema = z.object({
   id: z.string(),
   name: z.string(),
@@ -301,10 +318,11 @@ export const AgentConfigSchema = z.object({
   effort: EffortSchema.default('high'),
   /** Default speed for this persona; absent means Standard. */
   speed: z.literal('fast').optional(),
-  // Built-in tool names the persona may use. Empty array = no built-ins. This field
-  // governs BUILT-INS ONLY: `--tools ""` was measured not to gate MCP at all (a
-  // persona with an empty toolset executed mcp__filesystem__write_file), so MCP has
-  // its own field below and "this persona has no tools" means both are empty.
+  // Built-in tool names the turn may use. Empty array = no built-ins, which only
+  // Manor's own side calls (titles, summaries, routing) still use: every persona holds
+  // `PERSONA_TOOLS`, set by the server, never by a draft. This field governs BUILT-INS
+  // ONLY: `--tools ""` was measured not to gate MCP at all (a persona with an empty
+  // toolset executed mcp__filesystem__write_file), so MCP has its own field below.
   allowedTools: z.array(z.string()),
   // MCP servers attached to this persona. Empty = no MCP. Attachment is the whole
   // access decision: a server absent from this list is absent from the rendered
@@ -559,8 +577,8 @@ export const AutoRulesDraftSchema = z.record(z.string(), z.object({
 }))
 export type AutoRulesDraft = z.infer<typeof AutoRulesDraftSchema>
 
-/** An agent on its way in. No id yet when it is being created. */
-export const AgentDraftSchema = AgentConfigSchema.omit({ id: true }).extend({
+/** An agent on its way in. No id yet when it is being created. Its built-in tools are the server's to set. */
+export const AgentDraftSchema = AgentConfigSchema.omit({ id: true, allowedTools: true }).extend({
   id: z.string().optional(),
 })
 export type AgentDraft = z.infer<typeof AgentDraftSchema>
@@ -4146,6 +4164,8 @@ const ClientMessageWireSchema = z.discriminatedUnion('type', [
   // tree is not, so a project nobody has opened never pays for its listing.
   z.object({ type: z.literal('get_project_memory'), projectId: z.string(), ...optionalRequestId }),
   z.object({ type: z.literal('get_chat_summary'), chatId: z.string(), ...optionalRequestId }),
+  /** An agent's standing notes as its turns receive them, for its Agent settings Notes page. */
+  z.object({ type: z.literal('get_agent_notes'), agentId: z.string(), ...optionalRequestId }),
   z.object({
     type: z.literal('list_repo_files'),
     projectId: z.string(),
@@ -4879,6 +4899,17 @@ export const ServerMessageSchema = z.discriminatedUnion('type', [
       updatedAt: z.number(),
     }).nullable(),
     /** The persona's standing notes exactly as its turns receive them; absent when none are injected. */
+    notes: z.object({
+      path: z.string(),
+      content: z.string(),
+      truncated: z.boolean(),
+    }).optional(),
+  }),
+  z.object({
+    type: z.literal('agent_notes'),
+    ...optionalRequestId,
+    agentId: z.string(),
+    /** Absent when memory is off or the agent keeps none: the same rule its turns follow. */
     notes: z.object({
       path: z.string(),
       content: z.string(),

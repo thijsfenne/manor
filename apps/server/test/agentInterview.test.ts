@@ -16,7 +16,6 @@ const draft = (overrides: Partial<AgentDraft> = {}): AgentDraft => ({
   character: 'You are Nova in this workspace. You help with this: Plan my week.',
   driver: 'mock',
   effort: 'high',
-  allowedTools: [],
   mcpServers: [],
   memoryScope: false,
   role: '',

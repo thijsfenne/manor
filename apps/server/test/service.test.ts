@@ -390,10 +390,20 @@ describe('ManorService', () => {
     expect(replies.at(-1)).toMatchObject({
       type: 'chat_summary', notes: { path: notesPath, content: '# Sage\n\n- Coach, do not answer.', truncated: false },
     })
+    // Agent settings reads the same notes by agent, so a Session agent without a DM has them too.
+    await manor.handle({ type: 'get_agent_notes', agentId: 'sage', requestId: 'notes-1' }, (message) => replies.push(message))
+    expect(replies.at(-1)).toEqual({
+      type: 'agent_notes', agentId: 'sage', requestId: 'notes-1',
+      notes: { path: notesPath, content: '# Sage\n\n- Coach, do not answer.', truncated: false },
+    })
     live = [{ ...sage, memoryScope: false }]
     await manor.handle({ type: 'get_chat_summary', chatId: dm.id }, (message) => replies.push(message))
     expect(replies.at(-1)).toMatchObject({ type: 'chat_summary' })
     expect(replies.at(-1)).not.toHaveProperty('notes')
+    await manor.handle({ type: 'get_agent_notes', agentId: 'sage' }, (message) => replies.push(message))
+    expect(replies.at(-1)).toEqual({ type: 'agent_notes', agentId: 'sage' })
+    await manor.handle({ type: 'get_agent_notes', agentId: 'ghost', requestId: 'notes-2' }, (message) => replies.push(message))
+    expect(replies.at(-1)).toMatchObject({ type: 'notice', kind: 'error' })
   })
 
   it('refuses missing and non-DM chats without exposing their summary', async () => {

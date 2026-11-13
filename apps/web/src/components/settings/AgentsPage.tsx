@@ -1,31 +1,13 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
-import { PlusSignIcon } from '@hugeicons/core-free-icons'
-import type { AgentConfig, AgentDraft, McpServerConfig, SkillConfig, SubagentPolicy } from '@manor/contracts'
-import { draftOf, emptyDraft } from '../../persona'
-import type { Notice } from '../../state'
-import { useRequest, type RequestEvents } from '../../useRequest'
-import { AgentForm } from '../agents/AgentForm'
+import { ArrowUpRight01Icon, PlusSignIcon } from '@hugeicons/core-free-icons'
+import type { AgentConfig, Chat } from '@manor/contracts'
+import { AgentSettings, type AgentSettingsProps } from '../agents/AgentSettings'
 import { Avatar } from '../Avatar'
 import { Icon } from '../Icon'
 import { Button } from '../ui/Button'
-import { Select } from '../ui/Select'
+import { STAGE_PANEL_SHELL } from '../ui/dockPanel'
 import { SelectionMarker } from '../ui/SelectionMarker'
 
-/** A blank full form set to a Session agent: the door a Session with nobody to seat opens. */
-export const NEW_SESSION_AGENT = 'new-session'
-/** The narrow picker's row for the New agent door, which is not a location here. */
-const NEW_AGENT_ROW = 'new'
-
 const ROW_MARKER = 'settings-agent-row'
-
-/**
- * The agent the detail shows: the one asked for, a blank form for `new`, else the
- * first in the list. Shared with the workspace, which loads that agent's DM pin.
- */
-export function selectedAgentOf(agents: readonly AgentConfig[], agentId: string | undefined): AgentConfig | null {
-  if (agentId === NEW_SESSION_AGENT) return null
-  return agents.find((agent) => agent.id === agentId) ?? listOrder(agents)[0] ?? null
-}
 
 /** One list, placement as its subheaders: chat agents first, Session agents below. */
 const listOrder = (agents: readonly AgentConfig[]) => [
@@ -33,133 +15,44 @@ const listOrder = (agents: readonly AgentConfig[]) => [
   ...agents.filter((agent) => agent.placement === 'session'),
 ]
 
-interface AgentsPageProps {
-  agents: AgentConfig[]
-  /** From the Settings location: an id, `new`, or nothing for the first agent. */
+/** The DM an agent's settings dock in. A Session agent has none, nor does an agent never talked to. */
+export const dmOf = (chats: readonly Chat[], agent: AgentConfig) => agent.placement === 'session'
+  ? undefined
+  : chats.find((chat) => chat.kind === 'dm' && chat.memberIds[0] === agent.id)
+
+interface AgentsPageProps extends Omit<AgentSettingsProps, 'agent' | 'onClose'> {
+  /** From the Settings location: an id, or nothing for the first agent edited here. */
   agentId: string | undefined
-  registry: McpServerConfig[]
-  skills: SkillConfig[]
-  subagentPolicy: SubagentPolicy | null
-  /** The selected agent's DM pin, when it differs from her default. */
-  dmRuntime?: string
-  notice: Notice | null
-  requestEvents: RequestEvents
-  /** Guarded one level up: an unsaved edit is asked about before another agent opens. */
+  chats: readonly Chat[]
   onSelect: (agentId: string) => void
+  /** Leaves Settings for the agent's DM, its settings open there. */
+  onOpenDm: (agentId: string) => void
   /** Opens the short New agent form over the workspace. */
   onNewAgent: () => void
-  onSaveAgent: (draft: AgentDraft, requestId: string) => boolean
-  onDeleteAgent: (agentId: string, requestId: string) => boolean
-  onSaveSubagentPolicy: (policy: SubagentPolicy, requestId: string) => boolean
-  onRequestSubagentPolicy: () => void
-  onDismissNotice: () => void
-  onDirtyChange: (dirty: boolean) => void
 }
 
 /**
- * Every agent in one list beside the form for the selected one, the Scheduled tasks
- * shape. Too narrow for two columns, the list becomes a picker above the form.
+ * Every agent in one list. An agent with a DM opens its settings there; the others,
+ * Session agents first among them, open the same Agent settings beside the list.
  */
-export function AgentsPage({
-  agents,
-  agentId,
-  registry,
-  skills,
-  subagentPolicy,
-  dmRuntime,
-  notice,
-  requestEvents,
-  onSelect,
-  onNewAgent,
-  onSaveAgent,
-  onDeleteAgent,
-  onSaveSubagentPolicy,
-  onRequestSubagentPolicy,
-  onDismissNotice,
-  onDirtyChange,
-}: AgentsPageProps) {
-  const { start } = useRequest(requestEvents)
-  const [pending, setPending] = useState<'save' | 'delete' | null>(null)
-  // Bumped when a save lands. The roster carries the saved persona before the ack does,
-  // so the form takes its new baseline from exactly what the server stored.
-  const [saves, setSaves] = useState(0)
-  const selected = selectedAgentOf(agents, agentId)
-  const creating = agentId === NEW_SESSION_AGENT
-  const ordered = listOrder(agents)
-  const chatAgents = ordered.filter((agent) => agent.placement !== 'session')
-  const sessionAgents = ordered.filter((agent) => agent.placement === 'session')
-
-  // Her subagent narrowing lives in the house policy, read on the way in.
-  useEffect(() => onRequestSubagentPolicy(), [onRequestSubagentPolicy])
-
-  // A created agent has an id only once the roster carries her. The roster and the
-  // ack race, so whichever lands second selects her.
-  const latest = useRef(agents)
-  latest.current = agents
-  const createdFrom = useRef<Set<string> | null>(null)
-  const pickCreated = useCallback(() => {
-    const before = createdFrom.current
-    if (before === null) return
-    const created = latest.current.find((agent) => !before.has(agent.id))
-    if (created === undefined) return
-    createdFrom.current = null
-    onDirtyChange(false)
-    onSelect(created.id)
-  }, [onDirtyChange, onSelect])
-  useEffect(() => pickCreated(), [agents, pickCreated])
-
-  /**
-   * Saves the persona, then `followUp` (her subagent narrowing) only once the server
-   * has taken her, so a refused persona never leaves a changed policy behind.
-   */
-  const save = (draft: AgentDraft, followUp?: { send: (requestId: string) => boolean; onUnsent: () => void }) => {
-    const before = draft.id === undefined ? new Set(latest.current.map((agent) => agent.id)) : null
-    const finish = () => {
-      setPending(null)
-      setSaves((count) => count + 1)
-      if (before === null) return
-      createdFrom.current = before
-      pickCreated()
-    }
-    const sent = start((requestId) => onSaveAgent(draft, requestId), {
-      onAck: () => {
-        if (followUp === undefined) return finish()
-        if (start(followUp.send, { onAck: finish, onNotice: () => setPending(null) })) return
-        setPending(null)
-        followUp.onUnsent()
-      },
-      onNotice: () => setPending(null),
-    })
-    if (sent) setPending('save')
-    return sent
-  }
-
-  const remove = () => {
-    if (selected === null) return false
-    const id = selected.id
-    const sent = start((requestId) => onDeleteAgent(id, requestId), {
-      // The detail falls back to the first agent once she leaves the roster.
-      onAck: () => {
-        setPending(null)
-        onDirtyChange(false)
-      },
-      onNotice: () => setPending(null),
-    })
-    if (sent) setPending('delete')
-    return sent
-  }
+export function AgentsPage({ agentId, chats, onSelect, onOpenDm, onNewAgent, ...settings }: AgentsPageProps) {
+  const ordered = listOrder(settings.agents)
+  const editedHere = ordered.filter((agent) => dmOf(chats, agent) === undefined)
+  const selected = editedHere.find((agent) => agent.id === agentId) ?? editedHere[0]
 
   const row = (agent: AgentConfig) => {
-    const current = !creating && selected?.id === agent.id
+    const inDm = dmOf(chats, agent) !== undefined
+    const current = selected?.id === agent.id
     return (
       <button
         key={agent.id}
         type="button"
         aria-current={current ? 'true' : undefined}
+        title={inDm ? `Opens ${agent.name}'s settings in the DM` : undefined}
         className={`relative flex h-10 w-full cursor-pointer items-center gap-2.5 rounded-lg border-0 bg-transparent px-2.5 text-left outline-none focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-primary ${
           current ? 'text-text' : 'text-muted hover:bg-surface-2 hover:text-text'
         }`}
-        onClick={() => onSelect(agent.id)}
+        onClick={() => (inDm ? onOpenDm(agent.id) : onSelect(agent.id))}
       >
         {current ? <SelectionMarker layoutId={ROW_MARKER} className="rounded-lg" /> : null}
         <span className="relative flex flex-none">
@@ -167,6 +60,7 @@ export function AgentsPage({
         </span>
         <span className="relative min-w-0 flex-1 truncate text-[14px]">{agent.name}</span>
         {agent.isCos ? <span className="relative flex-none text-meta text-dim">Chief</span> : null}
+        {inDm ? <Icon icon={ArrowUpRight01Icon} size={14} className="relative flex-none text-dim" /> : null}
       </button>
     )
   }
@@ -180,14 +74,13 @@ export function AgentsPage({
     )
 
   return (
-    // One scroll for the page: the title leaves with it, the list stays beside the form.
     <div className="h-full min-h-0 overflow-y-auto">
       <div className="mx-auto w-full max-w-page">
         <header className="flex items-end justify-between gap-6 px-8 pt-10 pb-6 @max-[560px]:px-5 @max-[560px]:pt-7">
           <div className="min-w-0">
             <h1 className="m-0 font-display text-[24px] leading-tight font-semibold tracking-[-0.02em]">Agents</h1>
             <p className="mt-1 mb-0 max-w-[590px] text-[16px] leading-relaxed text-muted">
-              Chat and Session agents in one list. The Agents view opens the same form.
+              Every agent in one list. An agent you talk to opens its settings in its DM.
             </p>
           </div>
           <Button variant="primary" className="inline-flex flex-none items-center gap-2" onClick={onNewAgent}>
@@ -196,54 +89,23 @@ export function AgentsPage({
           </Button>
         </header>
 
-        <div className="grid grid-cols-[minmax(0,264px)_minmax(0,1fr)] gap-6 pl-6 @max-[720px]:grid-cols-1 @max-[720px]:pl-0">
-          {/* A list taller than the window scrolls itself, inside the frame's top bar and gutter. */}
-          <nav
-            aria-label="Agents list"
-            className="sticky top-6 max-h-[calc(100dvh-1.5rem-var(--top-bar-height,0px)-var(--frame-gutter,0px))] self-start overflow-y-auto pb-8 @max-[720px]:hidden"
-          >
-            {group('Chat agents', chatAgents)}
-            {group('Session agents', sessionAgents)}
+        <div className="grid grid-cols-[minmax(0,264px)_minmax(0,1fr)] gap-6 px-6 pb-10 @max-[720px]:grid-cols-1">
+          <nav aria-label="Agents list" className="self-start">
+            {group('Chat agents', ordered.filter((agent) => agent.placement !== 'session'))}
+            {group('Session agents', ordered.filter((agent) => agent.placement === 'session'))}
           </nav>
 
-          <div className="min-w-0">
-            <div className="hidden px-8 pb-4 @max-[720px]:block @max-[560px]:px-5">
-              <Select
-                label="Agent"
-                value={creating ? NEW_SESSION_AGENT : selected?.id ?? NEW_AGENT_ROW}
-                options={[
-                  ...ordered.map((agent) => ({ value: agent.id, label: agent.placement === 'session' ? `${agent.name} · Session` : agent.name })),
-                  ...(creating ? [{ value: NEW_SESSION_AGENT, label: 'New Session agent' }] : []),
-                  { value: NEW_AGENT_ROW, label: 'New agent' },
-                ]}
-                onChange={(value) => value === NEW_AGENT_ROW ? onNewAgent() : onSelect(value)}
-              />
-            </div>
-            <div className="max-w-[760px] px-8 pb-12 @max-[560px]:px-5">
-              {!creating && selected === null ? (
-                <p className="m-0 text-[14px] text-muted">No agents yet. Create the first one.</p>
-              ) : (
-                <AgentForm
-                  key={creating ? agentId : selected?.id ?? ''}
-                  initial={creating || selected === null
-                    ? { ...emptyDraft(agents), placement: 'session', isCos: false, pinned: false, railPinned: false }
-                    : draftOf(selected)}
-                  agents={agents}
-                  registry={registry}
-                  skills={skills}
-                  {...(dmRuntime === undefined || creating ? {} : { dmRuntime })}
-                  notice={notice}
-                  pending={pending}
-                  saved={saves}
-                  onSave={save}
-                  onDelete={remove}
-                  onDismissNotice={onDismissNotice}
-                  onDirtyChange={onDirtyChange}
-                  {...(creating ? {} : { subagentPolicy, onSaveSubagentPolicy })}
-                />
-              )}
-            </div>
-          </div>
+          {selected === undefined ? (
+            <p className="m-0 px-2 text-[14px] text-muted">Every agent here has a DM. Pick one to open its settings there.</p>
+          ) : (
+            <section
+              aria-label="Agent settings"
+              className={`${STAGE_PANEL_SHELL} flex h-[min(760px,calc(100dvh-12rem))] min-h-[480px] w-full max-w-[420px] flex-col`}
+            >
+              {/* Keyed on the agent so another agent never shows this one's draft or page. */}
+              <AgentSettings key={selected.id} agent={selected} {...settings} />
+            </section>
+          )}
         </div>
       </div>
     </div>

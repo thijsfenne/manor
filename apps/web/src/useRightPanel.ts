@@ -6,7 +6,7 @@ export const DOCK_PANEL_GAP = 8
 const KEY = 'manor:right-panel-by-chat'
 
 /** The panels the rail can put in the region beside the chat. */
-export type RightPanelId = 'memory' | 'agents' | 'files' | 'browser' | 'runs' | 'routines' | 'side' | 'knowledge' | 'diff'
+export type RightPanelId = 'agent' | 'memory' | 'agents' | 'files' | 'browser' | 'runs' | 'routines' | 'side' | 'knowledge' | 'diff'
 
 /** The rail shortcuts, kept pure so a key cannot quietly steal a native command. */
 export function rightPanelShortcut(
@@ -34,6 +34,8 @@ export const AGENTS_PANEL_WIDTH = 372
  * Beside other panels it is only where their column starts; see `columnDefaultWidth`.
  */
 export const LIST_PANEL_WIDTH = 412
+/** Agent settings: a column of rows and short fields. 428 so the card itself lands on 420. */
+export const AGENT_SETTINGS_WIDTH = 428
 /** The transcript floor that decides when a dock becomes an overlay. */
 export const CHAT_STAGE_MIN_WIDTH = 375
 
@@ -204,7 +206,7 @@ export const MAX_RIGHT_PANELS = 4
 
 export const NO_PANELS: PanelLayout = []
 
-const PANEL_IDS: readonly RightPanelId[] = ['memory', 'agents', 'files', 'browser', 'runs', 'routines', 'side', 'knowledge', 'diff']
+const PANEL_IDS: readonly RightPanelId[] = ['agent', 'memory', 'agents', 'files', 'browser', 'runs', 'routines', 'side', 'knowledge', 'diff']
 const isPanelId = (value: string): value is RightPanelId => (PANEL_IDS as readonly string[]).includes(value)
 
 export const layoutHas = (layout: PanelLayout, id: RightPanelId) => layout.some((column) => column.includes(id))

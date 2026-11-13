@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import type { DatabaseSync } from 'node:sqlite'
 import { openSqlite, readTransaction, SqliteRecords, transaction } from './sqliteDatabase.js'
-import { CONFIRM_REQUEST_PREFIX, HOME_PROJECT_ID, HOME_PROJECT_NAME, SINGLE_CHAT_VOICE, modelTextOf } from '@manor/contracts'
+import { CONFIRM_REQUEST_PREFIX, HOME_PROJECT_ID, HOME_PROJECT_NAME, PERSONA_TOOLS, SINGLE_CHAT_VOICE, modelTextOf } from '@manor/contracts'
 import { singleRuntime, singleRuntimeRequired } from '../singleChat.js'
 import { SqliteTranscript, SqliteBundles } from './sqliteTranscript.js'
 import { DEFAULT_PROJECT_COLOR, DEFAULT_PROJECT_ICON, DriverSchema, DEFAULT_SUBAGENT_POLICY, DEFAULT_USER_PROFILE, DEFAULT_HOUSE_SETTINGS, HouseSettingsSchema, ROUTINE_LEASE_MS, SIDE_CHAT_DEFAULTS, driverForModel, type SubagentPolicy, CURRENT_CHECKOUT, checkoutFromMapping, type AgentConfig, type AgentDraft, type Chat, type ChatOverride, type McpServerConfig, type Project, type ProjectIcon, type ProjectMemoryScope, type Routine, type SkillConfig, type ThreadEvent, type UserProfile, type WorkHandoff, isOpenRoom, } from '@manor/contracts'
@@ -50,7 +50,7 @@ const toAgent = (draft: AgentDraft, id: string): AgentConfig => ({
   ...(draft.model === undefined ? {} : { model: draft.model }),
   effort: draft.effort,
   ...(draft.speed === 'fast' ? { speed: 'fast' as const } : {}),
-  allowedTools: [...draft.allowedTools],
+  allowedTools: [...PERSONA_TOOLS],
   mcpServers: draft.mcpServers.map((attachment) => ({ ...attachment, disabledTools: [...attachment.disabledTools] })),
   skillIds: [...(draft.skillIds ?? [])],
   mentionAllowlist: [...(draft.mentionAllowlist ?? [])],
@@ -998,7 +998,9 @@ export function createSqliteStore(options: SqliteStoreOptions): Store & {
       workHandoffs.set(handoffId, saved)
       return { handoff: { ...saved }, event }
     },
-    loadRoster: () => [...roster.values()],
+    // Read through `PERSONA_TOOLS` rather than as stored: a row saved under tool groups
+    // may hold a narrower list, and no driver may keep honouring it.
+    loadRoster: () => [...roster.values()].map((agent) => ({ ...agent, allowedTools: [...PERSONA_TOOLS] })),
     saveAgent(draft: AgentDraft) {
       const at = draft.id === undefined ? -1 : ([...roster.values()].findIndex((agent) => agent.id === draft.id))
       // An update naming an id nobody holds throws the way the database's own

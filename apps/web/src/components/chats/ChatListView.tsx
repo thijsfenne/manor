@@ -287,7 +287,7 @@ function HeadCard({
           x={menu.x}
           y={menu.y}
           items={[
-            { label: 'Edit agent…', onSelect: onEditAgent },
+            { label: 'Agent settings', onSelect: onEditAgent },
             // Nothing to delete before her first message, the same as any other DM.
             ...(chat === null ? [] : [{ label: 'Delete chat', tone: 'danger' as const, onSelect: () => onArm(row.key) }]),
           ]}
@@ -430,7 +430,7 @@ function ChatRow({
           x={menu.x}
           y={menu.y}
           items={[
-            ...(agentId === null ? [] : [{ label: 'Edit agent…', onSelect: () => onEditAgent(agentId) }]),
+            ...(agentId === null ? [] : [{ label: 'Agent settings', onSelect: () => onEditAgent(agentId) }]),
             ...(chat !== null && row.kind === 'group'
               ? [{ label: 'Edit members…', onSelect: () => onEditGroup(chat.id) }]
               : []),

@@ -8,7 +8,7 @@ import {
   type PointerEvent as ReactPointerEvent,
   type SetStateAction,
 } from 'react'
-import { AGENTS_PANEL_WIDTH, CHAT_STAGE_MIN_WIDTH, DOCK_PANEL_GAP, LIST_PANEL_WIDTH, type RightPanelId } from './useRightPanel'
+import { AGENT_SETTINGS_WIDTH, AGENTS_PANEL_WIDTH, CHAT_STAGE_MIN_WIDTH, DOCK_PANEL_GAP, LIST_PANEL_WIDTH, type RightPanelId } from './useRightPanel'
 
 export const FILES_TREE_WIDTH = 240
 export const FILES_PREVIEW_MIN_WIDTH = 320
@@ -86,6 +86,7 @@ export function rightPanelDefaultWidth(panel: RightPanelId) {
     case 'side':
     case 'memory': return SIDE_DEFAULT_WIDTH
     case 'agents': return AGENTS_PANEL_WIDTH
+    case 'agent': return AGENT_SETTINGS_WIDTH
     // Code wants the room of a page: stacked lines with both gutters, split once it is wider.
     case 'diff': return DIFF_DEFAULT_WIDTH
     case 'runs':

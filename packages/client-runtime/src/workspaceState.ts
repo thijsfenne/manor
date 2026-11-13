@@ -1198,6 +1198,7 @@ export function reduce(
     // Read-only request responses are consumed by the requesting panel.
     case 'project_memory':
     case 'chat_summary':
+    case 'agent_notes':
     case 'heartbeat':
       return state
 

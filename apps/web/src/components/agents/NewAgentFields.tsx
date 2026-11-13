@@ -109,12 +109,14 @@ export function NewAgentFields({ draft, providers, disabled = false, onChange }:
 
 /**
  * Provider, model and effort as one field: a row naming the pick, opening a card with
- * the providers as a rail, that provider's models and an effort slider.
+ * the providers as a rail, that provider's models and an effort slider. The card opens
+ * above the row at a dialog's foot and below it near a panel's top.
  */
-function ModelField({ draft, providers, disabled, onChange }: {
+export function ModelField({ draft, providers, disabled, opens = 'up', onChange }: {
   draft: AgentDraft
   providers: readonly Driver[]
   disabled: boolean
+  opens?: 'up' | 'down'
   onChange: (draft: AgentDraft) => void
 }) {
   const rootRef = useRef<HTMLDivElement>(null)
@@ -170,8 +172,8 @@ function ModelField({ draft, providers, disabled, onChange }: {
       </button>
       <Popover
         open={open}
-        origin="bottom"
-        className="absolute inset-x-0 bottom-[calc(100%+8px)] z-10 overflow-hidden rounded-xl border border-line surface-floating"
+        origin={opens === 'up' ? 'bottom' : 'top'}
+        className={`absolute inset-x-0 ${opens === 'up' ? 'bottom-[calc(100%+8px)]' : 'top-[calc(100%+8px)]'} z-10 overflow-hidden rounded-xl border border-line surface-floating`}
         role="menu"
         aria-label="Model"
       >

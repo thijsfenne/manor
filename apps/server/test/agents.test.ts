@@ -1,4 +1,4 @@
-import type { AgentConfig, AgentDraft, ServerMessage } from '@manor/contracts'
+import { PERSONA_TOOLS, type AgentConfig, type AgentDraft, type ServerMessage } from '@manor/contracts'
 import { describe, expect, it } from 'vitest'
 import { createMockDriver } from '../src/drivers/mockDriver.js'
 import { ManorService } from '../src/service.js'
@@ -42,7 +42,6 @@ const draft = (overrides: Partial<AgentDraft> = {}): AgentDraft => ({
   character: 'You are Nova.',
   driver: 'mock',
   effort: 'high',
-  allowedTools: [],
   mcpServers: [],
   memoryScope: false,
   role: '',
@@ -108,7 +107,7 @@ describe('ManorService, saving a persona', () => {
       character: 'You are Nova.',
       driver: 'mock',
       effort: 'high',
-      allowedTools: [],
+      allowedTools: [...PERSONA_TOOLS],
       mcpServers: [],
       skillIds: [],
       // A new hire summons nobody: her mentions are inert until the user picks names.
@@ -203,11 +202,16 @@ describe('ManorService, saving a persona', () => {
     await test.manor.handle({ type: 'save_agent', agent: draft({ placement: 'session' }) }, test.reply)
     await test.manor.handle({ type: 'send_message', chatId: test.chatId, text: '@Nova now?' }, test.reply)
 
-    // Same process, same orchestrator, same drivers: the roster was read at use.
+    // Same process, same orchestrator, same drivers: the roster was read at use. The
+    // mock's read and edit are the proof she holds every built-in tool on that turn.
     expect(speakers(await test.store.loadEvents(test.chatId))).toEqual([
       ['user_message', 'user'],
       ['system_note', 'user'],
       ['user_message', 'user'],
+      ['tool_use', 'nova'],
+      ['tool_result', 'nova'],
+      ['tool_use', 'nova'],
+      ['tool_result', 'nova'],
       ['agent_message', 'nova'],
     ])
   })
@@ -409,12 +413,14 @@ describe('ManorService, deleting a persona', () => {
 describe('ManorService, the household on the wire', () => {
   it('answers with the roster as it stands, for the socket that just connected', async () => {
     const test = await harness(cosRoster)
+    // A stored list from the tool-group days never reaches the wire.
+    const read = (agent: AgentConfig) => ({ ...agent, allowedTools: [...PERSONA_TOOLS] })
 
-    expect(test.manor.roster()).toEqual({ type: 'roster', agents: cosRoster })
+    expect(test.manor.roster()).toEqual({ type: 'roster', agents: cosRoster.map(read) })
 
     await test.manor.handle({ type: 'delete_agent', agentId: 'smith' }, test.reply)
 
-    expect(test.manor.roster()).toEqual({ type: 'roster', agents: [marlow, sage] })
+    expect(test.manor.roster()).toEqual({ type: 'roster', agents: [marlow, sage].map(read) })
   })
 
   it('says nothing about the household when something else changes', async () => {

@@ -12,7 +12,7 @@ import { subagentSummary } from './subagents.js'
 type ChatMessage = Extract<
   ClientMessage,
   {
-    type: 'open_chat' | 'get_chat_summary' | 'send_message' | 'stop' | 'stop_background' | 'answer_user_input' | 'answer_secret_request' | 'submit_outbound_draft' | 'discard_outbound_draft' | 'snooze_outbound_draft' | 'ignore_outbound_draft' | 'restore_outbound_draft' | 'outbound_thread_read' | 'set_chat_override'
+    type: 'open_chat' | 'get_chat_summary' | 'get_agent_notes' | 'send_message' | 'stop' | 'stop_background' | 'answer_user_input' | 'answer_secret_request' | 'submit_outbound_draft' | 'discard_outbound_draft' | 'snooze_outbound_draft' | 'ignore_outbound_draft' | 'restore_outbound_draft' | 'outbound_thread_read' | 'set_chat_override'
   }
 >
 
@@ -65,9 +65,9 @@ export class ChatModule {
 
   constructor(private readonly options: ChatModuleOptions) {}
 
-  /** The same notes, under the same conditions and cut, that this DM's turns inject. A DM is never Single. */
-  private async injectedNotes(chat: { memberIds: readonly string[] }) {
-    const agent = this.options.agents().find((candidate) => candidate.id === chat.memberIds[0])
+  /** The same notes, under the same conditions and cut, that the agent's DM and Session turns inject. */
+  private async injectedNotes(agentId: string | undefined) {
+    const agent = this.options.agents().find((candidate) => candidate.id === agentId)
     if (agent?.memoryScope !== true) return undefined
     const bundle = await composeAgentNotesBundle(this.options.memoryTarget, agent.id)
     const source = bundle.sources[0]
@@ -166,12 +166,26 @@ export class ChatModule {
             updatedAt: held.updatedAt,
           }
         }
-        const notes = await this.injectedNotes(chat)
+        const notes = await this.injectedNotes(chat.memberIds[0])
         reply({
           type: 'chat_summary',
           chatId: chat.id,
           ...(message.requestId === undefined ? {} : { requestId: message.requestId }),
           summary,
+          ...(notes === undefined ? {} : { notes }),
+        })
+        return
+      }
+      case 'get_agent_notes': {
+        if (!this.options.agents().some((agent) => agent.id === message.agentId)) {
+          reply({ type: 'notice', kind: 'error', text: `There is no agent ${message.agentId} to read notes for.` })
+          return
+        }
+        const notes = await this.injectedNotes(message.agentId)
+        reply({
+          type: 'agent_notes',
+          agentId: message.agentId,
+          ...(message.requestId === undefined ? {} : { requestId: message.requestId }),
           ...(notes === undefined ? {} : { notes }),
         })
         return

@@ -147,6 +147,7 @@ export interface Manor {
   status: ConnectionStatus
   getProjectMemory: (projectId: string, requestId: string) => boolean
   getChatSummary: (chatId: string, requestId: string) => boolean
+  getAgentNotes: (agentId: string, requestId: string) => boolean
   /** One palette query; the answer arrives on `requestEvents` as `search_results` with this id. */
   search: (query: string, requestId: string) => boolean
   /** Direct replies for request-scoped UI lifecycles; broadcasts remain workspace state. */
@@ -785,7 +786,7 @@ export function useWorkspace(url: string, auth?: WorkspaceAuth): Manor {
           for (const listener of requestListeners.current) listener(parsed)
           return
         }
-        if ((parsed.type === 'project_memory' || parsed.type === 'chat_summary') && parsed.requestId !== undefined) {
+        if ((parsed.type === 'project_memory' || parsed.type === 'chat_summary' || parsed.type === 'agent_notes') && parsed.requestId !== undefined) {
           const response: RequestResponse = { ...parsed, requestId: parsed.requestId }
           for (const listener of requestListeners.current) listener(response)
         }
@@ -1181,6 +1182,10 @@ export function useWorkspace(url: string, auth?: WorkspaceAuth): Manor {
 
   const getChatSummary = useCallback(
     (chatId: string, requestId: string) => send({ type: 'get_chat_summary', chatId, requestId }),
+    [send],
+  )
+  const getAgentNotes = useCallback(
+    (agentId: string, requestId: string) => send({ type: 'get_agent_notes', agentId, requestId }),
     [send],
   )
 
@@ -1698,6 +1703,7 @@ export function useWorkspace(url: string, auth?: WorkspaceAuth): Manor {
     requestEvents: requestEventsRef.current,
     getProjectMemory,
     getChatSummary,
+    getAgentNotes,
     search,
     browserActivity,
     browserUse,

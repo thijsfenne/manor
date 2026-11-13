@@ -1,7 +1,7 @@
 import { useLayoutEffect, useRef, useState, type ComponentProps, type RefObject } from 'react'
 import { createPortal } from 'react-dom'
 import type { Chat } from '@manor/contracts'
-import { Clock01Icon, BookOpen01Icon, BubbleChatQuestionIcon, Files01Icon, Folder01Icon, Globe02Icon, MoreVerticalIcon, Tick02Icon } from '@hugeicons/core-free-icons'
+import { Clock01Icon, BookOpen01Icon, BubbleChatQuestionIcon, Files01Icon, Folder01Icon, Globe02Icon, MoreVerticalIcon, Settings01Icon, Tick02Icon } from '@hugeicons/core-free-icons'
 import {
   Clock01Icon as Clock01SolidIcon,
   BookOpen01Icon as BookOpen01SolidIcon,
@@ -10,6 +10,7 @@ import {
   Folder01Icon as Folder01SolidIcon,
   GitCompareIcon as GitCompareSolidIcon,
   Globe02Icon as Globe02SolidIcon,
+  Settings01Icon as Settings01SolidIcon,
 } from '@manor/client-runtime/solid-icons'
 import { MAX_RIGHT_PANELS, layoutFull, layoutHas, type PanelLayout, type RightPanelId } from '../useRightPanel'
 import { AiBotHeadLookingIcon, AiBotHeadLookingSolidIcon, SessionListIcon, SessionListSolidIcon } from './customIcons'
@@ -39,6 +40,7 @@ interface RightRailProps {
 
 /** The solid variant each panel door wears while its panel is open. */
 const ACTIVE_ICON: Record<RightPanelId, RailItem['icon']> = {
+  agent: Settings01SolidIcon,
   runs: Clock01SolidIcon,
   agents: SessionListSolidIcon,
   routines: Clock01SolidIcon,
@@ -92,7 +94,7 @@ export function chatRailItems(
   }
   const memory: RailItem[] =
     chat.kind === 'dm'
-      ? [{ id: 'memory', label: 'Agent memory', icon: Files01Icon }]
+      ? [{ id: 'memory', label: 'Agent memory', icon: Files01Icon }, { id: 'agent', label: 'Agent settings', icon: Settings01Icon }]
       : !options.hasProject || (options.singleChat && options.projectThread !== true)
         ? []
         : [{ id: 'memory', label: 'Context', icon: Files01Icon }]

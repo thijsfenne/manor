@@ -13,15 +13,19 @@ const PROVIDER_ORDER = PROVIDERS.map((option) => option.value).filter((driver) =
  * The New agent door: the short form over the workspace. Create saves the agent and
  * hands its id on once the roster carries it, so the caller can open its DM.
  */
-export function NewAgentDialog({ agents, requestEvents, onSaveAgent, onCreated, onClose }: {
+export function NewAgentDialog({ agents, session = false, requestEvents, onSaveAgent, onCreated, onClose }: {
   agents: AgentConfig[]
+  /** A Session agent: no DM, so no interview; its instructions are written in Agent settings. */
+  session?: boolean
   requestEvents: RequestEvents
   onSaveAgent: (draft: AgentDraft, requestId: string, interview?: boolean) => boolean
   onCreated: (agentId: string) => void
   onClose: () => void
 }) {
   const { start, pending } = useRequest(requestEvents)
-  const [draft, setDraft] = useState(() => newAgentDraft(agents))
+  const [draft, setDraft] = useState(() => session
+    ? { ...newAgentDraft(agents), placement: 'session' as const, isCos: false, pinned: false, railPinned: false }
+    : newAgentDraft(agents))
   const [error, setError] = useState<string | null>(null)
   // The roster and the ack race; the agent opens once both have landed.
   const before = useRef<ReadonlySet<string> | null>(null)
@@ -39,7 +43,7 @@ export function NewAgentDialog({ agents, requestEvents, onSaveAgent, onCreated, 
     if (draft.name.trim() === '' || pending || before.current !== null) return
     setError(null)
     const ids = new Set(agents.map((agent) => agent.id))
-    const sent = start((requestId) => onSaveAgent(draftToCreate(draft), requestId, true), {
+    const sent = start((requestId) => onSaveAgent(draftToCreate(draft), requestId, !session), {
       onAck: () => {
         before.current = ids
         setAcked(true)
@@ -51,12 +55,14 @@ export function NewAgentDialog({ agents, requestEvents, onSaveAgent, onCreated, 
 
   const busy = pending || acked
   return (
-    <Modal title="New agent" onClose={onClose}>
+    <Modal title={session ? 'New Session agent' : 'New agent'} onClose={onClose}>
       <form className="contents" onSubmit={(event) => { event.preventDefault(); create() }}>
         <NewAgentFields draft={draft} providers={PROVIDER_ORDER} disabled={busy} onChange={(next) => { setError(null); setDraft(next) }} />
         {error === null ? null : <p className="m-0 text-label text-danger" role="alert">{error}</p>}
         <div className="flex items-center gap-3">
-          <p className="m-0 min-w-0 flex-1 text-label text-dim">Next it asks you a few questions and writes its own instructions.</p>
+          <p className="m-0 min-w-0 flex-1 text-label text-dim">
+            {session ? 'Next you write its instructions in Agent settings.' : 'Next it asks you a few questions and writes its own instructions.'}
+          </p>
           <Button variant="ghost" onClick={onClose}>Cancel</Button>
           <Button type="submit" variant="primary" disabled={draft.name.trim() === '' || busy}>{busy ? 'Creating…' : 'Create agent'}</Button>
         </div>

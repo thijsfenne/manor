@@ -56,7 +56,6 @@ export const emptyDraft = (agents: AgentConfig[]): AgentDraft => ({
   character: '',
   driver: 'claude',
   effort: 'high',
-  allowedTools: [],
   mcpServers: [],
   skillIds: [],
   memoryScope: false,
@@ -76,7 +75,6 @@ export const draftOf = (agent: AgentConfig): AgentDraft => ({
   model: agent.model,
   effort: agent.effort,
   ...(agent.speed === 'fast' ? { speed: 'fast' as const } : {}),
-  allowedTools: agent.allowedTools,
   mcpServers: agent.mcpServers,
   skillIds: agent.skillIds ?? [],
   mentionAllowlist: [...(agent.mentionAllowlist ?? [])],
@@ -125,24 +123,6 @@ export function cleanDraft(draft: AgentDraft): AgentDraft {
  */
 export const fastFor = (driver: AgentConfig['driver'], model: string | undefined, speed: AgentDraft['speed']) =>
   speed === 'fast' && supportsFastMode(driver, model) ? ('fast' as const) : undefined
-
-/**
- * Reads a toolset the way a person types one: commas, spaces, or newlines, in any
- * mixture. Order is kept because the toolset reads as a list, and duplicates are
- * dropped because a tool named twice is still one tool.
- */
-export function parseTools(text: string): string[] {
-  const seen = new Set<string>()
-  const tools: string[] = []
-  for (const raw of text.split(/[\s,]+/)) {
-    if (raw === '' || seen.has(raw)) continue
-    seen.add(raw)
-    tools.push(raw)
-  }
-  return tools
-}
-
-export const formatTools = (tools: string[]) => tools.join(', ')
 
 /** Who holds the chief-of-staff flag, or nobody. At most one agent ever does. */
 export const cosOf = (agents: AgentConfig[]): AgentConfig | null =>

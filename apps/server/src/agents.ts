@@ -1,4 +1,4 @@
-import type { AgentConfig } from '@manor/contracts'
+import { PERSONA_TOOLS, type AgentConfig } from '@manor/contracts'
 
 /**
  * Seed data for `createMemoryStore`, and nothing else. The live roster comes from
@@ -8,9 +8,8 @@ import type { AgentConfig } from '@manor/contracts'
  * Expect drift, by design. The live roster was seeded from this list once and
  * has moved on since (personas added, tools granted, characters rewritten in the
  * UI). This file is not a mirror of them and must not be kept in sync with them,
- * it is a fixture: three personas covering one chief of staff, one driver each
- * (claude and codex), and one agent with tools and one without, which is the
- * spread the tests need. Edit a real persona in the app, not here; edit here only
+ * it is a fixture: three personas covering one chief of staff and one driver each
+ * (claude and codex). Every persona holds `PERSONA_TOOLS`, as the store reads them. Edit a real persona in the app, not here; edit here only
  * when a test or a database-less run needs a different shape.
  */
 /**
@@ -27,8 +26,7 @@ export const agents: AgentConfig[] = [
     name: 'Marlow',
     color: '#8B7EC8',
     driver: 'claude',
-    // The CoS routes and answers; it has no business touching the machine.
-    allowedTools: [],
+    allowedTools: [...PERSONA_TOOLS],
     mcpServers: [],
     effort: 'high',
     memoryScope: false,
@@ -57,7 +55,7 @@ export const agents: AgentConfig[] = [
     name: 'Sage',
     color: '#6FA8A0',
     driver: 'claude',
-    allowedTools: [],
+    allowedTools: [...PERSONA_TOOLS],
     mcpServers: [],
     effort: 'high',
     memoryScope: false,
@@ -82,7 +80,7 @@ export const agents: AgentConfig[] = [
     color: '#D08A3E',
     // Smith runs on Codex so one thread exercises both providers at once.
     driver: 'codex',
-    allowedTools: ['Read', 'Bash'],
+    allowedTools: [...PERSONA_TOOLS],
     mcpServers: [],
     effort: 'high',
     memoryScope: false,

@@ -4,6 +4,8 @@ What changed for someone who uses Manor, newest first. A version is a tag on `ma
 
 ## Unreleased
 
+- Agent settings open beside the agent's DM, from the Agent settings door or the face in the header. A short root holds the face, name, what it helps with and its model, with a page each for instructions, notes, skills, connections, subagents, routines and access. Changes save as you make them. Session agents open the same settings in Settings → Agents. The long agent form is gone.
+- Tool groups are gone. Every agent gets every built-in tool; connections stay per agent, and writes to outside services still ask you first.
 - New agent opens a short form over the workspace: a face, a name, what it should help with, and a model with effort. Create opens the agent's DM. The onboarding's first agent uses the same form. The Role field is gone from creation.
 - A persona's face now shows what her turn is doing. She tilts her head while she thinks, follows lines while she reads, melts into three dots while her answer streams in, dozes while she waits on a colleague, turns to you when she needs an answer, nods when she is done and shakes when a turn fails. Any other work keeps the eye loop she already had. Reduced motion and photo avatars show none of it. The phone shows it on the face behind the latest reply and in a DM's working line.
 - Persona faces have a richer finish. The light on a face is now tinted from its own colour, small faces are drawn simpler with larger eyes, and in the dark theme a face stands on a glow in its colour, where its shadow could not be seen.

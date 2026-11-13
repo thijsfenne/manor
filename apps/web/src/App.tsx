@@ -449,14 +449,35 @@ function Workspace({
    * A modal owns the screen. The server keeps one notice at a time, and an open
    * dialog is where that notice belongs.
    */
-  const [newAgentOpen, setNewAgentOpen] = useState(false)
-  const openNewAgent = () => setNewAgentOpen(true)
-  const closeNewAgent = () => setNewAgentOpen(false)
+  // A Session agent has no DM to be interviewed in, so it is made apart and opens in Settings.
+  const [newAgentKind, setNewAgentKind] = useState<'chat' | 'session' | null>(null)
+  const openNewAgent = () => setNewAgentKind('chat')
+  const closeNewAgent = () => setNewAgentKind(null)
+  const newAgentOpen = newAgentKind !== null
   const dialogOpen =
     editingSettings || settingsOpen || projectDialog !== null || groupDialog !== null || searchOpen || newAgentOpen
 
   const settingsDoors = useSettingsDoors(settings, manor.dismissNotice, openNewAgent)
-  const { openAutoRules, editAgent, newAgent, newSessionAgent } = settingsDoors
+  const { openAutoRules, newAgent, leaveSettingsThen } = settingsDoors
+  const newSessionAgent = leaveSettingsThen(() => setNewAgentKind('session'))
+  /**
+   * Agent settings, one editor in two hosts: an agent with a DM gets it docked in that
+   * DM, a Session agent (or one never talked to) gets it in Settings → Agents.
+   */
+  const editAgent = (agentId: string) => {
+    const agent = workspace.agents.find((candidate) => candidate.id === agentId)
+    const dm = agent === undefined || agent.placement === 'session'
+      ? undefined
+      : workspace.chats.find((chat) => chat.kind === 'dm' && chat.memberIds[0] === agentId)
+    if (dm === undefined) {
+      settingsDoors.editAgent(agentId)
+      return
+    }
+    leaveSettingsThen(() => {
+      openDm(agentId)
+      showRightPanelFor(dm.id, 'agent')
+    })()
+  }
   const [managingAgents, setManagingAgents] = useState(false)
   const manageAgents = () => setManagingAgents(true)
   const closeManagingAgents = () => setManagingAgents(false)
@@ -800,14 +821,16 @@ function Workspace({
       </SplitDragContext.Provider>
       <SplitDragLayer drag={splitDrag} />
 
-      {newAgentOpen ? (
+      {newAgentKind !== null ? (
         <NewAgentDialog
+          session={newAgentKind === 'session'}
           agents={workspace.agents}
           requestEvents={manor.requestEvents}
           onSaveAgent={manor.saveAgent}
           onCreated={(agentId) => {
             closeNewAgent()
-            openDm(agentId)
+            if (newAgentKind === 'session') settings.open('agents', agentId)
+            else openDm(agentId)
           }}
           onClose={closeNewAgent}
         />
@@ -903,6 +926,7 @@ function Workspace({
           theme={theme}
           account={account}
           onNewAgent={newAgent}
+          onEditAgent={editAgent}
           onDialogChange={setEditingSettings}
         />
       )}

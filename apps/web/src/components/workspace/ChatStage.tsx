@@ -352,8 +352,7 @@ export function ChatStage({
           : {})}
         {...(headerAgent === undefined
           ? {}
-          : // The face in the header is the only handle a DM has on the persona it
-            // is with: a one-on-one has no agents panel to reach her from.
+          : // The face in the header opens Agent settings beside the DM, as the rail door does.
             { onEditPersona: () => kit.editAgent(headerAgent.id) })}
       />
 

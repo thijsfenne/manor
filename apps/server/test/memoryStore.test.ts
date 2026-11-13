@@ -338,7 +338,6 @@ describe('memoryStore', () => {
         character: 'boo',
         driver: 'mock',
         effort: 'high',
-        allowedTools: [],
         mcpServers: [],
         memoryScope: false,
         role: '',

@@ -26,10 +26,10 @@ interface SettingsHostProps {
   theme: { choice: ThemeChoice; set: (choice: ThemeChoice) => void }
   account?: { onSignOut: () => void }
   providerUpdates: readonly ProviderUpdate[]
-  /** The selected agent's DM pin, loaded by the workspace. */
-  dmRuntime?: string
   /** The New agent door, which leaves Settings for the short form. */
   onNewAgent: () => void
+  /** Leaves Settings for the agent's DM with its settings open, or opens them here. */
+  onEditAgent: (agentId: string) => void
   /** Dialogs inside the reused registry views own the shared notice while open. */
   onDialogChange: (open: boolean) => void
 }
@@ -42,8 +42,8 @@ export function SettingsHost({
   theme,
   account,
   providerUpdates,
-  dmRuntime,
   onNewAgent,
+  onEditAgent,
   onDialogChange,
 }: SettingsHostProps) {
   const { workspace } = manor
@@ -81,21 +81,23 @@ export function SettingsHost({
       case 'agents':
         return (
           <AgentsPage
-            agents={workspace.agents}
             agentId={location.agentId}
+            chats={workspace.chats}
+            agents={workspace.agents}
             registry={workspace.mcpServers}
             skills={workspace.skills}
+            routines={workspace.routines}
             subagentPolicy={workspace.subagentPolicy}
-            {...(dmRuntime === undefined ? {} : { dmRuntime })}
+            status={manor.status}
             requestEvents={manor.requestEvents}
             onSelect={(agentId) => settings.open('agents', agentId)}
+            onOpenDm={onEditAgent}
             onNewAgent={onNewAgent}
             onSaveAgent={manor.saveAgent}
             onDeleteAgent={manor.deleteAgent}
             onSaveSubagentPolicy={manor.saveSubagentPolicy}
             onRequestSubagentPolicy={manor.requestSubagentPolicy}
-            onDirtyChange={settings.reportDirty}
-            {...common}
+            onLoadNotes={manor.getAgentNotes}
           />
         )
       case 'context':

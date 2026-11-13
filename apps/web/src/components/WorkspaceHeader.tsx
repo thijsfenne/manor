@@ -262,8 +262,8 @@ function Crumb({
             // pointer-events-auto for the same reason the project chip has it: the
             // overlay header swallows clicks otherwise.
             className="pointer-events-auto -mx-1.5 flex min-w-0 cursor-pointer items-center gap-2 rounded-lg border-0 bg-transparent px-1.5 py-1 text-left [font:inherit] hover:bg-surface-2"
-            title={`Edit ${persona.name}`}
-            aria-label={`Edit ${persona.name}`}
+            title={`Agent settings for ${persona.name}`}
+            aria-label={`Agent settings for ${persona.name}`}
             onClick={onEditPersona}
           >
             <Avatar name={persona.name} color={persona.color} src={persona.avatar} shape={persona.avatarShape} tone={persona.avatarTone} size={face} />

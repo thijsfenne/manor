@@ -49,7 +49,7 @@ describe('chatRailItems', () => {
     it('is false in a DM, whatever else its rail offers', () => {
       expect(offers('dm')).toBe(false)
       expect(offers('dm', { hasProject: false, hasVault: false, hasBrowser: false })).toBe(false)
-      expect(chatRailItems({ kind: 'dm' } as Chat, options).map((item) => item.id)).toEqual(['routines', 'files', 'knowledge', 'browser', 'memory'])
+      expect(chatRailItems({ kind: 'dm' } as Chat, options).map((item) => item.id)).toEqual(['routines', 'files', 'knowledge', 'browser', 'memory', 'agent'])
     })
     it('is false in a project thread, a project Session, a pair chat and on the phone', () => {
       expect(offers('group', { projectThread: true })).toBe(false)

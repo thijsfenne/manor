@@ -316,7 +316,9 @@ export function buildGrokArgs(input: TurnInput): string[] {
 
   const hasAttachedMcp = (input.mcpServers?.length ?? 0) > 0
   const selected = unique([
-    ...input.agent.allowedTools.flatMap((tool) => GROK_TOOLS[tool] ?? [tool]),
+    // Only names with a Grok built-in behind them: a persona holds the whole Claude set,
+    // and a name Grok does not know is noise on its argv at best.
+    ...input.agent.allowedTools.flatMap((tool) => GROK_TOOLS[tool] ?? []),
     ...((input.imagePaths?.length ?? 0) > 0 ? ['read_file'] : []),
     ...(hasAttachedMcp ? ['search_tool', 'use_tool'] : []),
   ])

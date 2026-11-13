@@ -34,7 +34,7 @@ describe('the workspace header', () => {
   })
 
   // A DM has no agents panel, so the face in the header is the one way to her form.
-  it('makes the DM recipient a handle on her own persona form', () => {
+  it('makes the DM recipient a handle on her Agent settings', () => {
     const html = renderToStaticMarkup(
       <WorkspaceHeader
         title="Smith"
@@ -46,7 +46,7 @@ describe('the workspace header', () => {
       />,
     )
 
-    expect(html).toContain('aria-label="Edit Smith"')
+    expect(html).toContain('aria-label="Agent settings for Smith"')
     expect(html).toContain('Development and architecture')
     // One act on one target: the zoom would need a second handle in the same 36px.
     expect(html).not.toContain('cursor-zoom-in')

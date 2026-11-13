@@ -5,6 +5,7 @@ export type RequestResponse =
   | Extract<ServerMessage, { type: 'ack' }>
   | (Extract<ServerMessage, { type: 'project_memory' }> & { requestId: string })
   | (Extract<ServerMessage, { type: 'chat_summary' }> & { requestId: string })
+  | (Extract<ServerMessage, { type: 'agent_notes' }> & { requestId: string })
   | (Extract<ServerMessage, { type: 'notice' }> & { requestId: string })
   | Extract<ServerMessage, { type: 'search_results' }>
   | (Extract<ServerMessage, { type: 'project_created' }> & { requestId: string })

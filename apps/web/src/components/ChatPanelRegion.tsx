@@ -22,6 +22,7 @@ import type { WorkResultActions } from './WorkResultBody'
 import { BrowserPanel } from './BrowserPanel'
 import { SideChatPanel } from './SideChatPanel'
 import { AgentMemoryPanel } from './AgentMemoryPanel'
+import { AgentSettingsPanel } from './agents/AgentSettingsPanel'
 import { ProjectMemoryPanel } from './ProjectMemoryPanel'
 import { ChatAgentsPanel } from './agents/ChatAgentsPanel'
 import { DOCK_FLOAT, DOCK_FLOAT_TOP } from './ui/dockPanel'
@@ -167,7 +168,7 @@ export function ChatPanelRegion({
   const shown = useMemo(() => keepPanels(layout, (id) => !(
     (id === 'agents' && rosterAgents.length === 0 && !hasRepo && helperCount === 0)
     || (id === 'runs' && chatRoutines.length === 0)
-    || (id === 'routines' && dmAgent === undefined)
+    || ((id === 'routines' || id === 'agent') && dmAgent === undefined)
   )), [layout, rosterAgents.length, hasRepo, helperCount, chatRoutines.length, dmAgent])
   const shownKey = shown.length === 0 ? null : layoutKey(shown)
 
@@ -542,6 +543,30 @@ export function ChatPanelRegion({
         status={status}
         requestEvents={manor.requestEvents}
         onLoad={manor.getChatSummary}
+        overlay={dock.overlay}
+        revealed={dock.revealed}
+        phone={phone}
+        width={dock.width}
+        resizing={dock.resizing}
+        resizeProps={dock.resizeProps}
+        onClose={close}
+      />
+    )
+    if (id === 'agent' && dmAgent !== undefined) return (
+      <AgentSettingsPanel
+        agent={dmAgent}
+        agents={workspace.agents}
+        registry={workspace.mcpServers}
+        skills={workspace.skills}
+        routines={workspace.routines}
+        subagentPolicy={workspace.subagentPolicy}
+        status={status}
+        requestEvents={manor.requestEvents}
+        onSaveAgent={manor.saveAgent}
+        onDeleteAgent={manor.deleteAgent}
+        onSaveSubagentPolicy={manor.saveSubagentPolicy}
+        onRequestSubagentPolicy={manor.requestSubagentPolicy}
+        onLoadNotes={manor.getAgentNotes}
         overlay={dock.overlay}
         revealed={dock.revealed}
         phone={phone}
