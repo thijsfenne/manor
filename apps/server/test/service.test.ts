@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import {
@@ -1709,6 +1709,101 @@ describe('ManorService, picking a folder while creating a project', () => {
     expect((await store.getChat(threadId))?.archivedAt).toBeNull()
     expect((await store.getProject(project.id))?.threadChatId).toBe(threadId)
     expect(replies.some((message) => message.type === 'notice' && message.kind === 'error')).toBe(false)
+  })
+
+  it('adds a folder without a thread, takes it off the picker with its Sessions kept, and promotes it', async () => {
+    const store = createMemoryStore({ agents: roster })
+    const memory = mkdtempSync(path.join(os.tmpdir(), 'manor-folder-memory-'))
+    const folderPath = mkdtempSync(path.join(os.tmpdir(), 'manor-folder-'))
+    const replies: ServerMessage[] = []
+    const reply = (message: ServerMessage) => { replies.push(message) }
+    const manor = new ManorService({
+      store, agents: () => roster, setAgents: () => undefined, mcpServers: () => [], setMcpServers: () => undefined,
+      resolveDriver: () => createMockDriver({ deltaDelayMs: 0 }), ensureScratchDir: scratchFor,
+      structuredMemoryRoot: memory, broadcast: () => undefined,
+    })
+
+    await manor.handle({ type: 'add_folder', path: folderPath, requestId: 'add' }, reply)
+    const created = replies.find((message) => message.type === 'project_created')
+    expect(created).toMatchObject({ requestId: 'add' })
+    const folderId = created?.type === 'project_created' ? created.projectId : ''
+    const folder = await store.getProject(folderId)
+    // A folder is a project row with no thread and no memory files.
+    expect(folder).toMatchObject({ name: path.basename(folderPath), repoPaths: [folderPath] })
+    expect(folder?.threadChatId).toBeUndefined()
+    expect(readdirSync(memory)).toEqual([])
+    const session = await store.createChat({ kind: 'project', projectId: folderId, mode: 'single' })
+
+    await manor.handle({ type: 'remove_folder', projectId: folderId, requestId: 'remove' }, reply)
+    expect(replies.at(-1)).toMatchObject({ type: 'ack', requestId: 'remove' })
+    expect((await store.getProject(folderId))?.unlisted).toBe(true)
+    expect(await store.getChat(session.id)).toMatchObject({ projectId: folderId })
+
+    // The same folder again is the folder it was, listed again, not a second row.
+    const rows = (await store.listProjects()).length
+    await manor.handle({ type: 'add_folder', path: `${folderPath}/`, requestId: 'again' }, reply)
+    expect(replies.filter((message) => message.type === 'project_created').at(-1)).toMatchObject({ projectId: folderId, requestId: 'again' })
+    expect((await store.listProjects()).length).toBe(rows)
+    expect((await store.getProject(folderId))?.unlisted).toBeUndefined()
+
+    // Promotion is the thread: the folder becomes a project and keeps its Session.
+    await store.setProjectUnlisted(folderId, true)
+    await manor.handle({ type: 'create_project_thread', projectId: folderId, requestId: 'promote' }, reply)
+    const promoted = await store.getProject(folderId)
+    expect(promoted?.threadChatId).toBeDefined()
+    expect(promoted?.unlisted).toBeUndefined()
+    expect(replies.at(-1)).toMatchObject({ type: 'ack', requestId: 'promote', workChatId: promoted?.threadChatId })
+    expect(await store.getChat(session.id)).toMatchObject({ projectId: folderId })
+    // A project is not a folder, so it cannot be removed as one.
+    await manor.handle({ type: 'remove_folder', projectId: folderId, requestId: 'not-a-folder' }, reply)
+    expect(replies.at(-1)).toMatchObject({ type: 'notice', kind: 'error', requestId: 'not-a-folder' })
+    expect((await store.getProject(folderId))?.unlisted).toBeUndefined()
+
+    await manor.handle({ type: 'add_folder', path: path.join(folderPath, 'missing'), requestId: 'missing' }, reply)
+    expect(replies.at(-1)).toMatchObject({ type: 'notice', kind: 'error', requestId: 'missing' })
+  })
+
+  it('treats a symlinked folder as the folder it points at, and reads no project memory by its name', async () => {
+    const store = createMemoryStore({ agents: roster })
+    const memory = mkdtempSync(path.join(os.tmpdir(), 'manor-folder-memory-'))
+    mkdirSync(path.join(memory, 'client'))
+    writeFileSync(path.join(memory, 'client', 'MEMORY.md'), '- [Client](brief.md): the client project\n')
+    const parent = mkdtempSync(path.join(os.tmpdir(), 'manor-folder-'))
+    const folderPath = path.join(parent, 'Client')
+    mkdirSync(folderPath)
+    symlinkSync(folderPath, path.join(parent, 'alias'))
+    const replies: ServerMessage[] = []
+    const reply = (message: ServerMessage) => { replies.push(message) }
+    const manor = new ManorService({
+      store, agents: () => roster, setAgents: () => undefined, mcpServers: () => [], setMcpServers: () => undefined,
+      resolveDriver: () => createMockDriver({ deltaDelayMs: 0 }), ensureScratchDir: scratchFor,
+      structuredMemoryRoot: memory, broadcast: () => undefined,
+    })
+    const created = () => replies.filter((message) => message.type === 'project_created').at(-1)
+
+    await manor.handle({ type: 'add_folder', path: folderPath, requestId: 'add' }, reply)
+    const folderId = created()?.type === 'project_created' ? created()!.projectId : ''
+    await manor.handle({ type: 'remove_folder', projectId: folderId, requestId: 'remove' }, reply)
+    await manor.handle({ type: 'add_folder', path: path.join(parent, 'alias'), requestId: 'alias' }, reply)
+    expect(created()).toMatchObject({ projectId: folderId, requestId: 'alias' })
+    expect((await store.getProject(folderId))?.unlisted).toBeUndefined()
+
+    // A folder named Client is not the Client project.
+    await manor.handle({ type: 'get_project_memory', projectId: folderId, requestId: 'memory' }, reply)
+    expect(replies.find((message) => message.type === 'project_memory')).toMatchObject({ files: [] })
+
+    // Two clients adding one new folder at once find one row.
+    const shared = path.join(parent, 'Shared')
+    mkdirSync(shared)
+    const rows = (await store.listProjects()).length
+    await Promise.all([
+      manor.handle({ type: 'add_folder', path: shared, requestId: 'desktop' }, reply),
+      manor.handle({ type: 'add_folder', path: path.join(parent, '.', 'Shared'), requestId: 'phone' }, reply),
+    ])
+    const ids = replies.filter((message) => message.type === 'project_created' && (message.requestId === 'desktop' || message.requestId === 'phone'))
+      .map((message) => message.type === 'project_created' ? message.projectId : '')
+    expect(new Set(ids).size).toBe(1)
+    expect((await store.listProjects()).length).toBe(rows + 1)
   })
 
   it('tells the new thread what to read and what the welcome holds', () => {

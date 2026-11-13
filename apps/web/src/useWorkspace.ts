@@ -325,6 +325,10 @@ export interface Manor {
   createProjectThread: (projectId: string) => Promise<string>
   /** Archives the thread and keeps its files; refused while a session it started is open. */
   removeProjectThread: (projectId: string) => Promise<void>
+  /** A folder to start Sessions in, without a project thread; resolves on its project id. */
+  addFolder: (path: string) => Promise<string>
+  /** Takes a folder off the new-Session picker. Its Sessions keep it. */
+  removeFolder: (projectId: string) => Promise<void>
   rejectWorkHandoff: (handoffId: string) => boolean
   /** The user agrees a goal Session's lead reached the goal. */
   confirmWorkGoal: (handoffId: string, mergeInto?: string, version?: number, requestId?: string) => boolean
@@ -1513,6 +1517,16 @@ export function useWorkspace(url: string, auth?: WorkspaceAuth): Manor {
     [send],
   )
 
+  const addFolder = useCallback(
+    (path: string) => workAcceptance.current.folder(send, crypto.randomUUID(), { add: path }),
+    [send],
+  )
+
+  const removeFolder = useCallback(
+    (projectId: string) => workAcceptance.current.folder(send, crypto.randomUUID(), { remove: projectId }).then(() => undefined),
+    [send],
+  )
+
   // A finished run that was opened is settled, which keeps it out of pushes and the
   // inbox's unsettled list. It no longer drives the routine orb; `App` clears that
   // from `unreadRunIds` while the thread is actually on the stage.
@@ -1740,6 +1754,8 @@ export function useWorkspace(url: string, auth?: WorkspaceAuth): Manor {
     acceptWorkHandoff,
     createProjectThread,
     removeProjectThread,
+    addFolder,
+    removeFolder,
     rejectWorkHandoff,
     confirmWorkGoal,
     reviseWorkGoal,

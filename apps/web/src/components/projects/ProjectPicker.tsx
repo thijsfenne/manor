@@ -1,8 +1,8 @@
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react'
 import { createPortal } from 'react-dom'
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
-import { Cancel01Icon, Folder01Icon, PlusSignIcon, Search01Icon, Tick02Icon } from '@hugeicons/core-free-icons'
-import type { Project } from '@manor/contracts'
+import { Cancel01Icon, Folder01Icon, FolderAddIcon, Search01Icon, Tick02Icon } from '@hugeicons/core-free-icons'
+import { isFolder, type Project } from '@manor/contracts'
 import { INSTANT, TEXT_SWAP, TEXT_SWAP_ABOVE, TEXT_SWAP_BELOW, TEXT_SWAP_REST } from '../../motion'
 import { projectIcon } from '../../projectAppearance'
 import { Icon } from '../Icon'
@@ -17,21 +17,32 @@ const MIN_HEIGHT = 180
 const MIN_WIDTH = 260
 const CLEAR_LABEL = "Don't work in a project"
 const CHANGE_LABEL = 'Change the project for this chat'
-const CREATE_LABEL = 'Create a project for this chat'
+const ADD_FOLDER = 'Add folder'
+const ADD_FOLDER_TIP = 'Choose a folder to work in'
 /** Opens the list from anywhere on the stage; `event.code` because Option rewrites `event.key`. */
 export const CHANGE_PROJECT_KEYS = '⌥⇧⌘O'
 
-/** The rows the list shows. The home room is "no project" and never one of them. */
+/**
+ * The rows the list shows: projects and the folders added here (2026-11-13). The home
+ * room is "no project" and never one of them, and a removed folder is off the list.
+ */
 export function pickerRows(projects: readonly Project[], general: Project | undefined, needle: string) {
-  return projects.filter((project) => project.id !== general?.id && project.name.toLowerCase().includes(needle))
+  return projects.filter((project) =>
+    project.id !== general?.id && project.unlisted !== true && project.name.toLowerCase().includes(needle))
 }
 
 interface ProjectPickerProps {
   projects: Project[]
   value: string
   onChange: (projectId: string) => void
-  /** Opens the project form. The picker closes first, so the dialog lands on a quiet screen. */
-  onNewProject: () => void
+  /**
+   * Adds a folder to work in, without a project thread: Finder on the desktop, the
+   * server's folder walk elsewhere. A real project is made only from Projects in the
+   * sidebar, so the list has no New project row. The picker closes first.
+   */
+  onAddFolder: () => void
+  /** Takes a folder off the list. Its Sessions keep it. Absent, folders have no remove control. */
+  onRemoveFolder?: (projectId: string) => void
   /** The home room, which "Don't work in a project" falls back to. Absent, there is nothing to clear to. */
   general?: Project | undefined
   disabled?: boolean
@@ -56,7 +67,8 @@ export function ProjectPicker({
   projects,
   value,
   onChange,
-  onNewProject,
+  onAddFolder,
+  onRemoveFolder,
   general,
   disabled = false,
   variant = 'chip',
@@ -91,15 +103,15 @@ export function ProjectPicker({
   const current = value === general?.id ? undefined : projects.find((project) => project.id === value)
   const needle = query.trim().toLowerCase()
   const matches = pickerRows(projects, general, needle)
-  // Nothing to choose from yet: the chip is then the way to make the first project,
-  // not a door onto an empty list.
+  // Nothing to choose from yet: the chip is then the way to add the first folder, not
+  // a door onto an empty list. With a row there, the chip only ever opens the list.
   const none = current === undefined && pickerRows(projects, general, '').length === 0
 
   const show = () => {
     if (disabled) return
     setTip(null)
     if (none) {
-      onNewProject()
+      onAddFolder()
       return
     }
     setQuery('')
@@ -167,9 +179,16 @@ export function ProjectPicker({
     setActive((current) => Math.max(0, Math.min(matches.length - 1, current + delta)))
   }
 
-  const create = () => {
+  const addFolder = () => {
     setOpen(false)
-    onNewProject()
+    onAddFolder()
+  }
+
+  const removeFolder = (project: Project) => {
+    onRemoveFolder?.(project.id)
+    // The row the keys point at stays on the list that is left.
+    setActive((current) => Math.max(0, Math.min(current, matches.length - 2)))
+    searchRef.current?.focus()
   }
 
   const onSearchKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
@@ -195,6 +214,14 @@ export function ProjectPicker({
         event.preventDefault()
         choose(active)
         return
+      // The keyboard's way to the remove control a folder row shows on hover.
+      case 'Backspace': {
+        const project = matches[active]
+        if (!(event.metaKey || event.ctrlKey) || project === undefined || onRemoveFolder === undefined || !isFolder(project)) return
+        event.preventDefault()
+        removeFolder(project)
+        return
+      }
       default:
     }
   }
@@ -272,17 +299,17 @@ export function ProjectPicker({
           }`}
           disabled={disabled}
           {...(none ? {} : { 'aria-haspopup': 'listbox' as const, 'aria-expanded': open })}
-          aria-label={none ? 'Create project' : current === undefined ? 'Choose project' : 'Project for this chat'}
+          aria-label={none ? ADD_FOLDER : current === undefined ? 'Choose project' : 'Project for this chat'}
           aria-describedby={tip === null ? undefined : tipId}
-          {...tipOn(none ? CREATE_LABEL : CHANGE_LABEL, CHANGE_PROJECT_KEYS)}
+          {...tipOn(none ? ADD_FOLDER_TIP : CHANGE_LABEL, CHANGE_PROJECT_KEYS)}
           onClick={() => {
             setTip(null)
             if (open) hide()
             else show()
           }}
         >
-          {current === undefined ? <Icon className="flex-none" icon={none ? PlusSignIcon : Folder01Icon} size={15} /> : null}
-          <span className="max-w-[220px] truncate">{current?.name ?? (none ? 'Create project' : 'Choose project')}</span>
+          {current === undefined ? <Icon className="flex-none" icon={none ? FolderAddIcon : Folder01Icon} size={15} /> : null}
+          <span className="max-w-[220px] truncate">{current?.name ?? (none ? ADD_FOLDER : 'Choose project')}</span>
         </button>
       </span>
       )}
@@ -328,13 +355,13 @@ export function ProjectPicker({
               <input
                 ref={searchRef}
                 className="min-w-0 flex-1 border-0 bg-transparent text-label text-text outline-none placeholder:text-dim"
-                placeholder="Find a project…"
+                placeholder="Find a project or folder…"
                 value={query}
                 role="combobox"
                 aria-expanded
                 aria-controls={listId}
                 aria-activedescendant={`${listId}-${active}`}
-                aria-label="Search projects"
+                aria-label="Search projects and folders"
                 onChange={(event) => {
                   setQuery(event.target.value)
                   // The row the keys point at belongs to the list as it now reads.
@@ -346,35 +373,60 @@ export function ProjectPicker({
 
             <div id={listId} role="listbox" aria-label="Projects" className="min-h-0 flex-1 overflow-y-auto p-1">
               {matches.length === 0 ? (
-                <p className="m-0 px-2 py-2 text-[12px] text-dim">No project by that name</p>
+                <p className="m-0 px-2 py-2 text-[12px] text-dim">{query.trim() === '' ? 'No folders yet' : 'Nothing by that name'}</p>
               ) : (
-                matches.map((project, index) => (
-                  <button
-                    key={project.id}
-                    id={`${listId}-${index}`}
-                    type="button"
-                    role="option"
-                    aria-selected={project.id === value}
-                    data-index={index}
-                    tabIndex={-1}
-                    className={`flex w-full cursor-pointer items-center gap-2 rounded-md border-0 px-2 py-1.5 text-left text-label text-text ${
-                      index === active ? 'bg-user-bg' : 'bg-transparent'
-                    }`}
-                    onMouseEnter={() => setActive(index)}
-                    // The press must not pull focus out of the search field, which
-                    // is what drives the list.
-                    onMouseDown={(event) => event.preventDefault()}
-                    onClick={() => choose(index)}
-                  >
-                    <Icon className="flex-none" icon={projectIcon(project.icon)} size={15} style={{ color: project.color }} />
-                    <span className="min-w-0 flex-1 truncate">{project.name}</span>
-                    {project.id === value ? (
-                      <Icon className="flex-none" icon={Tick02Icon} size={13} />
-                    ) : (
-                      <span className="w-[13px] flex-none" aria-hidden="true" />
-                    )}
-                  </button>
-                ))
+                matches.map((project, index) => {
+                  const removable = onRemoveFolder !== undefined && isFolder(project)
+                  return (
+                    <div key={project.id} role="none" className="group/row relative">
+                      <button
+                        id={`${listId}-${index}`}
+                        type="button"
+                        role="option"
+                        aria-selected={project.id === value}
+                        data-index={index}
+                        tabIndex={-1}
+                        {...(removable ? { 'aria-keyshortcuts': 'Meta+Backspace Control+Backspace' } : {})}
+                        className={`flex w-full cursor-pointer items-center gap-2 rounded-md border-0 px-2 py-1.5 text-left text-label text-text ${
+                          index === active ? 'bg-user-bg' : 'bg-transparent'
+                        }`}
+                        onMouseEnter={() => setActive(index)}
+                        // The press must not pull focus out of the search field, which
+                        // is what drives the list.
+                        onMouseDown={(event) => event.preventDefault()}
+                        onClick={() => choose(index)}
+                      >
+                        <Icon className="flex-none" icon={projectIcon(project.icon)} size={15} style={{ color: project.color }} />
+                        <span className="min-w-0 flex-1 truncate">{project.name}</span>
+                        {project.id === value ? (
+                          <Icon
+                            className={`flex-none ${removable ? 'group-hover/row:opacity-0' : ''}`}
+                            icon={Tick02Icon}
+                            size={13}
+                          />
+                        ) : (
+                          <span className="w-[13px] flex-none" aria-hidden="true" />
+                        )}
+                      </button>
+                      {/* The way off the list, on the folder it undoes. A project leaves from Projects in the sidebar.
+                          The pointer's handle only: the keyboard and a screen reader use ⌘⌫ on the option. */}
+                      {removable ? (
+                        <button
+                          type="button"
+                          tabIndex={-1}
+                          aria-hidden="true"
+                          className="absolute top-1/2 right-1.5 grid h-5 w-5 -translate-y-1/2 cursor-pointer place-items-center rounded-full border-0 bg-transparent p-0 text-dim opacity-0 group-hover/row:opacity-100 hover:bg-line hover:text-text"
+                          aria-label={`Remove ${project.name} from this list`}
+                          title="Remove from this list (⌘⌫)"
+                          onMouseDown={(event) => event.preventDefault()}
+                          onClick={() => removeFolder(project)}
+                        >
+                          <Icon icon={Cancel01Icon} size={11} />
+                        </button>
+                      ) : null}
+                    </div>
+                  )
+                })
               )}
             </div>
 
@@ -383,10 +435,10 @@ export function ProjectPicker({
                 type="button"
                 className="flex w-full cursor-pointer items-center gap-2 rounded-md border-0 bg-transparent px-2 py-1.5 text-left text-label text-muted hover:bg-user-bg hover:text-text"
                 onMouseDown={(event) => event.preventDefault()}
-                onClick={create}
+                onClick={addFolder}
               >
-                <Icon className="flex-none" icon={PlusSignIcon} size={14} />
-                <span>New project</span>
+                <Icon className="flex-none" icon={FolderAddIcon} size={14} />
+                <span>{ADD_FOLDER}</span>
               </button>
               {current === undefined || general === undefined ? null : (
                 <button

@@ -11,7 +11,9 @@ import { RuntimeControls } from '../RuntimeControls'
 import { SingleRuntimeControl } from '../SingleRuntimeControl'
 import { StageBackdrop } from '../StageBackdrop'
 import { Transcript } from '../Transcript'
+import { AddFolderDialog } from '../projects/AddFolderDialog'
 import { ProjectPicker } from '../projects/ProjectPicker'
+import { useAddFolder } from '../../useAddFolder'
 import { chatRoster } from '../../chatRoster'
 import { roomAgents } from '../../mentions'
 import { effectiveDriver, isAutoOn, withAuto } from '../../runtimeChoices'
@@ -56,11 +58,18 @@ export function DraftStage({
   const hostAuto = useHostAuto()
   const { workspace, status } = manor
   const { draftBoxRef, creating, draftProjectId, draftAgentId, submitDraft, draftOverride, setDraftMode,
-    setDraftSingleRuntime, setDraftProject, setDraftCheckout, openProjectDialog } = dialogs
+    setDraftSingleRuntime, setDraftProject, setDraftCheckout } = dialogs
   const pickerProjects = useMemo(
     () => projectsByRecentActivity({ projects: workspace.projects, chats: workspace.chats }),
     [workspace.projects, workspace.chats],
   )
+  // A folder added from the chip is where the draft goes next.
+  const folders = useAddFolder(manor, setDraftProject)
+  // The draft leaves the folder as the press lands, so a late answer cannot undo a newer pick.
+  const removeFolder = (projectId: string) => {
+    if (draftProjectId === projectId && workspace.home !== undefined) setDraftProject(workspace.home.id)
+    void manor.removeFolder(projectId).catch(() => undefined)
+  }
   const draftProject = roomOf(workspace, draftProjectId)
   // "No project" is the home room, so a draft sitting there reads as having none.
   const generalProject = workspace.home
@@ -161,7 +170,8 @@ export function DraftStage({
             disabled={draft.submitting}
             variant="inline"
             onChange={setDraftProject}
-            onNewProject={() => openProjectDialog({ mode: 'create', onCreated: setDraftProject })}
+            onAddFolder={() => void folders.start()}
+            onRemoveFolder={removeFolder}
           />
           ?
         </>
@@ -176,9 +186,20 @@ export function DraftStage({
       general={generalProject}
       disabled={draft.submitting}
       onChange={setDraftProject}
-      onNewProject={() => openProjectDialog({ mode: 'create', onCreated: setDraftProject })}
+      onAddFolder={() => void folders.start()}
+      onRemoveFolder={removeFolder}
     />
   )
+  const addFolderDialog = folders.browsing ? (
+    <AddFolderDialog
+      dirs={workspace.dirs}
+      error={folders.error}
+      busy={folders.busy}
+      onWalk={folders.listDirs}
+      onPick={(path) => void folders.add(path)}
+      onClose={folders.cancel}
+    />
+  ) : null
 
   /**
    * The one composer the new-chat stage has, and the very same element that ends up
@@ -358,6 +379,7 @@ export function DraftStage({
           </div>
         </footer>
       ) : null}
+      {addFolderDialog}
     </>
   )
 }

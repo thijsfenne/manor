@@ -6,6 +6,7 @@ import {
   ArrowRight01Icon,
   Cancel01Icon,
   Folder01Icon,
+  FolderAddIcon,
   UnfoldMoreIcon,
 } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon, type IconSvgElement } from '@hugeicons/react-native'
@@ -13,6 +14,7 @@ import {
   NEW_SINGLE_CHAT_DEFAULT,
   SINGLE_CHAT_VOICE,
   addsAgentMention,
+  isFolder,
   type AgentConfig,
   type ChatMode,
   type ChatOverride,
@@ -34,6 +36,7 @@ import { router } from 'expo-router'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   ActivityIndicator,
+  Alert,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -54,7 +57,7 @@ import { RuntimeSheet, SingleRuntimeSheet } from '@/components/RuntimeSheet'
 import { SegmentedControl } from '@/components/SegmentedControl'
 import { useWorkspace } from '@/providers/WorkspaceProvider'
 import { Text } from '@/components/Text'
-import { colors, fonts, radius, spacing, squircle, tracking } from '@/theme'
+import { colors, fonts, radius, spacing, squircle } from '@/theme'
 import { useHostAuto } from '@/useHostAuto'
 
 type Stage = 'projects' | 'folders' | 'draft'
@@ -78,7 +81,8 @@ function NewChatFlow() {
     clearCreatedProject,
     closeDirs,
     createChat,
-    createProject,
+    addFolder,
+    removeFolder,
     listDirs,
     listRepoFiles,
     openChat,
@@ -96,7 +100,6 @@ function NewChatFlow() {
   const [agentsOpen, setAgentsOpen] = useState(false)
   const [singleRuntimeOpen, setSingleRuntimeOpen] = useState(false)
   const [manualPath, setManualPath] = useState('')
-  const [projectName, setProjectName] = useState('')
   const [pendingChatRequestId, setPendingChatRequestId] = useState<string | null>(null)
   const [pendingProjectRequestId, setPendingProjectRequestId] = useState<string | null>(null)
   const [chatError, setChatError] = useState<string | null>(null)
@@ -117,7 +120,8 @@ function NewChatFlow() {
   )
   // "No project" is the home room, a row of its own; no project list holds it.
   const generalProject = workspace.home
-  const namedProjects = pickerProjects
+  // Projects and the folders added here (2026-11-13); a removed folder is off the list.
+  const namedProjects = pickerProjects.filter((project) => project.unlisted !== true)
   const listing = workspace.dirs.listing
   // The `@` menu's files, for the project this chat is about to open in. Re-listed
   // rather than cached: the listing is one `git ls-files`, and a menu offering files
@@ -170,20 +174,20 @@ function NewChatFlow() {
   if (listing !== null && listing.path !== appliedPath) {
     setAppliedPath(listing.path)
     setManualPath(listing.path)
-    setProjectName(folderName(listing.path))
   }
 
   // Both confirmations are kept as state rather than derived: a value the
   // adjustment itself nulls never reaches the commit, and only committed state
   // can feed an effect.
-  const [confirmedProjectId, setConfirmedProjectId] = useState<string | null>(null)
+  // Keyed by request: adding a folder already on the list answers with the same id.
+  const [confirmedProjectRequest, setConfirmedProjectRequest] = useState<string | null>(null)
   if (
     createdProject !== null &&
     pendingProjectRequestId !== null &&
     createdProject.requestId === pendingProjectRequestId &&
-    confirmedProjectId !== createdProject.projectId
+    confirmedProjectRequest !== pendingProjectRequestId
   ) {
-    setConfirmedProjectId(createdProject.projectId)
+    setConfirmedProjectRequest(pendingProjectRequestId)
     setPendingProjectRequestId(null)
     setSelectedProjectId(createdProject.projectId)
     setStage('draft')
@@ -213,7 +217,7 @@ function NewChatFlow() {
   if (status !== 'live') {
     if (pendingProjectRequestId !== null) {
       setPendingProjectRequestId(null)
-      setFolderError('The connection to your Mac dropped before Manor confirmed the project.')
+      setFolderError('The connection to your Mac dropped before Manor confirmed the folder.')
     }
     if (pendingChatRequestId !== null) {
       setPendingChatRequestId(null)
@@ -222,10 +226,10 @@ function NewChatFlow() {
   }
 
   useEffect(() => {
-    if (confirmedProjectId === null) return
+    if (confirmedProjectRequest === null) return
     clearCreatedProject()
     closeDirs()
-  }, [clearCreatedProject, closeDirs, confirmedProjectId])
+  }, [clearCreatedProject, closeDirs, confirmedProjectRequest])
 
   useEffect(() => {
     if (confirmedChatId === null) return
@@ -264,10 +268,10 @@ function NewChatFlow() {
   }
 
   const addCurrentFolder = () => {
-    if (listing === null || projectName.trim() === '' || status !== 'live') return
-    const requestId = `mobile-project-${Date.now()}-${Math.random().toString(36).slice(2)}`
+    if (listing === null || status !== 'live') return
+    const requestId = `mobile-folder-${Date.now()}-${Math.random().toString(36).slice(2)}`
     setFolderError(null)
-    if (createProject(projectName, listing.path, requestId)) {
+    if (addFolder(listing.path, requestId)) {
       setPendingProjectRequestId(requestId)
     } else {
       setFolderError('Manor could not send the request to your Mac.')
@@ -319,7 +323,7 @@ function NewChatFlow() {
     })
   }
 
-  const title = stage === 'projects' ? 'Choose project' : stage === 'folders' ? 'Add a project' : 'New Session'
+  const title = stage === 'projects' ? 'Choose project' : stage === 'folders' ? 'Add folder' : 'New Session'
 
   return (
     <SafeAreaView edges={['top', 'bottom']} style={styles.screen}>
@@ -335,6 +339,11 @@ function NewChatFlow() {
           onAdd={showFolders}
           general={generalProject}
           onChoose={chooseProject}
+          onRemove={(projectId) => {
+            void removeFolder(projectId).catch((error: unknown) => {
+              Alert.alert('Folder not removed', error instanceof Error ? error.message : 'Try again when Manor is back.')
+            })
+          }}
           projects={namedProjects}
         />
       ) : stage === 'folders' ? (
@@ -346,8 +355,6 @@ function NewChatFlow() {
           onAdd={addCurrentFolder}
           onBrowse={browse}
           onManualPathChange={setManualPath}
-          onNameChange={setProjectName}
-          projectName={projectName}
           status={status}
           submitting={pendingProjectRequestId !== null}
         />
@@ -365,7 +372,9 @@ function NewChatFlow() {
           textFiles={textFiles}
           onMessageChange={setMessage}
           onModeChange={chooseMode}
-          onPickProject={showProjects}
+          // Nothing to choose from yet: the row goes straight to adding a folder, as the Mac's chip does.
+          onPickProject={namedProjects.length === 0 ? showFolders : showProjects}
+          addFolder={namedProjects.length === 0}
           onSingleRuntime={() => setSingleRuntimeOpen(true)}
           onSubmit={startChat}
           overrides={overrides}
@@ -423,7 +432,7 @@ function SheetHeader({
       <Text numberOfLines={1} style={styles.headerTitle}>{title}</Text>
       {onAdd === undefined ? <View style={styles.headerButton} /> : (
         <GlassIconButton
-          accessibilityLabel="Add a project"
+          accessibilityLabel="Add folder"
           icon={Add01Icon}
           onPress={onAdd}
         />
@@ -437,12 +446,15 @@ function ProjectPicker({
   general,
   onChoose,
   onAdd,
+  onRemove,
 }: {
   projects: ReturnType<typeof useWorkspace>['workspace']['projects']
   /** The project "No project" stands for; absent, there is no such row. */
   general: ReturnType<typeof useWorkspace>['workspace']['projects'][number] | undefined
   onChoose: (projectId: string) => void
   onAdd: () => void
+  /** Takes a folder off this list; a long press asks first. A project is never offered. */
+  onRemove: (projectId: string) => void
 }) {
   return (
     <ScrollView
@@ -454,15 +466,15 @@ function ProjectPicker({
           <View style={styles.emptyIcon}>
             <HugeiconsIcon color={colors.muted} icon={Folder01Icon} size={24} strokeWidth={1.6} />
           </View>
-          <Text style={styles.emptyTitle}>No projects yet</Text>
-          <Text style={styles.emptyCopy}>Choose a folder on your Mac. Manor turns it into a project and takes you straight to your first chat.</Text>
+          <Text style={styles.emptyTitle}>No folders yet</Text>
+          <Text style={styles.emptyCopy}>Choose a folder on your Mac to work in. Manor takes you straight to your first Session.</Text>
           <Pressable
             accessibilityRole="button"
             onPress={onAdd}
             style={({ pressed }) => [styles.primaryButton, styles.emptyAction, pressed && styles.pressed]}
           >
             <HugeiconsIcon color={colors.onPrimary} icon={Add01Icon} size={18} strokeWidth={1.8} />
-            <Text style={styles.primaryText}>Choose a local folder</Text>
+            <Text style={styles.primaryText}>Add folder</Text>
           </Pressable>
         </View>
       ) : (
@@ -493,6 +505,13 @@ function ProjectPicker({
                 accessibilityRole="button"
                 key={project.id}
                 onPress={() => onChoose(project.id)}
+                {...(isFolder(project) ? {
+                  accessibilityHint: 'Long press to remove this folder from the list',
+                  onLongPress: () => Alert.alert(`Remove ${project.name}?`, 'It leaves this list. Its Sessions stay.', [
+                    { text: 'Cancel', style: 'cancel' },
+                    { text: 'Remove', style: 'destructive', onPress: () => onRemove(project.id) },
+                  ]),
+                } : {})}
                 style={({ pressed }) => [styles.projectRow, pressed && styles.rowPressed]}
               >
                 <View style={styles.projectMark}>
@@ -509,6 +528,21 @@ function ProjectPicker({
               </Pressable>
             ))}
           </View>
+          <View style={styles.group}>
+            <Pressable
+              accessibilityLabel="Add folder"
+              accessibilityRole="button"
+              onPress={onAdd}
+              style={({ pressed }) => [styles.projectRow, pressed && styles.rowPressed]}
+            >
+              <View style={styles.projectMark}>
+                <HugeiconsIcon color={colors.muted} icon={FolderAddIcon} size={20} strokeWidth={1.7} />
+              </View>
+              <View style={styles.projectCopy}>
+                <Text numberOfLines={1} style={styles.projectTitle}>Add folder</Text>
+              </View>
+            </Pressable>
+          </View>
         </>
       )}
     </ScrollView>
@@ -519,24 +553,20 @@ function FolderPicker({
   listing,
   asking,
   manualPath,
-  projectName,
   error,
   status,
   submitting,
   onManualPathChange,
-  onNameChange,
   onBrowse,
   onAdd,
 }: {
   listing: ReturnType<typeof useWorkspace>['workspace']['dirs']['listing']
   asking: boolean
   manualPath: string
-  projectName: string
   error: string | null
   status: 'connecting' | 'live' | 'offline'
   submitting: boolean
   onManualPathChange: (path: string) => void
-  onNameChange: (name: string) => void
   onBrowse: (path?: string) => void
   onAdd: () => void
 }) {
@@ -570,19 +600,6 @@ function FolderPicker({
               )}
             </Pressable>
           </View>
-        </View>
-
-        <View style={styles.fieldGroup}>
-          <Text style={styles.fieldLabel}>Project name</Text>
-          <TextInput
-            autoCapitalize="words"
-            onChangeText={onNameChange}
-            placeholder="Project name"
-            placeholderTextColor={colors.dim}
-            selectionColor={colors.text}
-            style={styles.nameInput}
-            value={projectName}
-          />
         </View>
 
         {listing === null && asking ? (
@@ -636,18 +653,18 @@ function FolderPicker({
 
         <Pressable
           accessibilityRole="button"
-          disabled={listing === null || projectName.trim() === '' || status !== 'live' || submitting}
+          disabled={listing === null || status !== 'live' || submitting}
           onPress={onAdd}
           style={({ pressed }) => [
             styles.primaryButton,
-            (listing === null || projectName.trim() === '' || status !== 'live' || submitting) && styles.disabled,
+            (listing === null || status !== 'live' || submitting) && styles.disabled,
             pressed && styles.pressed,
           ]}
         >
           {submitting ? <ActivityIndicator color={colors.onPrimary} size="small" /> : (
             <HugeiconsIcon color={colors.onPrimary} icon={Add01Icon} size={18} strokeWidth={1.8} />
           )}
-          <Text style={styles.primaryText}>{submitting ? 'Adding project…' : 'Use this folder'}</Text>
+          <Text style={styles.primaryText}>{submitting ? 'Adding folder…' : 'Use this folder'}</Text>
         </Pressable>
         <Text style={styles.hostHint}>This folder stays on your Mac. The app only uses Manor as a remote control.</Text>
         {error === null ? null : <Text accessibilityRole="alert" style={styles.error}>{error}</Text>}
@@ -659,6 +676,7 @@ function FolderPicker({
 function ChatDraft({
   project,
   noProject,
+  addFolder,
   agents,
   overrides,
   message,
@@ -685,6 +703,8 @@ function ChatDraft({
   project: ReturnType<typeof useWorkspace>['workspace']['projects'][number] | undefined
   /** The chat is in the home room, shown as "No project". */
   noProject: boolean
+  /** Nothing to choose from yet: the project row reads Add folder (2026-11-13). */
+  addFolder: boolean
   agents: AgentConfig[]
   overrides: Record<string, ChatOverride>
   message: string
@@ -725,7 +745,12 @@ function ChatDraft({
         {/* Where the chat will run, as rows above the composer: the
             project and the personas' runtime for this chat alone. */}
         <View style={styles.scope}>
-          <ScopeRow icon={Folder01Icon} label={noProject ? 'No project' : (project?.name ?? 'Preparing project…')} onPress={onPickProject} tint={noProject ? undefined : project?.color} />
+          <ScopeRow
+            icon={noProject && addFolder ? FolderAddIcon : Folder01Icon}
+            label={noProject ? (addFolder ? 'Add folder' : 'No project') : (project?.name ?? 'Preparing project…')}
+            onPress={onPickProject}
+            tint={noProject ? undefined : project?.color}
+          />
           <View style={styles.modeRow}>
             <SegmentedControl disabled={submitting} label="Chat mode" onChange={onModeChange} options={MODES} value={mode} />
             {/* What the session runs on, with Auto at the far right of the same row:
@@ -828,11 +853,6 @@ function ScopeRow({
   )
 }
 
-function folderName(path: string): string {
-  const normalized = path.replace(/\/+$/, '')
-  const name = normalized.split('/').pop()?.trim()
-  return name === undefined || name === '' ? 'New project' : name
-}
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.background },
@@ -918,17 +938,6 @@ const styles = StyleSheet.create({
     paddingVertical: 0,
   },
   goButton: { width: 48, height: 48, alignItems: 'center', justifyContent: 'center' },
-  nameInput: {
-    minHeight: 52,
-    borderRadius: radius.md,
-    ...squircle,
-    backgroundColor: colors.surface2,
-    color: colors.text,
-    fontFamily: fonts.sans,
-    fontSize: 16,
-    letterSpacing: tracking.body,
-    paddingHorizontal: spacing.md,
-  },
   location: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm, paddingHorizontal: spacing.xs },
   locationText: { flex: 1, color: colors.muted, fontFamily: fonts.mono, fontSize: 12, lineHeight: 17 },
   folderRow: {

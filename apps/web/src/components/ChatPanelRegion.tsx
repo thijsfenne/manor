@@ -1,5 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type ComponentPropsWithoutRef, type CSSProperties, type Dispatch, type RefObject, type SetStateAction } from 'react'
-import { isOpenRoom, NOTE_AI_DEFAULTS, type Chat, type NoteQuote, type PageContextAttachment, type RepoFileApp } from '@manor/contracts'
+import { isFolder, isOpenRoom, NOTE_AI_DEFAULTS, type Chat, type NoteQuote, type PageContextAttachment, type RepoFileApp } from '@manor/contracts'
 import type { useWorkspace } from '../useWorkspace'
 import { chatRoster } from '../chatRoster'
 import { lastTurnSelectedMemoryPaths, messageTime } from '../messageMeta'
@@ -567,7 +567,8 @@ export function ChatPanelRegion({
         usedPaths={usedMemoryPaths}
         {...(workspace.contextFiles === null ? {} : { userFiles: workspace.contextFiles.files })}
         onLoadUserFiles={manor.requestContextFiles}
-        memoryScope={openProject.memoryScope === 'knowledge' ? 'knowledge' : 'project'}
+        // A folder reads memory the way No project does (2026-11-13).
+        memoryScope={openProject.memoryScope === 'knowledge' || isFolder(openProject) ? 'knowledge' : 'project'}
         {...(isProjectThread(workspace, open.id) ? { summaryChatId: open.id, onLoadSummary: manor.getChatSummary } : {})}
         onClose={close}
       />

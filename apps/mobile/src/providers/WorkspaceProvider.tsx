@@ -1,7 +1,5 @@
 import { createWorkAcceptance, createWorkspaceCommands, type WorkAcceptanceOptions } from '@manor/client-runtime/commands'
 import {
-  DEFAULT_PROJECT_COLOR,
-  DEFAULT_PROJECT_ICON,
   type SlackRichText,
   type ChatOverride,
   type ClientMessage,
@@ -127,7 +125,10 @@ export interface WorkspaceActions {
   restoreOutboundDraft: (chatId: string, draftId: string) => boolean
   readOutboundThread: (chatId: string, draftId: string) => boolean
   createChat: (target: NewChatTarget, opening: Opening, overrides: Record<string, ChatOverride>, requestId: string) => boolean
-  createProject: (name: string, repoPath: string, requestId: string) => boolean
+  /** A folder to start Sessions in, without a project thread; answered through `createdProject`. */
+  addFolder: (repoPath: string, requestId: string) => boolean
+  /** Takes a folder off the new-Session list. Its Sessions keep it. */
+  removeFolder: (projectId: string) => Promise<void>
   /** Saves the project form as a whole, as the Mac's Edit project does; resolves on the ack, rejects with the notice. */
   updateProject: (projectId: string, edit: ProjectEdit) => Promise<void>
   /** Deletes the project with its thread, Sessions and chats. */
@@ -611,19 +612,17 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     [send],
   )
 
-  const createProject = useCallback(
-    (name: string, repoPath: string, requestId: string) => {
+  const addFolder = useCallback(
+    (repoPath: string, requestId: string) => {
       setCreatedProject(null)
-      return send({
-        type: 'create_project',
-        name: name.trim(),
-        repoPaths: [repoPath],
-        icon: DEFAULT_PROJECT_ICON,
-        color: DEFAULT_PROJECT_COLOR,
-        requestId,
-      })
+      return send({ type: 'add_folder', path: repoPath, requestId })
     },
     [send],
+  )
+
+  const removeFolder = useCallback(
+    (projectId: string) => answered((id) => send({ type: 'remove_folder', projectId, requestId: id })),
+    [answered, send],
   )
 
   const setChatOverride = useCallback(
@@ -726,7 +725,8 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       restoreOutboundDraft,
       readOutboundThread,
       createChat,
-      createProject,
+      addFolder,
+      removeFolder,
       updateProject,
       deleteProject,
       setChatOverride,
@@ -742,7 +742,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       listArtifacts,
       loadMoreArtifacts,
     }),
-    [acceptWorkHandoff, answerSecretRequest, answerUserInput, changeSessionAnswer, askCheckoutStatus, askProjectCheckout, clearCreatedChat, clearCreatedProject, closeDirs, confirmWorkGoal, acceptWorkResult, reviseWorkResult, retryWorkResult, approveMergeFix, createChat, createProject, deleteProject, discardOutboundDraft, ignoreOutboundDraft, listWorkflowSuggestions, listArtifacts, listDirs, listRepoFiles, listVault, loadMoreArtifacts, openChat, openSubagentThread, readOutboundThread, readRepoFile, readVaultFile, rejectWorkHandoff, restoreOutboundDraft, runRoutine, sendMessage, setChatOverride, setChatSettled, signOut, snoozeOutboundDraft, stopBackground, stopSubagent, stopTurn, submitOutboundDraft, updateProject],
+    [acceptWorkHandoff, answerSecretRequest, answerUserInput, changeSessionAnswer, askCheckoutStatus, askProjectCheckout, clearCreatedChat, clearCreatedProject, closeDirs, confirmWorkGoal, acceptWorkResult, reviseWorkResult, retryWorkResult, approveMergeFix, createChat, addFolder, removeFolder, deleteProject, discardOutboundDraft, ignoreOutboundDraft, listWorkflowSuggestions, listArtifacts, listDirs, listRepoFiles, listVault, loadMoreArtifacts, openChat, openSubagentThread, readOutboundThread, readRepoFile, readVaultFile, rejectWorkHandoff, restoreOutboundDraft, runRoutine, sendMessage, setChatOverride, setChatSettled, signOut, snoozeOutboundDraft, stopBackground, stopSubagent, stopTurn, submitOutboundDraft, updateProject],
   )
 
   const data = useMemo<WorkspaceData>(

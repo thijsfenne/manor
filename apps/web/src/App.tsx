@@ -226,10 +226,12 @@ function Workspace({
   const hasArtifacts = workspace.artifacts.status === 'ready'
   // The phone has Apple's own Reminders app, which syncs; the door is a Mac-width surface.
   const hasReminders = workspace.reminders.available && !phone
-  const defaultProjectId = lastCreatedProjectId(workspace.chats, workspace.projects)
+  // A folder taken off the picker is never where a new Session lands on its own.
+  const listedProjects = workspace.projects.filter((project) => project.unlisted !== true)
+  const defaultProjectId = lastCreatedProjectId(workspace.chats, listedProjects)
   // A Session needs no project: with none to go on it starts in the home room.
   const newChatProject =
-    roomOf(workspace, draftProjectId ?? heldProjectDraftId() ?? defaultProjectId) ?? workspace.projects[0] ?? workspace.home
+    roomOf(workspace, draftProjectId ?? heldProjectDraftId() ?? defaultProjectId) ?? listedProjects[0] ?? workspace.home
   // One answer for the button and the ⌘N shortcut alike: a chat can be started
   // only while the server is there to hold it. A room always exists.
   const canStartChat = status === 'live'

@@ -48,4 +48,23 @@ describe('Work acceptance on both clients', () => {
     await assertion
     expect(vi.getTimerCount()).toBe(0)
   })
+
+  it('resolves an added folder on the project Manor names before the ack, and a removal on the ack', async () => {
+    const acceptance = createWorkAcceptance()
+    const send = vi.fn(() => true)
+    const added = acceptance.folder(send, 'add-1', { add: '/Users/me/Downloads' })
+    expect(send).toHaveBeenCalledWith({ type: 'add_folder', path: '/Users/me/Downloads', requestId: 'add-1' })
+    acceptance.receive({ type: 'project_created', projectId: 'folder-1', requestId: 'add-1' })
+    acceptance.receive({ type: 'ack', requestId: 'add-1' })
+    await expect(added).resolves.toBe('folder-1')
+
+    const removed = acceptance.folder(send, 'remove-1', { remove: 'folder-1' })
+    expect(send).toHaveBeenLastCalledWith({ type: 'remove_folder', projectId: 'folder-1', requestId: 'remove-1' })
+    acceptance.receive({ type: 'ack', requestId: 'remove-1' })
+    await expect(removed).resolves.toBe('')
+
+    const refused = acceptance.folder(send, 'add-2', { add: '/nowhere' })
+    acceptance.receive({ type: 'notice', requestId: 'add-2', text: 'There is nothing at /nowhere.', kind: 'error' })
+    await expect(refused).rejects.toThrow('nothing at /nowhere')
+  })
 })

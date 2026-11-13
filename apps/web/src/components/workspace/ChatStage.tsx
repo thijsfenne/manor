@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { BotIcon, Cancel01Icon } from '@hugeicons/core-free-icons'
-import { isOpenRoom, type Chat, type DesktopBrowserBridge, type MessageQuote, type MessageReply, type NoteQuote, type PageContextAttachment } from '@manor/contracts'
+import { isFolder, isOpenRoom, type Chat, type DesktopBrowserBridge, type MessageQuote, type MessageReply, type NoteQuote, type PageContextAttachment } from '@manor/contracts'
 import { ProjectSessionsOverview, SessionsOverviewDoor, SettleButton } from '../inbox/ProjectSessionsOverview'
 import { ChatPane } from '../ChatPane'
 import { ChatPanelRegion } from '../ChatPanelRegion'
@@ -344,7 +344,7 @@ export function ChatStage({
               selected={layoutHas(activeLayout, 'agents')} onClick={() => rightPanel.show('agents')} />
           )
         }
-        {...(!phone && headerProject !== undefined && !isHomeRoom(headerProject.id)
+        {...(!phone && headerProject !== undefined && !isHomeRoom(headerProject.id) && !isFolder(headerProject)
           ? {
               onEditProject: () =>
                 dialogs.openProjectDialog({ mode: 'edit', projectId: headerProject.id }),
@@ -485,7 +485,7 @@ export function StageChatPane({
       if (visibleSplit !== null && visibleSplit.focus !== side) focusSplitSide(side)
     }}
     {...(paneRail === undefined ? {} : { rail: paneRail })}
-    {...(chat.projectId === null || workspace.projects.find((project) => project.id === chat.projectId) === undefined
+    {...(chat.projectId === null || !workspace.projects.some((project) => project.id === chat.projectId && !isFolder(project))
       ? {}
       : { onEditProject: () => openProjectDialog({ mode: 'edit', projectId: chat.projectId! }) })}
     onEditPersona={editAgent}

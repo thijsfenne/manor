@@ -1102,6 +1102,8 @@ export class ManorService {
         await this.myMindModule.handle(message, reply)
         return
       case 'create_project':
+      case 'add_folder':
+      case 'remove_folder':
       case 'create_chat':
       case 'delete_project':
       case 'open_side_chat':

@@ -359,6 +359,8 @@ export class ProjectThreads {
       ? project.threadChatId : undefined
     if (hidden !== undefined) await store.setChatArchived(hidden, false)
     const threadChatId = hidden ?? await this.newThread(project, options.runtime)
+    // A folder taken off the picker and then made a project is listed again.
+    if (project.unlisted === true) await store.setProjectUnlisted(projectId, false)
     for (const file of [paths.preferences, paths.notes]) this.known.set(file, await readThreadFile(file))
     await store.setProjectSetupVersion(projectId, PROJECT_SETUP_VERSION)
     if (options.broadcast !== false) await this.options.broadcastDirectory()

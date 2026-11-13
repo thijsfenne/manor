@@ -28,7 +28,8 @@ export function useWorkspaceLists(workspace: WorkspaceShape, phone: boolean) {
     [workspace.chats, workspace.projects, workspace.workHandoffs, workspace.activity, workspace.subagents, workspace.backgroundChatIds, workspace.openChatId, workspace.pendingChatId],
   )
   const threadlessProjects = useMemo(
-    () => workspace.projects.filter((project) => !threadRows.some((row) => row.project.id === project.id)),
+    // A hidden project to add back, or a folder to make a project (2026-11-13); a folder taken off the picker stays off here too.
+    () => workspace.projects.filter((project) => project.unlisted !== true && !threadRows.some((row) => row.project.id === project.id)),
     [workspace.projects, threadRows],
   )
   // Every tile the Ctrl+Tab switcher can show. Only the work inbox feeds it; direct,

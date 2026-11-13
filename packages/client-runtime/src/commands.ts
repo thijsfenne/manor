@@ -114,6 +114,7 @@ export function createChatMessage(
 /** Work opens only after its own acknowledgement, including any Git preparation. */
 export function createWorkAcceptance() {
   const pending = new Map<string, (error?: string, chatId?: string) => void>()
+  const created = new Map<string, string>()
   return {
     accept(send: (message: ClientMessage) => boolean, requestId: string, handoffId: string, options: WorkAcceptanceOptions): Promise<string> {
       return new Promise((resolve, reject) => {
@@ -157,7 +158,35 @@ export function createWorkAcceptance() {
         }
       })
     },
+    /**
+     * Adds a folder to start Sessions in, or takes one off the picker, and resolves on
+     * Manor's answer: the folder's project id on add, an empty string on remove.
+     */
+    folder(send: (message: ClientMessage) => boolean, requestId: string, change: { add: string } | { remove: string }): Promise<string> {
+      return new Promise((resolve, reject) => {
+        const finish = (error?: string) => {
+          clearTimeout(timer)
+          pending.delete(requestId)
+          const projectId = created.get(requestId)
+          created.delete(requestId)
+          if (error !== undefined) reject(new Error(error))
+          else if ('add' in change && projectId === undefined) reject(new Error('Manor did not say which folder it added. Try again.'))
+          else resolve(projectId ?? '')
+        }
+        const timer = setTimeout(() => finish('No confirmation received. Try again.'), 30_000)
+        pending.set(requestId, finish)
+        if (!send('add' in change
+          ? { type: 'add_folder', path: change.add, requestId }
+          : { type: 'remove_folder', projectId: change.remove, requestId })) {
+          finish('Not connected. Try again when connected.')
+        }
+      })
+    },
     receive(message: ServerMessage) {
+      // Sent just ahead of the ack, so the folder is known by the time the ack settles it.
+      if (message.type === 'project_created' && message.requestId !== undefined && pending.has(message.requestId)) {
+        created.set(message.requestId, message.projectId)
+      }
       if ((message.type === 'ack' || message.type === 'notice') && message.requestId !== undefined) {
         pending.get(message.requestId)?.(message.type === 'notice' ? message.text : undefined, message.type === 'ack' ? message.workChatId : undefined)
       }

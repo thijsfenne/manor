@@ -2657,8 +2657,20 @@ export const ProjectSchema = z.object({
   // chat kind, because an older phone drops a directory whose enum it does not know but
   // strips a field it does not know.
   threadChatId: z.string().optional(),
+  // A folder the user took off the new-Session picker (2026-11-13). Only a folder, a
+  // project without a thread, carries it. Its Sessions keep the folder as their room,
+  // and adding the same folder again lists it once more.
+  unlisted: z.literal(true).optional(),
 })
 export type Project = z.infer<typeof ProjectSchema>
+
+/**
+ * A folder is a project row that never got a thread (2026-11-13): a place to start
+ * Sessions in, with no thread, context, notes or preferences, never listed under
+ * Projects. A hidden project keeps its archived thread's id, so the two stay apart.
+ * Giving a folder a thread (`create_project_thread`) makes it a project.
+ */
+export const isFolder = (project: Pick<Project, 'threadChatId'>): boolean => project.threadChatId === undefined
 
 
 /** The thread a project chat belongs to as its curator, or undefined. */
@@ -4052,6 +4064,13 @@ const ClientMessageWireSchema = z.discriminatedUnion('type', [
     // What the new project's thread runs on at first. Absent is the house default.
     threadRuntime: ChatOverrideSchema.optional(),
   }),
+  // A folder to start Sessions in, without a project thread (2026-11-13). Answered
+  // like `create_project` with `project_created`; the same folder added again answers
+  // with the folder it already is and lists it again. One path, checked like a project's.
+  z.object({ type: z.literal('add_folder'), ...optionalRequestId, path: z.string() }),
+  // Takes a folder off the new-Session picker. Its Sessions keep it as their room and
+  // nothing is deleted. A project, a row with a thread, is refused.
+  z.object({ type: z.literal('remove_folder'), ...optionalRequestId, projectId: z.string() }),
   // Browsing happens on the server's filesystem, not the viewer's. A browser cannot
   // hand out an absolute path (neither showDirectoryPicker nor webkitdirectory
   // exposes one), and on the VPS the viewer's machine is the wrong one anyway.

@@ -173,6 +173,14 @@ function liveCompactDriver(
   }
 }
 
+/** The seeded room as a project, not a folder (2026-11-13): a hidden thread, so no thread files load. */
+async function asProject(store: Store, chatId: string) {
+  const projectId = (await store.getChat(chatId))!.projectId!
+  const thread = await store.createChat({ kind: 'project', projectId })
+  await store.setChatArchived(thread.id, true)
+  await store.setProjectThread(projectId, thread.id)
+}
+
 async function harness(driver: Driver, options: HarnessOptions = {}): Promise<Harness> {
   const agents = options.agents ?? roster
   const store = createMemoryStore({ agents })
@@ -1221,6 +1229,7 @@ describe('Orchestrator', () => {
       generateMemoryTrace,
     })
 
+    await asProject(store, chatId)
     await orchestrator.submitUserMessage(chatId, '@Sage answer now')
 
     expect(seen[0]?.agent.character).not.toContain('Route calendar questions.')
@@ -1245,6 +1254,25 @@ describe('Orchestrator', () => {
     })
   })
 
+  it('reads memory in a folder the way No project does, whatever the folder is called', async () => {
+    const structuredMemoryRoot = mkdtempSync(path.join(os.tmpdir(), 'manor-folder-room-'))
+    await mkdir(path.join(structuredMemoryRoot, 'manor'), { recursive: true })
+    await writeFile(path.join(structuredMemoryRoot, 'MEMORY.md'), 'Route calendar questions.', 'utf8')
+    await writeFile(path.join(structuredMemoryRoot, 'manor/MEMORY.md'), 'Route Manor questions.', 'utf8')
+    const seen: TurnInput[] = []
+    // The seeded room is named Manor and has no thread: a folder.
+    const { orchestrator, chatId } = await harness(scripted(() => [{ type: 'result', text: 'Done.' }], seen), {
+      agents: [{ ...sage, memoryScope: true }],
+      structuredMemoryRoot,
+      memoryRoots: [structuredMemoryRoot],
+    })
+
+    await orchestrator.submitUserMessage(chatId, '@Sage answer now')
+
+    expect(seen[0]?.agent.character).toContain('Route calendar questions.')
+    expect(seen[0]?.agent.character).not.toContain('Route Manor questions.')
+  })
+
   it('injects the root index in full once the room is set to knowledge work', async () => {
     const structuredMemoryRoot = mkdtempSync(path.join(os.tmpdir(), 'manor-knowledge-room-'))
     await mkdir(path.join(structuredMemoryRoot, 'manor'), { recursive: true })
@@ -1260,6 +1288,7 @@ describe('Orchestrator', () => {
       structuredMemoryRoot,
       memoryRoots: [structuredMemoryRoot],
     })
+    await asProject(store, chatId)
     await store.updateProject(projectId, 'Manor', [], undefined, undefined, 'knowledge')
 
     await orchestrator.submitUserMessage(chatId, '@Sage answer now')
@@ -1283,6 +1312,7 @@ describe('Orchestrator', () => {
     await store.appendEvent(chatId, { type: 'user_message', text: 'ancient', mentions: [] })
     for (let index = 0; index < 6; index++) await store.appendEvent(chatId, { type: 'agent_message', agentId: 'smith', turnId: `old-${index}`, text: 'poison' })
     await store.appendEvent(chatId, { type: 'user_message', text: 'cloud', mentions: [] })
+    await asProject(store, chatId)
     await orchestrator.submitUserMessage(chatId, '@Sage continue')
     expect(handed(seen[0])).toContain('EVIDENCE_cloud')
     expect(handed(seen[0])).not.toContain('EVIDENCE_ancient')
@@ -1317,6 +1347,7 @@ describe('Orchestrator', () => {
       agents: [{ ...sage, memoryScope: true }, { ...smith, memoryScope: false }],
       structuredMemoryRoot: root, rankStructuredMemory,
     })
+    await asProject(store, chatId)
     await orchestrator.submitUserMessage(chatId, '@Sage @Smith cloud')
     expect(rankStructuredMemory).toHaveBeenCalledTimes(1)
     expect(handed(seen[0])).toContain('CLOUD_EVIDENCE')

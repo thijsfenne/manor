@@ -1,8 +1,9 @@
 import { listStructuredProjectMemory } from './structuredProjectFiles.js'
-import { HOME_PROJECT_ID, isProjectThreadFile, SINGLE_CHAT_VOICE } from '@manor/contracts'
-import { join } from 'node:path'
+import { HOME_PROJECT_ID, isFolder, isProjectThreadFile, SINGLE_CHAT_VOICE } from '@manor/contracts'
+import { realpath } from 'node:fs/promises'
+import { basename, join } from 'node:path'
 import { singleRuntime, singleRuntimeRequired } from './singleChat.js'
-import type { AgentConfig, Chat, ChatOverride, CheckoutRequest, ClientMessage, ProjectFileWrite, ServerMessage } from '@manor/contracts'
+import type { AgentConfig, Chat, ChatOverride, CheckoutRequest, ClientMessage, Project, ProjectFileWrite, ServerMessage } from '@manor/contracts'
 import {
   ARCHIVE_RETENTION_MS,
   DEFAULT_PROJECT_COLOR,
@@ -52,6 +53,8 @@ type ProjectMessage = Extract<
       | 'write_repo_file'
       | 'open_repo_file'
       | 'create_project'
+      | 'add_folder'
+      | 'remove_folder'
       | 'create_chat'
       | 'delete_project'
       | 'open_side_chat'
@@ -108,6 +111,7 @@ export class ProjectModule {
   // Which broadcast began last, and which of them went out last.
   private directoriesStarted = 0
   private directorySent = 0
+  private addingFolder: Promise<unknown> = Promise.resolve()
 
   constructor(private readonly options: ProjectModuleOptions) {}
 
@@ -259,8 +263,9 @@ export class ProjectModule {
           reply({ type: 'notice', kind: 'error', text: 'Project not found' })
           return
         }
-        // The home room has no project memory folder of its own, so its name finds none.
-        const listing = await listStructuredProjectMemory(this.options.structuredMemoryRoot, project.id === HOME_PROJECT_ID ? '' : project.name)
+        // The home room and a folder have no project memory folder of their own, so no
+        // name looks one up: a folder called Client must not read the Client project's.
+        const listing = await listStructuredProjectMemory(this.options.structuredMemoryRoot, project.id === HOME_PROJECT_ID || isFolder(project) ? '' : project.name)
         // The thread's own writes say who changed its two files and when (2026-10-10).
         const writes = new Map<string, { path: string; by: string; at: number; action: ProjectFileWrite['action']; line?: string }>()
         if (project.threadChatId !== undefined && this.options.structuredMemoryRoot !== undefined) {
@@ -378,6 +383,39 @@ export class ProjectModule {
         if (setupError !== undefined) reply({ type: 'notice', kind: 'error', text: `Project created, but setup is incomplete. ${setupError}` })
         else this.options.welcomeProject?.(project.id)
         return
+      }
+      case 'add_folder': {
+        if (message.path.trim().length === 0) {
+          reply({ type: 'notice', kind: 'error', text: 'Choose a folder first.' })
+          return
+        }
+        const checked = await validateRepoPaths([message.path])
+        if (!checked.ok) {
+          reply({ type: 'notice', kind: 'error', text: checked.message })
+          return
+        }
+        // One add at a time, so the desktop and the phone adding one folder at once
+        // find a single row rather than both creating it.
+        const adding = this.addingFolder.then(() => this.folderFor(checked.paths[0]!))
+        this.addingFolder = adding.catch(() => undefined)
+        const folder = await adding
+        await this.broadcast()
+        reply({ type: 'project_created', projectId: folder.id, ...(requestId === undefined ? {} : { requestId }) })
+        ack()
+        return
+      }
+      case 'remove_folder': {
+        const project = await store.getProject(message.projectId)
+        if (project === undefined || project.id === HOME_PROJECT_ID) {
+          reply({ type: 'notice', kind: 'error', text: 'That folder is no longer on the list.' })
+          return
+        }
+        if (!isFolder(project)) {
+          reply({ type: 'notice', kind: 'error', text: 'That is a project. Hide or delete it from Projects in the sidebar.' })
+          return
+        }
+        await store.setProjectUnlisted(project.id, true)
+        break
       }
       case 'create_chat': {
         const kind = message.kind ?? 'project'
@@ -773,6 +811,26 @@ export class ProjectModule {
     }
     await this.broadcast()
     ack()
+  }
+
+  /** The folder row for `path`, listed: the one already there, or a new one. */
+  private async folderFor(path: string): Promise<Project> {
+    const { store } = this.options
+    // The same folder twice is the folder it already is, listed again if it was removed.
+    // Compared on disk, so a symlink or /var against /private/var is one folder.
+    const identity = (candidate: string) => realpath(candidate).catch(() => candidate)
+    const wanted = await identity(path)
+    let folder: Project | undefined
+    for (const project of await store.listProjects()) {
+      if (!isFolder(project) || project.repoPaths.length !== 1) continue
+      if (await identity(project.repoPaths[0]!) === wanted) {
+        folder = project
+        break
+      }
+    }
+    folder ??= await store.createProject(basename(path) || path, [path])
+    if (folder.unlisted === true) await store.setProjectUnlisted(folder.id, false)
+    return folder
   }
 
   private async loadDirectory(remember: 'none' | 'merge' | 'replace'): Promise<ServerMessage> {

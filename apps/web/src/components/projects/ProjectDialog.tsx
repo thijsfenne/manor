@@ -372,7 +372,7 @@ interface PickerProps {
  * previous one standing rather than blinking the list away. Same trade the chat
  * switch makes, and it keeps a fast local listing from flickering.
  */
-function Picker({ dirs, typed, onTyped, onWalk, onPick, onDone }: PickerProps) {
+export function Picker({ dirs, typed, onTyped, onWalk, onPick, onDone }: PickerProps) {
   const { listing, asking } = dirs
 
   const parent = listing === null ? null : listing.parent

@@ -181,6 +181,8 @@ export interface Store {
    * is a Single project chat the caller already created; nothing else changes.
    */
   setProjectThread(projectId: string, chatId: string | null): Promise<void>
+  /** Takes a folder off the new-Session picker, or lists it again (`Project.unlisted`). */
+  setProjectUnlisted(projectId: string, unlisted: boolean): Promise<void>
   /** One project by id. One select, and what a turn uses to find its folders. */
   getProject(projectId: string): Promise<Project | undefined>
   /** One chat by id, or nothing. How routing learns a chat's kind and membership. */

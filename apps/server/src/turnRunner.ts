@@ -32,6 +32,7 @@ import {
   type Usage,
   type UsageBreakdown,
   type UserInputQuestion,
+  isFolder,
   isOpenRoom,
   userInputAnswerText,
   BROWSER_HOME_SESSION_ID,
@@ -1087,11 +1088,14 @@ export class TurnRunner {
             .slice(-6)
             .filter((event) => event.type === 'user_message')
             .map((event) => modelTextOf(event)).join('\n')
+          // A folder is no project (2026-11-13): it reads memory the way No project does,
+          // so a folder named after a project never picks up that project's folder.
+          const folderRoom = project !== undefined && room?.projectId != null && isFolder(project)
           return composeStructuredMemoryBundle(
             this.options.structuredMemoryRoot,
             // A project's name keys its own memory folder. The home room has no such
             // folder: it is the memory system, read through the knowledge scope below.
-            room?.projectId == null || room.projectId === HOME_PROJECT_ID ? undefined : project?.name,
+            room?.projectId == null || room.projectId === HOME_PROJECT_ID || folderRoom ? undefined : project?.name,
             request,
             this.rankerFor(chatId, latestUser?.id),
             {
@@ -1099,7 +1103,8 @@ export class TurnRunner {
               currentQuestion: latestUser === undefined ? undefined : modelTextOf(latestUser),
               ...(room?.projectId == null
                 ? browserRoom ? { scope: 'knowledge' as const } : {}
-                : { scope: project?.memoryScope, projectNames: projects.map((entry) => entry.name) }),
+                : folderRoom ? { scope: 'knowledge' as const }
+                : { scope: project?.memoryScope, projectNames: projects.filter((entry) => !isFolder(entry)).map((entry) => entry.name) }),
               ...(threadPaths === undefined ? {} : { excludePaths: [threadPaths.preferences, threadPaths.notes] }),
             },
           )

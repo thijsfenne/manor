@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { NEW_SINGLE_CHAT_DEFAULT, type Project, type ProjectIcon, type ProjectMemoryScope, type SingleRuntime } from '@manor/contracts'
 import { readSingleRuntime } from '../../runtimeChoices'
 import type { DirBrowse, Notice } from '../../state'
@@ -11,9 +11,7 @@ import { draftOf, emptyDraft, normaliseProjectColor, ProjectDialog, type Project
  * Delete project… entry, so that menu shares the dialog's one confirmation.
  */
 export type ProjectDialogState =
-  // `onCreated` is for an opener that wants the project it asked for, such as the
-  // new-session stage, which puts its draft in it.
-  | { mode: 'create'; onCreated?: (projectId: string) => void }
+  | { mode: 'create' }
   | { mode: 'edit'; projectId: string; armDelete?: boolean }
 
 interface ProjectDialogHostProps {
@@ -48,9 +46,8 @@ interface ProjectDialogHostProps {
 }
 
 /**
- * The project form and the whole life of one opening of it. It lives above the
- * sidebar rather than inside it because two places now ask for it: the sidebar's
- * own new-project button and the new-chat stage's project picker. Mounted only
+ * The project form and the whole life of one opening of it, opened by the sidebar's
+ * New project and by a project row's Edit and Delete entries. Mounted only
  * while a dialog is open and keyed on which project it is about, so every opening
  * starts from a freshly seeded draft instead of the last one's leftovers.
  */
@@ -73,15 +70,6 @@ export function ProjectDialogHost({
     dialog.mode === 'create' || editing === undefined ? emptyDraft : draftOf(editing),
   )
   const request = useRequest(requestEvents)
-  // The create this form sent and the project the server made for it.
-  const sentId = useRef<string | null>(null)
-  const createdId = useRef<string | null>(null)
-  useEffect(
-    () => requestEvents.subscribe((response) => {
-      if (response.type === 'project_created' && response.requestId === sentId.current) createdId.current = response.projectId
-    }),
-    [requestEvents],
-  )
 
   const close = () => {
     request.cancel()
@@ -106,19 +94,10 @@ export function ProjectDialogHost({
     const name = draft.name.trim()
     if (name === '') return
     if (dialog.mode === 'create') {
-      const { onCreated } = dialog
       request.start(
-        (requestId) => {
-          sentId.current = requestId
-          return onNewProject(name, draft.repoPaths, draft.icon, normaliseProjectColor(draft.color), draft.memoryScope, requestId,
-            readSingleRuntime(draft.threadRuntime, NEW_SINGLE_CHAT_DEFAULT))
-        },
-        {
-          onAck: () => {
-            if (createdId.current !== null) onCreated?.(createdId.current)
-            finish()
-          },
-        },
+        (requestId) => onNewProject(name, draft.repoPaths, draft.icon, normaliseProjectColor(draft.color), draft.memoryScope, requestId,
+          readSingleRuntime(draft.threadRuntime, NEW_SINGLE_CHAT_DEFAULT)),
+        { onAck: finish },
       )
       return
     }

@@ -560,6 +560,7 @@ export function createSqliteStore(options: SqliteStoreOptions): Store & {
         memoryScope: memoryScope ?? project.memoryScope,
         repoPaths: [...repoPaths],
         ...(project.threadChatId === undefined ? {} : { threadChatId: project.threadChatId }),
+        ...(project.unlisted === undefined ? {} : { unlisted: project.unlisted }),
       })
       return undefined
     },
@@ -569,6 +570,13 @@ export function createSqliteStore(options: SqliteStoreOptions): Store & {
       if (chatId !== null && chats.get(chatId)?.projectId !== projectId) throw new Error(`chat ${chatId} is not in project ${projectId}`)
       const { threadChatId: _thread, ...rest } = project
       projects.set(projectId, chatId === null ? rest : { ...rest, threadChatId: chatId })
+      return undefined
+    },
+    setProjectUnlisted(projectId, unlisted) {
+      const project = projects.get(projectId)
+      if (project === undefined) throw new Error(`unknown project ${projectId}`)
+      const { unlisted: _unlisted, ...rest } = project
+      projects.set(projectId, unlisted ? { ...rest, unlisted: true } : rest)
       return undefined
     },
     getProject(projectId) {
