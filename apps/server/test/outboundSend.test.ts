@@ -101,7 +101,7 @@ describe('Gmail outbound send', () => {
     })).resolves.toEqual({
       ok: false,
       certainty: 'safe',
-      message: 'Gmail sending is unavailable because the personal mail connection is not configured.',
+      message: 'Gmail sending is unavailable because no Gmail account is connected.',
     })
     expect(transport).not.toHaveBeenCalled()
   })

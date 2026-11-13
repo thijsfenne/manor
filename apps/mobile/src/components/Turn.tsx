@@ -292,6 +292,7 @@ export function Turn({
           <TaskCard foldKey={segment.key} key={segment.key} tasks={segment.todos} />
         ) : segment.kind === 'draft' ? (
           <OutboundDraftGroup
+            bubble={bubbleReplies}
             connected={connected}
             drafts={segment.drafts}
             key={segment.key}
@@ -763,6 +764,7 @@ function TurnActivity({
       {displayed.map((segment) => (
         <Segment
           accent={persona.color}
+          bubble={bubble}
           activeTool={segment.kind === 'bundle' && segment.key === active?.key ? active.tool : undefined}
           agents={agents}
           connected={connected}
@@ -789,6 +791,7 @@ function Segment({
   activeTool,
   accent,
   agents,
+  bubble,
   connected,
   draftActions,
   onOpenSubagent,
@@ -803,6 +806,7 @@ function Segment({
   activeTool?: ToolStep
   accent: string
   agents: AgentConfig[]
+  bubble: boolean
   connected: boolean
   draftActions?: DraftActions
   onOpenSubagent: ((toolCallId: string) => void) | undefined
@@ -819,6 +823,7 @@ function Segment({
     case 'draft':
       return (
         <OutboundDraftGroup
+          bubble={bubble}
           connected={connected}
           drafts={segment.drafts}
           {...(draftActions === undefined ? {} : { actions: draftActions })}

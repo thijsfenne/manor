@@ -282,6 +282,11 @@ export interface DraftRecord {
   channel: OutboundChannel
   to: string
   subject?: string
+  cc?: string
+  /** The sending address, when the server knew it at prepare time. */
+  from?: string
+  /** False when the host cannot read the whole thread; the quote stays, Show more goes. */
+  fullThread?: false
   body: string
   mailAccount?: OutboundMailAccount
   slackChannelId?: string
@@ -293,6 +298,7 @@ export interface DraftRecord {
     status: 'started' | 'uncertain'
     body: string
     subject?: string
+    cc?: string
     message?: string
   }
   failure?: string
@@ -303,6 +309,7 @@ export interface DraftRecord {
     delivery?: 'recorded' | 'delivered'
     body?: string
     subject?: string
+    cc?: string
   }
 }
 
@@ -322,6 +329,33 @@ export function draftStatus(draft: DraftRecord): DraftStatus {
     return draft.closed.delivery === 'delivered' ? 'sent' : 'saved'
   }
   return draft.submission === undefined ? 'open' : 'locked'
+}
+
+/** The word a card shows beside its app name: "Discarded", "Sent", and so on. */
+export function draftStatusLabel(draft: DraftRecord): string {
+  const status = draftStatus(draft)
+  if (status === 'open') return draft.failure === undefined ? 'Draft' : 'Failed'
+  if (status === 'locked') return draft.submission?.status === 'uncertain' ? 'Uncertain' : 'Sending'
+  return { sent: 'Sent', saved: 'Saved', discarded: 'Discarded', snoozed: 'Later', ignored: 'Ignored' }[status]
+}
+
+/**
+ * A card folds to its header once its decision is taken. Open drafts wait for one, and a
+ * send in flight or of unknown fate stays unfolded so its warning line stays in view.
+ */
+export const draftSettled = (draft: DraftRecord): boolean => {
+  const status = draftStatus(draft)
+  return status !== 'open' && status !== 'locked'
+}
+
+/**
+ * What a decided card shows when it is reopened. A send keeps exactly what left, so a
+ * field the user cleared stays empty; Discard, Later and Ignore keep the prepared draft.
+ */
+export function draftShown(draft: DraftRecord): { subject: string; cc: string; body: string } {
+  const sent = draft.closed?.outcome === 'submitted' ? draft.closed : draft.submission
+  if (sent !== undefined) return { subject: sent.subject ?? '', cc: sent.cc ?? '', body: sent.body ?? draft.body }
+  return { subject: draft.subject ?? '', cc: draft.cc ?? '', body: draft.body }
 }
 
 /** How many of a group stand where, for the line above a stack of drafts. */
@@ -2781,6 +2815,9 @@ function durableRowsOf(events: ThreadEvent[], dmBeats: boolean): DurableRows {
           channel: event.channel,
           to: event.to,
           ...(event.subject === undefined ? {} : { subject: event.subject }),
+          ...(event.cc === undefined ? {} : { cc: event.cc }),
+          ...(event.from === undefined ? {} : { from: event.from }),
+          ...(event.fullThread === undefined ? {} : { fullThread: event.fullThread }),
           ...(event.slackRichText === undefined ? {} : { slackRichText: event.slackRichText }),
           ...(event.mailAccount === undefined ? {} : { mailAccount: event.mailAccount }),
           ...(event.slackChannelId === undefined ? {} : { slackChannelId: event.slackChannelId }),
@@ -2801,6 +2838,7 @@ function durableRowsOf(events: ThreadEvent[], dmBeats: boolean): DurableRows {
             ...(event.delivery === undefined ? {} : { delivery: event.delivery }),
             ...(event.body === undefined ? {} : { body: event.body }),
             ...(event.subject === undefined ? {} : { subject: event.subject }),
+            ...(event.cc === undefined ? {} : { cc: event.cc }),
             ...(event.slackRichText === undefined ? {} : { slackRichText: event.slackRichText }),
             ...(event.until === undefined ? {} : { until: event.until }),
           }
@@ -2826,6 +2864,8 @@ function durableRowsOf(events: ThreadEvent[], dmBeats: boolean): DurableRows {
           else draft.slackRichText = event.slackRichText
           if (event.subject === undefined) delete draft.subject
           else draft.subject = event.subject
+          if (event.cc === undefined) delete draft.cc
+          else draft.cc = event.cc
           draft.failure = event.message ?? 'This draft could not be sent.'
           break
         }
@@ -2835,6 +2875,7 @@ function durableRowsOf(events: ThreadEvent[], dmBeats: boolean): DurableRows {
             status: event.status,
             body: event.body,
             ...(event.subject === undefined ? {} : { subject: event.subject }),
+            ...(event.cc === undefined ? {} : { cc: event.cc }),
             ...(event.slackRichText === undefined ? {} : { slackRichText: event.slackRichText }),
             ...(event.message === undefined ? {} : { message: event.message }),
           }
@@ -2846,6 +2887,7 @@ function durableRowsOf(events: ThreadEvent[], dmBeats: boolean): DurableRows {
           ...(event.delivery === undefined ? {} : { delivery: event.delivery }),
           body: event.body,
           ...(event.subject === undefined ? {} : { subject: event.subject }),
+          ...(event.cc === undefined ? {} : { cc: event.cc }),
           ...(event.slackRichText === undefined ? {} : { slackRichText: event.slackRichText }),
         }
         break

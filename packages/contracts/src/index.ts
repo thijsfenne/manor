@@ -1678,6 +1678,7 @@ export const OutboundDraftContentSchema = z.discriminatedUnion('channel', [
   OutboundDraftBaseSchema.extend({
     channel: z.literal('gmail'),
     subject: z.string().max(OUTBOUND_DRAFT_SUBJECT_MAX).optional(),
+    cc: z.string().max(OUTBOUND_DRAFT_TO_MAX).optional(),
     mailAccount: OutboundMailAccountSchema.optional(),
   }),
   OutboundDraftBaseSchema.extend({
@@ -1695,12 +1696,17 @@ export const OutboundDraftFieldsSchema = z.object({
   channel: OutboundChannelSchema,
   to: z.string().trim().min(1).max(OUTBOUND_DRAFT_TO_MAX),
   subject: z.string().max(OUTBOUND_DRAFT_SUBJECT_MAX).optional(),
+  cc: z.string().max(OUTBOUND_DRAFT_TO_MAX).optional(),
+  /** The sending address as the server resolved it when the draft was prepared. Display only. */
+  from: z.string().max(OUTBOUND_DRAFT_TO_MAX).optional(),
   body: z.string().max(OUTBOUND_DRAFT_BODY_MAX),
   mailAccount: OutboundMailAccountSchema.optional(),
   slackChannelId: z.string().trim().min(1).max(OUTBOUND_SLACK_CHANNEL_ID_MAX).optional(),
   slackThreadTs: z.string().trim().min(1).max(OUTBOUND_SLACK_THREAD_TS_MAX).optional(),
   slackRichText: SlackRichTextSchema.optional(),
   thread: OutboundDraftThreadSchema.optional(),
+  /** False when this Manor cannot read the full thread, so the card offers no Show more. Server-filled. */
+  fullThread: z.literal(false).optional(),
 })
 export type OutboundDraftFields = z.infer<typeof OutboundDraftFieldsSchema>
 
@@ -1761,6 +1767,7 @@ export const OutboundDraftClosedEventSchema = z.object({
   channel: OutboundChannelSchema,
   to: z.string().min(1).max(OUTBOUND_DRAFT_TO_MAX),
   subject: z.string().max(OUTBOUND_DRAFT_SUBJECT_MAX).optional(),
+  cc: z.string().max(OUTBOUND_DRAFT_TO_MAX).optional(),
   body: z.string().max(OUTBOUND_DRAFT_BODY_MAX).optional(),
   mailAccount: OutboundMailAccountSchema.optional(),
   slackChannelId: z.string().min(1).max(OUTBOUND_SLACK_CHANNEL_ID_MAX).optional(),
@@ -1785,6 +1792,7 @@ export const OutboundDraftSubmissionEventSchema = z.object({
   channel: OutboundChannelSchema,
   to: z.string().min(1).max(OUTBOUND_DRAFT_TO_MAX),
   subject: z.string().max(OUTBOUND_DRAFT_SUBJECT_MAX).optional(),
+  cc: z.string().max(OUTBOUND_DRAFT_TO_MAX).optional(),
   body: z.string().max(OUTBOUND_DRAFT_BODY_MAX),
   mailAccount: OutboundMailAccountSchema.optional(),
   slackChannelId: z.string().min(1).max(OUTBOUND_SLACK_CHANNEL_ID_MAX).optional(),
@@ -4020,6 +4028,7 @@ const ClientMessageWireSchema = z.discriminatedUnion('type', [
     draftId: z.string().min(1).max(120),
     body: z.string().max(OUTBOUND_DRAFT_BODY_MAX),
     subject: z.string().max(OUTBOUND_DRAFT_SUBJECT_MAX).optional(),
+    cc: z.string().max(OUTBOUND_DRAFT_TO_MAX).optional(),
   }),
   OpenConnectCardMessageSchema,
   z.object({
@@ -5110,6 +5119,7 @@ export type RuntimeEvent =
       channel: OutboundChannel
       to: string
       subject?: string
+      cc?: string
       body: string
       mailAccount?: OutboundMailAccount
       slackChannelId?: string

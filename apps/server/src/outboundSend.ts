@@ -12,12 +12,17 @@ import {
   type OutboundMailAccount,
 } from '@manor/contracts'
 import nodemailer from 'nodemailer'
+import type { ComposioExecution } from './mcp/composioRegistration.js'
 import { readMailReplyHeaders, type MailReplyHeaders } from './mcp/mailMcp.js'
 
 export interface OutboundSendRequest {
   channel: OutboundChannel
   to: string
   subject?: string
+  /** Gmail only: comma-separated addresses. */
+  cc?: string
+  /** Gmail only: the From address the card showed. A send from any other account is refused. */
+  from?: string
   body: string
   mailAccount?: OutboundMailAccount
   /** The card's Gmail thread. Present means Submit must send a threaded reply, never new mail. */
@@ -39,6 +44,29 @@ export type OutboundSendResult =
  */
 export interface OutboundSendPort {
   send(request: OutboundSendRequest): Promise<OutboundSendResult>
+  /**
+   * How a draft on this channel would leave right now, or undefined when nothing on
+   * this host can send it. Absent means every channel is routable (the test port).
+   */
+  route?(channel: OutboundChannel): Promise<OutboundRoute | undefined>
+}
+
+/** Where a send goes: the host's own credentials first, a Composio account second. */
+export type OutboundRoute =
+  | { kind: 'native'; from?: string }
+  | { kind: 'composio'; accountId: string; from?: string }
+
+/**
+ * The Composio side of sending, so a new user with Gmail or Slack connected there can
+ * send without the host's own mail or Slack setup. Server-side tool calls on the
+ * user's connected account; no agent session is involved.
+ */
+export interface ComposioOutbound {
+  /** False when this host has no Composio key: no account can exist and no link can be made. */
+  available(): boolean
+  /** The connected account to send from, preferring the personal alias. */
+  account(toolkit: OutboundChannel): Promise<string | undefined>
+  execute(toolSlug: string, accountId: string, arguments_: Record<string, unknown>): Promise<ComposioExecution>
 }
 
 interface GmailTransportOptions {
@@ -52,6 +80,7 @@ interface GmailTransportOptions {
 interface GmailMessage {
   from: string
   to: string
+  cc?: string[]
   subject: string
   text: string
   messageId: string
@@ -94,6 +123,48 @@ const defaultSlackCredentials: SlackCredentialsLoader = async () => {
   return { token, cookie }
 }
 
+/** Every address of a comma-separated Cc line, or undefined when one of them is not an address. */
+function recipients(value: string | undefined): string[] | undefined {
+  if (value === undefined || value.trim() === '') return []
+  const list = value.split(',').map((entry) => recipient(entry))
+  return list.every((entry): entry is string => entry !== undefined) ? list : undefined
+}
+
+/** The bare address of `Name <address>`, which Composio's Gmail tools require. */
+const bareAddress = (value: string) => /<([^<>]+)>$/.exec(value)?.[1] ?? value
+
+/** GMAIL_GET_PROFILE answers the address directly or wrapped once more under `data`. */
+function profileAddress(data: Record<string, unknown>): string | undefined {
+  const nested = typeof data['data'] === 'object' && data['data'] !== null ? data['data'] as Record<string, unknown> : {}
+  const address = data['emailAddress'] ?? nested['emailAddress']
+  return typeof address === 'string' && address.length > 0 ? address : undefined
+}
+
+const sameAddress = (left: string | undefined, right: string) =>
+  left !== undefined && bareAddress(left).toLowerCase() === bareAddress(right).toLowerCase()
+
+/** The card named one sender; the account that would send now is another, or unreadable. */
+const senderChanged = (from: string): OutboundSendResult => ({
+  ok: false,
+  certainty: 'safe',
+  message: `Not sent: the connected Gmail account is no longer ${from}. Ask for the draft again to send from the current account.`,
+})
+
+/** Recipients nodemailer reports as refused; its answer carries `rejected` beside `accepted`. */
+function rejectedRecipients(info: unknown): string[] {
+  const rejected = typeof info === 'object' && info !== null ? (info as { rejected?: unknown }).rejected : undefined
+  if (!Array.isArray(rejected)) return []
+  return rejected.map((entry: unknown) => typeof entry === 'string' ? entry : typeof entry === 'object' && entry !== null && 'address' in entry ? String(entry.address) : '').filter((entry) => entry !== '')
+}
+
+function composioFailure(channel: 'Gmail' | 'Slack', result: Exclude<ComposioExecution, { status: 'ok' }>): OutboundSendResult {
+  return {
+    ok: false,
+    certainty: result.status === 'refused' ? 'safe' : 'uncertain',
+    message: `${channel} could not send this draft through Composio: ${result.message}`,
+  }
+}
+
 function recipient(value: string): string | undefined {
   const address = value.trim()
   if (address.length === 0 || /[\r\n]/.test(address)) return undefined
@@ -113,23 +184,65 @@ export class ConfirmedOutboundSend implements OutboundSendPort {
     private readonly slackCredentials: SlackCredentialsLoader = defaultSlackCredentials,
     private readonly slackFetch: SlackFetch = fetch,
     private readonly gmailReply: GmailReplyResolver = readMailReplyHeaders,
+    private readonly composio?: ComposioOutbound,
   ) {}
+
+  async route(channel: OutboundChannel): Promise<OutboundRoute | undefined> {
+    if (channel === 'gmail') {
+      const user = this.gmailUser()
+      if (user !== undefined) return { kind: 'native', from: user }
+    } else if (await this.slackCredentials().then(() => true, () => false)) {
+      return { kind: 'native' }
+    }
+    if (this.composio?.available() !== true) return undefined
+    const accountId = await this.composio.account(channel).catch(() => undefined)
+    if (accountId === undefined) return undefined
+    if (channel === 'slack') return { kind: 'composio', accountId }
+    // The address is only for the card's From row, so a slow or failed read leaves it out.
+    const profile = await this.composio.execute('GMAIL_GET_PROFILE', accountId, { user_id: 'me' }).catch(() => undefined)
+    const from = profile?.status === 'ok' ? profileAddress(profile.data) : undefined
+    return { kind: 'composio', accountId, ...(from === undefined ? {} : { from }) }
+  }
 
   async send(request: OutboundSendRequest): Promise<OutboundSendResult> {
     return request.channel === 'gmail' ? this.sendGmail(request) : this.sendSlack(request)
   }
 
-  private async sendGmail(request: OutboundSendRequest): Promise<OutboundSendResult> {
+  private gmailUser(): string | undefined {
     const user = this.env.MANOR_MAIL_IMAP_USER
     const pass = this.env.MANOR_MAIL_IMAP_PASSWORD
-    if (user === undefined || user === '' || pass === undefined || pass === '') {
-      return { ok: false, certainty: 'safe', message: `Gmail sending is unavailable because the personal mail connection is not configured.` }
-    }
+    return user === undefined || user === '' || pass === undefined || pass === '' ? undefined : user
+  }
 
+  private async composioAccount(channel: OutboundChannel): Promise<string | undefined> {
+    if (this.composio?.available() !== true) return undefined
+    return this.composio.account(channel).catch(() => undefined)
+  }
+
+  private async sendGmail(request: OutboundSendRequest): Promise<OutboundSendResult> {
     const to = recipient(request.to)
     if (to === undefined) {
       return { ok: false, certainty: 'safe', message: `Gmail could not send this draft because "${request.to.replace(/[\r\n]+/g, ' ')}" is not one email address.` }
     }
+    const cc = recipients(request.cc)
+    if (cc === undefined) {
+      return { ok: false, certainty: 'safe', message: 'Gmail could not send this draft because the Cc line holds something that is not an email address.' }
+    }
+
+    const user = this.env.MANOR_MAIL_IMAP_USER
+    const pass = this.env.MANOR_MAIL_IMAP_PASSWORD
+    if (user === undefined || user === '' || pass === undefined || pass === '') {
+      const accountId = await this.composioAccount('gmail')
+      if (accountId === undefined) return { ok: false, certainty: 'safe', message: 'Gmail sending is unavailable because no Gmail account is connected.' }
+      // A Composio account can be swapped behind Manor's back, so it sends only as the
+      // address its card showed. A card without one never names who it would send as.
+      if (request.from === undefined) return { ok: false, certainty: 'safe', message: 'Not sent: this draft does not say which Gmail account sends it. Ask for the draft again.' }
+      const profile = await this.composio?.execute('GMAIL_GET_PROFILE', accountId, { user_id: 'me' }).catch(() => undefined)
+      const current = profile?.status === 'ok' ? profileAddress(profile.data) : undefined
+      if (!sameAddress(current, request.from)) return senderChanged(request.from)
+      return this.sendGmailComposio(request, accountId, to, cc)
+    }
+    if (request.from !== undefined && !sameAddress(user, request.from)) return senderChanged(request.from)
 
     // Gmail files a reply in its thread only by the original's Message-ID. Without
     // those headers the reply lands as new mail, so an unreadable thread refuses
@@ -155,14 +268,25 @@ export class ConfirmedOutboundSend implements OutboundSendPort {
         greetingTimeout: 10_000,
         socketTimeout: 30_000,
       })
-      await gmail.sendMail({
+      const info = await gmail.sendMail({
         from: user,
         to,
+        ...(cc.length === 0 ? {} : { cc }),
         subject: request.subject ?? '',
         text: request.body,
         messageId: `<${request.submissionId}@manor.local>`,
         ...(reply === undefined ? {} : { inReplyTo: reply.inReplyTo, references: reply.references }),
       })
+      // SMTP may take the mail for some recipients and refuse others. Part of it left, so
+      // Send stays locked against a duplicate, but nothing may claim it reached everyone.
+      const refused = rejectedRecipients(info)
+      if (refused.length > 0) {
+        return {
+          ok: false,
+          certainty: 'uncertain',
+          message: `Gmail refused ${refused.join(', ')} but may have sent to the others. Check Sent before sending again.`,
+        }
+      }
       return { ok: true, delivery: 'delivered' }
     } catch (error: unknown) {
       return {
@@ -192,6 +316,8 @@ export class ConfirmedOutboundSend implements OutboundSendPort {
     try {
       credentials = await this.slackCredentials()
     } catch (error: unknown) {
+      const accountId = await this.composioAccount('slack')
+      if (accountId !== undefined) return this.sendSlackComposio(request, accountId, channel, threadTs, richText?.success ? richText.data : undefined)
       return {
         ok: false,
         certainty: 'safe',
@@ -236,6 +362,44 @@ export class ConfirmedOutboundSend implements OutboundSendPort {
       }
     }
   }
+
+  /**
+   * Gmail through the user's Composio account. A reply goes through the thread tool,
+   * which files it by Gmail's own thread id, so a missing thread fails instead of
+   * leaving as new mail. The signature stays off: the approved text is what goes.
+   */
+  private async sendGmailComposio(request: OutboundSendRequest, accountId: string, to: string, cc: string[]): Promise<OutboundSendResult> {
+    const composio = this.composio
+    if (composio === undefined) return { ok: false, certainty: 'safe', message: 'Composio is not available on this host.' }
+    const shared = { recipient_email: bareAddress(to), cc: cc.map(bareAddress), include_signature: false, is_html: false }
+    const result = await composio.execute(
+      request.gmailThreadId === undefined ? 'GMAIL_SEND_EMAIL' : 'GMAIL_REPLY_TO_THREAD',
+      accountId,
+      request.gmailThreadId === undefined
+        ? { ...shared, subject: request.subject ?? '', body: request.body }
+        : { ...shared, thread_id: request.gmailThreadId, message_body: request.body },
+    )
+    return result.status === 'ok' ? { ok: true, delivery: 'delivered' } : composioFailure('Gmail', result)
+  }
+
+  private async sendSlackComposio(
+    request: OutboundSendRequest,
+    accountId: string,
+    channel: string,
+    threadTs: string | undefined,
+    richText: SlackRichText | undefined,
+  ): Promise<OutboundSendResult> {
+    const composio = this.composio
+    if (composio === undefined) return { ok: false, certainty: 'safe', message: 'Composio is not available on this host.' }
+    const result = await composio.execute('SLACK_SEND_MESSAGE', accountId, {
+      channel,
+      ...(threadTs === undefined ? {} : { thread_ts: threadTs }),
+      ...(richText === undefined
+        ? { markdown_text: request.body }
+        : { blocks: [slackRichTextForPost(richText)], fallback_text: slackRichTextFallback(richText) }),
+    })
+    return result.status === 'ok' ? { ok: true, delivery: 'delivered' } : composioFailure('Slack', result)
+  }
 }
 
 export class RecordingOutboundSend implements OutboundSendPort {
@@ -247,6 +411,16 @@ export class RecordingOutboundSend implements OutboundSendPort {
   }
 }
 
-export function createOutboundSendPort(): OutboundSendPort {
-  return new ConfirmedOutboundSend()
+/**
+ * The spike's sender: the real Composio path over the mock accounts, with no host
+ * mailbox or Slack session, so nothing on this Mac is ever read or sent.
+ */
+export function createMockOutboundSendPort(composio: ComposioOutbound): ConfirmedOutboundSend {
+  return new ConfirmedOutboundSend({}, defaultGmailTransport, async () => {
+    throw new Error('the spike has no Slack session')
+  }, fetch, readMailReplyHeaders, composio)
+}
+
+export function createOutboundSendPort(composio?: ComposioOutbound): ConfirmedOutboundSend {
+  return new ConfirmedOutboundSend(process.env, defaultGmailTransport, defaultSlackCredentials, fetch, readMailReplyHeaders, composio)
 }

@@ -25,8 +25,6 @@
 @theme {
 
   /* Draft chrome stays visible; only the message body consumes this budget. */
-  --spacing-outbound-dock-max: 45dvh;
-  --spacing-outbound-input-max: 16rem;
   /* The bar of Session cards waiting above the composer: three rows and the top of a fourth. */
   --spacing-work-dock-max: 8.75rem;
 

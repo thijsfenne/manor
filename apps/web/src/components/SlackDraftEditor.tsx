@@ -39,8 +39,6 @@ export function SlackDraftEditor({ body, document, onChange }: { body: string; d
   const [link, setLink] = useState<{ selection: DraftSelection; url: string } | null>(null)
   const inputs = useRef(new Map<number, DraftInputHandle>())
   const pendingFocus = useRef(false)
-  const frame = useRef<HTMLDivElement>(null)
-  const content = useRef<HTMLDivElement>(null)
   const current = state.blocks[state.selection.block]!
   const styles = state.pending ?? selectionStyle(state.blocks, state.selection)
   const rich = draftDocument(state.blocks)
@@ -56,18 +54,6 @@ export function SlackDraftEditor({ body, document, onChange }: { body: string; d
       pendingFocus.current = false
     }
   }, [state])
-  useEffect(() => {
-    const card = frame.current?.closest<HTMLElement>('[data-outbound-card]')
-    const input = content.current
-    if (!card || !input || typeof ResizeObserver === 'undefined') return
-    const measure = () => {
-      const chrome = Math.max(0, card.getBoundingClientRect().height - input.getBoundingClientRect().height)
-      input.style.setProperty('--outbound-card-chrome', `${chrome}px`)
-    }
-    const observer = new ResizeObserver(measure)
-    observer.observe(card); observer.observe(input); measure()
-    return () => observer.disconnect()
-  }, [])
   const format = (key: keyof InlineStyle) => {
     if (state.selection.start === state.selection.end) {
       setState({ ...state, pending: { ...styles, [key]: !styles[key] } })
@@ -76,8 +62,8 @@ export function SlackDraftEditor({ body, document, onChange }: { body: string; d
   }
   const kind = (value: BlockKind) => change(commitDraftEdit(state, formatDraftBlock(state.blocks, state.selection.block, current.kind === value ? 'paragraph' : value)))
   const tool = (label: string, icon: typeof CodeIcon, action: () => void, active = false, disabled = false) => <button key={label} type="button" aria-label={label} title={label} aria-pressed={active} disabled={disabled} onMouseDown={(e) => e.preventDefault()} onClick={action} className={`grid size-8 cursor-pointer place-items-center rounded-md border-0 disabled:cursor-default disabled:opacity-40 ${active ? 'bg-surface-2 text-text' : 'bg-transparent text-muted hover:bg-surface-2 hover:text-text'}`}><Icon icon={icon} size={16} /></button>
-  return <div ref={frame} className="mb-3 overflow-hidden rounded-md border border-line bg-stage">
-    <div className="flex items-center gap-0.5 overflow-x-auto border-b border-line p-1 [&>*]:shrink-0" role="group" aria-label="Slack formatting">
+  return <div className="min-w-0">
+    <div className="-mx-1 mb-2 flex items-center gap-0.5 overflow-x-auto border-b border-line pb-1 [&>*]:shrink-0" role="group" aria-label="Slack formatting">
         {inlineTools.map(([key, label, icon]) => tool(label, icon, () => format(key), styles[key], current.kind === 'code'))}
         {tool('Link', Link01Icon, () => setLink({ selection: state.selection, url: '' }), false, state.selection.start === state.selection.end || current.kind === 'code')}
         {blockTools.map(([key, label, icon]) => tool(label, icon, () => kind(key), current.kind === key))}
@@ -96,7 +82,7 @@ export function SlackDraftEditor({ body, document, onChange }: { body: string; d
       <Button size="compact" variant="ghost" onClick={() => { change(commitDraftEdit(state, formatDraftInline(state.blocks, link.selection, 'link'), link.selection)); setLink(null) }}>Unlink</Button>
       <Button size="compact" variant="ghost" onClick={() => setLink(null)}>Cancel</Button>
     </div>}
-    <div ref={content} className="max-h-[min(var(--spacing-outbound-input-max),max(0px,calc(var(--spacing-outbound-dock-max)-var(--outbound-card-chrome,10rem)-0.5rem)))] overflow-y-auto overscroll-contain p-2.5 text-[length:var(--msg-size,16px)] leading-relaxed text-text">
+    <div className="min-h-[4.5rem] text-[length:var(--msg-size,16px)] leading-relaxed text-text">
       {state.blocks.map((row, index) => {
         const list = row.kind === 'bullet' || row.kind === 'ordered'
         const Tag = row.kind === 'ordered' ? 'ol' : row.kind === 'bullet' ? 'ul' : 'div'
@@ -133,6 +119,6 @@ export function SlackDraftEditor({ body, document, onChange }: { body: string; d
         change(commitDraftEdit(state, state.blocks.map((row, i) => i >= state.selection.block && row.group === current.group ? { ...row, number: row.number + number - current.number } : row)), false)
       }} /></label>}
     </div>
-    {!valid && <p role="status" className="m-0 px-2.5 pb-2 text-label text-muted">{state.blocks.every((row) => !blockText(row).trim()) ? 'Write a message to enable Submit.' : 'This message exceeds Slack’s formatting limits. Shorten it before submitting.'}</p>}
+    {!valid && <p role="status" className="m-0 pt-2 text-label text-muted">{state.blocks.every((row) => !blockText(row).trim()) ? 'Write a message to enable Send.' : 'This message exceeds Slack’s formatting limits. Shorten it before sending.'}</p>}
   </div>
 }

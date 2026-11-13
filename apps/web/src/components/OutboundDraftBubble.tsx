@@ -1,22 +1,16 @@
 import { draftBlocks, draftDocument } from '@manor/client-runtime/slack-draft-formatting'
 import { SlackDraftEditor, SlackDraftPreview } from './SlackDraftEditor'
 import { outboundDraftRevision, readOutboundDraftEdit, writeOutboundDraftEdit, type OutboundDraftEdit } from '@manor/client-runtime/outbound-draft-edits'
-import slackIcon from '../../../desktop/assets/Slack_icon.svg'
-import { useDockDraftActions } from './outboundDockState'
-import { Copy01Icon, PencilEdit02Icon, Tick02Icon } from '@hugeicons/core-free-icons'
-import { AnimatePresence, motion } from 'motion/react'
-import { useEffect, useRef, useState } from 'react'
-import { plainDraftText } from '@manor/client-runtime/plain-preview'
+import { Mail01Icon, SlackIcon, UnfoldMoreIcon } from '@hugeicons/core-free-icons'
+import { useState, type ReactNode } from 'react'
 import type { OutboundDraftThread, SlackRichText } from '@manor/contracts'
-import { slackRichTextFallback, SlackRichTextSchema, isOutboundSlackChannelId, OUTBOUND_DRAFT_BODY_MAX, OUTBOUND_DRAFT_SUBJECT_MAX } from '@manor/contracts'
-import { draftStatus, snoozeUntilTomorrow, type DraftRecord, type WorkspaceState } from '../state'
-import { copyText } from '../clipboard'
+import { slackRichTextFallback, SlackRichTextSchema, isOutboundSlackChannelId, OUTBOUND_DRAFT_BODY_MAX, OUTBOUND_DRAFT_SUBJECT_MAX, OUTBOUND_DRAFT_TO_MAX } from '@manor/contracts'
+import { draftSettled, draftShown, draftStatus, draftStatusLabel, snoozeUntilTomorrow, type DraftRecord, type WorkspaceState } from '../state'
 import { accentStyle } from '../accent'
 import { ExternalLink } from './ExternalLink'
 import { Icon } from './Icon'
 import { Modal } from './Modal'
 import { Button } from './ui/Button'
-import { SIDE_SURFACE } from './ui/dockPanel'
 
 export type OutboundThreadReply = WorkspaceState['outboundThreads'][string]
 
@@ -25,7 +19,7 @@ export type OutboundThreadReply = WorkspaceState['outboundThreads'][string]
  * grow a prop per verb. Every handler returns whether the socket took the message.
  */
 export interface DraftActions {
-  onSubmit?: (draftId: string, body: string, subject?: string, slackRichText?: SlackRichText) => boolean
+  onSubmit?: (draftId: string, body: string, subject?: string, slackRichText?: SlackRichText, cc?: string) => boolean
   onDiscard?: (draftId: string) => boolean
   onSnooze?: (draftId: string, until: number) => boolean
   onIgnore?: (draftId: string) => boolean
@@ -40,18 +34,13 @@ interface OutboundDraftBubbleProps {
   color: string
   connected?: boolean
   actions?: DraftActions
+  /**
+   * Set by a list of drafts, which unfolds one card at a time. Absent, the card keeps
+   * its own fold: unfolded while it waits for a decision, folded once it is taken.
+   */
+  unfolded?: boolean
+  onToggle?: () => void
 }
-
-/**
- * Where this draft leaves from. Two mailboxes can reach the same address, so the
- * header names the sending account rather than only the channel.
- */
-const routeLabel = (draft: DraftRecord) =>
-  draft.channel === 'slack'
-    ? draft.slackThreadTs === undefined
-      ? 'Slack draft'
-      : 'Slack thread reply'
-    : 'Gmail draft from Personal'
 
 const when = (iso: string) =>
   new Intl.DateTimeFormat(undefined, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }).format(new Date(iso))
@@ -59,40 +48,46 @@ const when = (iso: string) =>
 const untilLabel = (ms: number) =>
   new Intl.DateTimeFormat(undefined, { weekday: 'short', hour: '2-digit', minute: '2-digit' }).format(new Date(ms))
 
+/** Body type for the card, the chat's own size so a mail reads like the reply around it. */
+const BODY_TEXT = 'text-[length:var(--msg-size,16px)] leading-[1.5] text-text'
+/** A field that reads as plain text: no box, no handle, it grows with what is typed. */
+const PLAIN_FIELD = 'w-full min-w-0 border-0 bg-transparent p-0 text-text [font:inherit] outline-none placeholder:text-dim'
+
+/**
+ * One outbound message, Gmail or Slack, inside the turn that wrote it. Open, it is the
+ * mail as it will leave, editable in place. Once Send, Discard, Later or Ignore is
+ * taken it folds to its header, and the header reopens it to read, never to act.
+ */
 export function OutboundDraftBubble({
   draft,
   color,
   connected = true,
   actions = {},
+  unfolded,
+  onToggle,
 }: OutboundDraftBubbleProps) {
-  const { onSubmit, onDiscard, onSnooze, onIgnore, onRestore, onReadThread, threads } = useDockDraftActions(draft, actions)
+  const { onSubmit, onDiscard, onSnooze, onIgnore, onRestore, onReadThread, threads } = actions
   const closed = draft.closed
   const submission = draft.submission
   const editRevision = outboundDraftRevision(draft)
   const [edit, setLocalEdit] = useState(() => readOutboundDraftEdit(draft))
   const currentEdit = edit.revision === editRevision ? edit : readOutboundDraftEdit(draft)
-  const { body, subject, slackRichText } = currentEdit
+  const { body, subject, cc, slackRichText } = currentEdit
   const editedRichText = draft.channel === 'slack' ? slackRichText ?? draftDocument(draftBlocks(body)) : undefined
   const shownRichText = closed?.slackRichText ?? submission?.slackRichText ?? slackRichText
   const validFormatting = editedRichText === undefined || SlackRichTextSchema.safeParse(editedRichText).success
-  const setEdit = (next: OutboundDraftEdit) => {
-    writeOutboundDraftEdit(draft.draftId, next)
-    setLocalEdit(next)
+  const setEdit = (next: Partial<OutboundDraftEdit>) => {
+    const merged = { ...currentEdit, ...next, revision: editRevision }
+    writeOutboundDraftEdit(draft.draftId, merged)
+    setLocalEdit(merged)
   }
-  const [copied, setCopied] = useState(false)
   const [threadOpen, setThreadOpen] = useState(false)
-  const timer = useRef<number | undefined>(undefined)
-
-  useEffect(() => () => window.clearTimeout(timer.current), [])
-
-  const copy = async () => {
-    const copiedRichText = closed === undefined && submission === undefined ? editedRichText : shownRichText
-    const text = (copiedRichText === undefined ? plainDraftText(closed?.body ?? submission?.body ?? body) : slackRichTextFallback(copiedRichText))
-    if (!(await copyText(text))) return
-    setCopied(true)
-    window.clearTimeout(timer.current)
-    timer.current = window.setTimeout(() => setCopied(false), 1_600)
-  }
+  const settled = draftSettled(draft)
+  // A card picked to be re-read stays open until it is folded again; a fresh decision folds it.
+  const [reread, setReread] = useState<string | undefined>(undefined)
+  const rereadOpen = reread === `${draftStatus(draft)}:${draft.draftId}`
+  const expanded = unfolded ?? (!settled || rereadOpen)
+  const toggle = onToggle ?? (settled ? () => setReread(rereadOpen ? undefined : `${draftStatus(draft)}:${draft.draftId}`) : undefined)
 
   const status = draftStatus(draft)
   const open = status === 'open'
@@ -103,164 +98,156 @@ export function OutboundDraftBubble({
   const threadVerbs = draft.thread !== undefined && (onSnooze !== undefined || onIgnore !== undefined)
   // Only a mailbox can be read back in full today. A Slack thread keeps its quote and
   // its verbs, but no "Show more" that every click would fail.
-  const readable = draft.channel === 'gmail' && onReadThread !== undefined
+  const readable = draft.channel === 'gmail' && onReadThread !== undefined && draft.fullThread !== false
+  const shown = draftShown(draft)
+  // A reply keeps its thread's subject, so only new mail can retitle itself.
+  const subjectEditable = open && draft.thread === undefined
+  const shownSubject = subjectEditable ? subject : open ? (draft.subject ?? '') : shown.subject
+  const shownCc = open ? cc : shown.cc
+  const showHeaderStatus = !expanded || !open
+  const restorable = onRestore !== undefined && (status === 'snoozed' || status === 'ignored')
 
   return (
     <div
-      data-outbound-card
-      className={`w-full min-w-0 shrink-0 rounded-xl px-3.5 py-3 ${SIDE_SURFACE}`}
+      data-outbound-card={status}
+      className="w-full min-w-0 shrink-0 rounded-dock border border-line bg-bubble"
       style={accentStyle(color)}
     >
-      <div className="mb-2 flex items-center gap-1.5 text-label font-medium text-muted">
-        {draft.channel === 'slack' ? <img src={slackIcon} alt="" aria-hidden="true" className="size-3.5 shrink-0 object-contain" /> : <Icon icon={PencilEdit02Icon} size={14} />}
-        <span>
-          {routeLabel(draft)} · {draft.to}
-        </span>
-      </div>
-      {draft.thread === undefined ? null : (
-        <ThreadQuote
-          thread={draft.thread}
-          {...(!readable
-            ? {}
-            : {
-                // Asked for on every opening, so the list is as fresh as the mailbox;
-                // a reply from an earlier look stays on screen until this one lands.
-                onMore: () => {
-                  onReadThread(draft.draftId)
-                  setThreadOpen(true)
-                },
-              })}
-        />
-      )}
-      {draft.channel === 'gmail' ? (
-        open ? (
-          <input
-            aria-label="Draft subject"
-            className="mb-2 w-full rounded-md border border-line bg-stage px-2.5 py-1.5 text-[length:var(--msg-size,16px)] text-text [font:inherit] outline-none"
-            maxLength={OUTBOUND_DRAFT_SUBJECT_MAX}
-            value={subject}
-            onChange={(event) => setEdit({ revision: editRevision, body, subject: event.target.value })}
-          />
-        ) : (closed?.subject ?? submission?.subject ?? draft.subject)?.length ? (
-          <p className="mb-2 text-[length:var(--msg-size,16px)] text-text">
-            {closed?.subject ?? submission?.subject ?? draft.subject}
-          </p>
-        ) : null
-      ) : null}
-      {draft.channel === 'slack' && open ? (
-        <SlackDraftEditor key={editRevision} body={body} {...(slackRichText === undefined ? {} : { document: slackRichText })} onChange={(document) => setEdit({ revision: editRevision, body: slackRichTextFallback(document), subject, slackRichText: document })} />
-      ) : draft.channel === 'slack' && shownRichText !== undefined ? (
-        <div className="mb-3"><SlackDraftPreview document={shownRichText} /></div>
-      ) : open ? (
-        <textarea
-          aria-label="Draft body"
-          className="mb-3 min-h-[7.5rem] w-full resize-y rounded-md border border-line bg-stage px-2.5 py-2 text-[length:var(--msg-size,16px)] text-text [font:inherit] outline-none"
-          maxLength={OUTBOUND_DRAFT_BODY_MAX}
-          value={body}
-          onChange={(event) => setEdit({ revision: editRevision, body: event.target.value, subject })}
-        />
-      ) : (
-        <p className="mb-3 whitespace-pre-wrap text-[length:var(--msg-size,16px)] text-text">
-          {closed?.body ?? submission?.body ?? draft.body}
-        </p>
-      )}
-      {!routeReady ? (
-        <p className="mb-2 text-label text-danger">Copy only: the Slack destination is missing.</p>
-      ) : draft.failure !== undefined ? (
-        <p className="mb-2 text-label text-danger">{draft.failure}</p>
-      ) : submission !== undefined ? (
-        <p className="mb-2 text-label text-dim">
-          {submission.status === 'uncertain'
-            ? submission.message ?? 'Delivery is uncertain. Submit stays locked to prevent a duplicate.'
-            : 'Sending started. Submit stays locked to prevent a duplicate.'}
-        </p>
-      ) : null}
-      <div className="flex flex-wrap items-center gap-2">
-        <Button
-          size="compact"
-          variant="secondary"
-          aria-label={copied ? 'Copied' : 'Copy'}
-          onClick={() => void copy()}
-        >
-          <span className="inline-flex items-center gap-1.5">
-            <Icon icon={copied ? Tick02Icon : Copy01Icon} size={13} />
-            {copied ? 'Copied' : 'Copy'}
-          </span>
-        </Button>
-        {open ? (
-          <>
-            <Button
-              size="compact"
-              variant="primary"
-              aria-label="Submit"
-              disabled={!canAct}
-              onClick={() => {
-                if (!canAct || onSubmit === undefined) return
-                onSubmit(draft.draftId, body, draft.channel === 'gmail' ? subject : undefined, editedRichText)
-              }}
-            >
-              Submit
-            </Button>
-            {threadVerbs ? (
-              <>
-                {onSnooze === undefined ? null : (
-                  <Button
-                    size="compact"
-                    variant="ghost"
-                    aria-label="Answer tomorrow"
-                    disabled={!connected}
-                    onClick={() => onSnooze(draft.draftId, snoozeUntilTomorrow())}
-                  >
-                    Later, tomorrow
-                  </Button>
-                )}
-                {onIgnore === undefined ? null : (
-                  <Button
-                    size="compact"
-                    variant="ghost"
-                    aria-label="Ignore this thread"
-                    disabled={!connected}
-                    onClick={() => onIgnore(draft.draftId)}
-                  >
-                    Ignore
-                  </Button>
-                )}
-              </>
-            ) : onDiscard === undefined ? null : (
-              <Button
-                size="compact"
-                variant="ghost"
-                aria-label="Discard draft"
-                disabled={!connected}
-                onClick={() => onDiscard(draft.draftId)}
-              >
-                Discard
-              </Button>
+      <CardHeader
+        channel={draft.channel}
+        expanded={expanded}
+        {...(toggle === undefined ? {} : { onToggle: toggle })}
+        status={showHeaderStatus ? `${draftStatusLabel(draft)}${status === 'snoozed' && closed?.until !== undefined ? `, back ${untilLabel(closed.until)}` : ''} · ${draft.to}` : undefined}
+        tone={status === 'open' && draft.failure !== undefined ? 'text-danger' : 'text-muted'}
+        action={restorable ? (
+          <Button
+            size="compact"
+            variant="ghost"
+            aria-label="Restore this draft"
+            disabled={!connected}
+            onClick={() => onRestore(draft.draftId)}
+          >
+            Restore
+          </Button>
+        ) : undefined}
+      />
+      <div className="fold" data-open={expanded}>
+        <div>
+          <div className="px-5 pb-4">
+            {draft.thread === undefined ? null : (
+              <ThreadQuote
+                thread={draft.thread}
+                {...(!readable
+                  ? {}
+                  : {
+                      // Asked for on every opening, so the list is as fresh as the mailbox;
+                      // a reply from an earlier look stays on screen until this one lands.
+                      onMore: () => {
+                        onReadThread(draft.draftId)
+                        setThreadOpen(true)
+                      },
+                    })}
+              />
             )}
-          </>
-        ) : closed !== undefined ? (
-          <AnimatePresence>
-            <motion.span
-              key={closed.outcome}
-              className="inline-flex items-center gap-2 text-label text-dim"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-            >
-              {outcomeLabel(closed)}
-              {onRestore !== undefined && (status === 'snoozed' || status === 'ignored') ? (
+            {draft.channel === 'gmail' ? (
+              subjectEditable ? (
+                <input
+                  aria-label="Draft subject"
+                  placeholder="Subject"
+                  className={`${PLAIN_FIELD} mb-1 font-medium text-[length:var(--msg-size,16px)]`}
+                  maxLength={OUTBOUND_DRAFT_SUBJECT_MAX}
+                  value={subject}
+                  onChange={(event) => setEdit({ subject: event.target.value })}
+                />
+              ) : shownSubject.length > 0 ? (
+                <p className="m-0 mb-1 font-medium text-[length:var(--msg-size,16px)] text-text">{shownSubject}</p>
+              ) : null
+            ) : null}
+            <dl className="m-0 mb-3 text-[15px]">
+              {draft.channel === 'gmail' ? <Field label="From">{draft.from ?? 'Personal Gmail'}</Field> : null}
+              <Field label="To">{draft.to}</Field>
+              {draft.channel !== 'gmail' ? null : open ? (
+                <Field label="Cc">
+                  <input
+                    aria-label="Draft Cc"
+                    placeholder="Add Cc"
+                    className={PLAIN_FIELD}
+                    maxLength={OUTBOUND_DRAFT_TO_MAX}
+                    value={cc}
+                    onChange={(event) => setEdit({ cc: event.target.value })}
+                  />
+                </Field>
+              ) : shownCc.length > 0 ? <Field label="Cc">{shownCc}</Field> : null}
+            </dl>
+            {draft.channel === 'slack' && open ? (
+              <SlackDraftEditor key={editRevision} body={body} {...(slackRichText === undefined ? {} : { document: slackRichText })} onChange={(document) => setEdit({ body: slackRichTextFallback(document), slackRichText: document })} />
+            ) : draft.channel === 'slack' && shownRichText !== undefined ? (
+              <SlackDraftPreview document={shownRichText} />
+            ) : open ? (
+              <textarea
+                aria-label="Draft body"
+                className={`${PLAIN_FIELD} ${BODY_TEXT} block min-h-[6rem] resize-none [field-sizing:content]`}
+                maxLength={OUTBOUND_DRAFT_BODY_MAX}
+                value={body}
+                onChange={(event) => setEdit({ body: event.target.value })}
+              />
+            ) : (
+              <p className={`m-0 whitespace-pre-wrap ${BODY_TEXT}`}>
+                {shown.body}
+              </p>
+            )}
+            {!routeReady ? (
+              <p className="m-0 mt-3 text-label text-danger">The Slack destination is missing, so this cannot be sent.</p>
+            ) : draft.failure !== undefined && open ? (
+              <p className="m-0 mt-3 text-label text-danger">{draft.failure}</p>
+            ) : submission !== undefined ? (
+              <p className="m-0 mt-3 text-label text-dim">
+                {submission.status === 'uncertain'
+                  ? submission.message ?? 'Delivery is uncertain. Send stays locked to prevent a duplicate.'
+                  : 'Sending. Send stays locked to prevent a duplicate.'}
+              </p>
+            ) : closed?.outcome === 'submitted' && closed.delivery !== 'delivered' ? (
+              <p className="m-0 mt-3 text-label text-dim">Saved in this chat. Nothing was sent.</p>
+            ) : null}
+            {open ? (
+              <div className="mt-4 flex flex-wrap items-center justify-end gap-1">
+                {threadVerbs ? (
+                  <>
+                    {onSnooze === undefined ? null : (
+                      <Button size="medium" variant="ghost" aria-label="Answer tomorrow" disabled={!connected} onClick={() => onSnooze(draft.draftId, snoozeUntilTomorrow())}>
+                        Later
+                      </Button>
+                    )}
+                    {onIgnore === undefined ? null : (
+                      <Button size="medium" variant="ghost" aria-label="Ignore this thread" disabled={!connected} onClick={() => onIgnore(draft.draftId)}>
+                        Ignore
+                      </Button>
+                    )}
+                  </>
+                ) : null}
+                {onDiscard === undefined || threadVerbs ? null : (
+                  <Button size="medium" variant="ghost" aria-label="Discard draft" disabled={!connected} onClick={() => onDiscard(draft.draftId)}>
+                    Discard
+                  </Button>
+                )}
                 <Button
-                  size="compact"
-                  variant="ghost"
-                  aria-label="Restore this draft"
-                  disabled={!connected}
-                  onClick={() => onRestore(draft.draftId)}
+                  size="medium"
+                  variant="primary"
+                  className="ml-1 rounded-full px-5"
+                  aria-label="Send"
+                  disabled={!canAct}
+                  onClick={() => {
+                    if (!canAct || onSubmit === undefined) return
+                    if (draft.channel === 'gmail') onSubmit(draft.draftId, body, subjectEditable ? subject : undefined, editedRichText, cc)
+                    else onSubmit(draft.draftId, body, undefined, editedRichText)
+                  }}
                 >
-                  Restore
+                  Send
                 </Button>
-              ) : null}
-            </motion.span>
-          </AnimatePresence>
-        ) : null}
+              </div>
+            ) : null}
+          </div>
+        </div>
       </div>
       {threadOpen && readable && draft.thread !== undefined ? (
         <ThreadModal draft={draft} reply={threads?.[draft.draftId]} onClose={() => setThreadOpen(false)} />
@@ -269,18 +256,59 @@ export function OutboundDraftBubble({
   )
 }
 
-/** What happened to it, in words that never claim more than the machine did. */
-function outcomeLabel(closed: NonNullable<DraftRecord['closed']>): string {
-  switch (closed.outcome) {
-    case 'discarded':
-      return 'Discarded.'
-    case 'snoozed':
-      return closed.until === undefined ? 'Later.' : `Later. Back ${untilLabel(closed.until)}.`
-    case 'ignored':
-      return 'Ignored. This thread stays quiet.'
-    case 'submitted':
-      return closed.delivery === 'delivered' ? 'Sent.' : 'Saved in this chat. Nothing was sent.'
-  }
+/**
+ * The app tile and its name, plus where the draft stands once that is the news. The
+ * whole row is the fold toggle whenever there is something folded to reopen.
+ */
+function CardHeader({ channel, expanded, onToggle, status, tone, action }: {
+  channel: DraftRecord['channel']
+  expanded: boolean
+  onToggle?: () => void
+  status: string | undefined
+  tone: string
+  action: ReactNode
+}) {
+  const label = channel === 'slack' ? 'Slack' : 'Mail'
+  const content = (
+    <>
+      <span className="grid size-7 shrink-0 place-items-center rounded-lg bg-user-bg text-text">
+        <Icon icon={channel === 'slack' ? SlackIcon : Mail01Icon} size={16} />
+      </span>
+      <span className="text-[15px] text-text">{label}</span>
+      {status === undefined ? null : <span className={`min-w-0 flex-1 truncate text-[15px] ${tone}`}>{status}</span>}
+    </>
+  )
+  return (
+    <div className="flex min-w-0 items-center gap-2 px-3.5 py-3">
+      {onToggle === undefined ? (
+        <div className="flex min-w-0 flex-1 items-center gap-2.5">{content}</div>
+      ) : (
+        <button
+          type="button"
+          aria-expanded={expanded}
+          aria-label={expanded ? `Fold ${label.toLowerCase()} card` : `Open ${label.toLowerCase()} card`}
+          className="flex min-w-0 flex-1 cursor-pointer items-center gap-2.5 border-0 bg-transparent p-0 text-left [font:inherit]"
+          onClick={onToggle}
+        >
+          {content}
+          <span className="ml-auto grid size-7 shrink-0 place-items-center rounded-md text-dim">
+            <Icon icon={UnfoldMoreIcon} size={16} />
+          </span>
+        </button>
+      )}
+      {action}
+    </div>
+  )
+}
+
+/** One header line of the mail, label muted, divided from the next by a hairline. */
+function Field({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="flex min-w-0 items-baseline gap-2 border-b border-line py-2.5">
+      <dt className="shrink-0 text-muted">{label}</dt>
+      <dd className="m-0 min-w-0 flex-1 truncate text-text">{children}</dd>
+    </div>
+  )
 }
 
 /**

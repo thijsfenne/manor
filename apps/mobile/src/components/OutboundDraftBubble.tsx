@@ -1,18 +1,14 @@
-import { useOutboundDraftHeight } from '@/lib/useOutboundDraftHeight'
 import { draftBlocks, draftDocument } from '@manor/client-runtime/slack-draft-formatting'
 import { SlackDraftEditor, SlackDraftPreview } from './SlackDraftEditor'
 import { outboundDraftRevision, readOutboundDraftEdit, writeOutboundDraftEdit, type OutboundDraftEdit } from '@manor/client-runtime/outbound-draft-edits'
-import { Image } from 'expo-image'
-import { useDockDraftActions } from './outboundDockState'
-import { Copy01Icon, PencilEdit02Icon, Tick02Icon } from '@hugeicons/core-free-icons'
-import { HugeiconsIcon, type IconSvgElement } from '@hugeicons/react-native'
-import { plainDraftText } from '@manor/client-runtime/plain-preview'
-import { draftStatus, snoozeUntilTomorrow, type DraftRecord, type WorkspaceState } from '@manor/client-runtime/state'
+import { Mail01Icon, SlackIcon, UnfoldMoreIcon } from '@hugeicons/core-free-icons'
+import { HugeiconsIcon } from '@hugeicons/react-native'
+import { draftSettled, draftShown, draftStatus, draftStatusLabel, snoozeUntilTomorrow, type DraftRecord, type WorkspaceState } from '@manor/client-runtime/state'
 import type { OutboundDraftThread, SlackRichText } from '@manor/contracts'
-import { slackRichTextFallback, SlackRichTextSchema, isOutboundSlackChannelId, OUTBOUND_DRAFT_BODY_MAX, OUTBOUND_DRAFT_SUBJECT_MAX } from '@manor/contracts'
-import * as Clipboard from 'expo-clipboard'
-import { useEffect, useRef, useState } from 'react'
+import { slackRichTextFallback, SlackRichTextSchema, isOutboundSlackChannelId, OUTBOUND_DRAFT_BODY_MAX, OUTBOUND_DRAFT_SUBJECT_MAX, OUTBOUND_DRAFT_TO_MAX } from '@manor/contracts'
+import { useRef, useState, type ReactNode } from 'react'
 import { Keyboard, Linking, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native'
+import Animated, { Easing, FadeIn, FadeOut, LinearTransition, ReduceMotion } from 'react-native-reanimated'
 
 import { Sheet } from '@/components/Sheet'
 import { Text } from '@/components/Text'
@@ -25,7 +21,7 @@ export type OutboundThreadReply = WorkspaceState['outboundThreads'][string]
  * grow a prop per verb. Every handler returns whether the socket took the message.
  */
 export interface DraftActions {
-  onSubmit?: (draftId: string, body: string, subject?: string, slackRichText?: SlackRichText) => boolean
+  onSubmit?: (draftId: string, body: string, subject?: string, slackRichText?: SlackRichText, cc?: string) => boolean
   onDiscard?: (draftId: string) => boolean
   onSnooze?: (draftId: string, until: number) => boolean
   onIgnore?: (draftId: string) => boolean
@@ -37,44 +33,53 @@ export interface DraftActions {
 
 type Selection = { start: number; end: number }
 
-/**
- * One prepared Gmail or Slack message, the same card the Mac shows. Submit is the
- * only way anything leaves Manor, so the line above the text names the account that
- * will do the sending rather than only the channel: two mailboxes reach the same
- * address, and only one of them is the right sender.
- */
-export function OutboundDraftBubble({
-  draft,
-  connected = true,
-  actions = {},
-}: {
+interface OutboundDraftBubbleProps {
   draft: DraftRecord
   connected?: boolean
   actions?: DraftActions
-}) {
-  const { onSubmit, onDiscard, onSnooze, onIgnore, onRestore, onReadThread, threads } = useDockDraftActions(draft, actions)
-  const dockHeight = useOutboundDraftHeight()
-  const [cardHeight, setCardHeight] = useState(0)
-  const [inputHeight, setInputHeight] = useState(0)
-  const inputMaxHeight = Math.max(0, dockHeight - (cardHeight - inputHeight) - spacing.sm)
+  /**
+   * Set by a list of drafts, which unfolds one card at a time. Absent, the card keeps
+   * its own fold: unfolded while it waits for a decision, folded once it is taken.
+   */
+  unfolded?: boolean
+  onToggle?: () => void
+}
+
+/** Reflows the card when its body folds or opens, on the curve the task card uses. */
+const SETTLE = LinearTransition.duration(220).easing(Easing.out(Easing.exp)).reduceMotion(ReduceMotion.System)
+const FADE_IN = FadeIn.duration(160).reduceMotion(ReduceMotion.System)
+const FADE_OUT = FadeOut.duration(100).reduceMotion(ReduceMotion.System)
+
+/**
+ * One outbound message, Gmail or Slack, inside the turn that wrote it. Open, it is the
+ * mail as it will leave, editable in place. Once Send, Discard, Later or Ignore is
+ * taken it folds to its header, and the header reopens it to read, never to act.
+ */
+export function OutboundDraftBubble({ draft, connected = true, actions = {}, unfolded, onToggle }: OutboundDraftBubbleProps) {
+  const { onSubmit, onDiscard, onSnooze, onIgnore, onRestore, onReadThread, threads } = actions
   const closed = draft.closed
   const submission = draft.submission
   const status = draftStatus(draft)
   const open = status === 'open'
+  const settled = draftSettled(draft)
   const editRevision = outboundDraftRevision(draft)
   const [edit, setLocalEdit] = useState(() => readOutboundDraftEdit(draft))
   const currentEdit = edit.revision === editRevision ? edit : readOutboundDraftEdit(draft)
-  const { body, subject, slackRichText } = currentEdit
+  const { body, subject, cc, slackRichText } = currentEdit
   const editedRichText = draft.channel === 'slack' ? slackRichText ?? draftDocument(draftBlocks(body)) : undefined
   const shownRichText = closed?.slackRichText ?? submission?.slackRichText ?? slackRichText
   const validFormatting = editedRichText === undefined || SlackRichTextSchema.safeParse(editedRichText).success
-  const setEdit = (next: OutboundDraftEdit) => {
-    writeOutboundDraftEdit(draft.draftId, next)
-    setLocalEdit(next)
+  const setEdit = (next: Partial<OutboundDraftEdit>) => {
+    const merged = { ...currentEdit, ...next, revision: editRevision }
+    writeOutboundDraftEdit(draft.draftId, merged)
+    setLocalEdit(merged)
   }
-  const [copied, setCopied] = useState(false)
-  const copiedTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
-  useEffect(() => () => clearTimeout(copiedTimer.current), [])
+  // A card picked to be re-read stays open until it is folded again; a fresh decision folds it.
+  const [reread, setReread] = useState<string | undefined>(undefined)
+  const rereadKey = `${status}:${draft.draftId}`
+  const rereadOpen = reread === rereadKey
+  const expanded = unfolded ?? (!settled || rereadOpen)
+  const toggle = onToggle ?? (settled ? () => setReread(rereadOpen ? undefined : rereadKey) : undefined)
 
   // The sheet opens over a live keyboard. It takes the keyboard down on the way in
   // and, if the body had focus, hands focus and the caret back on the way out, so
@@ -84,18 +89,6 @@ export function OutboundDraftBubble({
   const caret = useRef<Selection | undefined>(undefined)
   const [threadOpen, setThreadOpen] = useState(false)
   const [resumeAt, setResumeAt] = useState<{ selection: Selection } | undefined>(undefined)
-
-  const copy = async () => {
-    const copiedRichText = closed === undefined && submission === undefined ? editedRichText : shownRichText
-    try {
-      await Clipboard.setStringAsync((copiedRichText === undefined ? plainDraftText(closed?.body ?? submission?.body ?? body) : slackRichTextFallback(copiedRichText)))
-    } catch {
-      return
-    }
-    setCopied(true)
-    clearTimeout(copiedTimer.current)
-    copiedTimer.current = setTimeout(() => setCopied(false), 1_600)
-  }
 
   const showThread = () => {
     if (onReadThread === undefined) return
@@ -112,152 +105,202 @@ export function OutboundDraftBubble({
     if (resumeAt !== undefined) bodyRef.current?.focus()
   }
 
-  const routeReady = draft.channel === 'gmail' || isOutboundSlackChannelId(draft.slackChannelId)
+  const gmail = draft.channel === 'gmail'
+  const routeReady = gmail || isOutboundSlackChannelId(draft.slackChannelId)
   const canSubmit = open && routeReady && connected && onSubmit !== undefined && body.trim().length > 0 && validFormatting
   // Later and Ignore are decisions about the thread, and only a draft that knows
   // its thread can make them stick. Anything else keeps the plain Discard.
   const threadVerbs = draft.thread !== undefined && (onSnooze !== undefined || onIgnore !== undefined)
   // Only a mailbox can be read back in full today. A Slack thread keeps its quote and
   // its verbs, but no "Show more" that every tap would fail.
-  const readable = draft.channel === 'gmail' && onReadThread !== undefined
+  const readable = gmail && onReadThread !== undefined && draft.fullThread !== false
+  const shown = draftShown(draft)
+  // A reply keeps its thread's subject, so only new mail can retitle itself.
+  const subjectEditable = open && draft.thread === undefined
+  const shownSubject = subjectEditable ? subject : open ? (draft.subject ?? '') : shown.subject
+  const shownCc = open ? cc : shown.cc
+  const showHeaderStatus = !expanded || !open
+  const snoozedUntil = status === 'snoozed' && closed?.until !== undefined ? `, back ${untilLabel(closed.until)}` : ''
+  const restorable = onRestore !== undefined && (status === 'snoozed' || status === 'ignored')
 
   return (
-    <View style={styles.bubble} onLayout={(event) => setCardHeight(event.nativeEvent.layout.height)}>
-      <View style={styles.meta}>
-        {draft.channel === 'slack' ? <Image source={require('../../assets/images/Slack_icon.svg')} style={{ width: 13, height: 13 }} contentFit="contain" /> : <HugeiconsIcon color={colors.dim} icon={PencilEdit02Icon} size={13} strokeWidth={1.8} />}
-        <Text numberOfLines={1} style={styles.metaText}>{route(draft)}</Text>
-      </View>
-      <Text numberOfLines={1} style={styles.to}>To {draft.to}</Text>
-      {draft.thread === undefined ? null : (
-        <ThreadQuote thread={draft.thread} {...(readable ? { onMore: showThread } : {})} />
-      )}
-      {draft.channel === 'gmail' ? (
-        open ? (
-          <TextInput
-            accessibilityLabel="Draft subject"
-            maxLength={OUTBOUND_DRAFT_SUBJECT_MAX}
-            onChangeText={(value) => setEdit({ revision: editRevision, body, subject: value })}
-            placeholder="Subject"
-            placeholderTextColor={colors.dim}
-            style={styles.subjectInput}
-            value={subject}
-          />
-        ) : (closed?.subject ?? submission?.subject ?? draft.subject)?.length ? (
-          <Text style={styles.subject}>{closed?.subject ?? submission?.subject ?? draft.subject}</Text>
-        ) : null
-      ) : null}
-      {draft.channel === 'slack' && open ? (
-        <SlackDraftEditor maxInputHeight={inputMaxHeight} onInputHeight={setInputHeight} key={editRevision} body={body} {...(slackRichText === undefined ? {} : { document: slackRichText })} onChange={(document) => setEdit({ revision: editRevision, body: slackRichTextFallback(document), subject, slackRichText: document })} />
-      ) : draft.channel === 'slack' && shownRichText !== undefined ? (
-        <View style={{ marginBottom: spacing.md }}><SlackDraftPreview document={shownRichText} /></View>
-      ) : open ? (
-        <TextInput
-          accessibilityLabel="Draft body"
-          maxLength={OUTBOUND_DRAFT_BODY_MAX}
-          multiline
-          onBlur={() => { bodyFocused.current = false }}
-          onChangeText={(value) => setEdit({ revision: editRevision, body: value, subject })}
-          onFocus={() => { bodyFocused.current = true }}
-          onSelectionChange={(event) => {
-            caret.current = event.nativeEvent.selection
-            // The pinned caret has landed once the input reports any selection again.
-            if (resumeAt !== undefined) setResumeAt(undefined)
-          }}
-          ref={bodyRef}
-          style={styles.bodyInput}
-          value={body}
-          {...(resumeAt === undefined || threadOpen ? {} : { selection: resumeAt.selection })}
-        />
-      ) : (
-        <Text selectable style={styles.body}>{closed?.body ?? submission?.body ?? draft.body}</Text>
-      )}
-      {!routeReady ? (
-        <Text style={styles.failure}>Copy only: the Slack destination is missing.</Text>
-      ) : draft.failure !== undefined ? (
-        <Text style={styles.failure}>{draft.failure}</Text>
-      ) : submission !== undefined ? (
-        <Text style={styles.status}>
-          {submission.status === 'uncertain'
-            ? submission.message ?? 'Delivery is uncertain. Submit stays locked to prevent a duplicate.'
-            : 'Sending started. Submit stays locked to prevent a duplicate.'}
-        </Text>
-      ) : null}
-      <View style={styles.actions}>
-        <Action
-          accessibilityLabel={copied ? 'Copied' : 'Copy'}
-          icon={copied ? Tick02Icon : Copy01Icon}
-          label={copied ? 'Copied' : 'Copy'}
-          onPress={() => void copy()}
-        />
-        {open ? (
-          <>
-            <Action
-              accessibilityLabel="Submit"
-              disabled={!canSubmit}
-              label="Submit"
-              onPress={() => {
-                if (!canSubmit || onSubmit === undefined) return
-                onSubmit(draft.draftId, body, draft.channel === 'gmail' ? subject : undefined, editedRichText)
-              }}
-              primary
+    <Animated.View layout={SETTLE} style={styles.card}>
+      <CardHeader
+        channel={draft.channel}
+        expanded={expanded}
+        {...(toggle === undefined ? {} : { onToggle: toggle })}
+        status={showHeaderStatus ? `${draftStatusLabel(draft)}${snoozedUntil} · ${draft.to}` : undefined}
+        danger={open && draft.failure !== undefined}
+        action={restorable ? (
+          <TextButton accessibilityLabel="Restore this draft" disabled={!connected} label="Restore" onPress={() => onRestore(draft.draftId)} />
+        ) : undefined}
+      />
+      {!expanded ? null : (
+        <Animated.View entering={FADE_IN} exiting={FADE_OUT} style={styles.content}>
+          {draft.thread === undefined ? null : (
+            <ThreadQuote thread={draft.thread} {...(readable ? { onMore: showThread } : {})} />
+          )}
+          {!gmail ? null : subjectEditable ? (
+            <TextInput
+              accessibilityLabel="Draft subject"
+              maxLength={OUTBOUND_DRAFT_SUBJECT_MAX}
+              onChangeText={(value) => setEdit({ subject: value })}
+              placeholder="Subject"
+              placeholderTextColor={colors.dim}
+              style={styles.subjectInput}
+              value={subject}
             />
-            {threadVerbs ? (
-              <>
-                {onSnooze === undefined ? null : (
-                  <Action
-                    accessibilityLabel="Answer tomorrow"
-                    disabled={!connected}
-                    ghost
-                    label="Later, tomorrow"
-                    onPress={() => onSnooze(draft.draftId, snoozeUntilTomorrow())}
-                  />
-                )}
-                {onIgnore === undefined ? null : (
-                  <Action
-                    accessibilityLabel="Ignore this thread"
-                    disabled={!connected}
-                    ghost
-                    label="Ignore"
-                    onPress={() => onIgnore(draft.draftId)}
-                  />
-                )}
-              </>
-            ) : onDiscard === undefined ? null : (
-              <Action
-                accessibilityLabel="Discard draft"
-                disabled={!connected}
-                ghost
-                label="Discard"
-                onPress={() => onDiscard(draft.draftId)}
-              />
-            )}
-          </>
-        ) : closed !== undefined ? (
-          <>
-            <Text style={styles.outcome}>{outcome(closed)}</Text>
-            {onRestore !== undefined && (status === 'snoozed' || status === 'ignored') ? (
-              <Action
-                accessibilityLabel="Restore this draft"
-                disabled={!connected}
-                ghost
-                label="Restore"
-                onPress={() => onRestore(draft.draftId)}
-              />
+          ) : shownSubject.length > 0 ? (
+            <Text style={styles.subject}>{shownSubject}</Text>
+          ) : null}
+          <View style={styles.fields}>
+            {gmail ? <Field label="From"><Text numberOfLines={1} style={styles.fieldValue}>{draft.from ?? 'Personal Gmail'}</Text></Field> : null}
+            <Field label="To"><Text numberOfLines={1} style={styles.fieldValue}>{draft.to}</Text></Field>
+            {!gmail ? null : open ? (
+              <Field label="Cc">
+                <TextInput
+                  accessibilityLabel="Draft Cc"
+                  maxLength={OUTBOUND_DRAFT_TO_MAX}
+                  onChangeText={(value) => setEdit({ cc: value })}
+                  placeholder="Add Cc"
+                  placeholderTextColor={colors.dim}
+                  style={[styles.fieldValue, styles.fieldInput]}
+                  value={cc}
+                />
+              </Field>
+            ) : shownCc.length > 0 ? (
+              <Field label="Cc"><Text numberOfLines={1} style={styles.fieldValue}>{shownCc}</Text></Field>
             ) : null}
-          </>
-        ) : null}
-      </View>
+          </View>
+          {draft.channel === 'slack' && open ? (
+            <SlackDraftEditor key={editRevision} body={body} {...(slackRichText === undefined ? {} : { document: slackRichText })} onChange={(document) => setEdit({ body: slackRichTextFallback(document), slackRichText: document })} />
+          ) : draft.channel === 'slack' && shownRichText !== undefined ? (
+            <SlackDraftPreview document={shownRichText} />
+          ) : open ? (
+            <TextInput
+              accessibilityLabel="Draft body"
+              maxLength={OUTBOUND_DRAFT_BODY_MAX}
+              multiline
+              onBlur={() => { bodyFocused.current = false }}
+              onChangeText={(value) => setEdit({ body: value })}
+              onFocus={() => { bodyFocused.current = true }}
+              onSelectionChange={(event) => {
+                caret.current = event.nativeEvent.selection
+                // The pinned caret has landed once the input reports any selection again.
+                if (resumeAt !== undefined) setResumeAt(undefined)
+              }}
+              ref={bodyRef}
+              scrollEnabled={false}
+              style={styles.bodyInput}
+              value={body}
+              {...(resumeAt === undefined || threadOpen ? {} : { selection: resumeAt.selection })}
+            />
+          ) : (
+            <Text selectable style={styles.body}>{shown.body}</Text>
+          )}
+          {!routeReady ? (
+            <Text style={styles.failure}>The Slack destination is missing, so this cannot be sent.</Text>
+          ) : draft.failure !== undefined && open ? (
+            <Text style={styles.failure}>{draft.failure}</Text>
+          ) : submission !== undefined ? (
+            <Text style={styles.note}>
+              {submission.status === 'uncertain'
+                ? submission.message ?? 'Delivery is uncertain. Send stays locked to prevent a duplicate.'
+                : 'Sending. Send stays locked to prevent a duplicate.'}
+            </Text>
+          ) : closed?.outcome === 'submitted' && closed.delivery !== 'delivered' ? (
+            <Text style={styles.note}>Saved in this chat. Nothing was sent.</Text>
+          ) : null}
+          {!open ? null : (
+            <View style={styles.actions}>
+              {threadVerbs ? (
+                <>
+                  {onSnooze === undefined ? null : (
+                    <TextButton accessibilityLabel="Answer tomorrow" disabled={!connected} label="Later" onPress={() => onSnooze(draft.draftId, snoozeUntilTomorrow())} />
+                  )}
+                  {onIgnore === undefined ? null : (
+                    <TextButton accessibilityLabel="Ignore this thread" disabled={!connected} label="Ignore" onPress={() => onIgnore(draft.draftId)} />
+                  )}
+                </>
+              ) : onDiscard === undefined ? null : (
+                <TextButton accessibilityLabel="Discard draft" disabled={!connected} label="Discard" onPress={() => onDiscard(draft.draftId)} />
+              )}
+              <TextButton
+                accessibilityLabel="Send"
+                disabled={!canSubmit}
+                label="Send"
+                onPress={() => {
+                  if (!canSubmit || onSubmit === undefined) return
+                  if (gmail) onSubmit(draft.draftId, body, subjectEditable ? subject : undefined, editedRichText, cc)
+                  else onSubmit(draft.draftId, body, undefined, editedRichText)
+                }}
+                primary
+              />
+            </View>
+          )}
+        </Animated.View>
+      )}
       {draft.thread === undefined || !readable ? null : (
         <ThreadSheet draft={draft} onClose={closeThread} onDismiss={resumeEditing} open={threadOpen} reply={threads?.[draft.draftId]} />
       )}
+    </Animated.View>
+  )
+}
+
+/**
+ * The app tile and its name, plus where the draft stands once that is the news. The
+ * whole row is the fold toggle whenever there is something folded to reopen.
+ */
+function CardHeader({ channel, expanded, onToggle, status, danger, action }: {
+  channel: DraftRecord['channel']
+  expanded: boolean
+  onToggle?: () => void
+  status: string | undefined
+  danger: boolean
+  action: ReactNode
+}) {
+  const label = channel === 'slack' ? 'Slack' : 'Mail'
+  const content = (
+    <>
+      <View style={styles.tile}>
+        <HugeiconsIcon color={colors.text} icon={channel === 'slack' ? SlackIcon : Mail01Icon} size={16} strokeWidth={1.8} />
+      </View>
+      <Text style={styles.headerLabel}>{label}</Text>
+      {status === undefined ? null : <Text numberOfLines={1} style={[styles.headerStatus, danger && styles.headerDanger]}>{status}</Text>}
+    </>
+  )
+  return (
+    <View style={styles.header}>
+      {onToggle === undefined ? (
+        <View style={styles.headerMain}>{content}</View>
+      ) : (
+        <Pressable
+          accessibilityLabel={expanded ? `Fold ${label.toLowerCase()} card` : `Open ${label.toLowerCase()} card`}
+          accessibilityRole="button"
+          accessibilityState={{ expanded }}
+          hitSlop={6}
+          onPress={onToggle}
+          style={({ pressed }) => [styles.headerMain, pressed && styles.pressed]}
+        >
+          {content}
+          <View style={styles.headerToggle}>
+            <HugeiconsIcon color={colors.dim} icon={UnfoldMoreIcon} size={16} strokeWidth={1.8} />
+          </View>
+        </Pressable>
+      )}
+      {action}
     </View>
   )
 }
 
-/** Where this draft comes from, which for mail is the mailbox and never just "Gmail". */
-function route(draft: DraftRecord): string {
-  if (draft.channel === 'slack') return draft.slackThreadTs === undefined ? 'Slack draft' : 'Slack thread reply'
-  return 'Gmail draft from Personal'
+/** One header line of the mail, label muted, divided from the next by a hairline. */
+function Field({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <View style={styles.field}>
+      <Text style={styles.fieldLabel}>{label}</Text>
+      <View style={styles.fieldBody}>{children}</View>
+    </View>
+  )
 }
 
 const when = (iso: string) =>
@@ -265,23 +308,6 @@ const when = (iso: string) =>
 
 const untilLabel = (ms: number) =>
   new Intl.DateTimeFormat('en-GB', { weekday: 'short', hour: '2-digit', minute: '2-digit' }).format(new Date(ms))
-
-/**
- * What happened to it. `recorded` means the machine accepted the text without an
- * external effect, so it says that instead of claiming a send that never left.
- */
-function outcome(closed: NonNullable<DraftRecord['closed']>): string {
-  switch (closed.outcome) {
-    case 'discarded':
-      return 'Discarded.'
-    case 'snoozed':
-      return closed.until === undefined ? 'Later.' : `Later. Back ${untilLabel(closed.until)}.`
-    case 'ignored':
-      return 'Ignored. This thread stays quiet.'
-    case 'submitted':
-      return closed.delivery === 'delivered' ? 'Sent.' : 'Saved in this chat. Nothing was sent.'
-  }
-}
 
 /**
  * The message this draft answers, quoted above the subject so the reply can be judged
@@ -377,19 +403,16 @@ function ThreadSheet({
   )
 }
 
-function Action({
+/** A text-only button; the primary one is the filled pill that sends. */
+function TextButton({
   accessibilityLabel,
   disabled = false,
-  ghost = false,
-  icon,
   label,
   onPress,
   primary = false,
 }: {
   accessibilityLabel: string
   disabled?: boolean
-  ghost?: boolean
-  icon?: IconSvgElement
   label: string
   onPress: () => void
   primary?: boolean
@@ -402,27 +425,29 @@ function Action({
       disabled={disabled}
       hitSlop={6}
       onPress={onPress}
-      style={({ pressed }) => [
-        styles.action,
-        primary && styles.actionPrimary,
-        ghost && styles.actionGhost,
-        disabled && styles.disabled,
-        pressed && styles.pressed,
-      ]}
+      style={({ pressed }) => [styles.button, primary && styles.buttonPrimary, disabled && styles.disabled, pressed && styles.pressed]}
     >
-      {icon === undefined ? null : (
-        <HugeiconsIcon color={primary ? colors.onPrimary : colors.muted} icon={icon} size={13} strokeWidth={1.8} />
-      )}
-      <Text style={[styles.actionLabel, primary && styles.actionLabelPrimary]}>{label}</Text>
+      <Text style={[styles.buttonLabel, primary && styles.buttonLabelPrimary]}>{label}</Text>
     </Pressable>
   )
 }
 
 const styles = StyleSheet.create({
-  bubble: { gap: spacing.sm, borderRadius: radius.lg, ...squircle, backgroundColor: colors.raised, padding: spacing.md },
-  meta: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  metaText: { flexShrink: 1, color: colors.muted, fontFamily: fonts.sans, fontSize: 13, fontWeight: '500' },
-  to: { color: colors.dim, fontFamily: fonts.sans, fontSize: 13 },
+  card: { borderRadius: radius.lg, ...squircle, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.line, backgroundColor: colors.bubble },
+  header: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingHorizontal: spacing.md, paddingVertical: spacing.md },
+  headerMain: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 10 },
+  tile: { width: 28, height: 28, alignItems: 'center', justifyContent: 'center', borderRadius: radius.sm, ...squircle, backgroundColor: colors.userBubble },
+  headerLabel: { color: colors.text, fontFamily: fonts.sans, fontSize: 15 },
+  headerStatus: { flexShrink: 1, color: colors.muted, fontFamily: fonts.sans, fontSize: 15 },
+  headerDanger: { color: colors.danger },
+  headerToggle: { marginLeft: 'auto', width: 28, height: 28, alignItems: 'center', justifyContent: 'center' },
+  content: { gap: spacing.sm, paddingHorizontal: spacing.lg, paddingBottom: spacing.lg },
+  fields: { marginBottom: spacing.xs },
+  field: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.line, paddingVertical: 10 },
+  fieldLabel: { width: 44, color: colors.muted, fontFamily: fonts.sans, fontSize: 15 },
+  fieldBody: { flex: 1, minWidth: 0 },
+  fieldValue: { color: colors.text, fontFamily: fonts.sans, fontSize: 15 },
+  fieldInput: { padding: 0, letterSpacing: tracking.body },
   quote: { gap: 4, borderLeftWidth: 2, borderLeftColor: colors.line, paddingLeft: spacing.md, paddingVertical: 2 },
   quoteHead: { flexDirection: 'row', alignItems: 'baseline', gap: spacing.sm },
   quoteFrom: { flexShrink: 1, color: colors.muted, fontFamily: fonts.sans, fontSize: 13 },
@@ -430,21 +455,18 @@ const styles = StyleSheet.create({
   quoteTail: { marginLeft: 'auto', flexDirection: 'row', alignItems: 'baseline', gap: 6 },
   quoteMore: { color: colors.muted, fontFamily: fonts.sans, fontSize: 13, fontWeight: '500' },
   quoteText: { color: colors.muted, fontFamily: fonts.sans, fontSize: 15, lineHeight: 21 },
-  subjectInput: { minHeight: 42, borderRadius: radius.md, ...squircle, backgroundColor: colors.surface, color: colors.text, fontFamily: fonts.sans, fontSize: 16, letterSpacing: tracking.body, paddingHorizontal: spacing.md },
+  subjectInput: { padding: 0, color: colors.text, fontFamily: fonts.sansMedium, fontSize: 16, letterSpacing: tracking.body },
   subject: { color: colors.text, fontFamily: fonts.sans, fontSize: 16, fontWeight: '500', lineHeight: 22 },
-  // Tall enough to hold a short mail without scrolling inside a transcript row, and
-  // free to grow with a longer one rather than hiding the end behind a fixed frame.
-  bodyInput: { minHeight: 132, borderRadius: radius.md, ...squircle, backgroundColor: colors.surface, color: colors.text, fontFamily: fonts.sans, fontSize: 16, letterSpacing: tracking.body, lineHeight: 23, paddingHorizontal: spacing.md, paddingTop: spacing.sm, paddingBottom: spacing.sm, textAlignVertical: 'top' },
+  // No box and no fixed frame: the input grows with the mail instead of scrolling inside a transcript row.
+  bodyInput: { minHeight: 96, padding: 0, color: colors.text, fontFamily: fonts.sans, fontSize: 16, letterSpacing: tracking.body, lineHeight: 23, textAlignVertical: 'top' },
   body: { color: colors.text, fontFamily: fonts.sans, fontSize: 16, lineHeight: 23 },
-  actions: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: spacing.sm },
-  action: { minHeight: 34, flexDirection: 'row', alignItems: 'center', gap: 6, borderRadius: radius.sm, ...squircle, backgroundColor: colors.fill, paddingHorizontal: spacing.md },
-  actionPrimary: { backgroundColor: colors.text },
-  actionGhost: { backgroundColor: 'transparent', paddingHorizontal: spacing.sm },
-  actionLabel: { color: colors.muted, fontFamily: fonts.sans, fontSize: 13, fontWeight: '500' },
-  actionLabelPrimary: { color: colors.onPrimary },
-  outcome: { flexShrink: 1, color: colors.dim, fontFamily: fonts.sans, fontSize: 13 },
+  actions: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', flexWrap: 'wrap', gap: spacing.xs, marginTop: spacing.xs },
+  button: { minHeight: 36, justifyContent: 'center', borderRadius: radius.round, paddingHorizontal: spacing.md },
+  buttonPrimary: { backgroundColor: colors.text, paddingHorizontal: spacing.lg, marginLeft: spacing.xs },
+  buttonLabel: { color: colors.muted, fontFamily: fonts.sans, fontSize: 14, fontWeight: '500' },
+  buttonLabelPrimary: { color: colors.onPrimary },
   failure: { color: colors.danger, fontFamily: fonts.sans, fontSize: 13, lineHeight: 18 },
-  status: { color: colors.dim, fontFamily: fonts.sans, fontSize: 13, lineHeight: 18 },
+  note: { color: colors.dim, fontFamily: fonts.sans, fontSize: 13, lineHeight: 18 },
   sheetContent: { gap: spacing.md, paddingHorizontal: spacing.lg, paddingBottom: spacing.xl },
   sheetNote: { color: colors.dim, fontFamily: fonts.sans, fontSize: 13, lineHeight: 18 },
   message: { gap: 4, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.line, paddingTop: spacing.md },

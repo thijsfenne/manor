@@ -25,6 +25,7 @@ import {
   ProjectThreadFileSchema,
   UserInputAnswersSchema,
   OutboundDraftContentSchema,
+  type OutboundChannel,
   UserInputQuestionsSchema,
   daysToMs,
   defaultModel,
@@ -50,7 +51,7 @@ import { BrowserCapabilities, InvalidBrowserCapabilityError } from './browserCap
 import { InteractionBroker, askedByModel, preferenceAnswerText } from './interactionBroker.js'
 import { OutboundDrafts } from './outboundDrafts.js'
 import { readMailThread } from './mcp/mailMcp.js'
-import { createOutboundSendPort } from './outboundSend.js'
+import { createMockOutboundSendPort, createOutboundSendPort } from './outboundSend.js'
 import { InvalidUserInputCapabilityError, UserInputCapabilities } from './interactionCapability.js'
 import { closeTerminalTurn } from './agentRelayLifecycle.js'
 import { EffectBroker } from './effectBroker.js'
@@ -59,7 +60,7 @@ import { EffectCapabilities, InvalidEffectCapabilityError } from './effectCapabi
 import { ConnectCards, type ConnectRequest } from './connectCards.js'
 import { liveConnectCardPorts, mockConnectCardPorts } from './connectCardPorts.js'
 import { ComposioMarketplace } from './composioMarketplace.js'
-import { liveComposioMarketplacePorts, mockComposio } from './composioMarketplacePorts.js'
+import { liveComposioMarketplacePorts, liveComposioOutbound, mockComposio } from './composioMarketplacePorts.js'
 import { isComposioConnectUrl } from './mcp/connectLinks.js'
 import type { McpServerConfig } from '@manor/contracts'
 import { DesktopLease } from './desktopLease.js'
@@ -644,11 +645,25 @@ async function main(): Promise<void> {
   ))
   const idleGate = new TurnIdleGate()
   let service: ManorService
-  const outboundSend = createOutboundSendPort()
+  // Created before the drafts and the cards: drafts send through it and wait on its cards.
+  const composio = forceMock ? mockComposio() : undefined
+  let composioMarketplace: ComposioMarketplace | undefined
+  const composioPorts = composio?.ports ?? liveComposioMarketplacePorts(() => mcpServers())
+  const composioOutbound = composio?.outbound ?? liveComposioOutbound()
+  // The spike sends only through its mock Composio: no host mailbox or Slack session is read.
+  const outboundSend = forceMock ? createMockOutboundSendPort(composioOutbound) : createOutboundSendPort(composioOutbound)
   const outboundDrafts = new OutboundDrafts({
     store,
     send: outboundSend,
     emit: (message) => send(message),
+    connect: async (context, channel, inTime) => {
+      if (!composioOutbound.available()) return undefined
+      // Same alias rule as every Composio connect: a send account is always the personal one.
+      const link = await composioPorts.createLink(channel, 'personal')
+      // A link that came back after the agent's call gave up puts no card in the chat.
+      if (!inTime()) return { status: 'failed', reason: 'connecting took too long' }
+      return connectCards.request(context, { kind: 'composio', toolkit: channel, alias: 'personal', ...link })
+    },
     threadReader: {
       read: (draft) => {
         if (draft.channel !== 'gmail') throw new Error('Full Slack thread context is not available yet.')
@@ -685,9 +700,6 @@ async function main(): Promise<void> {
     interactions,
     passwordPage: (context) => secretPasswordPage(browser, browserCapabilities.forTurn(context.turnId)),
   })
-  // Created before the cards, which report every landed Composio sign-in back to it.
-  const composio = forceMock ? mockComposio() : undefined
-  let composioMarketplace: ComposioMarketplace | undefined
   const connectCards = new ConnectCards({
     ...(composio !== undefined ? mockConnectCardPorts(undefined, composio.accountState) : liveConnectCardPorts(() => mcpServers())),
     recordRequest: (context, event) => service.recordConnectRequest(context, event),
@@ -856,7 +868,7 @@ async function main(): Promise<void> {
       ), ARTIFACT_BROKER_CAPABILITY_ENV, artifactMcpServer, turnId)
 
   composioMarketplace = new ComposioMarketplace({
-    ports: composio?.ports ?? liveComposioMarketplacePorts(() => mcpServers()),
+    ports: composioPorts,
     openPage: (link, report) => connectCards.openPage(link, report),
     mcpServers,
     setMcpServers: (next) => {
@@ -1988,6 +2000,19 @@ async function handleSecretRequest(
   }
 }
 
+/** What the agent hears when a draft could not land because nothing can send it yet. */
+function notConnectedNote(channel: OutboundChannel, result: { notConnected: 'unavailable' | 'pending' | 'failed'; reason?: string }): string {
+  const app = channel === 'gmail' ? 'Gmail' : 'Slack'
+  switch (result.notConnected) {
+    case 'pending':
+      return `No draft was added: ${app} is not connected. A connect card for ${app} is in the chat. Tell the user to connect it there, then prepare the draft again.`
+    case 'failed':
+      return `No draft was added: the ${app} sign-in failed${result.reason === undefined ? '' : ` (${result.reason})`}. Tell the user, and prepare the draft again after they connect ${app}.`
+    case 'unavailable':
+      return `No draft was added: ${app} is not connected on this Manor, and no connect card can be offered here. Tell the user to connect ${app} in Settings first.`
+  }
+}
+
 async function handleOutboundDraftRequest(
   request: IncomingMessage,
   response: ServerResponse,
@@ -2012,14 +2037,16 @@ async function handleOutboundDraftRequest(
       ? request.headers['x-manor-user-input-capability'][0]
       : request.headers['x-manor-user-input-capability']
     const context = capabilities.take(provided, 'draft')
-    const recorded = await drafts.record(context.chatId, context.agentId, context.turnId, parsed.data)
+    const recorded = await drafts.prepare(context, parsed.data)
     json(response, 200, 'draftId' in recorded
       ? { draftId: recorded.draftId, note: 'Draft added to the chat. Nothing has been sent.' }
-      : {
-          suppressed: recorded.suppressed,
-          until: recorded.until,
-          note: 'This thread is postponed, so no draft was added yet.',
-        })
+      : 'suppressed' in recorded
+        ? {
+            suppressed: recorded.suppressed,
+            until: recorded.until,
+            note: 'This thread is postponed, so no draft was added yet.',
+          }
+        : { notConnected: recorded.notConnected, note: notConnectedNote(parsed.data.channel, recorded) })
   } catch (error: unknown) {
     if (error instanceof InvalidUserInputCapabilityError) {
       json(response, 404, { error: 'Not found.' })

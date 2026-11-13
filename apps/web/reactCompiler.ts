@@ -34,7 +34,6 @@ export const REACT_COMPILED_FILES: readonly string[] = [
   'src/components/SingleRuntimeControl.tsx',
   'src/components/ContextRing.tsx',
   'src/components/AskCard.tsx',
-  'src/components/OutboundDraftDock.tsx',
   'src/components/WorkDecisionDock.tsx',
   'src/components/WorkspaceHeader.tsx',
   'src/components/RightRail.tsx',

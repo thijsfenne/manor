@@ -171,6 +171,7 @@ export function TurnActivity({
           ) : segment.kind === 'draft' ? (
             <li key={segment.key} data-chrome="" className="min-w-0">
               <OutboundDraftGroup
+                bubble={bubble}
                 color={persona.color}
                 connected={connected}
                 drafts={segment.drafts}

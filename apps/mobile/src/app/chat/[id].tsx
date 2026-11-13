@@ -4,8 +4,6 @@ import { WakeNotices } from '@/components/SubagentRow'
 import { SubagentDirectory, SubagentLaunchesContext, type SubagentLaunches } from '@/lib/subagentContext'
 import { WorkDecisionDock } from '@/components/WorkDecisionDock'
 import type { RevealPlace } from '@/components/WorkResultBody'
-import { OutboundDockProvider } from '@/components/outboundDockState'
-import { OutboundDraftDock } from '@/components/OutboundDraftDock'
 import { ArrowDown01Icon, CellsIcon, LockIcon, Undo02Icon } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react-native'
 import { imageRefSpans, isModelOnlyMessage, isSoloRoom, placeQuotesAfterText, projectThreadOf, withQuoteExcerpts, ROUTINE_LATE_AFTER_MS, SINGLE_CHAT_VOICE, SUBAGENT_VOICE, userInputAnswerText, type AgentConfig, type EventDocument, type EventImage, type FileAttachment, type ImageAttachment, type InlineQuote, type MessageQuote, type MessageReply, type NoteQuote, type SkillConfig, type ThreadEvent } from '@manor/contracts'
@@ -229,7 +227,7 @@ function ChatContent({ chatId }: { chatId: string | undefined }) {
   const outboundThreads = workspace.outboundThreads
   const draftActions = useMemo<DraftActions>(
     () => ({
-      onSubmit: (draftId, body, subject, slackRichText) => chatId !== undefined && submitOutboundDraft(chatId, draftId, body, subject, slackRichText),
+      onSubmit: (draftId, body, subject, slackRichText, cc) => chatId !== undefined && submitOutboundDraft(chatId, draftId, body, subject, slackRichText, cc),
       onDiscard: (draftId) => chatId !== undefined && discardOutboundDraft(chatId, draftId),
       onSnooze: (draftId, until) => chatId !== undefined && snoozeOutboundDraft(chatId, draftId, until),
       onIgnore: (draftId) => chatId !== undefined && ignoreOutboundDraft(chatId, draftId),
@@ -737,7 +735,6 @@ function ChatContent({ chatId }: { chatId: string | undefined }) {
   return (
     <SubagentDirectory.Provider value={directory}>
     <SubagentLaunchesContext.Provider value={launches}>
-    <OutboundDockProvider rows={rows} enabled={!isPair}>
     <AnswerChange.Provider value={answerChange}>
     <TranscriptCovered.Provider value={covered}>
     <View style={styles.screen}>
@@ -930,7 +927,6 @@ function ChatContent({ chatId }: { chatId: string | undefined }) {
           </Animated.View>
         ) : null}
         <View style={[styles.footerInner, { paddingBottom: footerPad }]}>
-          {isPair ? null : <OutboundDraftDock rows={rows} connected={status === 'live'} actions={draftActions} />}
           {isPair || sessionDmAgent !== undefined ? (
             <View style={styles.pairFooter}>
               <View style={styles.pairNotice}>
@@ -1157,7 +1153,6 @@ function ChatContent({ chatId }: { chatId: string | undefined }) {
     </View>
     </TranscriptCovered.Provider>
     </AnswerChange.Provider>
-    </OutboundDockProvider>
     </SubagentLaunchesContext.Provider>
     </SubagentDirectory.Provider>
   )

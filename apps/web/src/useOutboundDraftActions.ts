@@ -19,7 +19,7 @@ export function useOutboundDraftActions(manor: OutboundCommands, threads: Worksp
       let actions = cached.get(chatId)
       if (actions === undefined) {
         actions = {
-          onSubmit: (draftId, body, subject, slackRichText) => submitOutboundDraft(chatId, draftId, body, subject, slackRichText),
+          onSubmit: (draftId, body, subject, slackRichText, cc) => submitOutboundDraft(chatId, draftId, body, subject, slackRichText, cc),
           onDiscard: (draftId) => discardOutboundDraft(chatId, draftId),
           onSnooze: (draftId, until) => snoozeOutboundDraft(chatId, draftId, until),
           onIgnore: (draftId) => ignoreOutboundDraft(chatId, draftId),

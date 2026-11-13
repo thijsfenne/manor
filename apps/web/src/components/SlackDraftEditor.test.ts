@@ -38,7 +38,7 @@ describe('Slack draft card', () => {
     act(() => card.unmount())
     card = mount(createElement(OutboundDraftBubble, props))
     expect(card.root.findByType(SlackDraftEditor).props.document).toEqual(document)
-    act(() => card.root.findByProps({ 'aria-label': 'Submit', type: 'button' }).props.onClick())
+    act(() => card.root.findByProps({ 'aria-label': 'Send', type: 'button' }).props.onClick())
     expect(onSubmit).toHaveBeenCalledWith('format-test', slackRichTextFallback(document), undefined, document)
   })
 
@@ -46,7 +46,7 @@ describe('Slack draft card', () => {
     const card = mount(createElement(OutboundDraftBubble, { draft: { key: 'test', draftId: 'format-test', channel: 'slack', to: 'Self', slackChannelId: 'D12345678', body: 'Hello' }, color: 'currentColor', actions: { onSubmit: () => true } }))
     for (const text of ['\n', 'x'.repeat(20001)]) {
       act(() => card.root.findByType(SlackDraftEditor).props.onChange({ type: 'rich_text', elements: [{ type: 'rich_text_section', elements: [{ type: 'text', text }] }] }))
-      expect(card.root.findByProps({ 'aria-label': 'Submit', type: 'button' }).props.disabled).toBe(true)
+      expect(card.root.findByProps({ 'aria-label': 'Send', type: 'button' }).props.disabled).toBe(true)
     }
   })
 

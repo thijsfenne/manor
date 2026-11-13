@@ -608,6 +608,26 @@ function connectScriptFor(input: TurnInput, request: typeof fetch): MockWorkStep
   }
 }
 
+/**
+ * Spike-only: a draft line goes through the real prepare endpoint, as
+ * prepare_outbound_draft would, so the connection check and its connect card run. Without
+ * the endpoint (unit tests) the plain reply below still emits the draft as a stream event.
+ */
+function draftScriptFor(input: TurnInput, request: typeof fetch): MockWorkStep | undefined {
+  const draft = parseOutboundDraftIntent(lastUserLine(input))
+  const endpoint = manorEndpoint(input, 'prepare_outbound_draft', '--draft-url')
+  if (draft === undefined || endpoint === undefined) return undefined
+  return {
+    tool: 'mcp__manor__prepare_outbound_draft',
+    run: async (signal) => {
+      const payload = await postManor(request, endpoint, draft, signal)
+      return typeof payload.note === 'string' && payload.draftId === undefined
+        ? payload.note
+        : draft.channel === 'gmail' ? 'Here is the mail. Check it and send it when it reads right.' : 'Here is the Slack message.'
+    },
+  }
+}
+
 function projectScriptFor(input: TurnInput, request: typeof fetch): MockWorkStep | undefined {
   const text = lastUserLine(input)
   const ask = /\bmock ask:\s*([^|\n]+)\|([^\n]+)/i.exec(text)
@@ -862,6 +882,7 @@ export function createMockDriver(options: MockDriverOptions = {}): Driver {
       const workStep = delegations.length > 0 ? undefined : workScriptFor(input, options.request ?? fetch) ??
         projectScriptFor(input, options.request ?? fetch) ??
         connectScriptFor(input, options.request ?? fetch) ??
+        draftScriptFor(input, options.request ?? fetch) ??
         secretScriptFor(input, options.request ?? fetch) ??
         loginFillFor(input, options.request ?? fetch)
 
@@ -1349,10 +1370,7 @@ export function createMockDriver(options: MockDriverOptions = {}): Driver {
           queue.push({
             type: 'outbound_draft',
             draftId: `mock-${input.threadId}-${agent.id}`,
-            channel: draft.channel,
-            to: draft.to,
-            ...(draft.subject === undefined ? {} : { subject: draft.subject }),
-            body: draft.body,
+            ...draft,
           })
         }
         queue.push({ type: 'message', messageId, text: deltas.join('') })

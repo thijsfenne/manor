@@ -1,14 +1,46 @@
 import type { ComposioAlias, ComposioApp, ComposioConnectedApp, McpServerConfig } from '@manor/contracts'
 import type { ComposioMarketplacePorts } from './composioMarketplace.js'
-import type { ComposioConnectState } from './mcp/composioRegistration.js'
+import type { ComposioConnectState, ComposioExecution } from './mcp/composioRegistration.js'
+import type { ComposioOutbound } from './outboundSend.js'
 import { COMPOSIO_MCP_NAME, composioApiKeyEnv } from './mcp/composioAttachment.js'
 import { fetchComposioCatalog } from './mcp/composioCatalog.js'
 import {
   composioSessionId,
+  composioToolkitAccounts,
   createComposioConnectLink,
   disconnectComposioApp,
+  executeComposioTool,
   listComposioConnectedApps,
 } from './mcp/composioRegistration.js'
+
+/**
+ * A send only ever leaves from the personal account, the alias its connect card makes.
+ * Falling back to a work account would send from an address the card never showed.
+ */
+const SEND_ALIAS = 'personal'
+
+/** Composio sending on this host's key; nothing here runs inside an agent's turn. */
+export function liveComposioOutbound(env: NodeJS.ProcessEnv = process.env): ComposioOutbound {
+  const apiKey = () => {
+    const name = composioApiKeyEnv(env)
+    const value = name === undefined ? undefined : env[name]
+    return value === undefined || value.length === 0 ? undefined : value
+  }
+  return {
+    available: () => apiKey() !== undefined,
+    account: async (toolkit) => {
+      const key = apiKey()
+      if (key === undefined) return undefined
+      const accounts = await composioToolkitAccounts(key, toolkit)
+      return accounts.find((account) => account.alias === SEND_ALIAS)?.id
+    },
+    execute: async (toolSlug, accountId, arguments_) => {
+      const key = apiKey()
+      if (key === undefined) return { status: 'refused', message: 'The Composio API key is missing on this Manor host.' }
+      return executeComposioTool(key, toolSlug, accountId, arguments_)
+    },
+  }
+}
 
 /** Composio's API with this host's key; links belong to the registered row's session. */
 export function liveComposioMarketplacePorts(
@@ -35,6 +67,8 @@ export function liveComposioMarketplacePorts(
 
 export interface MockComposio {
   ports: ComposioMarketplacePorts
+  /** Sending through the mock accounts: nothing leaves, a recipient containing "uncertain" never confirms. */
+  outbound: ComposioOutbound
   /** Where a mock account's sign-in stands, for the spike's connect-card poller. */
   accountState: (accountId: string) => ComposioConnectState | undefined
 }
@@ -118,8 +152,19 @@ export function mockComposio(delayMs = 6_000): MockComposio {
       .sort(([left], [right]) => left.localeCompare(right))
       .map(([toolkit, aliases]) => ({ toolkit, aliases: [...aliases].sort() }))
   }
+  const execute = async (toolSlug: string, _accountId: string, arguments_: Record<string, unknown>): Promise<ComposioExecution> => {
+    if (toolSlug === 'GMAIL_GET_PROFILE') return { status: 'ok', data: { emailAddress: 'you@example.com' } }
+    if (JSON.stringify(arguments_).includes('uncertain')) return { status: 'unknown', message: 'the mock connection dropped before an answer' }
+    return { status: 'ok', data: {} }
+  }
   return {
     accountState,
+    outbound: {
+      available: () => true,
+      account: async (toolkit) => [...accounts.entries()]
+        .find(([id, account]) => account.toolkit === toolkit && account.alias === SEND_ALIAS && accountState(id)?.status === 'active')?.[0],
+      execute,
+    },
     ports: {
       catalog: async () => apps,
       connectedApps: async () => connectedApps(),

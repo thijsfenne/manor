@@ -118,7 +118,7 @@ export interface WorkspaceActions {
   answerSecretRequest: (chatId: string, requestId: string, value?: string) => boolean
   /** Replaces an answer the project thread gave a Session from a preference; his message reaches the Session. */
   changeSessionAnswer: (threadChatId: string, requestId: string, answers: UserInputAnswers) => boolean
-  submitOutboundDraft: (chatId: string, draftId: string, body: string, subject?: string, slackRichText?: SlackRichText) => boolean
+  submitOutboundDraft: (chatId: string, draftId: string, body: string, subject?: string, slackRichText?: SlackRichText, cc?: string) => boolean
   discardOutboundDraft: (chatId: string, draftId: string) => boolean
   snoozeOutboundDraft: (chatId: string, draftId: string, until: number) => boolean
   ignoreOutboundDraft: (chatId: string, draftId: string) => boolean
@@ -557,8 +557,8 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   )
 
   const submitOutboundDraft = useCallback(
-    (chatId: string, draftId: string, body: string, subject?: string, slackRichText?: SlackRichText) =>
-      send({ type: 'submit_outbound_draft', chatId, draftId, body, ...(subject === undefined ? {} : { subject }), ...(slackRichText === undefined ? {} : { slackRichText }) }),
+    (chatId: string, draftId: string, body: string, subject?: string, slackRichText?: SlackRichText, cc?: string) =>
+      send({ type: 'submit_outbound_draft', chatId, draftId, body, ...(subject === undefined ? {} : { subject }), ...(slackRichText === undefined ? {} : { slackRichText }), ...(cc === undefined ? {} : { cc }) }),
     [send],
   )
 

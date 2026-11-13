@@ -26,7 +26,7 @@ export function SlackDraftPreview({ document }: { document: SlackRichText }) {
 const inlineTools = [ ['bold', 'Bold', TextBoldIcon], ['italic', 'Italic', TextItalicIcon], ['strike', 'Strikethrough', TextStrikethroughIcon], ['code', 'Inline code', CodeIcon] ] as const
 const blockTools = [ ['bullet', 'Bullet list', LeftToRightListBulletIcon], ['ordered', 'Numbered list', LeftToRightListNumberIcon], ['quote', 'Quote', LeftToRightBlockQuoteIcon], ['code', 'Code block', CodeSquareIcon] ] as const
 
-export function SlackDraftEditor({ body, document, onChange, maxInputHeight = outboundLayout.inputMaxHeight, onInputHeight }: { body: string; document?: SlackRichText; onChange: (document: SlackRichText) => void; maxInputHeight?: number; onInputHeight?: (height: number) => void }) {
+export function SlackDraftEditor({ body, document, onChange }: { body: string; document?: SlackRichText; onChange: (document: SlackRichText) => void }) {
   const [state, setState] = useState(() => createDraftEditor(body, document))
   const [link, setLink] = useState<{ selection: DraftSelection; url: string } | null>(null)
   const [resume, setResume] = useState<DraftSelection | null>(null)
@@ -71,7 +71,7 @@ export function SlackDraftEditor({ body, document, onChange, maxInputHeight = ou
         {button('Cancel', () => setLink(null))}
       </View>
     </View>}
-    <ScrollView nestedScrollEnabled keyboardShouldPersistTaps="always" style={{ maxHeight: Math.min(outboundLayout.inputMaxHeight, maxInputHeight) }} contentContainerStyle={styles.content} onLayout={(event) => onInputHeight?.(event.nativeEvent.layout.height)}>
+    <ScrollView nestedScrollEnabled keyboardShouldPersistTaps="always" style={{ maxHeight: outboundLayout.inputMaxHeight }} contentContainerStyle={styles.content}>
         {state.blocks.map((row, index) => <View key={row.id} style={[styles.row, { marginLeft: row.indent * spacing.xl }, row.kind === 'quote' && styles.quote, row.kind === 'code' && styles.codeBlock]}>
           {row.kind === 'bullet' || row.kind === 'ordered' ? <Text style={styles.marker}>{row.kind === 'bullet' ? '•' : `${row.number}.`}</Text> : null}
           <TextInput
@@ -100,7 +100,7 @@ export function SlackDraftEditor({ body, document, onChange, maxInputHeight = ou
           change(commitDraftEdit(state, state.blocks.map((row, i) => i >= state.selection.block && row.group === current.group ? { ...row, number: row.number + number - current.number } : row)), false)
         }} /></View>}
     </ScrollView>
-    {!valid && <Text accessibilityLiveRegion="polite" style={styles.note}>{state.blocks.every((row) => !blockText(row).trim()) ? 'Write a message to enable Submit.' : 'This message exceeds Slack’s formatting limits. Shorten it before submitting.'}</Text>}
+    {!valid && <Text accessibilityLiveRegion="polite" style={styles.note}>{state.blocks.every((row) => !blockText(row).trim()) ? 'Write a message to enable Send.' : 'This message exceeds Slack’s formatting limits. Shorten it before sending.'}</Text>}
   </View>
 }
 const styles = StyleSheet.create({

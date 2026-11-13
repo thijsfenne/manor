@@ -235,6 +235,7 @@ export function createTurnStream({
                 channel: event.channel,
                 to: event.to,
                 ...(event.subject === undefined ? {} : { subject: event.subject }),
+                ...(event.cc === undefined ? {} : { cc: event.cc }),
                 body: event.body,
                 ...(event.mailAccount === undefined ? {} : { mailAccount: event.mailAccount }),
                 ...(event.slackChannelId === undefined ? {} : { slackChannelId: event.slackChannelId }),
@@ -261,6 +262,9 @@ export function createTurnStream({
                 to: draft.data.to,
                 ...(draft.data.channel === 'gmail' && draft.data.subject !== undefined && draft.data.subject !== ''
                   ? { subject: draft.data.subject }
+                  : {}),
+                ...(draft.data.channel === 'gmail' && draft.data.cc !== undefined && draft.data.cc.trim() !== ''
+                  ? { cc: draft.data.cc.trim() }
                   : {}),
                 ...(draft.data.channel === 'gmail'
                   ? { mailAccount: draft.data.mailAccount ?? 'personal' as const }

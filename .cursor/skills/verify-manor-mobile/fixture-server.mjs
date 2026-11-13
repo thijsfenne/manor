@@ -209,6 +209,14 @@ const directory = {
       preview: 'Vier bestanden aangepast.',
       minutesAgo: 3,
     }), mode: 'single' },
+    // Outbound mail cards: one sent with its confirmation, one discarded, one open.
+    { ...chat({
+      id: 'chat-mail-drafts',
+      projectId: 'project-manor',
+      title: 'Mail klaarzetten',
+      preview: 'Here is the mail. Check it and send it when it reads right.',
+      minutesAgo: 2,
+    }), mode: 'single' },
     // A Single Session the Notities thread started; the thread sent one of the user's messages on to it.
     { ...chat({
       id: 'chat-notes-session',
@@ -590,6 +598,34 @@ const snapshots = {
       ]),
       { id: 'df1', ts, type: 'agent_message', turnId, agentId, messageId: 'df-m1', text: 'Vier bestanden aangepast.' },
       { id: 'df2', ts: ts + 1, type: 'turn_result', turnId, agentId },
+    ]
+  })(),
+  // Three mail cards in three turns: an open draft with a Cc line, Sent with the
+  // persona's confirmation below it, and Discarded last, so the folds fill the first screen. Send and Discard are only acked here.
+  'chat-mail-drafts': (() => {
+    const agentId = '__single__'
+    const mail = (id, extra) => ({ draftId: id, channel: 'gmail', to: 'info@example.com', from: 'you@example.com', subject: 'Portfolio', body: 'Hi, here is the portfolio link you asked for.', ...extra })
+    const turn = (n, minutesAgo, ask, draft, after) => {
+      const ts = now - minutesAgo * 60_000
+      const turnId = `turn-mail-${n}`
+      return [
+        { id: `md${n}-u`, ts, type: 'user_message', text: ask, mentions: [] },
+        { id: `md${n}-d`, ts: ts + 1, type: 'outbound_draft', turnId, agentId, ...draft },
+        { id: `md${n}-m`, ts: ts + 2, type: 'agent_message', turnId, agentId, messageId: `md${n}-m`, text: 'Here is the mail. Check it and send it when it reads right.' },
+        { id: `md${n}-r`, ts: ts + 3, type: 'turn_result', turnId, agentId },
+        ...after(ts, turnId),
+      ]
+    }
+    const closed = (id, ts, turnId, draft, extra) => ({ id, ts, type: 'outbound_draft_closed', turnId, agentId, draftId: draft.draftId, channel: 'gmail', to: draft.to, subject: draft.subject, body: draft.body, ...extra })
+    const sent = mail('draft-sent', { cc: 'sam@example.com' })
+    const dropped = mail('draft-dropped', { subject: 'Thursday', body: 'Can we move Thursday to ten?' })
+    return [
+      ...turn(1, 8, 'Draft a thank-you to info@example.com, cc Sam.', mail('draft-open', { subject: 'Thank you', cc: 'sam@example.com', body: 'Thanks for the call today. I will send the case study by Friday.' }), () => []),
+      ...turn(2, 5, 'Mail info@example.com the portfolio link, cc Sam.', sent, (ts, turnId) => [
+        closed('md2-c', ts + 30_000, turnId, sent, { outcome: 'submitted', delivery: 'delivered', cc: sent.cc }),
+        { id: 'md2-s', ts: ts + 30_001, type: 'agent_message', turnId, agentId, messageId: 'md2-s', text: 'Sent to info@example.com.' },
+      ]),
+      ...turn(3, 2, 'Ask info@example.com to move Thursday.', dropped, (ts, turnId) => [closed('md3-c', ts + 20_000, turnId, dropped, { outcome: 'discarded' })]),
     ]
   })(),
   'chat-single-notes': [

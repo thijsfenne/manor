@@ -55,9 +55,7 @@ import { SubagentView } from './SubagentView'
 import { SubagentDirectory } from '../subagentContext'
 import { Icon } from './Icon'
 import { IconButton } from './ui/IconButton'
-import { OutboundDraftDock } from './OutboundDraftDock'
 import type { DraftActions } from './OutboundDraftBubble'
-import { OutboundDockProvider } from './outboundDockState'
 import { RepoFileLinkProvider } from './RepoFileLink'
 import { ComposerAutoRow } from './NewChatModeControl'
 import { RuntimeControls } from './RuntimeControls'
@@ -576,7 +574,6 @@ export function ChatPane({
 
   return (
     <SubagentDirectory.Provider value={directory}>
-    <OutboundDockProvider rows={rows} enabled={chat.kind !== 'pair'}>
       <RepoFileLinkProvider
         {...(canBrowseFiles && composerFiles !== undefined ? { files: composerFiles.files } : {})}
         open={onOpenFile ?? (() => {})}
@@ -736,7 +733,6 @@ export function ChatPane({
               </div>
             ) : (
               <>
-                <OutboundDraftDock rows={rows} agents={workspace.agents} connected={status === 'live'} actions={outboundActions} />
                 <AskDock
                   rows={rows}
                   agents={workspace.agents}
@@ -788,7 +784,6 @@ export function ChatPane({
       </div>
       </div>
       </RepoFileLinkProvider>
-    </OutboundDockProvider>
     </SubagentDirectory.Provider>
   )
 }

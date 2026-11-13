@@ -108,7 +108,7 @@ const secretTool = (mode: AskMode) => ({
 const draftTool = {
   name: 'prepare_outbound_draft',
   description:
-    'Add an editable Gmail or Slack draft to the chat. This does not send anything. For replies, pass the exact thread metadata returned by the mail or Slack read tool so Later and Ignore remain durable.',
+    'Add an editable Gmail or Slack draft to the chat. This does not send anything. For replies, pass the exact thread metadata returned by the mail or Slack read tool so Later and Ignore remain durable. When nothing on this Manor can send on that channel yet, the chat shows a connect card instead and no draft is added; prepare it again once the user has connected.',
   inputSchema: {
     type: 'object',
     properties: {
@@ -123,6 +123,11 @@ const draftTool = {
         type: 'string',
         maxLength: OUTBOUND_DRAFT_SUBJECT_MAX,
         description: 'Gmail subject. Omit for Slack.',
+      },
+      cc: {
+        type: 'string',
+        maxLength: OUTBOUND_DRAFT_TO_MAX,
+        description: 'Gmail Cc, comma-separated addresses. Omit for Slack.',
       },
       body: {
         type: 'string',

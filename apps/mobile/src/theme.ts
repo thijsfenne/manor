@@ -189,5 +189,5 @@ export const tracking = {
   body: -0.3,
 } as const
 
-/** Draft content yields space to its toolbar and send actions. */
-export const outboundLayout = { dockFraction: 0.45, inputMaxHeight: 256 } as const
+/** Tallest the Slack draft editor grows before it scrolls inside its card. */
+export const outboundLayout = { inputMaxHeight: 256 } as const

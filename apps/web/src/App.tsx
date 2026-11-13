@@ -13,7 +13,6 @@ import { DestinationView, isDestinationView } from './components/workspace/Desti
 import { SettingsLayer, useSettingsDoors } from './components/workspace/SettingsLayer'
 import { WorkspaceDialogs } from './components/workspace/WorkspaceDialogs'
 import { WorkspaceNavRail } from './components/workspace/WorkspaceNavRail'
-import { OutboundDockProvider } from './components/outboundDockState'
 import { ExternalLinkProvider } from './components/ExternalLink'
 import { Login } from './components/Login'
 import { Onboarding } from './components/onboarding/Onboarding'
@@ -660,7 +659,6 @@ function Workspace({
 
   return (
     <LiveWorkspaceProvider live={manor.live}>
-    <OutboundDockProvider rows={rows} enabled={open !== null && open.kind !== 'pair'}>
     <ExternalLinkProvider open={openWebsiteUrl}>
     <AutoRulesConfigProvider open={openAutoRules}>
       <FileMarkSprite />
@@ -895,7 +893,6 @@ function Workspace({
       </RepoFileLinkProvider>
     </AutoRulesConfigProvider>
     </ExternalLinkProvider>
-    </OutboundDockProvider>
     </LiveWorkspaceProvider>
   )
 }

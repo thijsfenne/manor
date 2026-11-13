@@ -589,3 +589,67 @@ export function composioRuntimeUnchanged(existing: McpServerConfig, apiKeyEnv: s
     JSON.stringify(existing.httpHeaders ?? []) === JSON.stringify([{ name: 'x-api-key', envKey: apiKeyEnv }])
   )
 }
+
+/** This host's active accounts of one app with their alias, for a call Manor makes itself. */
+export async function composioToolkitAccounts(
+  apiKey: string,
+  toolkit: string,
+  request: typeof fetch = fetch,
+): Promise<{ id: string; alias: string | null }[]> {
+  return (await listComposioAccounts(apiKey, request, toolkit))
+    .filter((account) => account.toolkit === toolkit && account.userId === COMPOSIO_USER_ID && account.status === 'ACTIVE')
+    .map(({ id, alias }) => ({ id, alias }))
+}
+
+const COMPOSIO_TOOLS_EXECUTE_ENDPOINT = 'https://backend.composio.dev/api/v3.1/tools/execute'
+const COMPOSIO_EXECUTE_TIMEOUT_MS = 30_000
+
+/**
+ * How one server-side tool call ended. `refused` means Composio turned the request down
+ * before the tool ran, so nothing happened. `unknown` covers everything after that point:
+ * a dropped connection, a server error or a tool that reported failure may still have acted.
+ */
+export type ComposioExecution =
+  | { status: 'ok'; data: Record<string, unknown> }
+  | { status: 'refused'; message: string }
+  | { status: 'unknown'; message: string }
+
+/** One Composio tool on one connected account, outside any agent session. */
+/**
+ * Answers Composio gives before a tool runs: bad key, unknown tool or account, arguments
+ * that fail its schema. Any other status, a 400, 408 or 429 included, may come after the
+ * provider took the message, so a send treats it as unconfirmed.
+ */
+const COMPOSIO_REFUSED_BEFORE_RUN = new Set([401, 403, 404, 422])
+
+export async function executeComposioTool(
+  apiKey: string,
+  toolSlug: string,
+  accountId: string,
+  arguments_: Record<string, unknown>,
+  request: typeof fetch = fetch,
+): Promise<ComposioExecution> {
+  let response: Response
+  try {
+    response = await request(`${COMPOSIO_TOOLS_EXECUTE_ENDPOINT}/${encodeURIComponent(toolSlug)}`, {
+      method: 'POST',
+      signal: AbortSignal.timeout(COMPOSIO_EXECUTE_TIMEOUT_MS),
+      headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey },
+      body: JSON.stringify({ user_id: COMPOSIO_USER_ID, connected_account_id: accountId, arguments: arguments_ }),
+    })
+  } catch (error: unknown) {
+    return { status: 'unknown', message: error instanceof Error ? error.message : 'Composio did not answer.' }
+  }
+  if (COMPOSIO_REFUSED_BEFORE_RUN.has(response.status)) {
+    return { status: 'refused', message: await composioErrorText(response, `Composio refused ${toolSlug}`) }
+  }
+  if (!response.ok) return { status: 'unknown', message: `Composio answered HTTP ${response.status} for ${toolSlug}.` }
+  const json = await response.json().catch(() => undefined) as unknown
+  const row = typeof json === 'object' && json !== null ? json as Record<string, unknown> : undefined
+  if (row?.['successful'] !== true) {
+    const reason = typeof row?.['error'] === 'string' ? row['error'].slice(0, 200) : 'no confirmation'
+    return { status: 'unknown', message: `${toolSlug} did not confirm: ${reason}` }
+  }
+  const data = row['data']
+  return { status: 'ok', data: typeof data === 'object' && data !== null ? data as Record<string, unknown> : {} }
+}

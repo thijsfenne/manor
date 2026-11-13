@@ -1618,6 +1618,7 @@ function StandingSegment({
   if (segment.kind === 'draft') {
     return (
       <OutboundDraftGroup
+        bubble={bubble}
         color={color}
         connected={connected}
         drafts={segment.drafts}

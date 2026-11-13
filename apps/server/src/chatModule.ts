@@ -226,7 +226,7 @@ export class ChatModule {
         const drafts = this.options.outboundDrafts
         if (
           drafts === undefined
-          || !(await drafts.submit(message.chatId, message.draftId, message.body, message.subject, message.slackRichText))
+          || !(await drafts.submit(message.chatId, message.draftId, message.body, message.subject, message.slackRichText, message.cc))
         ) {
           reply({ type: 'notice', kind: 'error', text: 'That draft could not be submitted.' })
         }
