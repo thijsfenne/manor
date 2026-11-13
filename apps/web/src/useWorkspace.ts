@@ -343,8 +343,10 @@ export interface Manor {
    * roster for every client, or a notice to this one and a household unchanged.
    * Both return false when the socket was down and nothing went out, because the
    * dialog above them shows a pending state and a pending state must not lie.
+   * `interview` on a create opens the new agent's DM on the interview that writes its
+   * instructions.
    */
-  saveAgent: (agent: AgentDraft, requestId: string) => boolean
+  saveAgent: (agent: AgentDraft, requestId: string, interview?: boolean) => boolean
   deleteAgent: (agentId: string, requestId: string) => boolean
   saveMcpServer: (server: McpServerDraft, requestId: string) => boolean
   verifyMcpServer: (serverId: string, requestId: string) => boolean
@@ -1553,9 +1555,9 @@ export function useWorkspace(url: string, auth?: WorkspaceAuth): Manor {
   // Same rule as createProject: the old answer was about the draft as it was, and
   // a refusal left over from the previous Save would read as this one's.
   const saveAgent = useCallback(
-    (agent: AgentDraft, requestId: string) => {
+    (agent: AgentDraft, requestId: string, interview = false) => {
       setWorkspace(clearNotice)
-      return send({ type: 'save_agent', agent, requestId })
+      return send({ type: 'save_agent', agent, requestId, ...(interview ? { interview: true as const } : {}) })
     },
     [send],
   )

@@ -232,6 +232,8 @@ export interface TurnRequest {
    * a background wake there, which is not the user's message and holds none of their tools.
    */
   readonly projectThread?: { reason: 'user' | 'wake' | ProjectThreadReason }
+  /** A new agent's interview turn in its DM: offered `write_instructions`, which takes one write. */
+  readonly instructionsInterview?: true
 }
 
 export interface ActiveTurn {
@@ -1276,6 +1278,7 @@ export class TurnRunner {
       allowProjectReport: reportTargets,
       // A Session of a project with a thread; the tool itself checks the thread started it.
       allowSessionStatus: allowGoal && threadPaths !== undefined && !threadTurn,
+      ...(turn.instructionsInterview === true ? { allowInstructions: true } : {}),
       canApprove,
       ...(resolvedRelay === undefined ? {} : { relay: resolvedRelay }),
     })

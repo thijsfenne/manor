@@ -8,6 +8,7 @@ export const INTERACTION_TOOL_NAMES = [
   'delegate_task', 'task_result', 'task_cancel', 'subagent_capabilities',
   'deliver_file', 'goal_reached', 'review_passed',
   'update_project_file', 'answer_session_question', 'report_to_project', 'send_to_session', 'set_session_status',
+  'write_instructions',
 ] as const
 export const SUBAGENT_TOOLS = ['delegate_task', 'task_result', 'task_cancel', 'subagent_capabilities'] as const
 
@@ -40,6 +41,7 @@ export function interactionMcpAttachment(
     goalBrokerUrl?: string
     secretBrokerUrl?: string
     projectBrokerUrl?: string
+    instructionsBrokerUrl?: string
     allowAsk?: boolean
     /** A turn with the user present, outside a project thread's own decisions: the secret card. */
     allowSecret?: boolean
@@ -68,6 +70,8 @@ export function interactionMcpAttachment(
     allowProjectReport?: boolean
     /** The goal turn of a Session in a project with a thread writes its own notes.md line. */
     allowSessionStatus?: boolean
+    /** Only a new agent's interview turn writes its instructions, once. */
+    allowInstructions?: boolean
     relayMode?: 'async' | 'sync'
   } = {},
 ): AttachedMcpServer {
@@ -80,6 +84,7 @@ export function interactionMcpAttachment(
   const goalUrl = runtime.goalBrokerUrl ?? brokerUrl.replace(/\/internal\/user-input$/, '/internal/goal-claims')
   const secretUrl = runtime.secretBrokerUrl ?? brokerUrl.replace(/\/internal\/user-input$/, '/internal/secret-request')
   const projectUrl = runtime.projectBrokerUrl ?? brokerUrl.replace(/\/internal\/user-input$/, '/internal/project-thread')
+  const instructionsUrl = runtime.instructionsBrokerUrl ?? brokerUrl.replace(/\/internal\/user-input$/, '/internal/agent-instructions')
   const enabledTools = [
     ...(runtime.allowAsk === false ? [] : ['ask_user']),
     ...(runtime.allowSecret === true ? ['request_secret'] : []),
@@ -94,6 +99,7 @@ export function interactionMcpAttachment(
     ...(runtime.allowSessionForward === true ? ['send_to_session'] : []),
     ...(runtime.allowProjectReport === true ? ['report_to_project'] : []),
     ...(runtime.allowSessionStatus === true ? ['set_session_status'] : []),
+    ...(runtime.allowInstructions === true ? ['write_instructions'] : []),
   ]
   return {
     server: {
@@ -118,6 +124,7 @@ export function interactionMcpAttachment(
         projectUrl,
         '--secret-url',
         secretUrl,
+        ...(runtime.allowInstructions === true ? ['--instructions-url', instructionsUrl] : []),
         ...(runtime.allowRelay === true ? ['--relay-mode', runtime.relayMode ?? 'async'] : []),
         ...((runtime.allowAsk !== false || runtime.allowSecret === true) && runtime.askMode === 'deferred' ? ['--ask-mode', 'deferred'] : []),
         ...enabledTools.flatMap((tool) => ['--tool', tool]),
@@ -139,6 +146,7 @@ export function interactionMcpAttachment(
         ...(runtime.allowSessionForward === true ? ['Send the user\'s follow-up on to the Session it is about with send_to_session.'] : []),
         ...(runtime.allowProjectReport === true ? ['Report a preference to its project thread with report_to_project.'] : []),
         ...(runtime.allowSessionStatus === true ? ['Keep this Session\'s status line in notes.md with set_session_status.'] : []),
+        ...(runtime.allowInstructions === true ? ['Write your own instructions once, after the interview, with write_instructions.'] : []),
       ].join(' '),
       writes: false,
       effectPolicy: 'trusted',

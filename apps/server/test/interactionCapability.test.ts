@@ -76,6 +76,15 @@ describe('UserInputCapabilities', () => {
     expect(() => capabilities.take(token, 'relay')).toThrow(InvalidUserInputCapabilityError)
   })
 
+  it('lets only an interview turn write instructions', () => {
+    const capabilities = new UserInputCapabilities()
+    const ordinary = capabilities.issue(context, 'ordinary')
+    const interview = capabilities.issue({ ...context, turnId: 'turn_2', mayWriteInstructions: true }, 'interview')
+
+    expect(() => capabilities.take(ordinary, 'instructions')).toThrow('only the user changes them')
+    expect(capabilities.take(interview, 'instructions').turnId).toBe('turn_2')
+  })
+
   it('refuses empty and unknown capabilities', () => {
     const capabilities = new UserInputCapabilities()
 

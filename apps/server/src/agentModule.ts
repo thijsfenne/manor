@@ -1,5 +1,6 @@
 import type { AgentConfig, ClientMessage, ServerMessage, SkillConfig } from '@manor/contracts'
 import { checkAgentDraft } from './agentDraft.js'
+import { AgentInterviews, INSTRUCTIONS_CLOSED } from './agentInterview.js'
 import type { Store } from './store.js'
 
 type AgentMessage = Extract<ClientMessage, { type: 'save_agent' | 'delete_agent' }>
@@ -24,6 +25,8 @@ interface AgentModuleOptions {
   discardRoutineWork: (agentId: string) => Promise<string[]>
   broadcastRoutines: () => Promise<void>
   broadcastDirectory: () => Promise<void>
+  /** Opens a new chat agent's DM on the interview that writes its instructions. */
+  startInterview?: (agent: AgentConfig) => Promise<void>
   onChatsDeleted?: (chatIds: readonly string[]) => void
 }
 
@@ -32,6 +35,9 @@ interface AgentModuleOptions {
  * delete cascades and roster publication all cross this one interface.
  */
 export class AgentModule {
+  /** Open interviews, each the one path by which an agent writes its own instructions. */
+  readonly interviews = new AgentInterviews()
+
   constructor(private readonly options: AgentModuleOptions) {}
 
   document(): ServerMessage {
@@ -65,6 +71,10 @@ export class AgentModule {
           reply({ type: 'notice', kind: 'error', text: checked.message })
           return
         }
+        if (message.interview === true && (checked.draft.id !== undefined || checked.draft.placement === 'session')) {
+          reply({ type: 'notice', kind: 'error', text: 'Only a new chat agent starts with an interview.' })
+          return
+        }
         const skillIds = [...new Set(checked.draft.skillIds ?? [])]
         const unknownSkill = skillIds.find(
           (skillId) => !(this.options.skills?.() ?? []).some((skill) => skill.id === skillId),
@@ -82,8 +92,12 @@ export class AgentModule {
             return
           }
         }
-        await this.options.store.saveAgent({ ...checked.draft, skillIds })
+        const saved = await this.options.store.saveAgent({ ...checked.draft, skillIds })
         await this.reload()
+        // The agent stands on its starter instructions either way, so a failed start costs only the interview.
+        if (message.interview === true) {
+          await this.options.startInterview?.(saved).catch((error: unknown) => console.warn('[manor] the interview could not start', error))
+        }
         ack()
         return
       }
@@ -106,6 +120,24 @@ export class AgentModule {
         return
       }
     }
+  }
+
+  /**
+   * The interview's one write of the agent's instructions (agent setup 2/4). Refused unless
+   * the agent's interview is open; the write closes it, so a second one is refused too.
+   */
+  async writeInstructions(agentId: string, instructions: string): Promise<void> {
+    const agent = this.options.agents().find((row) => row.id === agentId)
+    const kickoffId = agent === undefined ? undefined : this.interviews.claim(agentId)
+    if (agent === undefined || kickoffId === undefined) throw new Error(INSTRUCTIONS_CLOSED)
+    try {
+      await this.options.store.saveAgent({ ...agent, character: instructions })
+    } catch (error: unknown) {
+      // Nothing was written, so the interview keeps its one write; its turn's end still closes it.
+      this.interviews.begin(agentId, kickoffId)
+      throw error
+    }
+    await this.reload()
   }
 
   private publish(agents: readonly AgentConfig[]): void {

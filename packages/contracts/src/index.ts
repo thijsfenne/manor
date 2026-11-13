@@ -4388,7 +4388,9 @@ const ClientMessageWireSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('remove_project_thread'), ...optionalRequestId, projectId: z.string() }),
   // Create when the draft has no id, update when it has one. One message because it
   // is one form; the server checks the draft and answers a bad one with a `notice`.
-  z.object({ type: z.literal('save_agent'), agent: AgentDraftSchema, ...optionalRequestId }),
+  // `interview` only on a create of a chat agent: its DM opens with the interview that
+  // writes its instructions once.
+  z.object({ type: z.literal('save_agent'), agent: AgentDraftSchema, interview: z.literal(true).optional(), ...optionalRequestId }),
   z.object({ type: z.literal('delete_agent'), agentId: z.string(), ...optionalRequestId }),
   // The server probes before it saves, so a registry row always describes a server
   // that actually started on this machine with these env keys present.

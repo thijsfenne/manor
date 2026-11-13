@@ -201,10 +201,14 @@ export interface OrchestratorOptions {
       allowProjectReport?: boolean
       /** The goal turn of a Session in a project with a thread: `set_session_status`. */
       allowSessionStatus?: boolean
+      /** A new agent's interview turn: `write_instructions`; absent means off. */
+      allowInstructions?: boolean
       canApprove: boolean
       relay?: RelayTurnContext
     },
   ) => AttachedMcpServer
+  /** Whether this stored message starts the agent's interview turn, the only turn that writes its instructions. */
+  interviewKickoff?: (agentId: string, messageId: string) => boolean
   /** Create and update this persona's own schedules, offered only in a manual DM turn. */
   routineMcp?: (chatId: string, agent: AgentConfig, turnId: string) => AttachedMcpServer
   /**
@@ -2226,6 +2230,8 @@ export class Orchestrator {
         ...(chainWakes ? { wakes: true } : {}),
         ...(wakeRun ? { wakeRun: true } : {}),
         ...(origin?.source === 'background_wake' ? { backgroundWake: true as const } : {}),
+        ...(room?.kind === 'dm' && message.id !== undefined && this.options.interviewKickoff?.(next.agent.id, message.id) === true
+          ? { instructionsInterview: true as const } : {}),
       })
       if (outcome.kind === 'discarded') break
       // A child that ended during the turn and was never read wakes its persona now.

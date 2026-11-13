@@ -16,7 +16,7 @@ const PROVIDER_ORDER = PROVIDERS.map((option) => option.value).filter((driver) =
 export function NewAgentDialog({ agents, requestEvents, onSaveAgent, onCreated, onClose }: {
   agents: AgentConfig[]
   requestEvents: RequestEvents
-  onSaveAgent: (draft: AgentDraft, requestId: string) => boolean
+  onSaveAgent: (draft: AgentDraft, requestId: string, interview?: boolean) => boolean
   onCreated: (agentId: string) => void
   onClose: () => void
 }) {
@@ -39,7 +39,7 @@ export function NewAgentDialog({ agents, requestEvents, onSaveAgent, onCreated, 
     if (draft.name.trim() === '' || pending || before.current !== null) return
     setError(null)
     const ids = new Set(agents.map((agent) => agent.id))
-    const sent = start((requestId) => onSaveAgent(draftToCreate(draft), requestId), {
+    const sent = start((requestId) => onSaveAgent(draftToCreate(draft), requestId, true), {
       onAck: () => {
         before.current = ids
         setAcked(true)
@@ -56,7 +56,7 @@ export function NewAgentDialog({ agents, requestEvents, onSaveAgent, onCreated, 
         <NewAgentFields draft={draft} providers={PROVIDER_ORDER} disabled={busy} onChange={(next) => { setError(null); setDraft(next) }} />
         {error === null ? null : <p className="m-0 text-label text-danger" role="alert">{error}</p>}
         <div className="flex items-center gap-3">
-          <p className="m-0 min-w-0 flex-1 text-label text-dim">It starts with short instructions you can change in Settings.</p>
+          <p className="m-0 min-w-0 flex-1 text-label text-dim">Next it asks you a few questions and writes its own instructions.</p>
           <Button variant="ghost" onClick={onClose}>Cancel</Button>
           <Button type="submit" variant="primary" disabled={draft.name.trim() === '' || busy}>{busy ? 'Creating…' : 'Create agent'}</Button>
         </div>

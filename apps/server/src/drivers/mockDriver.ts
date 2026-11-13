@@ -303,6 +303,8 @@ interface MockWorkStep {
   /** A plan published before the step and never ticked further: the first done, the next in progress. */
   plan?: string[]
   run: (signal: AbortSignal) => Promise<string>
+  /** A second tool call after this one; its answer is the turn's reply. */
+  next?: MockWorkStep
 }
 
 const MOCK_RESULT_FILE = 'mock-result.md'
@@ -628,6 +630,53 @@ function draftScriptFor(input: TurnInput, request: typeof fetch): MockWorkStep |
   }
 }
 
+/**
+ * A new agent's interview: whenever the turn holds `write_instructions`, the mock asks
+ * three questions through the real ask broker, then writes instructions from the form and
+ * the answers it got. A skipped answer ("Skipped. …") adds nothing, so skipping them all
+ * leaves instructions built from the name and the job alone.
+ */
+function interviewScriptFor(input: TurnInput, request: typeof fetch): MockWorkStep | undefined {
+  const asker = manorEndpoint(input, 'ask_user', '--broker-url')
+  const writer = manorEndpoint(input, 'write_instructions', '--instructions-url')
+  if (asker === undefined || writer === undefined) return undefined
+  const { name, description } = input.agent
+  const questions = [
+    { id: 'focus', header: 'Focus', question: `What should ${name} help with most?`, options: [{ label: 'Planning my week' }, { label: 'Thinking through decisions' }, { label: 'Drafting messages' }] },
+    { id: 'tone', header: 'Tone', question: 'How should answers sound?', options: [{ label: 'Short and direct' }, { label: 'Warm and explanatory' }, { label: 'Formal' }] },
+    { id: 'never', header: 'Limits', question: `What should ${name} never do?`, options: [{ label: 'Send anything without asking' }, { label: 'Guess when unsure' }, { label: 'Use jargon' }] },
+  ]
+  const kept: string[] = []
+  return {
+    tool: 'mcp__manor__ask_user',
+    run: async (signal) => {
+      const payload = await postManor(request, asker, { questions }, signal)
+      const answers = (payload.answers ?? {}) as Record<string, unknown>
+      for (const { id, header } of questions) {
+        const answer = Array.isArray(answers[id]) ? (answers[id] as unknown[]).join(', ') : String(answers[id] ?? '')
+        if (answer !== '' && !answer.startsWith('Skipped')) kept.push(`- ${header}: ${answer}`)
+      }
+      return 'Answered.'
+    },
+    next: {
+      tool: 'mcp__manor__write_instructions',
+      run: async (signal) => {
+        const job = description.trim()
+        const instructions = [
+          `# ${name}`,
+          '',
+          `You are ${name}.${job === '' ? '' : ` You help with this: ${job}`}`,
+          ...(kept.length === 0 ? [] : ['', '## What the user asked for', ...kept]),
+        ].join('\n')
+        await postManor(request, writer, { instructions }, signal)
+        return kept.length === questions.length
+          ? 'My instructions are set. I left nothing out.'
+          : 'My instructions are set. I left out what you skipped and built that part on the form.'
+      },
+    },
+  }
+}
+
 function projectScriptFor(input: TurnInput, request: typeof fetch): MockWorkStep | undefined {
   const text = lastUserLine(input)
   const ask = /\bmock ask:\s*([^|\n]+)\|([^\n]+)/i.exec(text)
@@ -879,7 +928,8 @@ export function createMockDriver(options: MockDriverOptions = {}): Driver {
       const delegations = delegationsFor(input)
       const leaseCard = options.desktopCard === undefined ? undefined : leaseCardFor(input)
       // A scripted line inside a delegated task is the child's to run, not its parent's.
-      const workStep = delegations.length > 0 ? undefined : workScriptFor(input, options.request ?? fetch) ??
+      const workStep = delegations.length > 0 ? undefined : interviewScriptFor(input, options.request ?? fetch) ??
+        workScriptFor(input, options.request ?? fetch) ??
         projectScriptFor(input, options.request ?? fetch) ??
         connectScriptFor(input, options.request ?? fetch) ??
         draftScriptFor(input, options.request ?? fetch) ??
@@ -925,17 +975,21 @@ export function createMockDriver(options: MockDriverOptions = {}): Driver {
             })
             queue.push({ type: 'tool_result', toolCallId: 'mock-write', outcome: 'success' })
           }
-          queue.push({ type: 'tool_use', toolCallId: 'mock-work', tool: workStep.tool })
-          let answer: string
-          let outcome: 'success' | 'error' = 'success'
-          try {
-            answer = await workStep.run(controller.signal)
-          } catch (error: unknown) {
-            outcome = 'error'
-            answer = `The scripted step failed: ${error instanceof Error ? error.message : 'unknown error'}`
+          let answer = ''
+          for (let step: MockWorkStep | undefined = workStep, at = 0; step !== undefined; step = step.next, at += 1) {
+            const toolCallId = at === 0 ? 'mock-work' : `mock-work-${at}`
+            queue.push({ type: 'tool_use', toolCallId, tool: step.tool })
+            let outcome: 'success' | 'error' = 'success'
+            try {
+              answer = await step.run(controller.signal)
+            } catch (error: unknown) {
+              outcome = 'error'
+              answer = `The scripted step failed: ${error instanceof Error ? error.message : 'unknown error'}`
+            }
+            if (stopped) return
+            queue.push({ type: 'tool_result', toolCallId, outcome })
+            if (outcome === 'error') break
           }
-          if (stopped) return
-          queue.push({ type: 'tool_result', toolCallId: 'mock-work', outcome })
           queue.push({ type: 'message', messageId, text: answer })
           queue.push({
             type: 'result',

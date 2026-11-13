@@ -34,6 +34,7 @@ import {
   type PreferenceSource,
 } from '@manor/contracts'
 import { AgentModule } from './agentModule.js'
+import { interviewInstruction } from './agentInterview.js'
 import { ChatModule } from './chatModule.js'
 import type { GenerateChatTitle } from './chatTitle.js'
 import type { AdvanceChatSummary } from './chatSummary.js'
@@ -153,6 +154,8 @@ export interface ManorServiceOptions {
       mayForward?: boolean
       allowProjectReport?: boolean
       allowSessionStatus?: boolean
+      /** A new agent's interview turn: `write_instructions`. */
+      allowInstructions?: boolean
       canApprove: boolean
       relay?: RelayTurnContext
     },
@@ -360,6 +363,7 @@ export class ManorService {
       ...(options.providerUsage === undefined ? {} : { providerUsage: options.providerUsage }),
       ...(options.guardMcp === undefined ? {} : { guardMcp: options.guardMcp }),
       ...(options.interactionMcp === undefined ? {} : { interactionMcp: options.interactionMcp }),
+      interviewKickoff: (agentId, messageId) => this.agentModule.interviews.isKickoff(agentId, messageId),
       subagentPolicy: () => this.subagentPolicy,
       ...(options.subagentMcp === undefined ? {} : { subagentMcp: options.subagentMcp }),
       ...(options.routineMcp === undefined ? {} : { routineMcp: options.routineMcp }),
@@ -543,6 +547,7 @@ export class ManorService {
       discardRoutineWork: (agentId) => this.routineModule.discardAgentWork(agentId),
       broadcastRoutines: () => this.routineModule.broadcast(),
       broadcastDirectory: () => this.projectModule.broadcast(),
+      startInterview: (agent) => this.startInterview(agent),
       ...(options.onChatsDeleted === undefined ? {} : { onChatsDeleted: options.onChatsDeleted }),
     })
     this.connectionModule = new ConnectionModule({
@@ -659,6 +664,30 @@ export class ManorService {
       screenshots.push({ ...await readEvidenceImage(screenshot, worktrees), takenAt: (await stat(screenshot)).mtimeMs })
     }
     return this.orchestrator.recordGoalClaims(context, claims, report, screenshots)
+  }
+
+  /**
+   * Opens a new agent's DM on its interview: a model-only kickoff, run on the ordinary
+   * stored-message queue. The write path stays open until that turn ends.
+   */
+  private async startInterview(agent: AgentConfig): Promise<void> {
+    const { store } = this.options
+    const chat = await store.createChat({ kind: 'dm', memberIds: [agent.id] })
+    const event = await store.appendEvent(chat.id, {
+      type: 'user_message', text: '', instruction: interviewInstruction(agent), mentions: [], dispatchState: 'pending',
+    })
+    if (event.type !== 'user_message') throw new Error('Could not store the interview kickoff.')
+    const { interviews } = this.agentModule
+    interviews.begin(agent.id, event.id)
+    await this.projectModule.broadcast()
+    void this.orchestrator.runStoredUserMessage(chat.id, event)
+      .catch((error: unknown) => console.warn('[manor] the interview turn failed', error))
+      .finally(() => interviews.end(agent.id, event.id))
+  }
+
+  /** The interview's `write_instructions`; refused once written or outside that turn. */
+  writeInstructions(context: UserInputContext, instructions: string): Promise<void> {
+    return this.agentModule.writeInstructions(context.agentId, instructions)
   }
 
   /** A persona's live session reported something between its turns. */

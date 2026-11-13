@@ -144,6 +144,7 @@ import { HttpConnector } from './mcp/httpConnector.js'
 import { McpHttpHost, connectorEndpoint } from './mcp/httpHost.js'
 import { USER_INPUT_CAPABILITY_ENV, askModeFor, interactionMcpAttachment } from './mcp/interactionAttachment.js'
 import { interactionMcpServer } from './mcp/interactionServer.js'
+import { answerInstructionsCall } from './agentInterview.js'
 import { FileDeliveryError } from './fileDelivery.js'
 import { ROUTINE_BROKER_CAPABILITY_ENV, routineMcpAttachment } from './mcp/routineAttachment.js'
 import { routineMcpServer } from './mcp/routineServer.js'
@@ -957,6 +958,7 @@ async function main(): Promise<void> {
         ...(permissions?.commandCwd === undefined ? {} : { commandCwd: permissions.commandCwd }),
         ...(permissions?.mayForward === true ? { mayForward: true as const } : {}),
         ...(permissions?.mayAnswer === true ? { mayAnswer: true as const } : {}),
+        ...(permissions?.allowInstructions === true ? { mayWriteInstructions: true as const } : {}),
         ...(permissions?.allowRelay === true && permissions.relay !== undefined
           ? { relay: permissions.relay }
           : {}),
@@ -976,6 +978,7 @@ async function main(): Promise<void> {
         allowSessionForward: permissions?.allowSessionForward ?? false,
         allowProjectReport: permissions?.allowProjectReport ?? false,
         allowSessionStatus: permissions?.allowSessionStatus ?? false,
+        allowInstructions: permissions?.allowInstructions ?? false,
         relayMode: permissions?.relay?.depth === 0 ? 'async' : 'sync',
         relayBrokerUrl: agentRelayBrokerUrl,
         subagentBrokerUrl,
@@ -1369,6 +1372,10 @@ async function main(): Promise<void> {
     }
     if (request.url === '/internal/project-thread') {
       void handleProjectThreadRequest(request, response, service, userInputCapabilities)
+      return
+    }
+    if (request.url === '/internal/agent-instructions') {
+      void handleInstructionsRequest(request, response, service, userInputCapabilities)
       return
     }
     if (request.url === '/internal/subagent') {
@@ -2295,6 +2302,28 @@ const ProjectThreadRequestSchema = z.discriminatedUnion('action', [
     status: z.string().trim().min(1).max(300),
   }),
 ])
+
+/** A new agent's `write_instructions`, the interview's one write. */
+async function handleInstructionsRequest(
+  request: IncomingMessage,
+  response: ServerResponse,
+  service: ManorService,
+  capabilities: UserInputCapabilities,
+): Promise<void> {
+  if (request.method !== 'POST' || !isLoopback(request.socket.remoteAddress)) {
+    json(response, 404, { error: 'Not found.' })
+    return
+  }
+  try {
+    const body = await readJsonBody(request)
+    const header = request.headers['x-manor-user-input-capability']
+    const answer = await answerInstructionsCall(capabilities, (context, instructions) => service.writeInstructions(context, instructions),
+      Array.isArray(header) ? header[0] : header, body)
+    json(response, answer.status, answer.payload)
+  } catch {
+    json(response, 400, { error: 'Invalid instructions call.' })
+  }
+}
 
 async function handleProjectThreadRequest(
   request: IncomingMessage,

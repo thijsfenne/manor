@@ -18,6 +18,8 @@ export interface UserInputContext {
   mayAnswer?: true
   /** Where a secret card's command runs. Absent for a persona without a shell. */
   commandCwd?: string
+  /** Only a new agent's interview turn: `write_instructions`, which its open interview takes once. */
+  mayWriteInstructions?: true
   relay?: {
     originChatId: string
     originTurnId: string
@@ -44,12 +46,15 @@ export class UserInputCapabilities {
     return token
   }
 
-  take(token: string | undefined, use: 'ask' | 'draft' | 'relay' | 'subagent' | 'deliver' | 'goal' | 'project' = 'ask'): UserInputContext {
+  take(token: string | undefined, use: 'ask' | 'draft' | 'relay' | 'subagent' | 'deliver' | 'goal' | 'project' | 'instructions' = 'ask'): UserInputContext {
     if (token === undefined || token === '') throw new InvalidUserInputCapabilityError()
     const capability = this.entries.get(token)
     if (capability === undefined) {
       this.entries.delete(token)
       throw new InvalidUserInputCapabilityError()
+    }
+    if (use === 'instructions' && capability.mayWriteInstructions !== true) {
+      throw new Error('Only a new agent\'s interview writes its instructions; after that only the user changes them.')
     }
     if (use === 'ask' && capability.askCalls >= USER_INPUT_CALL_LIMIT) {
       throw new Error(`Ask-user budget exhausted after ${USER_INPUT_CALL_LIMIT} questions.`)

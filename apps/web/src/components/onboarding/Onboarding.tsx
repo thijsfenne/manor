@@ -36,7 +36,7 @@ export interface OnboardingProps {
   onSignIn: (provider: Provider) => void
   onCancelSignIn: (provider: Provider) => void
   onInstall: (provider: Provider) => void
-  onSaveAgent: (draft: AgentDraft, requestId: string) => boolean
+  onSaveAgent: (draft: AgentDraft, requestId: string, interview?: boolean) => boolean
 }
 
 /**
@@ -82,7 +82,7 @@ export function Onboarding({ profile, connections, agents, requestEvents, onSave
   const create = () => {
     if (agent === null || agent.name.trim() === '') return
     setError(null)
-    const sent = start((requestId) => onSaveAgent(firstAgentToCreate(agent), requestId), { onNotice: (notice) => setError(notice.text) })
+    const sent = start((requestId) => onSaveAgent(firstAgentToCreate(agent), requestId, true), { onNotice: (notice) => setError(notice.text) })
     if (!sent) setError('Manor is not connected. Try again in a moment.')
   }
 

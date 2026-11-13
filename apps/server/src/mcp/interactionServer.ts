@@ -22,6 +22,7 @@ import { request as httpRequest } from 'node:http'
 import { INTERACTION_TOOL_NAMES, SUBAGENT_TOOLS } from './interactionAttachment.js'
 import { isRecord, option, type JsonRecord, type McpToolServer } from './stdio.js'
 import { AGENT_RELAY_OUTBOUND_MAX } from '../agentRelay.js'
+import { INTERVIEW_INSTRUCTIONS_MAX } from '../agentInterview.js'
 
 const ASK_USE =
   'Use only when an answer materially changes the work; do not use for confirmations or progress updates, except to confirm your restatement before proposing complex Work with start_work, or a new memory card (named in the question) before update_project_file create. Each question gets two to four concrete options; the UI adds a free-form row. Set multi on a question when more than one option may be chosen.'
@@ -438,6 +439,33 @@ const sessionStatusTool = {
   },
 } as const
 
+// A new agent's interview turn only (agent setup 2/4): the broker takes it once.
+const instructionsTool = {
+  name: 'write_instructions',
+  description: 'Write your own instructions once, after the interview: the whole markdown document that becomes your system prompt from your next turn on. Built only on the form and the user\'s answers; a skipped answer leaves that choice to you. Available only in this turn and accepted once; after it only the user can change your instructions.',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      instructions: { type: 'string', minLength: 1, maxLength: INTERVIEW_INSTRUCTIONS_MAX, description: 'The whole document, addressed to yourself ("You are …").' },
+    },
+    required: ['instructions'],
+    additionalProperties: false,
+  },
+} as const
+
+async function writeInstructions(instructionsUrl: string, capability: string, arguments_: JsonRecord): Promise<string> {
+  const response = await fetch(instructionsUrl, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'x-manor-user-input-capability': capability },
+    body: JSON.stringify({ instructions: arguments_.instructions }),
+  })
+  const payload: unknown = await response.json().catch(() => undefined)
+  if (!response.ok) {
+    throw new Error(isRecord(payload) && typeof payload.error === 'string' ? payload.error : `Instructions returned HTTP ${response.status}.`)
+  }
+  return isRecord(payload) && typeof payload.note === 'string' ? payload.note : 'Saved.'
+}
+
 const sessionForwardTool = {
   name: 'send_to_session',
   description: 'Send the user\'s message on to the Session it follows up on, as their own message there: a correction or follow-up on work that Session already did, open or settled. A settled Session reopens and runs it; a running one takes the message into its current answer, subject to the same addressing and runtime safety guards as a message they type there. No Accept card. Pass their words as they wrote them, with only the context the Session needs after a blank line. New work or a different subject still gets start_work; when two Sessions could fit, ask the user with ask_user instead of guessing. Once per Session for each of their messages.',
@@ -663,6 +691,7 @@ export function interactionMcpServer(argv: readonly string[]): McpToolServer {
   const goalUrl = option('--goal-url', argv)
   const projectUrl = option('--project-url', argv)
   const secretUrl = option('--secret-url', argv)
+  const instructionsUrl = argv.includes('--instructions-url') ? option('--instructions-url', argv) : undefined
   const enabled = enabledTools(argv)
   const askMode: AskMode = argv.includes('--ask-mode') && argv[argv.indexOf('--ask-mode') + 1] === 'deferred'
     ? 'deferred'
@@ -676,6 +705,7 @@ export function interactionMcpServer(argv: readonly string[]): McpToolServer {
     tools: [
       askTool(askMode), secretTool(askMode), draftTool, relayTool(relayMode), ...(catalog === undefined ? [] : subagentTools(catalog)),
       deliverTool, goalTool, reviewTool, projectFileTool, sessionAnswerTool, projectReportTool, sessionForwardTool, sessionStatusTool,
+      instructionsTool,
     ].filter((tool) => enabled.has(tool.name)),
     failureMessage: 'The Manor tool failed.',
     concurrent: (name) => name === 'message_agent' || (SUBAGENT_TOOLS as readonly string[]).includes(name),
@@ -687,6 +717,7 @@ export function interactionMcpServer(argv: readonly string[]): McpToolServer {
       }
       if (name === 'goal_reached') return text(await recordGoalClaims(goalUrl, capability, arguments_))
       if (isProjectTool(name)) return text(await projectThreadCall(projectUrl, capability, name, arguments_))
+      if (name === 'write_instructions' && instructionsUrl !== undefined) return text(await writeInstructions(instructionsUrl, capability, arguments_))
       if (name === 'deliver_file') return text(await deliverFile(deliverUrl, capability, arguments_))
       if (name === 'message_agent') return text(await messageAgent(relayUrl, capability, arguments_))
       if ((SUBAGENT_TOOLS as readonly string[]).includes(name)) return text(await subagentCall(subagentUrl, capability, name, arguments_))
