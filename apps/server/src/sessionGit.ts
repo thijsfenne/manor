@@ -529,6 +529,30 @@ export function failingChecks(lines: readonly string[], stopped: 'commit' | 'pus
 const plural = (count: number, noun: string) => `${count} ${noun}${count === 1 ? '' : 's'}`
 
 /**
+ * Says what to do when a push failed because the remote wanted a sign in this Mac
+ * could not give, or refused the account it got. Undefined for any other failure.
+ * Manor holds no git sign in of its own, so the way out is always the user's own git
+ * setup. Reads only lines shaped the way Git and the remote print a refusal.
+ */
+export function signInRefusal(lines: readonly string[], remote: string, host?: string): string | undefined {
+  const said = lines.filter((line) => /^(?:fatal|remote|ERROR): |: Permission denied \(publickey/.test(line)).join('\n')
+  const denied = /Permission to (\S+?)(?:\.git)? denied to ([^\s.]+)/.exec(said)
+  if (denied !== null) {
+    return `Push failed: ${denied[2]} may not push to ${denied[1]}. Sign in to git as an account that may, then push again.`
+  }
+  const unsigned = /could not read (?:Username|Password) for|Authentication failed for|Invalid username or (?:password|token)|Permission denied \(publickey/.test(said)
+  if (!unsigned) return undefined
+  const how = host === 'github.com' ? 'Run gh auth login in Terminal' : 'Sign in to git in Terminal'
+  return `Push failed: this Mac is not signed in to ${host ?? remote}. ${how}, then push again.`
+}
+
+/** The host a remote's URL names, without anything else the URL may carry. */
+async function remoteHost(top: string, remote: string): Promise<string | undefined> {
+  const page = repoRemote(await tryGit(top, ['remote', 'get-url', '--push', remote]) ?? '')?.url
+  return page === undefined ? undefined : new URL(page).hostname
+}
+
+/**
  * Pushes the current branch, and only it, to where `pushTargetOf` points. The refspec
  * has no `+` and no force flag is ever passed, so the remote takes a fast-forward or
  * refuses. A branch with nothing ahead is refused before Git is asked.
@@ -552,6 +576,8 @@ export async function pushBranch(root: string): Promise<string> {
   if (!pushed.ok) {
     const checked = failingChecks(lines, 'push')
     if (checked !== undefined) throw new SessionGitError(checked)
+    const signIn = signInRefusal(lines, target.remote, await remoteHost(top, target.remote))
+    if (signIn !== undefined) throw new SessionGitError(signIn)
     // "failed to push some refs" closes every refusal and never says why; the line before it does.
     const said = lines.filter((line) => !line.startsWith('hint:') && line !== 'Done' && !line.startsWith('To ') && !line.startsWith('error: failed to push some refs'))
     throw new SessionGitError(`Push failed: ${said.at(-1) ?? 'Git gave no reason.'}`)

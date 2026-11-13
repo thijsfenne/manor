@@ -20,6 +20,8 @@ It is a Mac app for Apple Silicon. Everything stays on your Mac: the chats, the 
 - A subscription to at least one provider, and that provider's command line tool. Manor can install Claude Code for you and installs Codex itself. Grok and Cursor you install yourself.
 - To build from source you need Node 22 or newer and pnpm 10.
 
+Manor has no GitHub sign in of its own. An agent that works in a linked folder uses the git and `gh` sign in of your Mac user, the same one your Terminal uses. Manor stores and passes no token of its own. If you have never signed in, run `gh auth login` once first.
+
 ## Build and run from source
 
 There is no download yet. You build the app on your own Mac, which takes a few minutes. An app you build yourself opens without a Gatekeeper warning.

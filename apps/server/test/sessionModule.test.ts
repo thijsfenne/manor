@@ -5,7 +5,7 @@ import path from 'node:path'
 import { ChatSchema, ProjectSchema, WorkHandoffSchema, type ServerMessage, type ThreadEvent, type WorkCompletion } from '@manor/contracts'
 import { afterEach, describe, expect, it } from 'vitest'
 import { SessionModule } from '../src/sessionModule.js'
-import { liveSessionFiles, readSessionDiff, readSessionStatus, repoRemote } from '../src/sessionGit.js'
+import { liveSessionFiles, readSessionDiff, readSessionStatus, repoRemote, signInRefusal } from '../src/sessionGit.js'
 import { prepareWorkCompletion } from '../src/workCompletion.js'
 
 const dirs: string[] = []
@@ -289,6 +289,37 @@ describe('Session Push behind a pre-push check', () => {
     const { module, context, notices } = harness(root, [])
     await module.handle({ type: 'push_session', chatId: 'chat_1', root }, context)
     expect(notices()[0]).toBe('Push failed: lint found 2 problems')
+  })
+
+  it('names the way out when the remote wanted a sign in', async () => {
+    const { root } = fixture()
+    writeFileSync(path.join(root, 'a.txt'), 'ours\n')
+    git(root, 'commit', '-am', 'Ours')
+    refusingHook(root, "fatal: could not read Username for 'https://git.example.test': terminal prompts disabled")
+
+    const { module, context, notices } = harness(root, [])
+    await module.handle({ type: 'push_session', chatId: 'chat_1', root }, context)
+    expect(notices()[0]).toBe('Push failed: this Mac is not signed in to origin. Sign in to git in Terminal, then push again.')
+  })
+
+  it('reads a refused sign in from what Git and the remote say', () => {
+    const github = 'Push failed: this Mac is not signed in to github.com. Run gh auth login in Terminal, then push again.'
+    expect(signInRefusal(["fatal: could not read Username for 'https://github.com': terminal prompts disabled"], 'origin', 'github.com')).toBe(github)
+    expect(signInRefusal([
+      'remote: Invalid username or token. Password authentication is not supported for Git operations.',
+      "fatal: Authentication failed for 'https://github.com/someone/notes.git/'",
+    ], 'origin', 'github.com')).toBe(github)
+    expect(signInRefusal(['git@github.com: Permission denied (publickey).', 'fatal: Could not read from remote repository.'], 'origin', 'github.com')).toBe(github)
+    expect(signInRefusal(['git@git.example.test: Permission denied (publickey).'], 'upstream', 'git.example.test'))
+      .toBe('Push failed: this Mac is not signed in to git.example.test. Sign in to git in Terminal, then push again.')
+    // Signed in, as an account the repository does not let push.
+    expect(signInRefusal([
+      'remote: Permission to someone/notes.git denied to guest-1.',
+      "fatal: unable to access 'https://github.com/someone/notes.git/': The requested URL returned error: 403",
+    ], 'origin', 'github.com')).toBe('Push failed: guest-1 may not push to someone/notes. Sign in to git as an account that may, then push again.')
+    // Anything else keeps Git's own words, and a test's output is not a refusal.
+    expect(signInRefusal(['fatal: unable to access: Could not resolve host: github.com'], 'origin', 'github.com')).toBeUndefined()
+    expect(signInRefusal(['apps/server test:  FAIL  Authentication failed for the fixture'], 'origin', 'github.com')).toBeUndefined()
   })
 })
 
