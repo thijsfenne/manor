@@ -274,7 +274,7 @@ export function AskCard({ questions, accent, connected = true, more = 0, onSubmi
           </span>
         ) : null}
         <span
-          className={`min-w-0 flex-1 text-[16px] leading-6 font-medium text-text ${
+          className={`min-w-0 flex-1 text-[14px] leading-5 font-medium text-text ${
             collapsed ? 'truncate' : '[overflow-wrap:anywhere]'
           }`}
         >
