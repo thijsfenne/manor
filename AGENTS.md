@@ -63,7 +63,7 @@ Personal additions. If `~/.claude/manor.md` exists on this machine, read it befo
 - Never claim success from construction. Run it, read the output, then say it works.
 - Prove desktop and web interface changes on the isolated server with `.cursor/skills/verify-manor/SKILL.md` (headless Chromium on 43180, memory store, mock driver), never on the user's own Manor. Phone changes use `.cursor/skills/verify-manor-mobile/SKILL.md`.
 - Review probes go in the package's gitignored `test/.review/` and run with `pnpm exec vitest run --config vitest.review.config.ts` from `apps/web` or `apps/server`. The default suite skips that folder.
-- `scripts/check-public.sh` fails when a file that must stay private is tracked, and on the private names a maintainer lists on their own machine. The push hook and CI run it.
+- `scripts/check-public.sh` fails when a file that must stay private is tracked, and on the private names a maintainer lists on their own machine. The push hook and CI run it. `scripts/check-outgoing.sh` judges the commits of a push the same way, their mail addresses and their messages. Only the push hook runs that one.
 - Never test against a real subscription carelessly, runs with several agents burn real quota. Use the mock driver for interface work.
 
 ## Taste

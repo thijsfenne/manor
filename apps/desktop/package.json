@@ -2,7 +2,7 @@
   "name": "@manor/desktop",
   "productName": "Manor",
   "private": true,
-  "version": "0.0.2",
+  "version": "0.1.0",
   "description": "Manor personal multi-agent workspace",
   "author": "Thijs Fenne",
   "main": "dist/main.js",

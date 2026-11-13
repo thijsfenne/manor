@@ -42,6 +42,7 @@ The first builds the app from your tree and opens it on an empty workspace, with
 - Keep the change to one subject. A fix and a refactor are two pull requests.
 - Files, comments and interface text are in English. The phone companion is partly Dutch for now.
 - `scripts/check-public.sh` must pass. The push hook runs it.
+- A change a user notices gets a line in `CHANGELOG.md`.
 
 ## What must not go in a commit
 

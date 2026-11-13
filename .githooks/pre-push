@@ -5,6 +5,8 @@ cd "$(git rev-parse --show-toplevel)"
 # run in a temp dir would then re-initialise this repository instead, flipping the
 # shared config to `bare = true` and failing the suite.
 unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE
+# Reads git's list of pushed refs from stdin, so it runs first.
+scripts/check-outgoing.sh "$1"
 scripts/check-public.sh
 pnpm -r typecheck
 pnpm -r test
