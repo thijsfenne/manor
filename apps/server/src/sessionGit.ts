@@ -535,29 +535,60 @@ const plural = (count: number, noun: string) => `${count} ${noun}${count === 1 ?
  * setup. Reads only lines shaped the way Git and the remote print a refusal.
  */
 export function signInRefusal(lines: readonly string[], remote: string, host?: string): string | undefined {
-  const said = lines.filter((line) => /^(?:fatal|remote|ERROR): |: Permission denied \(publickey/.test(line)).join('\n')
-  const denied = /Permission to (\S+?)(?:\.git)? denied to ([^\s.]+)/.exec(said)
+  const said = lines.filter((line) => /^(?:fatal|remote|ERROR): |: Permission denied \(publickey|^Host key verification failed/.test(line)).join('\n')
+  // The name runs to the end of its line: an account may hold a dot, a deploy key a space.
+  const denied = /Permission to (\S+?)(?:\.git)? denied to (.+?)\.?$/m.exec(said)
   if (denied !== null) {
     return `Push failed: ${denied[2]} may not push to ${denied[1]}. Sign in to git as an account that may, then push again.`
   }
-  const unsigned = /could not read (?:Username|Password) for|Authentication failed for|Invalid username or (?:password|token)|Permission denied \(publickey/.test(said)
+  // An ssh key is not a sign in: `gh auth login` over https would change nothing here.
+  if (/Permission denied \(publickey/.test(said)) {
+    return `Push failed: ${host ?? remote} refused this Mac's ssh key. Load the key with ssh-add, or add it to your account there, then push again.`
+  }
+  if (/^Host key verification failed/m.test(said)) {
+    return `Push failed: this Mac does not trust the ssh host key of ${host ?? remote}. Connect to it once with ssh in Terminal, then push again.`
+  }
+  const unsigned = /could not read (?:Username|Password) for|Authentication failed for|Invalid username or (?:password|token)/.test(said)
   if (!unsigned) return undefined
   const how = host === 'github.com' ? 'Run gh auth login in Terminal' : 'Sign in to git in Terminal'
   return `Push failed: this Mac is not signed in to ${host ?? remote}. ${how}, then push again.`
 }
 
+/**
+ * The page a remote offers after a push for opening a pull or merge request, read
+ * from its own words ("Create a pull request for 'x' on GitHub by visiting:" and the
+ * address on the next line). Manor builds no address itself, so any host that prints
+ * one works and none needs a sign in here. Only an https address is taken, and it must
+ * be on the remote's own host when the remote's URL names one. An ssh alias or a local
+ * path names none, and then the remote's word is all there is.
+ */
+export function pullRequestLink(lines: readonly string[], host?: string): { label: string; url: string } | undefined {
+  const said = lines.filter((line) => line.startsWith('remote:')).map((line) => line.slice('remote:'.length).trim()).filter((line) => line.length > 0)
+  // The offer is a line that ends in a colon with the address alone on the next one. A
+  // rule's "Changes must be made through a pull request." is neither.
+  const at = said.findIndex((line) => /\b(?:pull|merge) request\b/i.test(line) && line.endsWith(':'))
+  const url = at === -1 ? undefined : said[at + 1]
+  if (url === undefined || !/^https:\/\/\S+$/.test(url) || !URL.canParse(url)) return undefined
+  // `ssh.github.com` and `altssh.gitlab.com` push for the host without that prefix.
+  const page = new URL(url).hostname
+  if (host !== undefined && page !== host && page !== host.replace(/^(?:alt)?ssh\./, '')) return undefined
+  const kind = /\bmerge request\b/i.test(said[at]!) ? 'merge request' : 'pull request'
+  return { label: `${/^(?:view|visit)\b/i.test(said[at]!) ? 'View' : 'Open'} ${kind}`, url }
+}
+
 /** The host a remote's URL names, without anything else the URL may carry. */
 async function remoteHost(top: string, remote: string): Promise<string | undefined> {
   const page = repoRemote(await tryGit(top, ['remote', 'get-url', '--push', remote]) ?? '')?.url
-  return page === undefined ? undefined : new URL(page).hostname
+  return page === undefined || !URL.canParse(page) ? undefined : new URL(page).hostname
 }
 
 /**
  * Pushes the current branch, and only it, to where `pushTargetOf` points. The refspec
  * has no `+` and no force flag is ever passed, so the remote takes a fast-forward or
- * refuses. A branch with nothing ahead is refused before Git is asked.
+ * refuses. A branch with nothing ahead is refused before Git is asked. The answer
+ * carries the page the remote offered for a pull or merge request, when it offered one.
  */
-export async function pushBranch(root: string): Promise<string> {
+export async function pushBranch(root: string): Promise<{ text: string; link?: { label: string; url: string; branch: string } }> {
   const top = (await git(root, ['rev-parse', '--show-toplevel'])).trim()
   const branch = await currentBranch(top)
   if (branch === null) throw new SessionGitError('This checkout is not on a branch, so there is nothing to push.')
@@ -580,7 +611,14 @@ export async function pushBranch(root: string): Promise<string> {
     if (signIn !== undefined) throw new SessionGitError(signIn)
     // "failed to push some refs" closes every refusal and never says why; the line before it does.
     const said = lines.filter((line) => !line.startsWith('hint:') && line !== 'Done' && !line.startsWith('To ') && !line.startsWith('error: failed to push some refs'))
-    throw new SessionGitError(`Push failed: ${said.at(-1) ?? 'Git gave no reason.'}`)
+    // Git closes an ssh refusal with advice ("and the repository exists."), so the remote's
+    // own word comes first, then Git's, then whatever line was last.
+    const cause = said.filter((line) => line.startsWith('ERROR: ')).at(-1) ?? said.filter((line) => line.startsWith('fatal: ')).at(-1) ?? said.at(-1)
+    throw new SessionGitError(`Push failed: ${cause ?? 'Git gave no reason.'}`)
   }
-  return `Pushed ${plural(target.ahead, 'commit')} to ${target.remote}/${target.remoteBranch}.`
+  const link = pullRequestLink(lines, await remoteHost(top, target.remote))
+  return {
+    text: `Pushed ${plural(target.ahead, 'commit')} to ${target.remote}/${target.remoteBranch}.`,
+    ...(link === undefined ? {} : { link: { ...link, branch } }),
+  }
 }

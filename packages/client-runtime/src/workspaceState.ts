@@ -404,6 +404,11 @@ export interface WorkspaceState {
    * `sessionGitResults` so a later Push, or a Commit of other files, cannot drop it.
    */
   sessionCommitFailures: Record<string, Record<string, Extract<ServerMessage, { type: 'session_git_result' }>>>
+  /**
+   * The last Push per chat and folder that came back with a pull or merge request page.
+   * Kept per folder so a Commit or Push in another folder of the chat cannot drop it.
+   */
+  sessionPushedLinks: Record<string, Record<string, Extract<ServerMessage, { type: 'session_git_result' }>>>
   /** Session Commits still running on the host, replaced whole by every `session_commits`. */
   sessionCommits: Extract<ServerMessage, { type: 'session_commits' }>['commits']
   /** The user's Obsidian vault, when the machine Manor runs on has one. */
@@ -632,6 +637,7 @@ export const emptyWorkspace: WorkspaceState = {
   sessionDiffs: {},
   sessionGitResults: {},
   sessionCommitFailures: {},
+  sessionPushedLinks: {},
   sessionCommits: [],
   vault: NO_VAULT_YET,
   artifacts: NO_ARTIFACTS_YET,
@@ -1490,6 +1496,9 @@ export function reduce(
       return { ...state, sessionDiffs: { ...state.sessionDiffs, [msg.chatId]: msg } }
     case 'session_git_result': {
       const sessionGitResults = { ...state.sessionGitResults, [msg.chatId]: msg }
+      if (msg.action === 'push' && msg.ok && msg.link !== undefined) {
+        return { ...state, sessionGitResults, sessionPushedLinks: { ...state.sessionPushedLinks, [msg.chatId]: { ...state.sessionPushedLinks[msg.chatId], [msg.root]: msg } } }
+      }
       if (msg.action !== 'commit' || msg.ok) return { ...state, sessionGitResults }
       return {
         ...state,

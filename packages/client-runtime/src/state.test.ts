@@ -1291,6 +1291,17 @@ describe('a failed Session Commit', () => {
     expect(held(state)).toMatchObject({ files: ['a.ts'], message: 'Ship a' })
   })
 
+  it('keeps the page a Push came back with per folder, whatever another folder does next', () => {
+    const linked = { ...result('push', true), link: { label: 'Open pull request', url: 'https://git.example.test/someone/notes/pull/new/feature', branch: 'feature' } }
+    let state = reduce(emptyWorkspace, linked)
+    state = reduce(state, { ...result('push', true), root: '/other' })
+    state = reduce(state, { ...result('commit', false), root: '/other' })
+    expect(state.sessionPushedLinks.chat).toEqual({ '/repo': linked })
+    // A later Push of that folder with a page of its own replaces it.
+    const again = { ...linked, link: { ...linked.link, url: 'https://git.example.test/someone/notes/pull/7', label: 'View pull request' } }
+    expect(reduce(state, again).sessionPushedLinks.chat?.['/repo']).toBe(again)
+  })
+
   it('goes for good once a status read shows its files landed, so a later edit brings nothing back', () => {
     let state = reduce(emptyWorkspace, result('commit', false))
     // A failed read, or one while a result waits, proves nothing.

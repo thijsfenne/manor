@@ -671,6 +671,7 @@ export function ChatPanelRegion({
                 connected={live}
                 commits={workspace.sessionCommits}
                 commitFailures={workspace.sessionCommitFailures[open.id]}
+                pushedLinks={workspace.sessionPushedLinks[open.id]}
                 requestEvents={manor.requestEvents}
                 onToggleDiff={() => {
                   // Changes always opens on the whole Session; a turn is opened from its card.

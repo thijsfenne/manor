@@ -551,7 +551,12 @@ describe('createCodexDriver', () => {
   })
 
   it('performs the JSON-RPC handshake and streams an answer with exact usage', async () => {
-    const { events, requests, env, cwd } = await run({ agent: sage })
+    const socket = process.env.SSH_AUTH_SOCK
+    process.env.SSH_AUTH_SOCK = '/tmp/manor-test-agent.sock'
+    const { events, requests, env, cwd } = await run({ agent: sage }).finally(() => {
+      if (socket === undefined) delete process.env.SSH_AUTH_SOCK
+      else process.env.SSH_AUTH_SOCK = socket
+    })
     expect(requests.map((request) => request['method'])).toEqual([
       'initialize', 'initialized', 'thread/start', 'turn/start',
     ])
@@ -569,6 +574,8 @@ describe('createCodexDriver', () => {
       },
     ])
     expect(env['CODEX_HOME']).toBe(codexHome)
+    // A turn's own git reaches the ssh agent, as it does in the user's Terminal.
+    expect(env['SSH_AUTH_SOCK']).toBe('/tmp/manor-test-agent.sock')
     expect(cwd).toBe(path.join(scratch, 'sage'))
   })
 

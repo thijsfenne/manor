@@ -719,7 +719,9 @@ describe('createCursorDriver', () => {
   })
 
   it('isolates config, writes the persona, and keeps the prompt off argv', async () => {
+    const socket = process.env.SSH_AUTH_SOCK
     process.env.SUPABASE_SECRET_KEY = 'database-secret'
+    process.env.SSH_AUTH_SOCK = '/tmp/manor-test-agent.sock'
     try {
       const { args, cwd, env, stdin, events } = await run({
         agent: smith,
@@ -742,10 +744,14 @@ describe('createCursorDriver', () => {
       expect(stdin).toContain(`${REPLY_LANGUAGE_LINE}\n\nUser: Say hello.`)
       expect(env['CURSOR_CONFIG_DIR']).toBe(cursorConfig)
       expect(env['SUPABASE_SECRET_KEY']).toBeUndefined()
+      // A turn's own git reaches the ssh agent, as it does in the user's Terminal.
+      expect(env['SSH_AUTH_SOCK']).toBe('/tmp/manor-test-agent.sock')
       expect(await readFile(path.join(cwd, 'AGENTS.md'), 'utf8')).toBe('You are Smith.\n')
       expect(events.at(-1)).toMatchObject({ type: 'result', sessionId: 'cursor-session' })
     } finally {
       delete process.env.SUPABASE_SECRET_KEY
+      if (socket === undefined) delete process.env.SSH_AUTH_SOCK
+      else process.env.SSH_AUTH_SOCK = socket
     }
   })
 

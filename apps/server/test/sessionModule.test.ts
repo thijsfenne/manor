@@ -5,7 +5,7 @@ import path from 'node:path'
 import { ChatSchema, ProjectSchema, WorkHandoffSchema, type ServerMessage, type ThreadEvent, type WorkCompletion } from '@manor/contracts'
 import { afterEach, describe, expect, it } from 'vitest'
 import { SessionModule } from '../src/sessionModule.js'
-import { liveSessionFiles, readSessionDiff, readSessionStatus, repoRemote, signInRefusal } from '../src/sessionGit.js'
+import { liveSessionFiles, pullRequestLink, readSessionDiff, readSessionStatus, repoRemote, signInRefusal } from '../src/sessionGit.js'
 import { prepareWorkCompletion } from '../src/workCompletion.js'
 
 const dirs: string[] = []
@@ -291,6 +291,22 @@ describe('Session Push behind a pre-push check', () => {
     expect(notices()[0]).toBe('Push failed: lint found 2 problems')
   })
 
+  it('says what the remote said rather than the advice Git closes an ssh refusal with', async () => {
+    const { root } = fixture()
+    writeFileSync(path.join(root, 'a.txt'), 'ours\n')
+    git(root, 'commit', '-am', 'Ours')
+    refusingHook(root, [
+      'ERROR: The key you are authenticating with has been marked as read only.',
+      'fatal: Could not read from remote repository.',
+      'Please make sure you have the correct access rights',
+      'and the repository exists.',
+    ].join('\n'))
+
+    const { module, context, notices } = harness(root, [])
+    await module.handle({ type: 'push_session', chatId: 'chat_1', root }, context)
+    expect(notices()[0]).toBe('Push failed: ERROR: The key you are authenticating with has been marked as read only.')
+  })
+
   it('names the way out when the remote wanted a sign in', async () => {
     const { root } = fixture()
     writeFileSync(path.join(root, 'a.txt'), 'ours\n')
@@ -302,6 +318,49 @@ describe('Session Push behind a pre-push check', () => {
     expect(notices()[0]).toBe('Push failed: this Mac is not signed in to origin. Sign in to git in Terminal, then push again.')
   })
 
+  it('hands back the pull request page the remote offered for the pushed branch', async () => {
+    const { root, remote } = fixture()
+    writeFileSync(path.join(remote, 'hooks', 'post-receive'), [
+      '#!/bin/sh',
+      'echo ""',
+      "echo \"Create a pull request for 'feature' on GitHub by visiting:\"",
+      'echo "     https://git.example.test/someone/notes/pull/new/feature"',
+      'echo ""',
+    ].join('\n'), { mode: 0o755 })
+    git(root, 'switch', '-c', 'feature')
+    writeFileSync(path.join(root, 'a.txt'), 'ours\n')
+    git(root, 'commit', '-am', 'Ours')
+
+    const { module, context, replies } = harness(root, [])
+    await module.handle({ type: 'push_session', chatId: 'chat_1', root }, context)
+    expect(replies.find((reply) => reply.type === 'session_git_result')).toMatchObject({
+      ok: true, text: 'Pushed 1 commit to origin/feature.',
+      link: { label: 'Open pull request', url: 'https://git.example.test/someone/notes/pull/new/feature', branch: 'feature' },
+    })
+  })
+
+  it('reads the pull or merge request page from the remote\'s own words, and only an https page on its host', () => {
+    const github = ['remote: ', "remote: Create a pull request for 'feature' on GitHub by visiting:        ", 'remote:      https://github.com/someone/notes/pull/new/feature        ', 'remote: ']
+    expect(pullRequestLink(github, 'github.com')).toEqual({ label: 'Open pull request', url: 'https://github.com/someone/notes/pull/new/feature' })
+    expect(pullRequestLink([
+      'remote: To create a merge request for feature, visit:',
+      'remote:   https://gitlab.example.test/team/notes/-/merge_requests/new?merge_request%5Bsource_branch%5D=feature',
+    ], 'gitlab.example.test')).toEqual({ label: 'Open merge request', url: 'https://gitlab.example.test/team/notes/-/merge_requests/new?merge_request%5Bsource_branch%5D=feature' })
+    expect(pullRequestLink(['remote: View merge request for feature:', 'remote:   https://gitlab.example.test/team/notes/-/merge_requests/12'], 'gitlab.example.test')?.label).toBe('View merge request')
+    expect(pullRequestLink(['remote: Visit the existing pull request:', 'remote:   https://git.example.test/someone/notes/pulls/3'], 'git.example.test')?.label).toBe('View pull request')
+    // An ssh host with a prefix pushes for the host without it, and an unnamed host leaves the remote's word.
+    expect(pullRequestLink(github, 'ssh.github.com')?.url).toBe('https://github.com/someone/notes/pull/new/feature')
+    expect(pullRequestLink(github)?.url).toBe('https://github.com/someone/notes/pull/new/feature')
+    // A rule's sentence is not an offer, and an address that only looks like the host is not on it.
+    expect(pullRequestLink(['remote: Bypassed rule violations for refs/heads/main:', 'remote: - Changes must be made through a pull request.', 'remote:   https://github.com/someone/notes/security'], 'github.com')).toBeUndefined()
+    expect(pullRequestLink(['remote: Create a pull request by visiting:', 'remote:   https://github.com@evil.example.test/x'], 'github.com')).toBeUndefined()
+    // A remote that says nothing, a page elsewhere, a plain http page, and a hook's own line.
+    expect(pullRequestLink(['To github.com:someone/notes.git', '   1a2b3c4..5d6e7f8  main -> main'], 'github.com')).toBeUndefined()
+    expect(pullRequestLink(github, 'git.example.test')).toBeUndefined()
+    expect(pullRequestLink(['remote: Create a pull request:', 'remote:   http://github.com/someone/notes/pull/new/feature'], 'github.com')).toBeUndefined()
+    expect(pullRequestLink(['Create a pull request by visiting:', 'https://github.com/someone/notes/pull/new/feature'], 'github.com')).toBeUndefined()
+  })
+
   it('reads a refused sign in from what Git and the remote say', () => {
     const github = 'Push failed: this Mac is not signed in to github.com. Run gh auth login in Terminal, then push again.'
     expect(signInRefusal(["fatal: could not read Username for 'https://github.com': terminal prompts disabled"], 'origin', 'github.com')).toBe(github)
@@ -309,14 +368,23 @@ describe('Session Push behind a pre-push check', () => {
       'remote: Invalid username or token. Password authentication is not supported for Git operations.',
       "fatal: Authentication failed for 'https://github.com/someone/notes.git/'",
     ], 'origin', 'github.com')).toBe(github)
-    expect(signInRefusal(['git@github.com: Permission denied (publickey).', 'fatal: Could not read from remote repository.'], 'origin', 'github.com')).toBe(github)
-    expect(signInRefusal(['git@git.example.test: Permission denied (publickey).'], 'upstream', 'git.example.test'))
-      .toBe('Push failed: this Mac is not signed in to git.example.test. Sign in to git in Terminal, then push again.')
+    // An ssh key the host refuses is not a sign in, so the way out is another one.
+    expect(signInRefusal(['git@github.com: Permission denied (publickey).', 'fatal: Could not read from remote repository.'], 'origin', 'github.com'))
+      .toBe("Push failed: github.com refused this Mac's ssh key. Load the key with ssh-add, or add it to your account there, then push again.")
     // Signed in, as an account the repository does not let push.
     expect(signInRefusal([
       'remote: Permission to someone/notes.git denied to guest-1.',
       "fatal: unable to access 'https://github.com/someone/notes.git/': The requested URL returned error: 403",
     ], 'origin', 'github.com')).toBe('Push failed: guest-1 may not push to someone/notes. Sign in to git as an account that may, then push again.')
+    expect(signInRefusal(['remote: Permission to someone/notes.git denied to jan.de.vries.'], 'origin', 'github.com'))
+      .toBe('Push failed: jan.de.vries may not push to someone/notes. Sign in to git as an account that may, then push again.')
+    expect(signInRefusal(['ERROR: Permission to someone/notes.git denied to deploy key', 'fatal: Could not read from remote repository.'], 'origin', 'github.com'))
+      .toBe('Push failed: deploy key may not push to someone/notes. Sign in to git as an account that may, then push again.')
+    // An ssh alias names no host, so the remote's own name stands in.
+    expect(signInRefusal(['git@work: Permission denied (publickey).'], 'upstream'))
+      .toBe("Push failed: upstream refused this Mac's ssh key. Load the key with ssh-add, or add it to your account there, then push again.")
+    expect(signInRefusal(['Host key verification failed.', 'fatal: Could not read from remote repository.'], 'origin', 'github.com'))
+      .toBe('Push failed: this Mac does not trust the ssh host key of github.com. Connect to it once with ssh in Terminal, then push again.')
     // Anything else keeps Git's own words, and a test's output is not a refusal.
     expect(signInRefusal(['fatal: unable to access: Could not resolve host: github.com'], 'origin', 'github.com')).toBeUndefined()
     expect(signInRefusal(['apps/server test:  FAIL  Authentication failed for the fixture'], 'origin', 'github.com')).toBeUndefined()

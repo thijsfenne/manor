@@ -629,7 +629,12 @@ describe('createGrokDriver', () => {
   })
 
   it('parses the live Grok envelope and keeps subscription turns free of dollar claims', async () => {
-    const { events, stdin, cwd, env } = await run({ stdoutLines: success })
+    const socket = process.env.SSH_AUTH_SOCK
+    process.env.SSH_AUTH_SOCK = '/tmp/manor-test-agent.sock'
+    const { events, stdin, cwd, env } = await run({ stdoutLines: success }).finally(() => {
+      if (socket === undefined) delete process.env.SSH_AUTH_SOCK
+      else process.env.SSH_AUTH_SOCK = socket
+    })
 
     expect(events.filter((event) => event.type === 'delta')).toEqual([
       { type: 'delta', messageId: 'msg_0', text: 'Hello' },
@@ -654,6 +659,8 @@ describe('createGrokDriver', () => {
     expect(cwd).toBe(path.join(scratch, 'sage'))
     expect(env['HOME']).toBe(grokHome)
     expect(env['GROK_HOME']).toBe(grokHome)
+    // A turn's own git reaches the ssh agent, as it does in the user's Terminal.
+    expect(env['SSH_AUTH_SOCK']).toBe('/tmp/manor-test-agent.sock')
   })
 
   it('keeps image paths on stdin before house style and the question', async () => {

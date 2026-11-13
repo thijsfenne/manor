@@ -38,6 +38,8 @@ interface SessionSectionsProps {
   commits: SessionCommits
   /** This chat's failed Commits by folder. The runtime drops one only once a full status read shows it landed. */
   commitFailures: Readonly<Record<string, SessionGitResult>> | undefined
+  /** This chat's last Push per folder that came back with a pull or merge request page, shown under its branch. */
+  pushedLinks?: Readonly<Record<string, SessionGitResult>> | undefined
   requestEvents: RequestEvents
   onToggleDiff: () => void
   /** Reads the status again after it failed. */
@@ -59,7 +61,7 @@ const plural = (count: number, noun: string) => `${count} ${noun}${count === 1 ?
  * the panel stays the roster everywhere else, without empty sections or dead buttons.
  */
 export function SessionSections({
-  repo, diffOpen, diffBlocked, running, connected, commits, commitFailures, requestEvents, onToggleDiff, onRetry, onCommit, onPush, openApps, onOpenFolder,
+  repo, diffOpen, diffBlocked, running, connected, commits, commitFailures, pushedLinks, requestEvents, onToggleDiff, onRetry, onCommit, onPush, openApps, onOpenFolder,
 }: SessionSectionsProps) {
   const repos = repo?.repos ?? []
   const named = repos.length > 1
@@ -82,6 +84,7 @@ export function SessionSections({
             connected={connected}
             committing={connected && commits.some((commit) => commit.chatId === repo.chatId && commit.root === entry.root)}
             failure={commitFailures?.[entry.root]}
+            pushed={pushedLink(pushedLinks?.[entry.root], entry)}
             requestEvents={requestEvents}
             onCommit={onCommit}
             onPush={onPush}
@@ -268,8 +271,19 @@ function ChangesRow({ repo, open, blocked, onToggle }: { repo: SessionRepoReply 
   )
 }
 
+/**
+ * The page the remote offered when this branch was last pushed, for as long as that
+ * push is still the whole story: the same branch, with nothing new to send.
+ */
+function pushedLink(result: SessionGitResult | undefined, repo: SessionRepo): PushedLink | undefined {
+  if (result?.link === undefined || result.link.branch !== repo.branch || repo.ahead > 0) return undefined
+  return { text: result.text, label: result.link.label, url: result.link.url }
+}
+
+interface PushedLink { text: string; label: string; url: string }
+
 /** The branch, where a worktree merges, what Push would send, and the two ways to land it. */
-function BranchLine({ repo, named, waiting, running, connected, committing: committingNow, failure, requestEvents, onCommit, onPush }: {
+function BranchLine({ repo, named, waiting, running, connected, committing: committingNow, failure, pushed, requestEvents, onCommit, onPush }: {
   repo: SessionRepo
   named: boolean
   waiting: boolean
@@ -278,6 +292,7 @@ function BranchLine({ repo, named, waiting, running, connected, committing: comm
   /** The host is committing in this folder: the dialog closed on Commit, the hook still runs. */
   committing: boolean
   failure: SessionGitResult | undefined
+  pushed: PushedLink | undefined
   requestEvents: RequestEvents
   onCommit: SessionSectionsProps['onCommit']
   onPush: SessionSectionsProps['onPush']
@@ -314,7 +329,7 @@ function BranchLine({ repo, named, waiting, running, connected, committing: comm
   const canCommit = !waiting && repo.uncommitted.length > 0
   const canPush = repo.pushTarget !== undefined && repo.ahead > 0
   // What went through is the window's toast (`SessionGitToast`); what went wrong stays
-  // here, under the branch it is about.
+  // here, under the branch it is about, and so does the page a Push came back with.
   const error = last?.error
   const busy = commit.pending || committingNow
   // A failed Commit reopens as it was left, from its Reopen and from Commit alike.
@@ -364,6 +379,15 @@ function BranchLine({ repo, named, waiting, running, connected, committing: comm
       </div>
       {error === undefined ? null : (
         <p role="alert" className="m-0 px-2 pb-1.5 pl-[30px] text-meta break-words text-danger">{error}</p>
+      )}
+      {pushed === undefined || error !== undefined ? null : (
+        <div className="flex min-w-0 items-baseline gap-2 px-2 pb-1.5 pl-[30px] text-meta">
+          <span className="min-w-0 flex-1 break-words text-dim">{pushed.text}</span>
+          <ExternalLink href={pushed.url} target="_blank" rel="noreferrer noopener" title={pushed.url}
+            className="flex-none text-meta font-medium text-text no-underline hover:underline">
+            {pushed.label}
+          </ExternalLink>
+        </div>
       )}
       {failure === undefined || busy || dialogOpen ? null : (
         <div role="alert" className="flex min-w-0 items-baseline gap-2 px-2 pb-1.5 pl-[30px] text-meta">

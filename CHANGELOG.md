@@ -4,6 +4,7 @@ What changed for someone who uses Manor, newest first. A version is a tag on `ma
 
 ## Unreleased
 
+- After you push a branch, the Session panel shows the pull or merge request page your remote offers, one click away. It needs no sign in in Manor.
 - A push that fails because this Mac is not signed in to the remote now says so and names the way out, instead of repeating Git's last line.
 - The README says that agents use your own git and `gh` sign in.
 - An agent's own `git push` over ssh now works with a key the macOS ssh agent holds, as it does in your Terminal.

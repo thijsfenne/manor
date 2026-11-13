@@ -114,7 +114,9 @@ export function childProcessEnv(
  * What an agent's own shell needs on top of the base list. `SSH_AUTH_SOCK` lets ssh
  * use a key the macOS agent holds, the way the user's Terminal and Manor's own push
  * do. It opens nothing new: the agent already reaches the user's keys and git sign
- * in through `HOME`. Only a provider turn gets it, never a probe or a status call.
+ * in through `HOME`. A Grok turn has a `HOME` of its own, where ssh still finds the
+ * user's keys through the account and git finds no settings. Only a provider turn
+ * gets it, never a probe or a status call.
  */
 const AGENT_TURN_KEYS = ['SSH_AUTH_SOCK'] as const
 

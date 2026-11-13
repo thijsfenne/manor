@@ -236,8 +236,8 @@ export class SessionModule {
       return
     }
     try {
-      const text = await pushBranch(message.root)
-      context.reply({ type: 'session_git_result', chatId: message.chatId, root: message.root, action: 'push', ok: true, text, ...(message.requestId === undefined ? {} : { requestId: message.requestId }) })
+      const pushed = await pushBranch(message.root)
+      context.reply({ type: 'session_git_result', chatId: message.chatId, root: message.root, action: 'push', ok: true, ...pushed, ...(message.requestId === undefined ? {} : { requestId: message.requestId }) })
       context.ack()
     } catch (error) {
       context.reply({ type: 'notice', kind: 'error', text: reason(error, 'The push failed.') })

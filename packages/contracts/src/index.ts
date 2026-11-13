@@ -4960,6 +4960,9 @@ export const ServerMessageSchema = z.discriminatedUnion('type', [
     action: z.enum(['commit', 'push']),
     ok: z.boolean(),
     text: z.string(),
+    // After a Push: the page the remote itself offered for opening a pull or merge
+    // request on `branch`. Absent when the remote offered none.
+    link: z.object({ label: z.string(), url: z.string(), branch: z.string() }).optional(),
     files: z.array(z.string()).optional(),
     message: z.string().optional(),
     requestId: RequestIdSchema.optional(),

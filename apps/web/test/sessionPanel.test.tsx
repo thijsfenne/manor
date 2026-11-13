@@ -185,6 +185,29 @@ describe('a Commit that runs on after its dialog closed', () => {
     expect(buttons()).toContainEqual(['Commit 2 files', false])
   })
 
+  it('keeps the pull request page a Push came back with under its branch, until the branch moves on', () => {
+    const feature = { ...repo, repos: [{ ...repo.repos[0]!, branch: 'feature', pushTarget: 'origin/feature', uncommitted: [] }] }
+    const pushed: SessionGitResult = {
+      type: 'session_git_result', chatId: 'chat', root: '/repo', action: 'push', ok: true, text: 'Pushed 2 commits to origin/feature.',
+      link: { label: 'Open pull request', url: 'https://git.example.test/someone/notes/pull/new/feature', branch: 'feature' },
+    }
+    const links = () => view!.root.findAll((node) => node.type === 'a' && node.props.href === pushed.link!.url)
+    act(() => { view = create(<SessionSections {...props} repo={feature} pushedLinks={{ '/repo': pushed }} />) })
+    expect(links()).toHaveLength(1)
+    expect(JSON.stringify(view!.toJSON())).toContain('Open pull request')
+    // A second folder on that branch has no page of its own, so the page shows once, under the folder it is for.
+    const two = { ...feature, repos: [...feature.repos, { ...feature.repos[0]!, root: '/other', label: 'other' }] }
+    act(() => view!.update(<SessionSections {...props} repo={two} pushedLinks={{ '/repo': pushed }} />))
+    expect(links()).toHaveLength(1)
+    // New commits wait to be pushed, or another branch is checked out: the page is not this state's.
+    act(() => view!.update(<SessionSections {...props} repo={{ ...feature, repos: [{ ...feature.repos[0]!, ahead: 1 }] }} pushedLinks={{ '/repo': pushed }} />))
+    expect(links()).toHaveLength(0)
+    act(() => view!.update(<SessionSections {...props} repo={repo} pushedLinks={{ '/repo': pushed }} />))
+    expect(links()).toHaveLength(0)
+    act(() => view!.update(<SessionSections {...props} repo={feature} />))
+    expect(links()).toHaveLength(0)
+  })
+
   it('reopens a failed file renamed since under its new name', () => {
     const renamed = { ...repo, repos: [{ ...repo.repos[0]!, uncommitted: [file('b.ts'), { ...file('a2.ts'), oldPath: 'a.ts' }] }] }
     act(() => { view = create(<SessionSections {...props} repo={renamed} commitFailures={{ '/repo': failed }} />) })
