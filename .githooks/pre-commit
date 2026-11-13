@@ -4,6 +4,7 @@
 # unnoticed until the pre-push hook runs everything. Tests see only the commit's
 # index, never other Sessions' working files. Typecheck stays at pre-push.
 set -e
+hooks=$(cd "$(dirname "$0")" && pwd)
 cd "$(git rev-parse --show-toplevel)"
 
 # Read what the commit carries before the env is cleared: `git commit --only` (Manor's
@@ -18,11 +19,14 @@ if ! command -v pnpm >/dev/null 2>&1; then
   exit 1
 fi
 
+# One hook run at a time, in a run folder that goes away however the run ends. See lib.sh.
+. "$hooks/lib.sh"
+hook_begin pre-commit
+
 # Export the effective index while GIT_INDEX_FILE still points at commit --only's
 # temporary index. No stash, reset, shared worktree registration or live-file copy.
-snapshot=$(mktemp -d "${TMPDIR:-/tmp}/manor-pre-commit.XXXXXX")
-trap 'rm -rf "$snapshot"' 0
-trap 'exit 1' 1 2 15
+snapshot=$hook_dir/snapshot
+mkdir "$snapshot"
 git checkout-index --all --prefix="$snapshot/"
 
 # A linked worktree hands the hook GIT_DIR, and every `git init` the tests run in a temp
@@ -39,7 +43,7 @@ cd "$snapshot"
 # install keeps the next undeclared import from reading as a broken commit. The cost
 # is a few seconds from a warm store, against a failure that looks like someone else's.
 echo "pre-commit: testing the commit index in an isolated snapshot." >&2
-if ! pnpm install --offline --frozen-lockfile --ignore-scripts 1>&2; then
+if ! hook_run pnpm install --offline --frozen-lockfile --ignore-scripts 1>&2; then
   echo "pre-commit: snapshot install failed. Populate the pnpm store with pnpm install, or fix the staged lockfile, then retry." >&2
   exit 1
 fi
@@ -47,4 +51,4 @@ fi
 # --stream prefixes every line with its package, also when only one runs, so Manor
 # can name the failing files. Output goes to stderr, where git sends hook output.
 # shellcheck disable=SC2086
-pnpm --stream $filters test 1>&2
+hook_run pnpm --stream $filters test 1>&2

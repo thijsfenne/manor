@@ -3,12 +3,23 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import os from 'node:os'
 import path from 'node:path'
-import { performance } from 'node:perf_hooks'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { BrowserHistoryStore } from './browserHistory'
 
 const { DatabaseSync } = createRequire(__filename)('node:sqlite') as typeof import('node:sqlite')
 const roots: string[] = []
+
+/**
+ * The processor time one call costs, in ms. The budget below is about the work a
+ * search does. Wall time also counts how long the machine kept this process waiting,
+ * and beside other test runs that alone was three times the budget for the same work.
+ */
+function cpuMsPerCall(calls: number, run: () => void): number {
+  const before = process.cpuUsage()
+  run()
+  const { user, system } = process.cpuUsage(before)
+  return (user + system) / 1_000 / calls
+}
 
 afterEach(async () => {
   vi.restoreAllMocks()
@@ -119,10 +130,9 @@ describe('BrowserHistoryStore', () => {
     store.replaceImported(browserImport(root, 'dia', rows))
 
     store.search('representative')
-    const started = performance.now()
-    for (let search = 0; search < 10; search += 1) store.search('representative')
-
-    const averageMs = (performance.now() - started) / 10
+    const averageMs = cpuMsPerCall(10, () => {
+      for (let search = 0; search < 10; search += 1) store.search('representative')
+    })
     expect(store.search('representative').map(({ url }) => url)).toEqual(
       Array.from({ length: 8 }, (_, index) => `https://history.example/page/${16_516 - index}`),
     )
@@ -189,9 +199,9 @@ describe('BrowserHistoryStore', () => {
     // One-letter prefixes match every row; the last two match none or almost none.
     const queries = ['s', 'si', 'site1', 'site12', 'representative', 'page/1234', 'nothing here']
     store.addressMatches('s')
-    const started = performance.now()
-    for (const query of queries) store.addressMatches(query)
-    const averageMs = (performance.now() - started) / queries.length
+    const averageMs = cpuMsPerCall(queries.length, () => {
+      for (const query of queries) store.addressMatches(query)
+    })
     expect(store.addressMatches('site12').sites[0]?.url).toMatch(/^https:\/\/site12\d*\.example\/$/)
     expect(store.addressMatches('page/1234').pages.map(({ url }) => url)).toContain('https://site534.example/page/1234')
     expect(averageMs).toBeLessThan(25)

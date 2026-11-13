@@ -1,5 +1,6 @@
 #!/bin/sh
 set -e
+hooks=$(cd "$(dirname "$0")" && pwd)
 cd "$(git rev-parse --show-toplevel)"
 # A push from a linked worktree hands the hook GIT_DIR. Every `git init` the tests
 # run in a temp dir would then re-initialise this repository instead, flipping the
@@ -8,5 +9,8 @@ unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE
 # Reads git's list of pushed refs from stdin, so it runs first.
 scripts/check-outgoing.sh "$1"
 scripts/check-public.sh
-pnpm -r typecheck
-pnpm -r test
+# One hook run at a time, and the temp folders the tests leave go with the run. See lib.sh.
+. "$hooks/lib.sh"
+hook_begin pre-push
+hook_run pnpm -r typecheck
+hook_run pnpm -r test

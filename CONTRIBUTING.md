@@ -16,7 +16,7 @@ pnpm dev
 pnpm desktop:dev
 ```
 
-`pnpm install` also points git at the hooks in `.githooks`. The commit hook runs the tests of the packages you touched.
+`pnpm install` also points git at the hooks in `.githooks`. The commit hook runs the tests of the packages you touched. Hook runs in one clone wait for each other, also across its worktrees, so a commit can sit for a while behind another one.
 
 To try a change without touching your own Manor data or a provider subscription, use the isolated server with the mock driver.
 
