@@ -18,6 +18,7 @@ import {
 } from '@manor/contracts'
 import { AsyncQueue } from '../asyncQueue.js'
 import {
+  agentTurnEnv,
   appendChildErrorTail,
   attachedMcpEnvironment,
   childProcessEnv,
@@ -2054,7 +2055,7 @@ export function createCodexDriver(options: CodexDriverOptions): Driver {
               ensureAgentDir(input.cwd, input.agent),
               personalSkillManifests(),
             ])
-            env = childProcessEnv(sourceEnv, grantedKeys, { CODEX_HOME: prepared[0] })
+            env = agentTurnEnv(sourceEnv, grantedKeys, { CODEX_HOME: prepared[0] })
             codexHome = prepared[0]
             workDir = prepared[1]
             disabledSkillManifests = prepared[2]

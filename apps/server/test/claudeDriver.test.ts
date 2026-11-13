@@ -471,6 +471,19 @@ describe('createClaudeDriver', () => {
     }
   })
 
+  it('hands a turn the ssh agent socket, so git over ssh works as it does in the Terminal', async () => {
+    const before = process.env.SSH_AUTH_SOCK
+    process.env.SSH_AUTH_SOCK = '/tmp/manor-test-agent.sock'
+    try {
+      const { env } = await run({ agent: sage, stdoutLines: fixture('claude-success.jsonl') })
+
+      expect(env['SSH_AUTH_SOCK']).toBe('/tmp/manor-test-agent.sock')
+    } finally {
+      if (before === undefined) delete process.env.SSH_AUTH_SOCK
+      else process.env.SSH_AUTH_SOCK = before
+    }
+  })
+
   it('redacts an attached capability when the CLI echoes it to stderr', async () => {
     process.env.MANOR_TEST_CAPABILITY = 'capability-secret'
     try {

@@ -110,6 +110,23 @@ export function childProcessEnv(
   return pickEnv(hostEnv, [...PASS_THROUGH_KEYS, ...grantedKeys], extra)
 }
 
+/**
+ * What an agent's own shell needs on top of the base list. `SSH_AUTH_SOCK` lets ssh
+ * use a key the macOS agent holds, the way the user's Terminal and Manor's own push
+ * do. It opens nothing new: the agent already reaches the user's keys and git sign
+ * in through `HOME`. Only a provider turn gets it, never a probe or a status call.
+ */
+const AGENT_TURN_KEYS = ['SSH_AUTH_SOCK'] as const
+
+/** The environment of a provider turn: the base list, the agent's own keys and the granted capability keys. */
+export function agentTurnEnv(
+  hostEnv: NodeJS.ProcessEnv = process.env,
+  grantedKeys: readonly string[] = [],
+  extra: NodeJS.ProcessEnv = {},
+): NodeJS.ProcessEnv {
+  return pickEnv(hostEnv, [...PASS_THROUGH_KEYS, ...AGENT_TURN_KEYS, ...grantedKeys], extra)
+}
+
 /** Env for an upstream stdio MCP. No HOME, no sibling connector keys. */
 export function upstreamProcessEnv(
   hostEnv: NodeJS.ProcessEnv = process.env,

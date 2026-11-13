@@ -18,6 +18,7 @@ import { dataPaths } from '../paths.js'
 import { runtimeVersion } from './runtimeVersion.js'
 import { checkGrok, runUpdater } from './providerUpdate.js'
 import {
+  agentTurnEnv,
   appendChildErrorTail,
   attachedMcpEnvironment,
   childProcessEnv,
@@ -754,7 +755,7 @@ export function createGrokDriver(options: GrokDriverOptions): Driver {
         try {
           grokHome = await ensureGrokHome()
           workDir = await ensureGrokAgentDir(input.cwd, input.agent, input.mcpServers ?? [])
-          env = childProcessEnv(sourceEnv, grantedKeys, { HOME: grokHome, GROK_HOME: grokHome })
+          env = agentTurnEnv(sourceEnv, grantedKeys, { HOME: grokHome, GROK_HOME: grokHome })
         } catch (error: unknown) {
           fail(`could not prepare the ${command} workspace: ${(error as Error).message}`)
           return

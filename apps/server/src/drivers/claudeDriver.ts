@@ -25,6 +25,7 @@ import { runtimeVersion } from './runtimeVersion.js'
 import { parseClaudeAccount, runStatusCommand } from './providerAccount.js'
 import { checkAgainstNpm, runUpdater } from './providerUpdate.js'
 import {
+  agentTurnEnv,
   appendChildErrorTail,
   attachedMcpEnvironment,
   childProcessEnv,
@@ -1825,7 +1826,7 @@ export function createClaudeDriver(options: ClaudeDriverOptions): Driver {
           spawned = spawnFn(command, buildArgs(input), {
             cwd: input.cwd,
             env: {
-              ...childProcessEnv(sourceEnv, grantedKeys),
+              ...agentTurnEnv(sourceEnv, grantedKeys),
               ...entrypointEnv(),
               ...LAZY_MCP_ENV,
               ...TODO_TOOL_ENV,

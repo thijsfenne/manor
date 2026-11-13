@@ -17,6 +17,7 @@ import { AsyncQueue } from '../asyncQueue.js'
 import { runtimeVersion } from './runtimeVersion.js'
 import { parseCursorAccount, runStatusCommand } from './providerAccount.js'
 import {
+  agentTurnEnv,
   appendChildErrorTail,
   attachedMcpEnvironment,
   childProcessEnv,
@@ -824,7 +825,7 @@ export function createCursorDriver(options: CursorDriverOptions): Driver {
         try {
           const configDir = await ensureCursorConfigDir()
           workDir = await ensureCursorAgentDir(input.cwd, input.agent, input.mcpServers ?? [], input.singleSession === true)
-          env = childProcessEnv(sourceEnv, grantedKeys, { CURSOR_CONFIG_DIR: configDir })
+          env = agentTurnEnv(sourceEnv, grantedKeys, { CURSOR_CONFIG_DIR: configDir })
         } catch (error: unknown) {
           fail(`could not prepare the ${command} workspace: ${(error as Error).message}`)
           return

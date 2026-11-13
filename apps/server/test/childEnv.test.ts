@@ -3,6 +3,7 @@ import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:f
 import os from 'node:os'
 import path from 'node:path'
 import {
+  agentTurnEnv,
   appendChildErrorTail,
   attachedMcpEnvironment,
   CHILD_ERROR_TAIL_CHARS,
@@ -61,6 +62,14 @@ describe('childProcessEnv', () => {
     )
 
     expect(env).toEqual({ PATH: '/usr/bin', MCP_TOKEN: 'allowed', CODEX_HOME: '/tmp/codex-home' })
+  })
+
+  it('gives the ssh agent socket to a provider turn and to no other child', () => {
+    const host = { PATH: '/usr/bin', SSH_AUTH_SOCK: '/tmp/agent.sock', GH_TOKEN: 'repository-secret', MCP_TOKEN: 'allowed' }
+
+    expect(agentTurnEnv(host, ['MCP_TOKEN'], { CODEX_HOME: '/tmp/codex-home' }))
+      .toEqual({ PATH: '/usr/bin', SSH_AUTH_SOCK: '/tmp/agent.sock', MCP_TOKEN: 'allowed', CODEX_HOME: '/tmp/codex-home' })
+    expect(childProcessEnv(host)).toEqual({ PATH: '/usr/bin' })
   })
 
   it('keeps per-turn MCP values out of the server env while granting them to one child', () => {
