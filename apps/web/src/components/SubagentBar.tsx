@@ -27,13 +27,13 @@ export function SubagentBar({ driver, runtime, status, onOpenParent, padding }: 
           data-subagent-bar=""
           className="flex min-h-12 items-center gap-3 rounded-composer border border-composer-line bg-composer py-2 pr-2 pl-4 text-[13px]"
         >
-          <div className="flex min-w-0 flex-1 items-center gap-3 @max-[560px]/subagent-bar:flex-col @max-[560px]/subagent-bar:items-start @max-[560px]/subagent-bar:gap-0.5">
+          <div className="flex min-w-0 flex-1 items-center gap-3 @max-[480px]/subagent-bar:flex-col @max-[480px]/subagent-bar:items-start @max-[480px]/subagent-bar:gap-0.5">
             <span className="flex min-w-0 max-w-full items-center gap-2">
               {driver === undefined ? null : <ProviderMark driver={driver} size={16} />}
               <span className="min-w-0 truncate font-medium text-text">{runtime?.model ?? 'Subagent'}</span>
               {runtime?.effort === undefined ? null : <span className="flex-none text-muted">{runtime.effort}</span>}
             </span>
-            <span aria-hidden="true" className="flex-none text-muted tabular-nums @max-[560px]/subagent-bar:text-[12px]">{status}</span>
+            <span aria-hidden="true" className="flex-none text-muted tabular-nums @max-[480px]/subagent-bar:text-[12px]">{status}</span>
             <span role="status" className="sr-only">{`${label} subagent: ${status.replace(/^Working .*/, 'Working')}`}</span>
           </div>
           <Button variant="ghost" size="compact" className="flex flex-none items-center gap-1.5" onClick={onOpenParent}>
