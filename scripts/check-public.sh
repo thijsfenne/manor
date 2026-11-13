@@ -25,8 +25,8 @@ if [ -r "$names_file" ]; then private="$(head -n 1 "$names_file")"; fi
 publisher='com\.thijsfenne\.manor[a-z-]*|github\.com/thijsfenne/[A-Za-z-]+'
 
 # Files where the publisher's name itself is meant to be: the licence, the author
-# fields and the Expo owner.
-allowed='^(LICENSE|scripts/check-public\.sh|apps/desktop/package\.json|apps/mobile/app\.json|apps/mobile/modules/manor-image-paste/ios/ManorImagePaste\.podspec):'
+# fields, the Expo owner and the two checks that spell out the pattern above.
+allowed='^(LICENSE|scripts/check-public\.sh|scripts/check-outgoing\.sh|apps/desktop/package\.json|apps/mobile/app\.json|apps/mobile/modules/manor-image-paste/ios/ManorImagePaste\.podspec):'
 
 if [ -n "$private" ]; then
   hits="$(git ls-files -z -- . ':!pnpm-lock.yaml' | { xargs -0 grep -InE -i "$private" 2>/dev/null || true; })"
