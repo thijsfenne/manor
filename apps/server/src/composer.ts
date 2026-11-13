@@ -890,7 +890,18 @@ export function withChatCodeChangeRule(agent: AgentConfig): AgentConfig {
 
 const SUBAGENT_GUIDANCE = 'Delegate when parts of the work are independent or span many files and a separate context helps; do a handful of tool calls yourself.'
 
-export const SUBAGENT_REVIEW_RULE = 'For code review or a second opinion, use the newest allowed GPT Sol at high. If no Sol model is allowed and available at high, use the newest allowed Grok at high, then the newest allowed Grok through Cursor at high. For a GPT lead, try Grok first, then Grok through Cursor, then Sol, all newest allowed and available at high. Never use GPT Astra or a Claude model (Haiku, Sonnet, Opus, or Cursor-hosted Claude) as a reviewer. If no Sol or Grok reviewer is allowed and available at high, report the blocker instead of claiming a review or reporting Done. Name the fallback in your report. GPT and Grok review code better, and Claude Opus writes the nicest code: a review that calls for a full rewrite sends the rewrite to the newest allowed Opus, not the review.'
+/**
+ * Reviewer choice stays in the prompt: Settings, sign-in and usage limits change between
+ * turns, and the lead sees what delegate_task allows. The last-resort step (2026-11-13)
+ * lets a one-subscription install still get a review.
+ */
+export const SUBAGENT_REVIEW_RULE = [
+  'For code review or a second opinion, use the newest allowed GPT Sol at high. If no Sol model is allowed and available at high, use the newest allowed Grok at high, then the newest allowed Grok through Cursor at high. For a GPT lead, try Grok first, then Grok through Cursor, then Sol, all newest allowed and available at high.',
+  'A model is unavailable when Settings does not allow it, its provider is not signed in, or its usage limit is hit.',
+  'Only when no Sol or Grok reviewer is available, fall back: the strongest available model from a provider other than yours reviews; when only your own provider is available, its strongest model reviews (Opus for a Claude lead). Outside that fallback, never use a Claude model (Haiku, Sonnet, Opus, or Cursor-hosted Claude) as a reviewer. Never use GPT Astra or Haiku as a reviewer, fallback included.',
+  'Name the reviewer in your report, and say it was a fallback when it came from one, so the user can weigh it. Report a blocker instead of claiming a review or reporting Done only when no model at all can review.',
+  'GPT and Grok review code better, and Claude Opus writes the nicest code: a review that calls for a full rewrite sends the rewrite to the newest allowed Opus, not the review.',
+].join(' ')
 
 export const SUBAGENT_RULE = [
   '[Manor] Subagents:',
@@ -908,13 +919,25 @@ export const REVIEW_SKILL_PATHS = {
   antiSlop: path.join(homedir(), '.agents', 'skills', 'anti-slop', 'SKILL.md'),
 }
 
+/**
+ * The review loop on top of the stop rule, adapted from tstack's sol-loop (2026-11-13):
+ * a round cap, delta rounds against a ledger, push back, and deadlock to the user.
+ */
+export const SINGLE_REVIEW_LOOP_RULES = [
+  'Round cap: at most 3 review rounds. Go up to 5 only while a P0 or P1 finding about security, permissions, data loss or state and concurrency stays open with evidence. Running out of rounds is not approval: report what is still open and let the user decide.',
+  'Delta rounds: round 1 reviews the full diff. Give every finding a stable id and keep a ledger of id, severity and outcome (fixed, disagree with evidence, or declined with a reason). A later round sends the reviewer that ledger and the code changed since the last round, asks it to check only the open ids and that changed code, and to mark each old id resolved or still open with a reason.',
+  'Push back: check every finding and its severity yourself. A finding about another path, a rare case or a small cost is a P3, whatever label it got. Fix with the smallest change, and prefer deleting or narrowing over a new helper, lock or option. Do not agree just to end the loop. If review grew the diff, cut it back first.',
+  'Deadlock: a finding still disputed after two exchanges with the reviewer ends the loop. Your report shows both sides in two or three lines each, and the user decides. A timeout, an error or an empty reply from the reviewer is never approval.',
+]
+
 export const SINGLE_SUBAGENT_RULE = [
   SUBAGENT_RULE.replace(SUBAGENT_GUIDANCE,
     'Default to delegation for broad code search across files you have not opened (newest allowed Haiku at high, file:line hits and searches run), independent implementation slices with a clear spec (newest allowed Sonnet at high), and code review (the reviewer order below). Keep small lookups with the lead.'),
   'Review only significant code changes in Single Sessions, including Single Work. Judge the actual final diff against the threshold below. For a non-significant diff, skip review and report Done or call goal_reached without a review child. If no code changed, skip the review.',
   'A significant change requires one read-only review subagent through delegate_task with review set to true before reporting Done and before calling goal_reached when available. Use that single reviewer for code-review on both the Standards and Spec axes, and anti-slop in after-implementation mode. The single reviewer checks correctness and safety first, then reports anti-slop in a separate section. Significant means any of: more than three files changed, a new module, component or behaviour, a schema or contract change, or roughly 150 or more changed lines. Review again after fixing, and keep going while an open finding is a P0, a P1, or a P2 the reviewer called alarming. Remaining P2 and P3 findings end the review instead of starting another round: report them with what you decided about each.',
+  ...SINGLE_REVIEW_LOOP_RULES,
   `Reviewers cannot load skills by name. Check that each skill file exists, then tell the reviewer to read it first and follow it: ${REVIEW_SKILL_PATHS.codeReview} for code-review, ${REVIEW_SKILL_PATHS.antiSlop} for anti-slop. For this combined review, apply both skills within the same reviewer without starting any subagents, even if a skill asks for parallel reviewers. If a skill file is missing, give that reviewer the generic review below instead and say in your report that the skill file was missing; never skip the review.`,
-  'Give the reviewer the actual current diff, the task brief and its constraints; instruct it to read only and return actionable findings with file:line evidence for Standards, Spec and anti-slop, each ranked P0 (bug, security, data loss, or a broken CLAUDE.md rule or Manor invariant), P1 (high maintainability or scalability risk), P2 (works today, bites later) or P3 (readability or polish), and to mark a P2 alarming when shipping it would cost far more to undo later than to fix now. That is the scale the Manor Reviewer uses, and ranking happens within each axis: never merge or rerank Standards against Spec. Collect its result with task_result if it is still running. Process every finding: fix it, or dismiss it with a reason. Your final report names the review child, which skills and axes it followed, and what came of its findings. Keep integration and final verification yourself.',
+  'In round 1, give the reviewer the actual current diff, the task brief and its constraints; later rounds follow the delta rule above. Instruct it to read only and return actionable findings with file:line evidence for Standards, Spec and anti-slop, each ranked P0 (bug, security, data loss, or a broken CLAUDE.md rule or Manor invariant), P1 (high maintainability or scalability risk), P2 (works today, bites later) or P3 (readability or polish), and to mark a P2 alarming when shipping it would cost far more to undo later than to fix now. That is the scale the Manor Reviewer uses, and ranking happens within each axis: never merge or rerank Standards against Spec. Collect its result with task_result if it is still running. Process every finding: fix it, or dismiss it with a reason. Your final report names the review child, which skills and axes it followed, and what came of its findings. Keep integration and final verification yourself.',
 ].join('\n')
 
 /** For turns that hold delegate_task, persona and Single alike; subagents get their own line in `subagents.ts`. */

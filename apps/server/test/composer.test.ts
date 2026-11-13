@@ -73,8 +73,8 @@ describe('Single subagent guidance', () => {
       'including Single Work', 'one read-only review subagent through delegate_task',
       'before reporting Done and before calling goal_reached',
       'If no code changed, skip the review',
-      'Name the fallback', 'report the blocker',
-      'actual current diff, the task brief and its constraints',
+      'say it was a fallback', 'Report a blocker',
+      'In round 1, give the reviewer the actual current diff, the task brief and its constraints; later rounds follow the delta rule above',
       'Collect its result with task_result', 'Process every finding',
       'fix it, or dismiss it with a reason', 'names the review child',
     ]) expect(character).toContain(instruction)
@@ -105,14 +105,48 @@ describe('Single subagent guidance', () => {
     expect(SINGLE_SUBAGENT_RULE).not.toContain('Start three reviewers in parallel')
   })
 
-  it.each([SUBAGENT_RULE, SINGLE_SUBAGENT_RULE])('keeps reviewer selection and refusal in shared guidance', (rule) => {
+  it.each([SUBAGENT_RULE, SINGLE_SUBAGENT_RULE])('keeps reviewer selection and the last-resort fallback in shared guidance', (rule) => {
     expect(rule).toContain('use the newest allowed GPT Sol at high. If no Sol model is allowed and available at high, use the newest allowed Grok at high, then the newest allowed Grok through Cursor at high')
     expect(rule).toContain('For a GPT lead, try Grok first, then Grok through Cursor, then Sol, all newest allowed and available at high')
-    expect(rule).toContain('Never use GPT Astra or a Claude model (Haiku, Sonnet, Opus, or Cursor-hosted Claude) as a reviewer')
-    expect(rule).toContain('If no Sol or Grok reviewer is allowed and available at high, report the blocker instead of claiming a review or reporting Done')
+    expect(rule).toContain('A model is unavailable when Settings does not allow it, its provider is not signed in, or its usage limit is hit')
+    expect(rule).toContain('Only when no Sol or Grok reviewer is available, fall back: the strongest available model from a provider other than yours reviews')
+    expect(rule).toContain('when only your own provider is available, its strongest model reviews (Opus for a Claude lead)')
+    expect(rule).toContain('Outside that fallback, never use a Claude model (Haiku, Sonnet, Opus, or Cursor-hosted Claude) as a reviewer')
+    expect(rule).toContain('Never use GPT Astra or Haiku as a reviewer, fallback included')
+    expect(rule).toContain('say it was a fallback when it came from one, so the user can weigh it')
+    expect(rule).toContain('Report a blocker instead of claiming a review or reporting Done only when no model at all can review')
+    expect(rule).not.toContain('If no Sol or Grok reviewer is allowed and available at high, report the blocker')
     expect(rule).toContain('a review that calls for a full rewrite sends the rewrite to the newest allowed Opus, not the review')
-    expect(rule).not.toContain('another allowed model of a different family')
     expect(rule).not.toMatch(/gpt-\d|grok-\d|claude-opus-\d/)
+  })
+
+  it('caps the Single review loop with delta rounds, push back and deadlock to the user', () => {
+    for (const instruction of [
+      'at most 3 review rounds',
+      'Go up to 5 only while a P0 or P1 finding about security, permissions, data loss or state and concurrency stays open with evidence',
+      'Running out of rounds is not approval: report what is still open and let the user decide',
+      'round 1 reviews the full diff',
+      'keep a ledger of id, severity and outcome (fixed, disagree with evidence, or declined with a reason)',
+      'check only the open ids and that changed code, and to mark each old id resolved or still open',
+      'A finding about another path, a rare case or a small cost is a P3, whatever label it got',
+      'prefer deleting or narrowing over a new helper, lock or option',
+      'Do not agree just to end the loop. If review grew the diff, cut it back first.',
+      'a finding still disputed after two exchanges with the reviewer ends the loop',
+      'shows both sides in two or three lines each, and the user decides',
+      'A timeout, an error or an empty reply from the reviewer is never approval',
+    ]) expect(SINGLE_SUBAGENT_RULE).toContain(instruction)
+    // The loop sits on top of the existing stop rule, not in place of it.
+    expect(SINGLE_SUBAGENT_RULE).toContain('keep going while an open finding is a P0, a P1, or a P2 the reviewer called alarming')
+    // Multiple reviews through Argus, whose goal Sessions stay uncapped.
+    expect(SUBAGENT_RULE).not.toContain('Round cap')
+  })
+
+  it.each(['claude', 'codex', 'grok', 'cursor'] as const)('gives a %s lead the same review block', (driver) => {
+    const agent = { ...agents[0]!, driver }
+    const character = withSubagentRule(agent, true).character
+    expect(character).toBe(`${agent.character}\n\n${SINGLE_SUBAGENT_RULE}`)
+    expect(character).toContain('Round cap: at most 3 review rounds')
+    expect(character).toContain('Only when no Sol or Grok reviewer is available, fall back')
   })
 
   it('keeps Multiple delegation and review scope unchanged', () => {
