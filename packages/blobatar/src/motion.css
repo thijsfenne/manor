@@ -360,6 +360,25 @@
   transition: fill var(--mo-morph) var(--mo-morph-ease);
 }
 
+/*
+ * The clay finish is relit from the head, so its gradients and filters read
+ * `--mo-hi`, `--mo-lo` and `--mo-deep` beside `--mo-head`. They ease on the same
+ * clock as the fill, or a tinting pose would snap its shading while the head
+ * under it took the whole morph to arrive.
+ */
+.mo-root stop {
+  transition: stop-color var(--mo-morph) var(--mo-morph-ease);
+}
+
+.mo-root feFlood {
+  transition: flood-color var(--mo-morph) var(--mo-morph-ease);
+}
+
+/* The lit lip under a shaded eye, which is the first path of the eye's one child. */
+.mo-eye > g > path:first-child {
+  transition: fill var(--mo-morph) var(--mo-morph-ease);
+}
+
 /**
  * A held tremor, not a burst — four stops around an irregular loop.
  *
@@ -1172,7 +1191,10 @@
     transition: none;
   }
 
-  .mo-bob > g:not(.mo-eyes) {
+  .mo-bob > g:not(.mo-eyes),
+  .mo-root stop,
+  .mo-root feFlood,
+  .mo-eye > g > path:first-child {
     transition: none;
   }
 }

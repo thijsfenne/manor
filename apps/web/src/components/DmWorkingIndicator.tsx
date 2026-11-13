@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import type { AgentConfig } from '@manor/contracts'
+import { turnFace } from '@manor/client-runtime/face-activity'
 import { personaOf, type Persona } from '../state'
 import { dmWorkingLabel, type DmWorking } from '../turnTrace'
 import { INSTANT, TEXT_SWAP, TEXT_SWAP_ABOVE, TEXT_SWAP_BELOW, TEXT_SWAP_REST } from '../motion'
 import { TurnHeader } from './Bubbles'
 import { useNowSecond } from '../useNowSecond'
+import { useFaceState } from '../useFaceState'
 
 /** A label stays at least this long, so a run of quick calls cannot make it flicker. */
 const LABEL_HOLD_MS = 2_500
@@ -27,6 +29,9 @@ export function DmWorkingIndicator({ working, persona, agents }: {
     ? `Waiting for ${personaOf(agents, working.peerAgentId).name}…`
     : dmWorkingLabel(working.kind === 'turn' ? working.turn : undefined, now)
   const shown = useHeldLabel(label)
+  // The face says what the words say: waiting on a colleague, thinking before a turn has
+  // drawn anything, and otherwise whatever her turn is doing.
+  const face = useFaceState(working.kind === 'consult' ? 'waiting' : working.kind === 'turn' ? turnFace(working.turn) : 'thinking', undefined, true)
   return (
     <motion.div
       data-dm-working=""
@@ -39,6 +44,7 @@ export function DmWorkingIndicator({ working, persona, agents }: {
       <TurnHeader
         quiet
         working
+        face={face}
         name={persona.name}
         color={persona.color}
         avatar={persona.avatar}

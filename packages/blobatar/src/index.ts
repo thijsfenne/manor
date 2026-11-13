@@ -18,7 +18,7 @@ export {
   type ColorKey,
 } from "./color";
 export { traits, type Traits, type TraitOverrides } from "./traits";
-export { CLAY, groundY, type Glow, type Stop } from "./shading";
+export { CLAY, clayTones, groundY, type Glow, type Stop, type Tone, type Tones } from "./shading";
 export { normalizeSeed } from "./hash";
 
 /**

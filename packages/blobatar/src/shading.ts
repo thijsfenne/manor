@@ -1,22 +1,32 @@
 /**
- * Manor's clay finish: the head modelled with light from the top left, a soft
- * shadow inside its bottom-right edge, a matte highlight, and a contact shadow
- * on the ground below it.
+ * Manor's clay finish: the head lit in its own colour from the top left, a soft
+ * shadow inside its bottom-right edge with a thin bounce light closing that edge,
+ * a matte highlight, and a contact shadow on the ground below it.
  *
  * Opt-in through `shading: "clay"`, so the frozen default output stays exactly
- * what it was. Every layer is a neutral black or white overlay rather than a mix
- * of the head colour. Mixing a colour toward white or black by `k` is the same
- * as laying white or black over it at opacity `k`, so the overlays reproduce the
- * colour-mixed look while the head keeps its one flat fill. That is what lets a
- * tinting expression keep working: `--mo-head` changes the head's fill, and the
- * shading over it follows for free.
+ * what it was. Every layer is an overlay, and the head keeps its one flat fill.
+ * The overlays are not neutral: the light leans warm and the shade leans cool, both
+ * relit from the head's own colour, because black and white over a saturated head
+ * dull it at the edges and chalk its highlight. That costs the finish its free ride
+ * on a tinting expression, so the relit colours travel the way the head's fill
+ * does. A still face has them written into the markup from the palette it wears,
+ * and an animated face reads them from `--mo-hi`, `--mo-lo` and `--mo-deep`, which
+ * the adapter sets beside `--mo-head`. The markup under the root therefore still
+ * does not vary with the expression.
  *
  * The numbers live here once. The string renderer below serializes them for the
  * web, and the phone draws the same values with react-native-svg.
  */
+import { fromHex, toHex } from "./color"
 
-/** A gradient stop: offset, opacity, and white or (absent) black. */
-export type Stop = readonly [offset: number, opacity: number, white?: true]
+/**
+ * Which colour a layer wears. `hi`, `lo` and `deep` are the head relit, see
+ * `clayTones`; `head` is the head itself.
+ */
+export type Tone = "white" | "hi" | "lo" | "deep" | "head"
+
+/** A gradient stop: offset, opacity and tone. */
+export type Stop = readonly [offset: number, opacity: number, tone: Tone]
 
 /** A radial gradient in user space, stretched to an ellipse when `rx` and `ry` differ. */
 export interface Glow {
@@ -24,24 +34,41 @@ export interface Glow {
   cy: number
   rx: number
   ry: number
+  /** Degrees the ellipse is turned about its own centre. */
+  rot?: number
   stops: readonly Stop[]
 }
 
 export const CLAY = {
   /**
-   * The light across the head: white at the top left fading out by 0.75 of the
-   * radius, then black toward the far edge. Two stops share 0.75 so the colour
-   * switches where both are transparent.
+   * The optical sizes. At `small` and under, the finish is the light alone and the
+   * eyes are drawn larger, because a highlight and a blurred band are haze at
+   * twenty pixels and the eyes are a pixel wide. From `glint` up, a crisp glint
+   * sits on the soft highlight.
+   */
+  small: 28,
+  glint: 40,
+  /**
+   * The light across the head: its warm relit colour at the top left fading out
+   * by 0.46 of the radius, then its cool one toward the far edge. Two stops share
+   * 0.46 so the colour switches where both are transparent.
    */
   light: {
-    cx: 40, cy: 35, rx: 62, ry: 62,
-    stops: [[0, 0.12, true], [0.75, 0, true], [0.75, 0], [1, 0.18]],
+    cx: 37, cy: 30, rx: 68, ry: 68,
+    stops: [[0, 1, "hi"], [0.46, 0, "hi"], [0.46, 0, "lo"], [1, 1, "lo"]],
   } satisfies Glow,
   /** The matte highlight, a soft white ellipse that the head's outline clips. */
   highlight: {
-    cx: 36, cy: 28, rx: 19, ry: 12,
-    stops: [[0, 0.22, true], [0.45, 0.19, true], [1, 0, true]],
+    cx: 35, cy: 27, rx: 15, ry: 8.5, rot: -18,
+    stops: [[0, 0.46, "white"], [0.55, 0.24, "white"], [1, 0, "white"]],
   } satisfies Glow,
+  /** The glint on the highlight. A gradient with a short falloff, not a blur. */
+  spark: {
+    cx: 34.5, cy: 27.5, rx: 7.5, ry: 3.3, rot: -24,
+    stops: [[0, 0.64, "white"], [0.7, 0.6, "white"], [1, 0, "white"]],
+  } satisfies Glow,
+  /** What a dark head keeps of its white layers, and what the highlight keeps under a glint. */
+  dim: { dark: 0.64, under: 0.7 },
   /**
    * The contact shadow. It sits `gap` below the head's lowest point, so a face
    * drawn high keeps its shadow close, and never lower than `cy`, which keeps it
@@ -49,24 +76,100 @@ export const CLAY = {
    */
   contact: {
     cx: 50, cy: 92, rx: 33, ry: 6.5, gap: 3,
-    stops: [[0, 0.26], [0.5, 0.15], [1, 0]],
+    stops: [[0, 0.42, "deep"], [0.5, 0.2, "deep"], [1, 0, "deep"]],
   } satisfies Glow & { gap: number },
+  /**
+   * What takes the contact shadow's place on a dark canvas, where a shadow cannot
+   * show: a glow in the head's own colour. Asked for with `ground: "glow"`.
+   */
+  glow: {
+    cx: 50, cy: 92, rx: 36, ry: 8,
+    stops: [[0, 0.5, "head"], [0.5, 0.22, "head"], [1, 0, "head"]],
+  } satisfies Glow,
   /**
    * The inner shadow: the silhouette, blurred by `blur` and moved by `dx`/`dy`
    * toward the light, cut out of itself. What is left is a soft band along the
-   * bottom-right edge, painted black at `opacity`.
+   * bottom-right edge, painted in `tone` at `opacity`.
    */
-  inner: { blur: 4, dx: -3, dy: -4, opacity: 0.25 },
+  inner: { blur: 4, dx: -3, dy: -4, opacity: 0.62, tone: "deep" },
+  /** The bounce light: the same cut, tighter, so a thin lit line closes the shaded edge. */
+  bounce: { blur: 1.1, dx: -1.1, dy: -1.5, opacity: 0.38, dark: 0.5, tone: "hi" },
+  /** The lit lip under each eye, which is what presses it into the surface. */
+  lip: { dy: 0.9, opacity: 0.55, tone: "hi" },
+  /** The eyes at `small`: grown about their own centres, spread about the pair's. */
+  eyes: { grow: 1.34, spread: 1.16 },
 } as const
+
+/** The head's colour and the three it is relit into. */
+export type Tones = Record<Tone, string> & {
+  /** A dark head, whose white layers are dimmed and whose bounce light is raised. */
+  dark: boolean
+}
+
+/** Moves a hue toward a target along the short arc, by at most `by` degrees. */
+const toward = (h: number, target: number, by: number) => {
+  const d = ((target - h + 540) % 360) - 180
+  return (h + Math.max(-by, Math.min(by, d)) + 360) % 360
+}
+
+/**
+ * The head relit: `hi` lighter and leaning to yellow, `lo` darker, a touch more
+ * saturated and leaning to violet, `deep` further the same way. Lightness, chroma
+ * and hue move in OKLCh, the space the palette is built in.
+ */
+export function clayTones(head: string): Tones {
+  const o = fromHex(head)
+  const dark = o.l < 0.45
+  const relit = (dl: number, dc: number, target: number, by: number) =>
+    toHex({ l: Math.max(0.05, Math.min(0.98, o.l + dl)), c: Math.max(0, o.c + dc), h: toward(o.h, target, by) })
+  return {
+    white: "white",
+    head,
+    hi: relit(dark ? 0.16 : 0.1, -0.01, 95, 14),
+    lo: relit(-0.13, 0.02, 285, 18),
+    deep: relit(-0.26, 0.01, 285, 24),
+    dark,
+  }
+}
+
+/** The relit colours as the custom properties an animated face reads them from. */
+export const toneVars = (head: string) => {
+  const t = clayTones(head)
+  return { "--mo-hi": t.hi, "--mo-lo": t.lo, "--mo-deep": t.deep }
+}
 
 const r2 = (v: number) => Math.round(v * 100) / 100
 
-const stop = ([offset, opacity, white]: Stop) =>
-  `<stop offset="${offset}"${white ? ` stop-color="#fff"` : ""} stop-opacity="${opacity}"/>`
+/**
+ * One finish, as the renderer asks for it. `id` prefixes every gradient, clip and
+ * filter. `tones` is what a still face is painted in; absent, the face is animated
+ * and reads its colours from the custom properties. `dark` is stated apart from
+ * the tones for that reason: an animated face has none here, and its opacities may
+ * not move with the expression.
+ */
+export interface Finish {
+  id: string
+  size?: number
+  glow?: boolean
+  tones?: Tones
+  dark?: boolean
+}
 
-/** A user-space radial gradient; the stretch rides on its transform so it stays elliptical. */
-const glow = (id: string, g: Glow) =>
-  `<radialGradient id="${id}" gradientUnits="userSpaceOnUse" cx="0" cy="0" r="1" gradientTransform="translate(${g.cx} ${r2(g.cy)}) scale(${g.rx} ${g.ry})">${g.stops.map(stop).join("")}</radialGradient>`
+/** A tone as the value of a paint property: a colour, or the custom property it rides on. */
+const colour = (tone: Tone, tones?: Tones) =>
+  tones ? tones[tone] : tone === "white" ? tone : `var(--mo-${tone})`
+
+/** A paint property as markup. A custom property has to go through `style`; an attribute cannot read one. */
+export const paint = (property: string, tone: Tone, tones?: Tones) => {
+  const value = colour(tone, tones)
+  return value.startsWith("var(") ? `style="${property}:${value}"` : `${property}="${value}"`
+}
+
+/** A user-space radial gradient; the turn and the stretch ride on its transform so it stays elliptical. */
+const glow = (id: string, g: Glow, tones?: Tones, keep = 1) =>
+  `<radialGradient id="${id}" gradientUnits="userSpaceOnUse" cx="0" cy="0" r="1" gradientTransform="translate(${g.cx} ${r2(g.cy)})${g.rot ? ` rotate(${g.rot})` : ""} scale(${g.rx} ${g.ry})">` +
+  g.stops.map(([offset, opacity, tone]) => `<stop offset="${offset}" ${paint("stop-color", tone, tones)} stop-opacity="${r2(opacity * keep)}"/>`).join("") +
+  `</radialGradient>`
 
 /**
  * Where the contact shadow centres for a head drawn from these paths and circles.
@@ -101,30 +204,46 @@ const box = (fill = "") => `<rect width="100" height="100"${fill && ` fill="${fi
  * scales that group as one. They are a rect and groups, never paths, so the
  * group's last path is still the silhouette. A box measure of that group counts
  * the rects, so measure its parts instead.
+ *
+ * At `CLAY.small` and under there are no filters at all, only the light, and no
+ * contact shadow: both are haze at that size, and a filter per list row is the
+ * costly part of the finish.
  */
-export function clay(id: string, shapes: string, ground: number) {
-  const contact = { ...CLAY.contact, cy: ground }
-  const { inner: s } = CLAY
+export function clay(finish: Finish, shapes: string, ground: number) {
+  const { id, tones } = finish
+  const dark = finish.dark ?? tones?.dark ?? false
+  const small = finish.size !== undefined && finish.size <= CLAY.small
+  const spark = finish.size !== undefined && finish.size >= CLAY.glint
+  const url = (key: string) => `url(#${id}${key})`
+  const whites = dark ? CLAY.dim.dark : 1
+  const floor = finish.glow ? CLAY.glow : small ? undefined : CLAY.contact
   // Filtered as a group, so `SourceAlpha` is the clipped silhouette, not the rect.
-  const shadow =
-    `<filter id="${id}i" x="-20%" y="-20%" width="140%" height="140%">` +
+  const band = (key: string, s: { blur: number; dx: number; dy: number; tone: Tone }, opacity: number) =>
+    `<filter id="${id}${key}" x="-20%" y="-20%" width="140%" height="140%">` +
     `<feGaussianBlur in="SourceAlpha" stdDeviation="${s.blur}"/>` +
     `<feOffset dx="${s.dx}" dy="${s.dy}"/>` +
     `<feComposite in2="SourceAlpha" operator="arithmetic" k2="-1" k3="1" result="s"/>` +
-    `<feFlood flood-opacity="${s.opacity}"/>` +
+    `<feFlood ${paint("flood-color", s.tone, tones)} flood-opacity="${opacity}"/>` +
     `<feComposite in2="s" operator="in"/>` +
     `</filter>`
+  const cut = (inside: string) => `<g clip-path="${url("k")}">${inside}</g>`
   return {
     defs:
       `<defs><clipPath id="${id}k">${shapes}</clipPath>` +
-      glow(`${id}l`, CLAY.light) +
-      glow(`${id}h`, CLAY.highlight) +
-      glow(`${id}c`, contact) +
-      shadow +
+      glow(`${id}l`, CLAY.light, tones) +
+      (floor ? glow(`${id}c`, { ...floor, cy: ground }, tones) : "") +
+      (small
+        ? ""
+        : glow(`${id}h`, CLAY.highlight, tones, whites * (spark ? CLAY.dim.under : 1)) +
+          (spark ? glow(`${id}g`, CLAY.spark, tones, whites) : "") +
+          band("i", CLAY.inner, CLAY.inner.opacity) +
+          band("b", CLAY.bounce, dark ? CLAY.bounce.dark : CLAY.bounce.opacity)) +
       `</defs>`,
-    contact: `<ellipse cx="${contact.cx}" cy="${r2(contact.cy)}" rx="${contact.rx}" ry="${contact.ry}" fill="url(#${id}c)"/>`,
-    overlays:
-      `<g filter="url(#${id}i)"><g clip-path="url(#${id}k)">${box()}</g></g>` +
-      `<g clip-path="url(#${id}k)">${box(`url(#${id}l)`)}${box(`url(#${id}h)`)}</g>`,
+    contact: floor ? `<ellipse cx="${floor.cx}" cy="${r2(ground)}" rx="${floor.rx}" ry="${floor.ry}" fill="${url("c")}"/>` : "",
+    overlays: small
+      ? cut(box(url("l")))
+      : cut(box(url("l"))) +
+        `<g filter="${url("i")}">${cut(box())}</g><g filter="${url("b")}">${cut(box())}</g>` +
+        cut(box(url("h")) + (spark ? box(url("g")) : "")),
   }
 }

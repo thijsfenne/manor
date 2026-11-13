@@ -1,6 +1,7 @@
 import type { Animate } from "./animate";
 import { palette as buildPalette, type Palette } from "./color";
 import type { Expression, Posable } from "./expression";
+import type { Finish } from "./shading";
 import { superellipse } from "./shape";
 import { traits, type TraitOverrides, type Traits } from "./traits";
 
@@ -96,6 +97,14 @@ export interface BlobatarOptions {
    */
   shading?: "clay";
   /**
+   * What `shading` puts under the figure. `"shadow"`, the default, is a contact
+   * shadow. `"glow"` is a glow in the head's own colour, for a dark canvas where a
+   * shadow cannot show. The library cannot see the page, and a still face is an
+   * `<img>` that no stylesheet reaches, so the caller states which it is.
+   * Ignored without `shading`.
+   */
+  ground?: "shadow" | "glow";
+  /**
    * Prefixes the gradient and filter ids that `shading` defines. Ids are
    * document-wide, so every inline blobatar on a page needs its own; the React
    * adapter passes `useId()`. Omitted, each render takes the next number.
@@ -113,11 +122,11 @@ export interface Style<L> {
    * `makeParts`.
    */
   /**
-   * `shade` is the id prefix for the clay finish, absent for the flat head.
-   * `ground` is what the finish puts under the figure, outside any pose; it is
-   * empty without `shade`.
+   * `finish` asks for the clay finish and carries its id prefix, absent for the
+   * flat head. `ground` is what the finish puts under the figure, outside any
+   * pose; it is empty without a finish.
    */
-  render(l: L, p: Palette, mo?: boolean, shade?: string): { ground: string; body: string };
+  render(l: L, p: Palette, mo?: boolean, finish?: Finish): { ground: string; body: string };
   background: boolean | "square" | "circle" | "squircle";
 }
 
@@ -152,8 +161,10 @@ let shaded = 0;
  * The id prefix for a shaded render. Starts with a letter outside hex, so an id
  * never reads as a colour inside a percent-encoded `url(%23…)`.
  */
-const shade = (opts: BlobatarOptions) =>
-  opts.shading ? `s${opts.idPrefix ?? ++shaded}-` : undefined;
+const shade = (opts: BlobatarOptions): Finish | undefined =>
+  opts.shading
+    ? { id: `s${opts.idPrefix ?? ++shaded}-`, size: opts.size, glow: opts.ground === "glow" }
+    : undefined;
 
 /** Wraps the body in the pose transform, when there is one. */
 const wrap = (body: string, t: string) =>

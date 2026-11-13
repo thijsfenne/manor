@@ -18,6 +18,8 @@
     "./turn-trace": "./src/turnTrace.ts",
     "./blob-shapes": "./src/blobShapes.ts",
     "./busy-face": "./src/busyFace.ts",
+    "./face-gesture": "./src/faceGesture.ts",
+    "./face-activity": "./src/faceActivity.ts",
     "./accent-hue": "./src/accentHue.ts",
     "./avatar-bubble": "./src/avatarBubble.ts",
     "./project-icons": "./src/projectIcons.ts",

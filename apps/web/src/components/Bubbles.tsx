@@ -1,4 +1,5 @@
 import { memo, useId, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
+import type { FaceState } from '@manor/client-runtime/face-activity'
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import { DISCLOSURE } from '../motion'
 import { AlertCircleIcon, ArrowDown01Icon, Clock01Icon, MinusSignIcon, RefreshIcon, TaskDone01Icon, Tick02Icon, Undo02Icon } from '@hugeicons/core-free-icons'
@@ -38,6 +39,7 @@ export function TurnHeader({
   avatarShape,
   avatarTone,
   working = false,
+  face: state,
   status,
   quiet = false,
 }: {
@@ -48,6 +50,8 @@ export function TurnHeader({
   avatarTone?: number
   /** Her turn is still running, which is the one thing her face here is allowed to say. */
   working?: boolean
+  /** What that turn is doing, for the face to show. See `Avatar`. */
+  face?: FaceState
   status?: ReactNode
   /**
    * The face alone, as in a DM's working indicator: the chat is already named after
@@ -55,7 +59,7 @@ export function TurnHeader({
    */
   quiet?: boolean
 }) {
-  const face = <Avatar name={name} color={color} src={avatar} shape={avatarShape} tone={avatarTone} size={32} working={working} />
+  const face = <Avatar name={name} color={color} src={avatar} shape={avatarShape} tone={avatarTone} size={32} working={working} face={state} />
   if (quiet) {
     return (
       <div className="flex min-h-8 w-fit max-w-full items-center gap-1.5 text-[16px] leading-none font-semibold" style={accentStyle(color)}>

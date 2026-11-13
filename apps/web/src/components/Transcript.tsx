@@ -38,6 +38,8 @@ import {
   streamedMessages,
 } from '../state'
 import { chatSubagents, dmWorking, hasFold, hasStatus, isCompactNote } from '../turnTrace'
+import { endFace, turnFace } from '@manor/client-runtime/face-activity'
+import { useFaceState } from '../useFaceState'
 import { SubagentLaunchesContext, type SubagentLaunches } from '../subagentContext'
 import { WakeNotices } from './SubagentRows'
 import { Icon } from './Icon'
@@ -1207,6 +1209,7 @@ const TurnRow = memo(function TurnRow({
   // Only once the turn is over: while it runs, "3 changed files" is a number that
   // is about to be wrong, and the trace above is already saying what is happening.
   const running = turn.live?.state === 'running'
+  const face = useFaceState(turnFace(turn, waitingOnAgentId !== undefined), endFace(turn), running)
   // Work keeps the live stream open so the task surface shows what is happening.
   // A DM never shows it live: the bubble is the conversation, the trace is evidence
   // asked for afterwards. Both fold shut again when the turn settles.
@@ -1275,6 +1278,7 @@ const TurnRow = memo(function TurnRow({
       avatarShape={persona.avatarShape}
       avatarTone={persona.avatarTone}
       working={running}
+      face={face}
       status={status}
     />
   ) : threadProject !== undefined || hasStatus(turn) ? (

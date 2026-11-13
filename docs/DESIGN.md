@@ -336,7 +336,7 @@ The persona dialog's toolset uses plain capability rows with one short explanati
 
 ### Persona faces
 
-Blobatar faces are deterministic from a persona's name, colored by her accent, and animated at every size. Their SVG shares the nominal slot's exact dimensions, so the avatar never exceeds its wrapper. Uploaded portraits remain circular and override the generated face.
+Blobatar faces are deterministic from a persona's name, colored by her accent, and animated at every size. A face in the transcript also shows what her turn is doing, with her eyes, a pose and a body gesture. On the phone that is the face behind the latest reply and the one in a DM's working line. Their SVG shares the nominal slot's exact dimensions, so the avatar never exceeds its wrapper. Uploaded portraits remain circular and override the generated face.
 
 ## Do's and Don'ts
 

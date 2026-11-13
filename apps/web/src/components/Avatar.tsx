@@ -1,15 +1,22 @@
 import { Blobatar } from '@manor/blobatar/react'
 import { palette, traits as seedTraits } from '@manor/blobatar'
-import { unsure } from '@manor/blobatar/expression'
+import { happy, sad, sleepy, thinking, unsure } from '@manor/blobatar/expression'
+import { FACE_LOOK, type FaceState } from '@manor/client-runtime/face-activity'
 import '@manor/blobatar/motion.css'
 import { useReducedMotion } from 'motion/react'
 import { memo, useEffect, useRef, useState, type CSSProperties } from 'react'
 import { accentHue, accentStyle } from '../accent'
 import { BLOB_FACE_TRAITS, DEFAULT_BLOB_TONE, SIDEBAR_WORKING_GAZE, WORKING_GAZE, blobShapeOf, blobShapeTraits } from '../blobShapes'
+import { useShownTheme } from '../useTheme'
 import { BUSY_LOOK, useBusyFace } from './busyFace'
+import { useFaceEyes, useFaceGesture } from './faceMotion'
 
 /** How long a face that stops working stays live, so its eyes and body can walk home. */
 const SETTLE_MS = 600
+
+/** The melt alone, held: what a face does while its answer streams in. */
+const DOTS_LOOK = { ...BUSY_LOOK, variation: 'dots', dots: true } as const
+const POSES = { thinking, sleepy, happy, sad }
 
 interface AvatarProps {
   name: string
@@ -39,6 +46,13 @@ interface AvatarProps {
   working?: boolean
   /** A running DM in the sidebar holds an upward squint and blinks without dots. */
   sidebarWorking?: boolean
+  /**
+   * What the turn behind this face is doing, where the caller knows more than that it
+   * runs: she reads, types, waits, needs the user, or has just finished. The eyes,
+   * the pose and the body follow it. Absent, a working face plays the busy loop as
+   * before. A portrait, or a reader who asks for reduced motion, shows none of it.
+   */
+  face?: FaceState
 }
 
 /**
@@ -47,7 +61,7 @@ interface AvatarProps {
  * Purely decorative everywhere it appears, because the name is always right next
  * to it, so it takes no alt text and no role.
  */
-export const Avatar = memo(function Avatar({ name, color, src, shape, tone = DEFAULT_BLOB_TONE, size, center = false, working = false, sidebarWorking = false }: AvatarProps) {
+export const Avatar = memo(function Avatar({ name, color, src, shape, tone = DEFAULT_BLOB_TONE, size, center = false, working = false, sidebarWorking = false, face }: AvatarProps) {
   const slot = useRef<HTMLSpanElement>(null)
   const [onScreen, setOnScreen] = useState(false)
   const [pageVisible, setPageVisible] = useState(true)
@@ -55,7 +69,10 @@ export const Avatar = memo(function Avatar({ name, color, src, shape, tone = DEF
   const [hovered, setHovered] = useState(false)
   const reduceMotion = useReducedMotion() ?? false
   const portrait = src !== undefined && src !== ''
-  const busy = working && !reduceMotion && !portrait
+  const lively = !reduceMotion && !portrait
+  const look = face === undefined || !lively ? undefined : FACE_LOOK[face]
+  // The loop is still what work looks like. A state with eyes of its own takes them over.
+  const busy = working && lively && (look === undefined || look.eyes === 'loop' || look.eyes === 'dots')
   // A face whose turn just ended stays live a moment, or the eyes would snap home
   // from wherever the loop had them, mid-melt included.
   const [settling, setSettling] = useState(false)
@@ -92,12 +109,19 @@ export const Avatar = memo(function Avatar({ name, color, src, shape, tone = DEF
       window.removeEventListener('blur', updateAttention)
     }
   }, [])
-  const moving = pageVisible && (working || settling || sidebarWorking || (onScreen && (hovered || windowFocused)))
+  const moving = pageVisible && (working || settling || sidebarWorking || look !== undefined || (onScreen && (hovered || windowFocused)))
   const square = { width: size, height: size }
   const hue = accentHue(color)
+  // A shadow under a face cannot show on the dark canvas, so there she stands on a glow.
+  const ground = useShownTheme() === 'dark' ? 'glow' : 'shadow'
   // The loop is the costly part of a working face, so one scrolled out of view rests
   // and picks up the next variation when it comes back.
-  useBusyFace(slot, busy && moving && onScreen, BUSY_LOOK, JSON.stringify([name, hue, tone, shape, size]))
+  const drawn = JSON.stringify([name, hue, tone, shape, size, ground])
+  useBusyFace(slot, busy && moving && onScreen, look?.eyes === 'dots' ? DOTS_LOOK : BUSY_LOOK, drawn)
+  // The body and the added eye moves rest with the loop when the face is out of sight.
+  const shown = moving && onScreen ? look : undefined
+  useFaceGesture(slot, shown?.gesture, drawn, shown?.passes)
+  useFaceEyes(slot, shown?.eyes === 'scan' || shown?.eyes === 'toward' || shown?.eyes === 'seesaw' ? shown.eyes : undefined, drawn)
 
   if (portrait) {
     return (
@@ -120,7 +144,7 @@ export const Avatar = memo(function Avatar({ name, color, src, shape, tone = DEF
   // seeded or explicitly chosen.
   // The busy face wears her resting traits, so a turn starting moves the eyes she has
   // rather than drawing a new face; only the still working face pins its own gaze.
-  const still = working && !busy
+  const still = working && !lively
   const traits = { ...BLOB_FACE_TRAITS, ...chosen, ...(sidebarWorking ? SIDEBAR_WORKING_GAZE : still ? WORKING_GAZE : {}) }
   // Nine of the ten silhouettes need none of this. The tenth draws its ink high in
   // its own viewBox, so centring the box leaves the face hovering above the name
@@ -148,11 +172,12 @@ export const Avatar = memo(function Avatar({ name, color, src, shape, tone = DEF
         size={size}
         tone={tone}
         shading="clay"
+        ground={ground}
         // Resting faces render still until the focused window or pointer needs them.
         {...(moving ? { animate: 'always' as const } : {})}
         {...(hue === undefined ? {} : { hue })}
         traits={traits}
-        {...(still || sidebarWorking ? { expression: unsure } : {})}
+        {...(look?.pose !== undefined ? { expression: POSES[look.pose] } : still || sidebarWorking ? { expression: unsure } : {})}
       />
       {still && moving ? <ThoughtDots color={workingDot(name, hue, tone)} size={size} /> : null}
     </span>

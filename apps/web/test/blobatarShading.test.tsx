@@ -1,5 +1,5 @@
 import { renderToStaticMarkup } from 'react-dom/server'
-import { blobatar } from '@manor/blobatar'
+import { CLAY, _layout, blobatar, clayTones } from '@manor/blobatar'
 import { _parts } from '@manor/blobatar/internal'
 import { mad, sad } from '@manor/blobatar/expression'
 import { Blobatar } from '@manor/blobatar/react'
@@ -57,9 +57,56 @@ describe('the clay finish', () => {
     expect(posed.indexOf('<ellipse')).toBeLessThan(posed.indexOf('<g transform='))
   })
 
-  it('shades in neutral overlays, so a tint on the head carries the finish with it', () => {
+  it('relights the finish from the head, so a tint on the head carries the finish with it', () => {
+    // A still face is painted from the palette it wears, the tinted one under a tinting pose.
     const flat = blobatar('Wren', { expression: mad })
-    const clay = blobatar('Wren', { expression: mad, shading: 'clay' })
-    expect(hexes(clay)).toEqual(hexes(flat))
+    const { hi, lo, deep } = clayTones(_layout('Wren', { expression: mad }).palette.head!)
+    expect(hexes(blobatar('Wren', { expression: mad, shading: 'clay' }))).toEqual(new Set([...hexes(flat), hi, lo, deep]))
+
+    // An animated face keeps the colours out of its markup and takes them from the pose.
+    const rest = _parts('Wren', { shading: 'clay', idPrefix: 'a', animate: 'always' })
+    const hot = _parts('Wren', { shading: 'clay', idPrefix: 'a', animate: 'always', expression: mad })
+    expect(rest.inner).toContain('var(--mo-hi)')
+    expect(hexes(rest.inner).has(clayTones(_layout('Wren').palette.head!).hi)).toBe(false)
+    expect(hot.vars?.['--mo-hi']).toBe(hi)
+    expect(rest.vars?.['--mo-hi']).not.toBe(hi)
+    expect(_parts('Wren', { animate: 'always' }).vars?.['--mo-hi']).toBeUndefined()
+  })
+
+  it('draws by optical size: the light alone when small, a glint when large', () => {
+    const small = blobatar('Wren', { shading: 'clay', size: CLAY.small })
+    const middle = blobatar('Wren', { shading: 'clay', size: CLAY.small + 4 })
+    const large = blobatar('Wren', { shading: 'clay', size: CLAY.glint })
+    // A filter per list row is the costly part of the finish, and haze at that size.
+    expect(small).not.toContain('<filter')
+    expect(small).not.toContain('<ellipse')
+    expect(middle.match(/<filter/g)).toHaveLength(2)
+    expect(defined(large)).toHaveLength(defined(middle).length + 1)
+  })
+
+  it('grows the eyes of a small face and leaves a larger one its own', () => {
+    const eyes = (markup: string) => [...markup.slice(markup.lastIndexOf('<g fill=')).matchAll(/ d="([^"]+)"/g)].map((match) => match[1]!)
+    const width = (d: string) => {
+      const xs = [...d.matchAll(/(-?[\d.]+)[ ,](-?[\d.]+)/g)].map((pair) => Number(pair[1]))
+      return Math.max(...xs) - Math.min(...xs)
+    }
+    const flat = eyes(blobatar('Wren'))
+    const small = eyes(blobatar('Wren', { shading: 'clay', size: 20 }))
+    expect(small).toHaveLength(2)
+    expect(width(small[0]!)).toBeGreaterThan(width(flat[0]!) * 1.05)
+    // Past the small size each eye is its own again, with the lit lip under it.
+    const large = eyes(blobatar('Wren', { shading: 'clay', size: 64 }))
+    expect(large).toHaveLength(4)
+    expect(large[1]).toBe(flat[0])
+  })
+
+  it('stands on a glow where a shadow cannot show', () => {
+    const head = _layout('Wren').palette.head!
+    const day = blobatar('Wren', { shading: 'clay' })
+    const night = blobatar('Wren', { shading: 'clay', ground: 'glow' })
+    // The shadow is the head relit deep; the glow is the head itself.
+    expect(night.match(new RegExp(head, 'g'))!.length).toBeGreaterThan(day.match(new RegExp(head, 'g'))!.length)
+    // A small face has no shadow by day, and keeps its glow by night.
+    expect(blobatar('Wren', { shading: 'clay', ground: 'glow', size: 20 })).toContain('<ellipse')
   })
 })

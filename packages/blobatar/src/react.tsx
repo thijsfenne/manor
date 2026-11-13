@@ -64,6 +64,7 @@ export function Blobatar({
   expression,
   traits,
   shading,
+  ground,
   idPrefix,
   ...rest
 }: BlobatarProps) {
@@ -78,7 +79,7 @@ export function Blobatar({
   // an `<img>` is a React warning per blobatar.
   const opts = {
     size, background, palette, hue, tone, normalize, contrast, title, expression, traits,
-    ...(shading ? { shading, idPrefix: scope } : {}),
+    ...(shading ? { shading, ground, idPrefix: scope } : {}),
   };
 
   // Both branches are hooks-stable: `animate` changing swaps the element type,

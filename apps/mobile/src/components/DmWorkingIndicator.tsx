@@ -1,11 +1,13 @@
 import type { AgentConfig } from '@manor/contracts'
 import { personaOf, type Persona } from '@manor/client-runtime/state'
+import { turnFace } from '@manor/client-runtime/face-activity'
 import { dmWorkingLabel, type DmWorking } from '@manor/client-runtime/turn-trace'
 import { useEffect, useRef, useState } from 'react'
 import { StyleSheet, View } from 'react-native'
 import Animated, { Easing, Keyframe, LayoutAnimationConfig, ReduceMotion } from 'react-native-reanimated'
 
 import { Blobatar } from '@/components/Blobatar'
+import { useFaceState } from '@/lib/useFaceState'
 import { ShimmerText } from '@/components/ShimmerText'
 import { colors, fonts, spacing } from '@/theme'
 
@@ -47,6 +49,9 @@ export function DmWorkingIndicator({ working, persona, agents, bare = false }: {
     ? `Waiting for ${personaOf(agents, working.peerAgentId).name}…`
     : dmWorkingLabel(working.kind === 'turn' ? working.turn : undefined, now)
   const shown = useHeldLabel(label)
+  // The face says what the words say: waiting on a colleague, thinking before a turn has
+  // drawn anything, and otherwise whatever her turn is doing.
+  const face = useFaceState(working.kind === 'consult' ? 'waiting' : working.kind === 'turn' ? turnFace(working.turn) : 'thinking', undefined, true)
   return (
     <Animated.View
       accessibilityLabel={bare ? shown : `${persona.name}: ${shown}`}
@@ -59,6 +64,7 @@ export function DmWorkingIndicator({ working, persona, agents, bare = false }: {
           <Blobatar
             animate
             busy
+            face={face}
             color={persona.color}
             name={persona.name}
             shape={persona.avatarShape}

@@ -186,11 +186,15 @@ function start(host: HTMLElement, ids: readonly VariationId[], speed: number, me
   const eyes = [...host.querySelectorAll<SVGGElement>('.mo-eye')]
   const silhouette = body?.querySelector(':scope > path:last-of-type')?.getAttribute('d')
   const [left, right] = eyes
-  if (group === null || body === null || left === undefined || right === undefined || ids.length === 0) return undefined
+  if (group === null || body === null || left === undefined || right === undefined || (ids.length === 0 && !melt)) return undefined
   if (matchMedia('(prefers-reduced-motion: reduce)').matches) return undefined
 
-  // A stop that has not finished walking home would be read as home and offset the loop.
-  for (const eye of [left, right]) for (const animation of eye.getAnimations()) if (animation.id === 'busy-home') animation.finish()
+  // Anything still on its way home would be read as home and offset the whole loop: a
+  // stop of this loop, an added eye move, and a pose the library is still morphing out of.
+  for (const eye of [left, right]) for (const animation of eye.getAnimations()) if (animation.id === 'busy-home' || animation.id === 'face-eyes-home') animation.finish()
+  if (typeof CSSTransition !== 'undefined') {
+    for (const animation of host.querySelector('.mo-root')?.getAnimations({ subtree: true }) ?? []) if (animation instanceof CSSTransition) animation.finish()
+  }
   const bases = [left, right].map((eye): Base => {
     const style = getComputedStyle(eye)
     const [x, y] = pair(style.translate)
@@ -274,12 +278,19 @@ function start(host: HTMLElement, ids: readonly VariationId[], speed: number, me
 }
 
 /**
+ * The group the head's own parts sit in. That is the body group itself, except while
+ * the dots rig is on it and until its dots have walked home: then the parts are one
+ * level down, and the body's own circles are the three dots.
+ */
+export const headOf = (body: SVGGElement): Element => (rigs.has(body) ? (body.firstElementChild ?? body) : body)
+
+/**
  * The middle of the head's own parts. The group's box would also count the clay
  * finish, whose full-box rects only show through the silhouette's clip.
  */
-function partsMiddle(body: SVGGElement): Pair {
+export function partsMiddle(body: SVGGElement): Pair {
   let [left, top, right, bottom] = [Infinity, Infinity, -Infinity, -Infinity]
-  for (const part of body.querySelectorAll<SVGGraphicsElement>(':scope > path, :scope > circle')) {
+  for (const part of headOf(body).querySelectorAll<SVGGraphicsElement>(':scope > path, :scope > circle')) {
     const box = part.getBBox()
     left = Math.min(left, box.x)
     top = Math.min(top, box.y)

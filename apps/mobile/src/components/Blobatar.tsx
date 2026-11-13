@@ -1,24 +1,39 @@
 import { accentHue } from '@manor/client-runtime/accent-hue'
 import { BLOB_FACE_TRAITS, DEFAULT_BLOB_TONE, SIDEBAR_WORKING_GAZE, WORKING_GAZE, blobShapeOf, blobShapeTraits } from '@manor/client-runtime/blob-shapes'
 import { BUSY_LOOK, DOT, order, timeline, type Key, type Pair } from '@manor/client-runtime/busy-face'
-import { CLAY, groundY, palette, traits as seedTraits, type Glow } from '@manor/blobatar'
-import { unsure } from '@manor/blobatar/expression'
+import { EYE_MOVE_MS, FACE_LOOK, scanStops, seesawStops, towardStops, type FaceLook, type FaceState } from '@manor/client-runtime/face-activity'
+import { frameOf, outlinePoints, plan } from '@manor/client-runtime/face-gesture'
+import { CLAY, clayTones, groundY, palette, traits as seedTraits, type Glow, type Tones } from '@manor/blobatar'
+import { happy, sad, sleepy, thinking, unsure } from '@manor/blobatar/expression'
 import { _parts } from '@manor/blobatar/internal'
 import MaskedView from '@react-native-masked-view/masked-view'
 import { Image } from 'expo-image'
-import { useId, useMemo, useState } from 'react'
+import { useEffect, useId, useMemo, useState } from 'react'
 import { StyleSheet, View, type ColorValue, type ViewStyle } from 'react-native'
-import Animated, { cubicBezier, useReducedMotion, type CSSAnimationKeyframes, type CSSAnimationTimingFunction, type CSSStyle } from 'react-native-reanimated'
+import Animated, { cubicBezier, useReducedMotion, type CSSAnimationKeyframes, type CSSAnimationTimingFunction, type CSSStyle, FadeIn, FadeOut, LayoutAnimationConfig, ReduceMotion } from 'react-native-reanimated'
 import Svg, { Circle, ClipPath, Defs, Ellipse, G, Path, RadialGradient, Rect, Stop } from 'react-native-svg'
 
 import { keyOffsets } from '@/lib/busyFrames'
-import { colors, shimmerTones } from '@/theme'
+import { eyeFrames, gestureFrames, type Layer } from '@/lib/faceFrames'
+import { colors, shimmerTones, useScheme } from '@/theme'
 
 /** A block of CSS animation or transition settings, as the view's style takes them. */
 type Motion = CSSStyle<ViewStyle>
 
 /** The library draws in a hundred-unit box; every motion below is stated in those units. */
 const BOX = 100
+
+/** The library's poses a face state can name. */
+const POSES = { thinking, sleepy, happy, sad }
+
+/**
+ * How the one fully moving face changes from one way of being drawn to the next. Each
+ * way is a component of its own with declared keyframes, and none of them can be asked
+ * where it is, so nothing can be walked home. The next one fades in over the last
+ * instead, and the last leaves once it is covered.
+ */
+const FACE_IN = FadeIn.duration(200).reduceMotion(ReduceMotion.System)
+const FACE_OUT = FadeOut.delay(160).duration(120).reduceMotion(ReduceMotion.System)
 
 interface BlobatarProps {
   name: string
@@ -54,6 +69,14 @@ interface BlobatarProps {
    * face in a list takes `'blink'`, the idle motion that reads at avatar size.
    */
   animate?: boolean | 'blink'
+  /**
+   * What the turn behind this face is doing, where the caller knows more than that it
+   * runs: she thinks, reads, types, waits, needs the user, or has just finished. Only
+   * the face that moves fully shows it, with her eyes, a pose and her body. Work with
+   * no look of its own stays what `working` and `busy` already draw. A portrait, or a
+   * reader who asks for reduced motion, shows none of it.
+   */
+  face?: FaceState
 }
 
 /**
@@ -65,15 +88,19 @@ interface BlobatarProps {
  * native side without a worklet per frame, which is what lets a transcript full of
  * faces scroll at speed.
  */
-export function Blobatar({ name, color, src, shape, tone = DEFAULT_BLOB_TONE, size, working: asked = false, busy: busyAsked = false, sidebarWorking = false, animate = false }: BlobatarProps) {
+export function Blobatar({ name, color, src, shape, tone = DEFAULT_BLOB_TONE, size, working: asked = false, busy: busyAsked = false, sidebarWorking = false, animate = false, face: state }: BlobatarProps) {
   const still = useReducedMotion()
   const live = animate === true && !sidebarWorking
   const hue = accentHue(color)
   const square = { width: size, height: size }
   const portrait = src !== undefined && src !== ''
+  // A state with a look of its own takes the face over. Plain work has none: the loop and the still working face stand.
+  const look = state === undefined || !live || portrait || still ? undefined : FACE_LOOK[state]
+  const own = look === undefined || look.eyes === 'loop' ? undefined : look
   // The busy face wears her resting traits, so only the still working face pins its own gaze.
-  const busy = busyAsked && live && !portrait && !still
-  const working = asked || (busyAsked && !busy)
+  const busy = busyAsked && live && !portrait && !still && own === undefined
+  const working = own === undefined && (asked || (busyAsked && !busy))
+  const pose = own?.pose
   const worn = blobShapeOf(name, shape)
   const face = useMemo(() => {
     if (portrait) return null
@@ -86,10 +113,11 @@ export function Blobatar({ name, color, src, shape, tone = DEFAULT_BLOB_TONE, si
         animate: 'always',
         ...(hue === undefined ? {} : { hue }),
         traits,
-        ...(working || sidebarWorking ? { expression: unsure } : {}),
+        ...(pose !== undefined ? { expression: POSES[pose] } : working || sidebarWorking ? { expression: unsure } : {}),
       }),
+      size,
     )
-  }, [hue, name, portrait, shape, size, tone, working, sidebarWorking])
+  }, [hue, name, portrait, pose, shape, size, tone, working, sidebarWorking])
 
   if (portrait || face === null) {
     return (
@@ -103,19 +131,35 @@ export function Blobatar({ name, color, src, shape, tone = DEFAULT_BLOB_TONE, si
   // The triangle draws its ink high in its viewBox; the lift levels it with a name.
   const lift = worn?.lift === undefined ? 0 : (worn.lift / 100) * size
 
+  const drawn = own?.eyes === 'dots' ? (
+    <BusyFace face={face} size={size} held />
+  ) : own !== undefined ? (
+    <StateFace face={face} look={own} size={size} />
+  ) : busy ? (
+    <BusyFace face={face} size={size} />
+  ) : sidebarWorking && animate ? (
+    <LiveFace face={face} size={size} blinkOnly />
+  ) : live ? (
+    <LiveFace face={face} size={size} />
+  ) : animate ? (
+    <BlinkFace face={face} size={size} />
+  ) : (
+    <StillFace face={face} size={size} />
+  )
+  // Which way she is drawn, and for a state which look: a change of either is a fade.
+  // The live face is one way whether she works or rests, so its pose still eases in place.
+  const way = own?.eyes === 'dots' ? 'held' : own !== undefined ? `state ${state}` : busy ? 'busy' : 'live'
+
   return (
     <View style={[square, lift === 0 ? null : { transform: [{ translateY: lift }] }]}>
-      {busy ? (
-        <BusyFace face={face} size={size} />
-      ) : sidebarWorking && animate ? (
-        <LiveFace face={face} size={size} blinkOnly />
-      ) : live ? (
-        <LiveFace face={face} size={size} />
-      ) : animate ? (
-        <BlinkFace face={face} size={size} />
-      ) : (
-        <StillFace face={face} size={size} />
-      )}
+      {live ? (
+        // A face that has just come on screen is simply there; only a change fades.
+        <LayoutAnimationConfig skipEntering>
+          <Animated.View entering={FACE_IN} exiting={FACE_OUT} key={way} style={StyleSheet.absoluteFill}>
+            {drawn}
+          </Animated.View>
+        </LayoutAnimationConfig>
+      ) : drawn}
       {working && live ? <ThoughtDots color={workingDot(name, hue, tone)} size={size} /> : null}
     </View>
   )
@@ -157,6 +201,8 @@ interface Pose {
 const IDLE: Pose = { esx: 1, esy: 1, tilt: 0, edy: 0, edx: 0, esx2: 0, esy2: 0, tilt2: 0, edy2: 0, lock: 0 }
 
 interface Face {
+  /** The slot's side in points, which picks the finish's optical size. */
+  size: number
   bodyFill: string | undefined
   body: BodyPart[]
   /** Where her contact shadow centres, in box units. */
@@ -187,7 +233,7 @@ const PART = /<(path|circle)\s([^>]*)\/>/g
  * have read. Written against the markup `_parts` emits for this major of the
  * library, which its adapters also read; the shape is stable inside a major.
  */
-function takeApart(parts: ReturnType<typeof _parts>): Face | null {
+function takeApart(parts: ReturnType<typeof _parts>, size: number): Face | null {
   const inner = parts.inner
   const eyesTag = inner.indexOf('class="mo-eyes"')
   if (eyesTag < 0) return null
@@ -226,6 +272,7 @@ function takeApart(parts: ReturnType<typeof _parts>): Face | null {
     return raw === undefined ? fallback : Number.parseFloat(raw)
   }
   return {
+    size,
     // The custom properties carry a tinting pose's colours; the markup keeps the resting pair.
     bodyFill: vars['--mo-head'] ?? bodyFill,
     body,
@@ -540,25 +587,34 @@ function silhouette(body: readonly BodyPart[]) {
   })
 }
 
-/** A clay gradient from the library's numbers, stretched to its ellipse in user space. */
-function ClayGlow({ id, glow }: { id: string; glow: Glow }) {
+/**
+ * A clay gradient from the library's numbers, turned and stretched to its ellipse in
+ * user space, in the head's relit colours. `keep` is what is left of its opacity.
+ */
+function ClayGlow({ id, glow, tones, keep = 1 }: { id: string; glow: Glow; tones: Tones; keep?: number }) {
   return (
-    <RadialGradient cx={0} cy={0} gradientTransform={`translate(${glow.cx} ${glow.cy}) scale(${glow.rx} ${glow.ry})`} gradientUnits="userSpaceOnUse" id={id} r={1}>
-      {glow.stops.map(([offset, opacity, white], index) => (
-        <Stop key={index} offset={offset} stopColor={white ? '#fff' : '#000'} stopOpacity={opacity} />
+    <RadialGradient cx={0} cy={0} gradientTransform={`translate(${glow.cx} ${glow.cy})${glow.rot ? ` rotate(${glow.rot})` : ''} scale(${glow.rx} ${glow.ry})`} gradientUnits="userSpaceOnUse" id={id} r={1}>
+      {glow.stops.map(([offset, opacity, tone], index) => (
+        <Stop key={index} offset={offset} stopColor={tones[tone]} stopOpacity={opacity * keep} />
       ))}
     </RadialGradient>
   )
 }
 
-/** The contact shadow on the ground under her. */
+/**
+ * What is on the ground under her: a contact shadow by day, and by night, where a
+ * shadow cannot show, a glow in her own colour. A small face by day has neither.
+ */
 function Contact({ face }: { face: Face }) {
   const id = useId().replace(/[^\w-]/g, '')
-  const contact = { ...CLAY.contact, cy: face.ground }
+  const night = useScheme() === 'dark'
+  const floor = night ? CLAY.glow : face.size <= CLAY.small ? undefined : CLAY.contact
+  if (floor === undefined || face.bodyFill === undefined) return null
+  const contact = { ...floor, cy: face.ground }
   return (
     <>
       <Defs>
-        <ClayGlow glow={contact} id={`${id}c`} />
+        <ClayGlow glow={contact} id={`${id}c`} tones={clayTones(face.bodyFill)} />
       </Defs>
       <Ellipse cx={contact.cx} cy={contact.cy} fill={`url(#${id}c)`} rx={contact.rx} ry={contact.ry} />
     </>
@@ -578,50 +634,72 @@ function Ground({ face, size }: { face: Face; size: number }) {
 }
 
 /**
- * How far the inner shadow softens. The web blurs it; a blur here is a Core Image
- * pass per face on every mount, which a scrolling list cannot afford. So the band is
- * cut with a copy of the head moved toward the light, over a half-strength copy
- * grown by this band: full shadow at the edge, half across the band, none past it.
- * The grown copy fades as one group, so overlapping parts never double its strength.
- */
-const SHADOW_BAND = 5
-
-/**
  * The head in the library's clay finish, drawn with the same numbers the web draws.
  * Every overlay is a full-box rect inside one clip of all the head's parts, so a pill
  * or a cloud is shaded as one silhouette with no seams where its parts overlap.
+ *
+ * The web blurs the inner shadow. A blur here is a Core Image pass per face on every
+ * mount, which a scrolling list cannot afford. So the shade is laid over the whole
+ * lit head and the lit head is drawn again on top, twice, through the same clip
+ * moved toward the light: once halfway at half strength, once all the way. What is
+ * left is full shadow at the edge, half across the band, none past it.
+ *
+ * The optical sizes follow the web: a small face wears the light alone, and a large
+ * one gains the glint. Three things the web draws are left out here. The bounce
+ * light is a second band, the lip under each eye would have to ride every eye layer,
+ * and the larger eyes of a small face would have to be redrawn from the layout;
+ * none is worth its cost on a scrolling list.
  */
 function Body({ face, ground = true }: { face: Face; ground?: boolean }) {
   const id = useId().replace(/[^\w-]/g, '')
   const fill = face.bodyFill ?? colors.muted
+  const tones = useMemo(() => (face.bodyFill === undefined ? undefined : clayTones(face.bodyFill)), [face.bodyFill])
   const { inner } = CLAY
   const clip = `url(#${id}k)`
+  const small = face.size <= CLAY.small
+  const spark = face.size >= CLAY.glint
+  const whites = tones?.dark ? CLAY.dim.dark : 1
+  const light = <Rect fill={`url(#${id}l)`} height={BOX} width={BOX} />
+  // The lit head through the clip moved by this share of the shadow's offset. The
+  // rects are moved back, so the light stays where it is and only the cut travels.
+  const lit = (share: number) => (
+    <G opacity={share} transform={`translate(${inner.dx * share} ${inner.dy * share})`}>
+      <G clipPath={clip} clipRule="nonzero">
+        <G transform={`translate(${-inner.dx * share} ${-inner.dy * share})`}>
+          <Rect fill={fill} height={BOX} width={BOX} />
+          {light}
+        </G>
+      </G>
+    </G>
+  )
   return (
     <>
       <Defs>
         <ClipPath id={`${id}k`}>
           {face.silhouette.map((d, index) => <Path d={d} key={index} />)}
         </ClipPath>
-        <ClayGlow glow={CLAY.light} id={`${id}l`} />
-        <ClayGlow glow={CLAY.highlight} id={`${id}h`} />
+        {tones ? <ClayGlow glow={CLAY.light} id={`${id}l`} tones={tones} /> : null}
+        {tones && !small ? <ClayGlow glow={CLAY.highlight} id={`${id}h`} keep={whites * (spark ? CLAY.dim.under : 1)} tones={tones} /> : null}
+        {tones && spark ? <ClayGlow glow={CLAY.spark} id={`${id}g`} keep={whites} tones={tones} /> : null}
       </Defs>
       {ground ? <Contact face={face} /> : null}
       <G fill={fill}>
         <Parts body={face.body} />
       </G>
-      <G clipPath={clip} clipRule="nonzero">
-        <Rect fill="#000" height={BOX} opacity={inner.opacity} width={BOX} />
-        <G opacity={0.5} transform={`translate(${inner.dx} ${inner.dy})`}>
-          <G fill={fill} stroke={fill} strokeWidth={SHADOW_BAND}>
-            <Parts body={face.body} />
-          </G>
+      {tones ? (
+        <G clipPath={clip} clipRule="nonzero">
+          {light}
+          {small ? null : (
+            <>
+              <Rect fill={tones[inner.tone]} height={BOX} opacity={inner.opacity} width={BOX} />
+              {lit(0.5)}
+              {lit(1)}
+              <Rect fill={`url(#${id}h)`} height={BOX} width={BOX} />
+            </>
+          )}
+          {spark ? <Rect fill={`url(#${id}g)`} height={BOX} width={BOX} /> : null}
         </G>
-        <G fill={fill} transform={`translate(${inner.dx} ${inner.dy})`}>
-          <Parts body={face.body} />
-        </G>
-        <Rect fill={`url(#${id}l)`} height={BOX} width={BOX} />
-        <Rect fill={`url(#${id}h)`} height={BOX} width={BOX} />
-      </G>
+      ) : null}
     </>
   )
 }
@@ -766,8 +844,10 @@ let busyTurns = 0
  *
  * The Mac also runs a goo filter while the dots bud and merge. Native views have no
  * cheap filter to animate, so here the drops overlap the shrinking body instead.
+ *
+ * `held` is the melt alone, kept up: what she does while her answer streams in.
  */
-function BusyFace({ face, size }: { face: Face; size: number }) {
+function BusyFace({ face, size, held = false }: { face: Face; size: number; held?: boolean }) {
   const [seed] = useState(() => busyTurns++)
   const unit = size / BOX
   const rig = useMemo(() => {
@@ -777,10 +857,10 @@ function BusyFace({ face, size }: { face: Face; size: number }) {
     const middle = bodyMiddle(face.body)
     const pull = (eye: Eye): Pair => [middle[0] - eye.cx, middle[1] - eye.cy]
     const plan = timeline(
-      order(BUSY_LOOK.variation, seed),
+      order(held ? 'dots' : BUSY_LOOK.variation, seed),
       [(right.cx - left.cx) / 2, (right.cy - left.cy) / 2],
       [pull(left), pull(right)],
-      BUSY_LOOK.dots,
+      held || BUSY_LOOK.dots,
     )
     const duration = (plan.total * 1000) / BUSY_LOOK.speed
     const silhouette = [...face.body].reverse().find((part) => part.kind === 'path')
@@ -802,7 +882,7 @@ function BusyFace({ face, size }: { face: Face; size: number }) {
         transform: [{ translateX: dot.x * unit }, { translateY: dot.y * unit }, { scale: Math.max(dot.s, GONE) }],
       }))),
     }
-  }, [face, seed, unit])
+  }, [face, held, seed, unit])
 
   if (rig === null) return <BlinkFace face={face} size={size} />
 
@@ -847,6 +927,105 @@ function BusyFace({ face, size }: { face: Face; size: number }) {
           {eyes}
         </MaskedView>
       )}
+    </>
+  )
+}
+
+/** How long a layer takes to ease to the first key of its move, and home again. */
+const REST_MS = 240
+
+/**
+ * One layer of a state, as the styles its two views take. The outer view rests at the
+ * move's first key and eases there; the inner one plays the loop measured from that
+ * key. `arrived` is false for the first frame, so a face that has just been drawn
+ * eases into its rest instead of being born there. A loop that never leaves home is
+ * not played at all: a face that only turns to the reader may hold that for hours.
+ */
+function layerMotion(layer: Layer | undefined, arrived: boolean): { rest: Motion | null; loop: Motion | null } {
+  if (layer === undefined) return { rest: null, loop: null }
+  const keyframes: Record<string, { transform: Layer['rest']; animationTimingFunction: CSSAnimationTimingFunction }> = {}
+  for (const [at, key] of Object.entries(layer.loop.keyframes)) keyframes[at] = { transform: key.transform, animationTimingFunction: curveOf(key.ease ?? 'ease-in-out') }
+  const home = JSON.stringify(layer.home)
+  const idle = Object.values(layer.loop.keyframes).every((key) => JSON.stringify(key.transform) === home)
+  return {
+    rest: {
+      // The frames are plain data, so one module plans for every client; a view's own type is narrower.
+      transform: (arrived ? layer.rest : layer.home) as unknown as ViewStyle['transform'],
+      transitionProperty: 'transform',
+      transitionDuration: REST_MS,
+      transitionTimingFunction: easeInOut,
+    },
+    loop: idle ? null : {
+      // The style type narrows a block's curve to a name; a curve object is what the keyframes runtime reads.
+      animationName: keyframes as unknown as CSSAnimationKeyframes<ViewStyle>,
+      animationDuration: layer.loop.duration,
+      animationIterationCount: layer.loop.passes,
+      animationTimingFunction: 'linear',
+    },
+  }
+}
+
+/**
+ * A face in a state with a look of its own: the pose the library gave her eyes, a small
+ * eye move added on top, and a body gesture from the shared plan, sized for her
+ * silhouette. The body layers hold the head and the eyes, so the whole figure moves as
+ * one over a ground that stays put. She does not breathe, bob or glance here: the
+ * gesture is the body's motion, and it means something.
+ */
+function StateFace({ face, size, look }: { face: Face; size: number; look: FaceLook }) {
+  const unit = size / BOX
+  const [arrived, setArrived] = useState(false)
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => setArrived(true))
+    return () => cancelAnimationFrame(frame)
+  }, [])
+  const { gesture, passes, eyes: move } = look
+  const layers = useMemo(() => {
+    const frame = frameOf(outlinePoints(
+      face.body.flatMap((part) => (part.kind === 'path' ? [part.d] : [])),
+      face.body.flatMap((part) => (part.kind === 'circle' ? [part] : [])),
+    ))
+    const moves = gesture === undefined ? undefined : plan(gesture, frame)
+    const body = moves === undefined ? undefined : gestureFrames(moves, unit, passes)
+    // From the middle of the pair, where the resting gaze leaves it, to the middle of the face.
+    const toMiddle = frame.middle[0] - face.eyes.reduce((sum, eye) => sum + eye.cx, 0) / Math.max(face.eyes.length, 1)
+    const eyes = new Map(face.eyes.map((eye) => [
+      eye.wrap,
+      move === 'scan' ? eyeFrames(scanStops(toMiddle), unit, EYE_MOVE_MS.scan)
+        : move === 'toward' ? eyeFrames(towardStops(toMiddle), unit, EYE_MOVE_MS.toward)
+        : move === 'seesaw' ? eyeFrames(seesawStops(thinking.p.edy2, eye.wrap < 0 ? -1 : 1), unit, EYE_MOVE_MS.seesaw)
+        : undefined,
+    ]))
+    return { body, eyes, foot: moves?.foot ?? frame.foot, middle: frame.middle }
+  }, [face, gesture, move, passes, unit])
+
+  const about = ([x, y]: readonly [number, number]) => ({ transformOrigin: [`${x}%`, `${y}%`, 0] as (string | number)[] })
+  const fig = layerMotion(layers.body?.fig, arrived)
+  const turn = layerMotion(layers.body?.turn, arrived)
+  return (
+    <>
+      <Ground face={face} size={size} />
+      <Animated.View style={[StyleSheet.absoluteFill, about(layers.foot), fig.rest]}>
+        <Animated.View style={[StyleSheet.absoluteFill, about(layers.foot), fig.loop]}>
+          <Animated.View style={[StyleSheet.absoluteFill, about(layers.middle), turn.rest]}>
+            <Animated.View style={[StyleSheet.absoluteFill, about(layers.middle), turn.loop]}>
+              <Svg height={size} viewBox={`0 0 ${BOX} ${BOX}`} width={size}>
+                <Body face={face} ground={false} />
+              </Svg>
+              {face.eyes.map((eye) => {
+                const added = layerMotion(layers.eyes.get(eye.wrap), arrived)
+                return (
+                  <Animated.View key={eye.wrap} pointerEvents="none" style={[StyleSheet.absoluteFill, added.rest]}>
+                    <Animated.View style={[StyleSheet.absoluteFill, added.loop]}>
+                      <EyeLayer eye={eye} fill={face.eyeFill} pose={face.pose} size={size} still={false} timing={face} />
+                    </Animated.View>
+                  </Animated.View>
+                )
+              })}
+            </Animated.View>
+          </Animated.View>
+        </Animated.View>
+      </Animated.View>
     </>
   )
 }

@@ -44,6 +44,7 @@ import {
   workSummary,
 } from '@manor/client-runtime/turn-labels'
 import { activeCall, activityBlocks, type ActivityBlock, groupLabel, hasFold, hasStatus, isCompactNote, isCompacting, isPaused, isSettledCompactNote, shownSegments, statusShimmers, stepDetail, stepLabel, subagentStepState, traceRows, turnSummary, type TraceRow } from '@manor/client-runtime/turn-trace'
+import { endFace, turnFace } from '@manor/client-runtime/face-activity'
 import * as Clipboard from 'expo-clipboard'
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Modal, Pressable, StyleSheet, View, useWindowDimensions, type AccessibilityState } from 'react-native'
@@ -55,6 +56,7 @@ import { Attachments } from '@/components/Attachments'
 import { AgentStack } from '@/components/AgentStack'
 import { DiffSheet } from '@/components/DiffSheet'
 import { Blobatar } from '@/components/Blobatar'
+import { useFaceState } from '@/lib/useFaceState'
 import { Markdown, type MarkdownLinks } from '@/components/Markdown'
 import { MemoryChangesSheet, hasMemoryChanges, memoryChangesLabel } from '@/components/MemoryChangesSheet'
 import { MemoryTraceSheet } from '@/components/MemoryTraceSheet'
@@ -129,6 +131,7 @@ export function Turn({
   const persona = personaOf(agents, turn.agentId)
   const memoryChanges = bubbleReplies ? dmMemory : turn.memoryChanges
   const running = turn.live?.state === 'running'
+  const faceState = useFaceState(turnFace(turn, waitingOnAgentId !== undefined), endFace(turn), running)
   // A turn the user steered mid-run carries its live text as `live` segments beside their
   // messages, so the loose stream below would draw it a second time. A DM holds a
   // reply back until it is whole; the working indicator at its foot says she is writing.
@@ -225,6 +228,7 @@ export function Turn({
       size={32}
       src={persona.avatar}
       working={running}
+      face={faceState}
     />
   )
   const foldable = hasFold(traced)

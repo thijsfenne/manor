@@ -9,7 +9,7 @@
  */
 import type { Palette } from "../color";
 import { superellipse } from "../shape";
-import { clay, groundY } from "../shading";
+import { CLAY, clay, clayTones, groundY, paint, type Finish } from "../shading";
 import type { Traits } from "../traits";
 import type { Body, Deco, Ellipse, Shape } from "./shapes";
 
@@ -61,6 +61,24 @@ export const faceFit: Fit = (t, b, face) => {
   ];
 };
 
+/**
+ * The eyes at a small size: grown and spread by `CLAY.eyes`, as far as the face
+ * region still holds them. Tried at the full amount and then at less, so a tight
+ * face keeps the containment `faceFit` gave it.
+ */
+function optical(eyes: Eye[], face: Ellipse): Eye[] {
+  const mid = (eyes[0]!.cx + eyes[1]!.cx) / 2;
+  const held = (e: Eye) =>
+    Math.hypot((Math.abs(e.cx - face.cx) + e.rx) / face.rx, (Math.abs(e.cy - face.cy) + e.ry) / face.ry) <= 1;
+  for (const k of [1, 0.75, 0.5, 0.25]) {
+    const grow = 1 + (CLAY.eyes.grow - 1) * k;
+    const spread = 1 + (CLAY.eyes.spread - 1) * k;
+    const grown = eyes.map(e => ({ ...e, cx: mid + (e.cx - mid) * spread, rx: e.rx * grow, ry: e.ry * grow }));
+    if (grown.every(held)) return grown;
+  }
+  return eyes;
+}
+
 /** `[shape, upper edge of its band in [0, 1)]`, in order. */
 export type Band = readonly [Shape, number];
 
@@ -98,10 +116,25 @@ export function compose(bands: Band[], fit: Fit) {
     };
   }
 
-  function render(l: ReturnType<typeof layout>, p: Palette, mo?: boolean, shade?: string) {
+  function render(l: ReturnType<typeof layout>, p: Palette, mo?: boolean, finish?: Finish) {
     const r2 = (v: number) => Math.round(v * 100) / 100;
+    // A still face is painted from the palette it wears. An animated one reads its
+    // colours from the custom properties, and keeps only what may not move with them.
+    const tones = finish && clayTones(p.head!);
+    const look = finish && { ...finish, ...(mo ? { dark: tones!.dark } : { tones }) };
+    const small = finish?.size !== undefined && finish.size <= CLAY.small;
+    const eyes = look && small ? optical(l.eyes, l.face) : l.eyes;
+    // The lip rides inside the eye's own group, so it poses and travels with it. There
+    // the two are one child: the stylesheet blinks each child of an eye about its own
+    // centre, and a lip blinking apart from its eye leaves a sliver under a closed one.
+    const lip = (e: Eye) =>
+      look && !small
+        ? `<path d="${superellipse({ ...e, cy: e.cy + CLAY.lip.dy })}" ${paint("fill", CLAY.lip.tone, look.tones)} opacity="${CLAY.lip.opacity}"/>`
+        : "";
     const eye = (e: Eye, i: number) => {
-      const path = `<path d="${superellipse(e)}"/>`;
+      const pressed = lip(e);
+      const drawn = `<path d="${superellipse(e)}"/>`;
+      const path = pressed ? (mo ? `<g>${pressed}${drawn}</g>` : pressed + drawn) : drawn;
       return mo
         ? `<g class="mo-eye" style="--mo-wrap:${i ? 1 : -1};--mo-lean:${r2(e.rot)};transform-origin:${r2(e.cx)}px ${r2(e.cy)}px">${path}</g>`
         : path;
@@ -111,20 +144,20 @@ export function compose(bands: Band[], fit: Fit) {
       l.petals.map(d => `<circle cx="${r2(d.cx)}" cy="${r2(d.cy)}" r="${r2(d.r)}"/>`).join("") +
       l.extra.map(d => `<path d="${d}"/>`).join("") +
       `<path d="${outline}"/>`;
-    const finish = shade === undefined
+    const finished = look === undefined
       ? undefined
-      : clay(shade, shapes, groundY([...l.extra, outline], l.petals));
+      : clay(look, shapes, groundY([...l.extra, outline], l.petals));
     const body =
       `<g fill="${p.head}">` +
       shapes +
-      (finish?.overlays ?? "") +
+      (finished?.overlays ?? "") +
       `</g>` +
       `<g fill="${p.eye}"${mo ? ` class="mo-eyes"` : ""}>` +
-      l.eyes.map(eye).join("") +
+      eyes.map(eye).join("") +
       `</g>`;
     return {
       // Outside the breathe, the bob and a static pose: the ground the face floats over.
-      ground: finish ? finish.defs + finish.contact : "",
+      ground: finished ? finished.defs + finished.contact : "",
       body: mo ? `<g class="mo-breathe"><g class="mo-bob">${body}</g></g>` : body,
     };
   }

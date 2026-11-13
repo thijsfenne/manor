@@ -308,8 +308,8 @@ export function stepLabels(id: VariationId) {
 export interface BusyLook {
   /** Playback rate; 1 is the recorded pace. */
   speed: number
-  /** One variation on repeat, or `shuffle` for what a turn does. */
-  variation: VariationId | 'shuffle'
+  /** One variation on repeat, `shuffle` for what a turn does, or `dots` for the melt alone, held. */
+  variation: VariationId | 'shuffle' | 'dots'
   /** Melt into three dots after each variation, and back. */
   dots: boolean
   /** Which variation a shuffle starts on. Absent, each start takes the next one, so two turns in a row differ. */
@@ -323,7 +323,9 @@ export const BUSY_LOOK: BusyLook = { speed: 1.6, variation: 'shuffle', dots: tru
 export type Segment = VariationId | 'dots'
 
 /** The variations one run plays, in order: a shuffle starts where the seed says and runs through all of them. */
-export function order(variation: BusyLook['variation'], seed: number) {
+export function order(variation: BusyLook['variation'], seed: number): VariationId[] {
+  // The dots alone play no variation at all; `timeline` holds the melt instead.
+  if (variation === 'dots') return []
   if (variation !== 'shuffle') return [variation]
   const first = seed % VARIATION_IDS.length
   return [...VARIATION_IDS.slice(first), ...VARIATION_IDS.slice(0, first)]
@@ -380,6 +382,8 @@ export const GOO = 3.5
 const HOP = 1.4
 /** How many times round the dots hop before the face comes back. */
 const HOPS = 5
+/** The same for the dots held on their own, while an answer streams in: long enough that a pass rarely ends. */
+const HELD_HOPS = 24
 
 export type Pair = [number, number]
 
@@ -397,7 +401,8 @@ function place(pose: Pose, side: -1 | 1, [hx, hy]: Pair, fx: number, fy: number,
 
 /**
  * Everything one pass of `ids` moves, and its length in seconds: both eyes, and with
- * `melt` the body's scale, the three dots and the goo blur. `half` is half the step
+ * `melt` the body's scale, the three dots and the goo blur. No ids and a melt is the
+ * dots alone, held. `half` is half the step
  * from the left eye's centre to the right one's, and `pulls` runs from each eye to the
  * middle of the body.
  */
@@ -423,7 +428,7 @@ export function timeline(ids: readonly VariationId[], half: Pair, pulls: [Pair, 
     })
   }
 
-  const dotsBetween = () => {
+  const dotsBetween = (hops = HOPS) => {
     const from = t
     const at = (dt: number) => from + dt
     marks.push({ t: from, id: 'dots' })
@@ -444,7 +449,7 @@ export function timeline(ids: readonly VariationId[], half: Pair, pulls: [Pair, 
     const wave = at(1.6)
     dots.forEach((keys, index) => {
       const x = (index - 1) * DOT.step
-      for (let round = 0; round < HOPS; round++) {
+      for (let round = 0; round < hops; round++) {
         const go = wave + round * HOP + index * 0.16
         wait(keys, go)
         to(keys, go + 0.32, { x, y: -DOT.hop, s: 1.06 })
@@ -452,7 +457,7 @@ export function timeline(ids: readonly VariationId[], half: Pair, pulls: [Pair, 
       }
     })
     // And back: the drops run together, the body swells out of them, and the eyes pop out of the middle.
-    const back = wave + HOPS * HOP
+    const back = wave + hops * HOP
     wait(blur, back - 0.35)
     to(blur, back + 0.05, GOO)
     wait(blur, back + 0.7)
@@ -481,6 +486,11 @@ export function timeline(ids: readonly VariationId[], half: Pair, pulls: [Pair, 
       dotsBetween()
       step({ d: REST, hold: true })
     }
+  }
+  // No variation and a melt is the dots on their own: the face melts once and stays melted.
+  if (ids.length === 0 && melt) {
+    dotsBetween(HELD_HOPS)
+    step({ d: REST, hold: true })
   }
   wait(body, t)
   wait(blur, t)

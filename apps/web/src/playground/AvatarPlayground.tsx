@@ -2,6 +2,8 @@ import { PlayIcon, StopIcon } from '@hugeicons/core-free-icons'
 import { palette, traits as seedTraits, type Expression } from '@manor/blobatar'
 import * as poses from '@manor/blobatar/expression'
 import { Blobatar } from '@manor/blobatar/react'
+import { FACE_LOOK, type FaceState } from '@manor/client-runtime/face-activity'
+import { GESTURES, type GestureId } from '@manor/client-runtime/face-gesture'
 import { useEffect, useId, useRef, useState } from 'react'
 import { accentHue } from '../accent'
 import { BLOB_FACE_TRAITS, BLOB_SHAPES, BLOB_TONES, DEFAULT_BLOB_TONE, SIDEBAR_WORKING_GAZE, WORKING_GAZE, blobShapeTraits } from '../blobShapes'
@@ -12,6 +14,8 @@ import { FormField, formFieldClass, formHintClass, formInputClass, formLabelClas
 import { Select } from '../components/ui/Select'
 import { Switch } from '../components/ui/Switch'
 import { BUSY_LOOK, VARIATIONS, VARIATION_IDS, stepLabels, useBusyFace, type BusyLook, type Segment } from '../components/busyFace'
+import { useFaceEyes, useFaceGesture } from '../components/faceMotion'
+import { useShownTheme } from '../useTheme'
 
 type Mode = 'resting' | 'working' | 'sidebar' | 'busy'
 
@@ -34,6 +38,10 @@ interface Settings {
   dots: boolean
   traits: Record<string, number>
   busy: BusyLook
+  /** A body gesture id, or empty for a still body. */
+  gesture: string
+  /** A face state as a turn asks for it, or empty. It stands in for state, expression and gesture. */
+  moment: string
 }
 
 const READY = 'avatar-playground:ready'
@@ -54,7 +62,12 @@ const MODES = [
 const VARIATION_OPTIONS = [
   { value: 'shuffle', label: 'Shuffle, like a turn' },
   ...VARIATION_IDS.map((id) => ({ value: id, label: VARIATIONS[id].label })),
+  { value: 'dots', label: 'Dots alone, held' },
 ] as const
+
+const named = (id: string) => id.charAt(0).toUpperCase() + id.slice(1)
+const GESTURE_OPTIONS = [{ value: '', label: 'None' }, ...Object.keys(GESTURES).map((id) => ({ value: id, label: named(id) }))]
+const MOMENT_OPTIONS = [{ value: '', label: 'None' }, ...Object.keys(FACE_LOOK).map((id) => ({ value: id, label: named(id) }))]
 
 const SHAPES = [{ value: '', label: 'From name' }, ...BLOB_SHAPES.map((shape) => ({ value: shape.id, label: shape.label }))]
 
@@ -75,6 +88,8 @@ const INITIAL: Settings = {
   dots: true,
   traits: { ...BLOB_FACE_TRAITS },
   busy: BUSY_LOOK,
+  gesture: '',
+  moment: '',
 }
 
 export function AvatarPlayground() {
@@ -155,6 +170,12 @@ export function AvatarPlayground() {
         <FormField label="State" custom>
           <Select label="State" value={settings.mode} options={MODES} onChange={(value) => set('mode', value)} />
         </FormField>
+        <FormField label="Moment" custom hint={settings.moment === '' ? 'What a turn shows on a face in the transcript.' : 'Stands in for state, expression and gesture.'}>
+          <Select label="Moment" value={settings.moment} options={MOMENT_OPTIONS} onChange={(value) => set('moment', value)} />
+        </FormField>
+        <FormField label="Body gesture" custom hint="Plays on top of the eyes, whatever they do.">
+          <Select label="Body gesture" value={settings.gesture} options={GESTURE_OPTIONS} onChange={(value) => set('gesture', value)} />
+        </FormField>
         {busy ? null : (
           <FormField label="Expression" custom hint={settings.expression === AUTO ? 'Idle at rest, unsure while working.' : undefined}>
             <Select label="Expression" value={settings.expression} options={EXPRESSION_OPTIONS} onChange={(value) => set('expression', value)} />
@@ -179,7 +200,9 @@ export function AvatarPlayground() {
             hint={
               settings.busy.variation === 'shuffle'
                 ? 'Starts on another variation each play, then runs through all of them.'
-                : stepLabels(settings.busy.variation).join(' · ')
+                : settings.busy.variation === 'dots'
+                  ? 'The melt on its own, held while an answer streams in.'
+                  : stepLabels(settings.busy.variation).join(' · ')
             }
           >
             <Select label="Variation" value={settings.busy.variation} options={VARIATION_OPTIONS} onChange={(variation) => setBusy({ variation })} />
@@ -265,11 +288,16 @@ export function PlaygroundPane({ theme }: { theme: string }) {
 function Face({ settings }: { settings: Settings }) {
   const { name, color, tone, shape, size, mode, animate } = settings
   const hue = accentHue(color)
-  const working = mode === 'working'
-  const sidebarWorking = mode === 'sidebar'
+  const ground = useShownTheme() === 'dark' ? 'glow' : 'shadow'
+  // A moment is composed the way `Avatar` composes it: eyes, pose and gesture from one look.
+  const look = settings.moment === '' || !animate ? undefined : FACE_LOOK[settings.moment as FaceState]
+  const working = look === undefined && mode === 'working'
+  const sidebarWorking = look === undefined && mode === 'sidebar'
   const traits = { ...settings.traits, ...blobShapeTraits(shape), ...(sidebarWorking ? SIDEBAR_WORKING_GAZE : working ? WORKING_GAZE : {}) }
   const expression =
-    mode === 'busy'
+    look !== undefined
+      ? look.pose === undefined ? undefined : poses[look.pose]
+      : mode === 'busy'
       ? undefined
       : settings.expression === AUTO
         ? working || sidebarWorking
@@ -278,8 +306,12 @@ function Face({ settings }: { settings: Settings }) {
         : EXPRESSIONS.find(([id]) => id === settings.expression)?.[1]
   const dot = palette(hue ?? seedTraits(name)('hue') * 360, true, tone).head ?? 'var(--accent-fg)'
   const slot = useRef<HTMLSpanElement>(null)
-  const busy = mode === 'busy' && animate
-  const run = useBusyFace(slot, busy, settings.busy, JSON.stringify([name, color, tone, traits]))
+  const busy = animate && (look === undefined ? mode === 'busy' : look.eyes === 'loop' || look.eyes === 'dots')
+  const drawn = JSON.stringify([name, color, tone, traits, size, ground])
+  const run = useBusyFace(slot, busy, look?.eyes === 'dots' ? { ...settings.busy, variation: 'dots', dots: true } : settings.busy, drawn)
+  const gesture = look === undefined ? settings.gesture : (look.gesture ?? '')
+  useFaceGesture(slot, animate && gesture !== '' ? (gesture as GestureId) : undefined, drawn)
+  useFaceEyes(slot, look?.eyes === 'scan' || look?.eyes === 'toward' || look?.eyes === 'seesaw' ? look.eyes : undefined, drawn)
   const [segment, setSegment] = useState<Segment>()
   useEffect(() => {
     if (!busy) return
@@ -308,6 +340,7 @@ function Face({ settings }: { settings: Settings }) {
           size={size}
           tone={tone}
           shading="clay"
+          ground={ground}
           traits={traits}
           {...(animate ? { animate: 'always' as const } : {})}
           {...(hue === undefined ? {} : { hue })}

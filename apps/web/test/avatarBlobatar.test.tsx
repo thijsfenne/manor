@@ -26,7 +26,8 @@ const stillRender = (element: Parameters<typeof renderToStaticMarkup>[0]) => {
 const faceNode = { querySelector: () => null, querySelectorAll: () => [] }
 
 /** Animated SVG properties and the corresponding colours in a resting SVG image. */
-const stillColors = (html: string) => [...html.matchAll(/%23([0-9a-f]{6})/ig)].map((match) => `#${match[1]}`)
+// The head and the eyes are the two filled groups; the finish's relit colours sit on stops and paths.
+const stillColors = (html: string) => [...html.matchAll(/%3Cg fill=(?:'|&#x27;)%23([0-9a-f]{6})/ig)].map((match) => `#${match[1]}`)
 const head = (html: string) => /--mo-head:(#[0-9a-f]{6})/i.exec(html)?.[1] ?? stillColors(html)[0]
 const eye = (html: string) => /--mo-eye:([^;"]+)/i.exec(html)?.[1] ?? stillColors(html)[1]
 
