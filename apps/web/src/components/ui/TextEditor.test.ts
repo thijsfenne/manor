@@ -2,29 +2,9 @@ import { ensureSyntaxTree } from '@codemirror/language'
 import { EditorState } from '@codemirror/state'
 import { EditorView } from '@codemirror/view'
 import { describe, expect, it } from 'vitest'
-import { sourceLanguage, sourceTextExtensions } from './TextEditor'
+import { sourceTextExtensions } from './TextEditor'
 
-describe('source text languages', () => {
-  it.each([
-    ['src/toolActivity.ts', 'typescript'],
-    ['src/Composer.tsx', 'tsx'],
-    ['package.json', 'json'],
-    ['tsconfig.json', 'json'],
-    ['styles.css', 'css'],
-    ['scripts/release.sh', 'shell'],
-    ['Dockerfile', 'dockerfile'],
-    ['migrations/001_init.sql', 'sql'],
-  ] as const)('recognises %s as %s', (path, language) => {
-    expect(sourceLanguage(path)).toBe(language)
-  })
-
-  it.each(['notes.custom-format', 'settings.jsonc', 'styles.scss', 'Component.vue', 'Component.svelte'])(
-    'leaves unsupported %s content readable without guessing a grammar',
-    (path) => {
-      expect(sourceLanguage(path)).toBeNull()
-    },
-  )
-
+describe('source text extensions', () => {
   it('parses TypeScript with JSX before applying token colours', () => {
     const state = EditorState.create({
       doc: 'export const App = () => <main>Hello</main>',

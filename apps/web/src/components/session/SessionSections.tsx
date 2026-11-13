@@ -29,8 +29,6 @@ interface SessionSectionsProps {
   /** Undefined until the first answer: the rows say they are reading rather than guess. */
   repo: SessionRepoReply | undefined
   diffOpen: boolean
-  /** The region is full, so Changes cannot open the diff beside it. */
-  diffBlocked: boolean
   /** A turn is running: what it writes is not finished, so Commit waits for it. */
   running: boolean
   connected: boolean
@@ -61,7 +59,7 @@ const plural = (count: number, noun: string) => `${count} ${noun}${count === 1 ?
  * the panel stays the roster everywhere else, without empty sections or dead buttons.
  */
 export function SessionSections({
-  repo, diffOpen, diffBlocked, running, connected, commits, commitFailures, pushedLinks, requestEvents, onToggleDiff, onRetry, onCommit, onPush, openApps, onOpenFolder,
+  repo, diffOpen, running, connected, commits, commitFailures, pushedLinks, requestEvents, onToggleDiff, onRetry, onCommit, onPush, openApps, onOpenFolder,
 }: SessionSectionsProps) {
   const repos = repo?.repos ?? []
   const named = repos.length > 1
@@ -70,7 +68,7 @@ export function SessionSections({
     <>
       <Section title="Environment">
         {repo?.error === undefined
-          ? <ChangesRow repo={repo} open={diffOpen} blocked={diffBlocked} onToggle={onToggleDiff} />
+          ? <ChangesRow repo={repo} open={diffOpen} onToggle={onToggleDiff} />
           : <ReadFailed repo={repo} error={repo.error} connected={connected} onRetry={onRetry} />}
         {repo === undefined ? (
           <Line icon={GitBranchIcon}><span className="text-dim">Reading the branch…</span></Line>
@@ -234,25 +232,21 @@ function ReadFailed({ repo, error, connected, onRetry }: { repo: SessionRepoRepl
 }
 
 /**
- * "Changes +12 −3", and the door to the diff. While a result waits for Confirm it shows
- * the count of files Confirm would land, in the waiting colour.
+ * "Changes +12 −3", and the door to the diff, which opens in this panel's place. While a
+ * result waits for Confirm it shows the count of files Confirm would land, in the waiting colour.
  */
-function ChangesRow({ repo, open, blocked, onToggle }: { repo: SessionRepoReply | undefined; open: boolean; blocked: boolean; onToggle: () => void }) {
+function ChangesRow({ repo, open, onToggle }: { repo: SessionRepoReply | undefined; open: boolean; onToggle: () => void }) {
   if (repo === undefined) return <Line icon={PlusMinusSquare01Icon}><span className="text-text">Changes</span><span className="ml-auto text-dim">Reading…</span></Line>
   const { files, added, removed } = repo.changes
   if (files === 0 && !open) return <Line icon={PlusMinusSquare01Icon}><span className="text-text">Changes</span><span className="ml-auto text-dim">None yet</span></Line>
-  const label = blocked && !open ? 'Close a panel first to open the diff' : open ? 'Hide the diff' : 'Show the diff'
   return (
     <button
       type="button"
       aria-expanded={open}
-      aria-disabled={blocked && !open ? true : undefined}
-      title={label}
-      onClick={() => {
-        if (!blocked || open) onToggle()
-      }}
+      title={open ? 'Hide the diff' : 'Show the diff'}
+      onClick={onToggle}
       className={`group flex min-h-8 w-full min-w-0 items-center gap-2 rounded-button-sm border-0 px-2 text-left text-[13px] ${
-        open ? 'cursor-pointer bg-icon-fill' : blocked ? 'cursor-default bg-transparent opacity-60' : `cursor-pointer bg-transparent ${PANEL_ROW_HOVER}`
+        open ? 'cursor-pointer bg-icon-fill' : `cursor-pointer bg-transparent ${PANEL_ROW_HOVER}`
       }`}
     >
       <Icon icon={PlusMinusSquare01Icon} size={14} className="flex-none text-dim" />

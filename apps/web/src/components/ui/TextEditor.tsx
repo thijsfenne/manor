@@ -1,25 +1,10 @@
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands'
-import { css } from '@codemirror/lang-css'
-import { html } from '@codemirror/lang-html'
-import { javascript } from '@codemirror/lang-javascript'
-import { json } from '@codemirror/lang-json'
-import { python } from '@codemirror/lang-python'
-import { sql } from '@codemirror/lang-sql'
-import { yaml } from '@codemirror/lang-yaml'
-import { HighlightStyle, StreamLanguage, syntaxHighlighting } from '@codemirror/language'
-import { c, cpp, csharp, dart, java, kotlin } from '@codemirror/legacy-modes/mode/clike'
-import { dockerFile } from '@codemirror/legacy-modes/mode/dockerfile'
-import { go } from '@codemirror/legacy-modes/mode/go'
-import { powerShell } from '@codemirror/legacy-modes/mode/powershell'
-import { ruby } from '@codemirror/legacy-modes/mode/ruby'
-import { rust } from '@codemirror/legacy-modes/mode/rust'
-import { shell } from '@codemirror/legacy-modes/mode/shell'
-import { swift } from '@codemirror/legacy-modes/mode/swift'
-import { toml } from '@codemirror/legacy-modes/mode/toml'
+import { syntaxHighlighting } from '@codemirror/language'
+import { sourceLanguage } from '@manor/client-runtime/languages'
 import { EditorState, type Extension } from '@codemirror/state'
 import { EditorView, keymap, lineNumbers } from '@codemirror/view'
-import { tags } from '@lezer/highlight'
 import { useEffect, useRef } from 'react'
+import { languageSupport, sourceHighlighter } from './sourceSyntax'
 
 interface TextEditorProps {
   /** The file's own path. A different file is a different document, not new text. */
@@ -164,159 +149,17 @@ const plainTheme = EditorView.theme({
   '.cm-scroller': { fontFamily: 'inherit', lineHeight: 'inherit' },
 })
 
-const sourceHighlight = HighlightStyle.define([
-  { tag: tags.comment, color: 'var(--color-syntax-comment)' },
-  { tag: [tags.keyword, tags.modifier, tags.self], color: 'var(--color-syntax-keyword)' },
-  { tag: [tags.string, tags.character, tags.attributeValue], color: 'var(--color-syntax-string)' },
-  { tag: [tags.number, tags.bool, tags.null, tags.atom], color: 'var(--color-syntax-number)' },
-  { tag: [tags.typeName, tags.className, tags.namespace, tags.tagName], color: 'var(--color-syntax-type)' },
-  {
-    tag: [tags.function(tags.variableName), tags.function(tags.propertyName), tags.definition(tags.variableName)],
-    color: 'var(--color-syntax-function)',
-  },
-  { tag: [tags.propertyName, tags.attributeName], color: 'var(--color-syntax-property)' },
-  { tag: [tags.operator, tags.punctuation, tags.meta], color: 'var(--color-syntax-operator)' },
-  { tag: [tags.regexp, tags.escape], color: 'var(--color-syntax-string)' },
-])
-
-export type SourceLanguage =
-  | 'c'
-  | 'cpp'
-  | 'csharp'
-  | 'css'
-  | 'dart'
-  | 'dockerfile'
-  | 'go'
-  | 'html'
-  | 'java'
-  | 'javascript'
-  | 'json'
-  | 'jsx'
-  | 'kotlin'
-  | 'powershell'
-  | 'python'
-  | 'ruby'
-  | 'rust'
-  | 'shell'
-  | 'sql'
-  | 'swift'
-  | 'toml'
-  | 'tsx'
-  | 'typescript'
-  | 'yaml'
-
-/** The languages a project is most likely to put in its file panel. */
-export function sourceLanguage(path: string): SourceLanguage | null {
-  const name = path.split(/[\\/]/).at(-1)?.toLowerCase() ?? ''
-  if (name === 'dockerfile' || name.startsWith('dockerfile.')) return 'dockerfile'
-  if (['.bashrc', '.bash_profile', '.profile', '.zshrc', '.zprofile'].includes(name)) return 'shell'
-
-  const suffix = name.split('.').at(-1)
-  switch (suffix) {
-    case 'js':
-    case 'mjs':
-    case 'cjs':
-      return 'javascript'
-    case 'jsx':
-      return 'jsx'
-    case 'ts':
-    case 'mts':
-    case 'cts':
-      return 'typescript'
-    case 'tsx':
-      return 'tsx'
-    case 'json':
-      return 'json'
-    case 'css':
-      return 'css'
-    case 'html':
-    case 'htm':
-      return 'html'
-    case 'py':
-    case 'pyi':
-      return 'python'
-    case 'sql':
-      return 'sql'
-    case 'yaml':
-    case 'yml':
-      return 'yaml'
-    case 'toml':
-      return 'toml'
-    case 'sh':
-    case 'bash':
-    case 'zsh':
-      return 'shell'
-    case 'ps1':
-    case 'psm1':
-      return 'powershell'
-    case 'c':
-      return 'c'
-    case 'cc':
-    case 'cpp':
-    case 'cxx':
-    case 'h':
-    case 'hh':
-    case 'hpp':
-      return 'cpp'
-    case 'cs':
-      return 'csharp'
-    case 'java':
-      return 'java'
-    case 'kt':
-    case 'kts':
-      return 'kotlin'
-    case 'dart':
-      return 'dart'
-    case 'go':
-      return 'go'
-    case 'rs':
-      return 'rust'
-    case 'rb':
-      return 'ruby'
-    case 'swift':
-      return 'swift'
-    default:
-      return null
-  }
-}
-
-const languageExtensions: Record<SourceLanguage, Extension> = {
-  javascript: javascript(),
-  jsx: javascript({ jsx: true }),
-  typescript: javascript({ typescript: true }),
-  tsx: javascript({ jsx: true, typescript: true }),
-  json: json(),
-  css: css(),
-  html: html(),
-  python: python(),
-  sql: sql(),
-  yaml: yaml(),
-  toml: StreamLanguage.define(toml),
-  shell: StreamLanguage.define(shell),
-  powershell: StreamLanguage.define(powerShell),
-  dockerfile: StreamLanguage.define(dockerFile),
-  c: StreamLanguage.define(c),
-  cpp: StreamLanguage.define(cpp),
-  csharp: StreamLanguage.define(csharp),
-  java: StreamLanguage.define(java),
-  kotlin: StreamLanguage.define(kotlin),
-  dart: StreamLanguage.define(dart),
-  go: StreamLanguage.define(go),
-  rust: StreamLanguage.define(rust),
-  ruby: StreamLanguage.define(ruby),
-  swift: StreamLanguage.define(swift),
-}
-
+/** `firstLine` lets an extensionless script colour by its `#!`. */
 export function sourceTextExtensions(
   path: string,
-  { wrap = true, lineNumbers: showLineNumbers = true }: { wrap?: boolean; lineNumbers?: boolean } = {},
+  { wrap = true, lineNumbers: showLineNumbers = true, firstLine }: { wrap?: boolean; lineNumbers?: boolean; firstLine?: string } = {},
 ): Extension[] {
-  const language = sourceLanguage(path)
+  const language = sourceLanguage(path, firstLine)
   return [
     plainTheme,
-    syntaxHighlighting(sourceHighlight),
+    syntaxHighlighting(sourceHighlighter),
     ...(showLineNumbers ? [lineNumbers()] : []),
-    ...(language === null ? [] : [languageExtensions[language]]),
+    ...(language === null ? [] : [languageSupport(language)]),
     ...(wrap ? [EditorView.lineWrapping] : []),
   ]
 }

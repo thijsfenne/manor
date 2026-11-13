@@ -32,6 +32,16 @@ describe('the right panel slot', () => {
     expect(storedPanels('agents', false)).toEqual({ open: true, layout: [['agents']] })
   })
 
+  test('the diff from Changes takes the Session panel\'s place, and closing it leaves the region closed', () => {
+    const session = { open: true, layout: [['agents']] as PanelLayout }
+    const diff = toggledPanels(session, session.layout, 'diff', 'agents')
+    expect(diff).toEqual({ open: true, layout: [['diff']] })
+    expect(toggledPanels(diff, diff.layout, 'diff')).toEqual({ open: false, layout: [['diff']] })
+    // In a full region it takes the slot the Session panel leaves, the others staying put.
+    const four = { open: true, layout: [['agents', 'files'], ['side', 'browser']] as PanelLayout }
+    expect(toggledPanels(four, four.layout, 'diff', 'agents').layout).toEqual([['files', 'diff'], ['side', 'browser']])
+  })
+
   test('keeps routines on its fixed room and gives memory the shared one', () => {
     expect(rightRegionWidth('routines', 500, none)).toBe(LIST_PANEL_WIDTH)
     expect(rightRegionWidth('memory', 500, none)).toBe(500)

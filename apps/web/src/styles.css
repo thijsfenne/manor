@@ -783,6 +783,20 @@ button {
 }
 
 /*
+ * Source colours, from the one highlighter the Files panel's editor and the Session
+ * diff share (`components/ui/sourceSyntax.ts`). Classes rather than CodeMirror's own
+ * generated styles, so a diff colours with no editor mounted anywhere on the page.
+ */
+.syn-comment { color: var(--color-syntax-comment); }
+.syn-keyword { color: var(--color-syntax-keyword); }
+.syn-string { color: var(--color-syntax-string); }
+.syn-number { color: var(--color-syntax-number); }
+.syn-type { color: var(--color-syntax-type); }
+.syn-function { color: var(--color-syntax-function); }
+.syn-property { color: var(--color-syntax-property); }
+.syn-operator { color: var(--color-syntax-operator); }
+
+/*
  * A ```mermaid block drawn by pele. Pele paints through these variables rather than
  * baked colours, so a theme switch recolours every diagram with no second render.
  * Node borders need more than the 8% hairline, so they take the text at 28%.

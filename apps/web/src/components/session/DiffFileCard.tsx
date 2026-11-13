@@ -4,6 +4,8 @@ import { splitPath, splitRows, type DiffViewFile, type DiffViewRow } from '../..
 import { FileMark } from '../fileMark'
 import { Icon } from '../Icon'
 import { ContextMenu, type ContextMenuItem } from '../ui/ContextMenu'
+import { sourceLanguage } from '@manor/client-runtime/languages'
+import { highlightLines, type SyntaxSpan } from '../ui/sourceSyntax'
 
 export type DiffLayout = 'stacked' | 'split'
 
@@ -115,6 +117,7 @@ export const DiffFileCard = memo(function DiffFileCard({
 function FileBody({ file, layout, scrollRoot }: { file: DiffViewFile; layout: DiffLayout; scrollRoot: RefObject<HTMLElement> }) {
   const box = useRef<HTMLDivElement>(null)
   const near = useNear(box, scrollRoot)
+  const syntax = useMemo(() => (near ? rowSyntax(file.path, file.rows) : null), [near, file.path, file.rows])
   const estimate = Math.max(1, file.rows.length) * ROW_PX + 8
   // The widest number, plus the padding either side of it inside its own column.
   const gutter = useMemo(() => `calc(${String(file.rows.reduce((widest, row) =>
@@ -136,10 +139,59 @@ function FileBody({ file, layout, scrollRoot }: { file: DiffViewFile; layout: Di
       // Drawn once, then skipped by the browser whenever it is out of view.
       style={{ '--diff-gutter': gutter, contentVisibility: 'auto', containIntrinsicSize: `auto ${estimate}px`, ...(near ? {} : { height: estimate }) } as CSSProperties}
     >
-      {near ? (layout === 'split' ? <SplitLines rows={file.rows} /> : <StackedLines rows={file.rows} />) : null}
+      {near ? (layout === 'split' ? <SplitLines rows={file.rows} syntax={syntax} /> : <StackedLines rows={file.rows} syntax={syntax} />) : null}
       {file.truncated && near ? <p className="m-0 px-3 pt-1.5 pb-1 font-sans text-label text-warn">Part of this file’s diff is left out.</p> : null}
     </div>
   )
+}
+
+type LineRow = Exclude<DiffViewRow, { kind: 'gap' }>
+/** Each line's coloured spans, by row. `null` where the file has no grammar. */
+type RowSyntax = ReadonlyMap<DiffViewRow, SyntaxSpan[]> | null
+
+/**
+ * Past this many characters of diff a file stays plain: the parse runs on the main
+ * thread as the card scrolls into view, and a change this long is a generated file.
+ */
+const HIGHLIGHT_MAX_CHARS = 120_000
+
+/**
+ * Colours each hunk as the two texts it comes from: unchanged and removed lines read
+ * as the old text, unchanged and added lines as the new, so a line inside a block
+ * comment or a template string colours as one. Hunks parse apart, so a comment the
+ * diff leaves out between them cannot run on into the next. An unchanged line takes
+ * the new side's colours. The grammar is the file's, read once: the first line seen
+ * is line 1 only where the diff starts there, which is where a `#!` sits.
+ */
+export function rowSyntax(path: string, rows: readonly DiffViewRow[]): RowSyntax {
+  const first = rows.find((row) => row.kind !== 'gap')
+  const language = sourceLanguage(path, first?.text)
+  if (language === null || rows.reduce((sum, row) => sum + (row.kind === 'gap' ? 0 : row.text.length + 1), 0) > HIGHLIGHT_MAX_CHARS) return null
+  const spans = new Map<DiffViewRow, SyntaxSpan[]>()
+  const colour = (side: LineRow[]) => {
+    if (side.length === 0) return
+    const lines = highlightLines(language, side.map((row) => row.text).join('\n'))
+    side.forEach((row, index) => spans.set(row, lines[index] ?? []))
+  }
+  let hunk: LineRow[] = []
+  for (const row of [...rows, { kind: 'gap' } as const]) {
+    if (row.kind !== 'gap') {
+      hunk.push(row)
+      continue
+    }
+    colour(hunk.filter((line) => line.kind !== 'added'))
+    colour(hunk.filter((line) => line.kind !== 'removed'))
+    hunk = []
+  }
+  return spans
+}
+
+/** A line's text in its grammar's colours, or as it is where there is none. */
+function Code({ row, syntax }: { row: DiffViewRow | undefined; syntax: RowSyntax }) {
+  if (row === undefined || row.kind === 'gap' || row.text === '') return ' '
+  const spans = syntax?.get(row)
+  if (spans === undefined) return row.text
+  return spans.map((span, index) => (span.className === '' ? span.text : <span key={index} className={span.className}>{span.text}</span>))
 }
 
 /** Lines the diff leaves out between two hunks, counted where Git says how many. */
@@ -161,7 +213,7 @@ function Edge({ kind }: { kind: DiffViewRow['kind'] | undefined }) {
 }
 
 /** One column of numbers: the new line's, or the old one's for a line that is gone. */
-function StackedLines({ rows }: { rows: readonly DiffViewRow[] }) {
+function StackedLines({ rows, syntax }: { rows: readonly DiffViewRow[]; syntax: RowSyntax }) {
   return (
     <>
       {rows.map((row, index) => row.kind === 'gap' ? <Gap key={index} {...(row.count === undefined ? {} : { count: row.count })} /> : (
@@ -169,14 +221,14 @@ function StackedLines({ rows }: { rows: readonly DiffViewRow[] }) {
           row.kind === 'added' ? `${ADDED} text-text` : row.kind === 'removed' ? `${REMOVED} text-text` : 'text-muted'}`}>
           <Edge kind={row.kind} />
           <span className={NUMBER}>{row.kind === 'removed' ? row.oldNo : row.newNo}</span>
-          <span className={TEXT}>{row.text === '' ? ' ' : row.text}</span>
+          <span className={TEXT}><Code row={row} syntax={syntax} /></span>
         </div>
       ))}
     </>
   )
 }
 
-function SplitLines({ rows }: { rows: readonly DiffViewRow[] }) {
+function SplitLines({ rows, syntax }: { rows: readonly DiffViewRow[]; syntax: RowSyntax }) {
   const pairs = useMemo(() => splitRows(rows), [rows])
   return (
     <>
@@ -185,12 +237,12 @@ function SplitLines({ rows }: { rows: readonly DiffViewRow[] }) {
           <Edge kind={pair.left?.kind} />
           <span className={`${NUMBER} ${pair.left?.kind === 'removed' ? REMOVED : ''}`}>{pair.left?.oldNo}</span>
           <span className={`${TEXT} border-r border-line ${pair.left === undefined ? 'bg-surface-2' : pair.left.kind === 'removed' ? `${REMOVED} text-text` : 'text-muted'}`}>
-            {pair.left === undefined ? ' ' : pair.left.text === '' ? ' ' : pair.left.text}
+            <Code row={pair.left} syntax={syntax} />
           </span>
           <Edge kind={pair.right?.kind} />
           <span className={`${NUMBER} ${pair.right?.kind === 'added' ? ADDED : ''}`}>{pair.right?.newNo}</span>
           <span className={`${TEXT} ${pair.right === undefined ? 'bg-surface-2' : pair.right.kind === 'added' ? `${ADDED} text-text` : 'text-muted'}`}>
-            {pair.right === undefined ? ' ' : pair.right.text === '' ? ' ' : pair.right.text}
+            <Code row={pair.right} syntax={syntax} />
           </span>
         </div>
       ))}

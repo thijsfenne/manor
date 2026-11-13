@@ -213,8 +213,8 @@ export const layoutFull = (layout: PanelLayout) => layoutCount(layout) >= MAX_RI
 
 /**
  * Adds a panel in the first free slot. At the cap nothing is replaced: the layout is
- * returned as it was. The diff is the exception: it is read beside the Session panel,
- * never under it. Up to two panels open, it takes a column of its own on the chat's
+ * returned as it was. The diff is the exception: opened from a turn's Review or a
+ * result card it is read beside the Session panel, never under it. Up to two panels open, it takes a column of its own on the chat's
  * side and the others share the second column; with three, it shares the column
  * without the Session panel, and when that one is full its second panel moves under
  * Session to make room.
@@ -416,11 +416,14 @@ export const storedValue = (open: boolean, layout: PanelLayout) => `${open ? '' 
  * not always what is stored: a chat with no folders shows the roster while Files is
  * still remembered, and a click on the visible roster has to close the roster.
  * A door on a hidden region opens that one panel, not everything that was open before.
+ * `instead` is a panel the opening one takes the place of: the Session panel's Changes
+ * row closes that panel, so the diff gets its room.
  */
 export function toggledPanels(
   stored: { open: boolean; layout: PanelLayout },
   shown: PanelLayout,
   id: RightPanelId,
+  instead?: RightPanelId,
 ): { open: boolean; layout: PanelLayout } {
   if (!stored.open || shown.length === 0) return { open: true, layout: [[id]] }
   if (layoutHas(shown, id)) {
@@ -428,7 +431,7 @@ export function toggledPanels(
     // The last panel out closes the region and stays the thing ⌘B brings back.
     return next.length === 0 ? { open: false, layout: shown } : { open: true, layout: next }
   }
-  return { open: true, layout: withPanel(shown, id) }
+  return { open: true, layout: withPanel(instead === undefined ? shown : withoutPanel(shown, instead), id) }
 }
 
 /**
@@ -497,8 +500,8 @@ export function useRightPanel(
     compactPanels[targetChatId]?.open === true && compactPanels[targetChatId]?.id === id
   const closeCompact = (targetChatId: string) => setCompact(targetChatId, compactPanels[targetChatId]!.id, false)
 
-  /** A door press. `shown` is the layout on screen, see `toggledPanels`. */
-  const toggleFor = useCallback((targetChatId: string, id: RightPanelId, shown?: PanelLayout) => {
+  /** A door press. `shown` is the layout on screen and `instead` what opening replaces, see `toggledPanels`. */
+  const toggleFor = useCallback((targetChatId: string, id: RightPanelId, shown?: PanelLayout, instead?: RightPanelId) => {
     if (compact) {
       if (compactOpen(targetChatId, id)) closeCompact(targetChatId)
       else setCompact(targetChatId, id, true)
@@ -506,7 +509,7 @@ export function useRightPanel(
     }
     setByChat((map) => {
       const stored = storedFor(map, targetChatId)
-      const next = toggledPanels(stored, shown ?? (stored.open ? stored.layout : NO_PANELS), id)
+      const next = toggledPanels(stored, shown ?? (stored.open ? stored.layout : NO_PANELS), id, instead)
       return { ...map, [targetChatId]: storedValue(next.open, next.layout) }
     })
   }, [compact, compactPanels, setCompact])

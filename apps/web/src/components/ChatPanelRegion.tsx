@@ -8,7 +8,7 @@ import { runsByRoutine as groupRunsByRoutine } from '../routines'
 import { desktopBrowser } from '../desktopBrowser'
 import { useChatSide } from '../useChatSide'
 import { BROWSER_EXPANDED_KEY, FILES_MIN_WIDTH, FILES_TREE_WIDTH, FILES_PREVIEW_MIN_WIDTH, rightPanelDefaultWidth, usePanelExpanded, useRightPanelSize } from '../useFilesPanel'
-import { AGENTS_PANEL_WIDTH, CHAT_STAGE_MIN_WIDTH, DOCK_PANEL_GAP, LIST_PANEL_WIDTH, NO_PANELS, RIGHT_PANEL_MOTION_MS, TILE_MIN_WIDTH, clampedSplit, columnSizingPanel, keepPanels, layoutCount, layoutFromKey, layoutFull, layoutHas, layoutKey, rightPanelOverlays, rightRegionWidth, tileCardBox, tileRowSpan, tiledColumnWidths, useLingeringPanel, useRegionSettling, useTileSizes, type PanelDrop, type PanelLayout, type RightPanelId } from '../useRightPanel'
+import { AGENTS_PANEL_WIDTH, CHAT_STAGE_MIN_WIDTH, DOCK_PANEL_GAP, LIST_PANEL_WIDTH, NO_PANELS, RIGHT_PANEL_MOTION_MS, TILE_MIN_WIDTH, clampedSplit, columnSizingPanel, keepPanels, layoutCount, layoutFromKey, layoutHas, layoutKey, rightPanelOverlays, rightRegionWidth, tileCardBox, tileRowSpan, tiledColumnWidths, useLingeringPanel, useRegionSettling, useTileSizes, type PanelDrop, type PanelLayout, type RightPanelId } from '../useRightPanel'
 import { turnChangedFiles } from '../changedFiles'
 import { turnDiffView } from '../diffView'
 import { insertIntoDraft } from '../composerDrafts'
@@ -667,7 +667,6 @@ export function ChatPanelRegion({
               <SessionSections
                 repo={sessionRepo}
                 diffOpen={layoutHas(shown, 'diff')}
-                diffBlocked={layoutFull(shown)}
                 running={running}
                 connected={live}
                 commits={workspace.sessionCommits}

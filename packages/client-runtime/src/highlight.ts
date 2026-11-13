@@ -6,6 +6,8 @@
  * editor would need a real grammar, and the phone does not edit.
  */
 
+import { sourceLanguage, type SourceLanguage } from './languages'
+
 export type TokenKind =
   | 'plain'
   | 'comment'
@@ -95,33 +97,27 @@ const LANGUAGES: Record<string, Language> = {
   plain: { family: 'plain', keywords: new Set(), types: new Set() },
 }
 
-const BY_EXTENSION: Record<string, string> = {
-  js: 'javascript', jsx: 'javascript', mjs: 'javascript', cjs: 'javascript',
-  ts: 'typescript', tsx: 'typescript', mts: 'typescript', cts: 'typescript',
-  go: 'go', rs: 'rust', swift: 'swift', kt: 'kotlin', kts: 'kotlin', java: 'java',
-  c: 'c', h: 'c', cc: 'c', cpp: 'c', hpp: 'c', m: 'c', mm: 'c',
-  py: 'python', pyi: 'python',
-  sh: 'shell', bash: 'shell', zsh: 'shell', fish: 'shell',
-  css: 'css', scss: 'css', less: 'css',
-  json: 'json', jsonc: 'json', json5: 'json',
-  yml: 'yaml', yaml: 'yaml',
-  toml: 'toml',
-  html: 'markup', htm: 'markup', xml: 'markup', svg: 'markup', vue: 'markup', svelte: 'markup', plist: 'markup',
+/** The phone's colourer for each grammar of the shared map; a grammar it has no family for reads plain. */
+const BY_SOURCE: Partial<Record<SourceLanguage, string>> = {
+  javascript: 'javascript', jsx: 'javascript', typescript: 'typescript', tsx: 'typescript',
+  go: 'go', rust: 'rust', swift: 'swift', kotlin: 'kotlin', java: 'java',
+  c: 'c', cpp: 'c', csharp: 'c', dart: 'c',
+  python: 'python',
+  shell: 'shell', dockerfile: 'shell', powershell: 'shell',
+  css: 'css', json: 'json', yaml: 'yaml', toml: 'toml', properties: 'toml',
+  html: 'markup', xml: 'markup',
   sql: 'sql',
 }
 
-const BY_NAME: Record<string, string> = {
-  dockerfile: 'shell', makefile: 'shell', '.zshrc': 'shell', '.bashrc': 'shell', '.npmrc': 'toml', '.gitignore': 'shell', '.env': 'shell',
+/** The language to colour a path in, from the map every code view shares; `plain` when it names none. */
+export function languageOf(path: string, firstLine?: string): string {
+  const source = sourceLanguage(path, firstLine)
+  return source === null ? 'plain' : BY_SOURCE[source] ?? 'plain'
 }
 
-/** The language to colour a path in, by its extension or its whole name; `plain` when neither says. */
-export function languageOf(path: string): string {
-  const name = (path.split('/').at(-1) ?? path).toLowerCase()
-  const named = BY_NAME[name]
-  if (named !== undefined) return named
-  const dot = name.lastIndexOf('.')
-  if (dot === -1) return 'plain'
-  return BY_EXTENSION[name.slice(dot + 1)] ?? 'plain'
+const FENCE_ALIASES: Record<string, string> = {
+  node: 'javascript', shellsession: 'shell', console: 'shell', postgres: 'sql', postgresql: 'sql', mysql: 'sql',
+  'c++': 'c', objc: 'c', golang: 'go', py3: 'python',
 }
 
 /** The same lookup for a fenced code block's info string ("ts", "python", "bash"). */
@@ -129,7 +125,7 @@ export function languageOfFence(info: string): string {
   const tag = info.trim().toLowerCase().split(/\s+/)[0] ?? ''
   if (tag === '') return 'plain'
   if (LANGUAGES[tag] !== undefined) return tag
-  return BY_EXTENSION[tag] ?? ({ node: 'javascript', shellsession: 'shell', console: 'shell', jsonl: 'json', postgres: 'sql', postgresql: 'sql', mysql: 'sql', cpp: 'c', 'c++': 'c', objc: 'c', golang: 'go', py3: 'python' } as Record<string, string>)[tag] ?? 'plain'
+  return FENCE_ALIASES[tag] ?? languageOf(`fence.${tag}`)
 }
 
 /* One alternation per family. Order matters: comments before punctuation, strings before words. */

@@ -612,7 +612,7 @@ function StagePanel({ kit, chat, layout, availableWidth }: { kit: StageKit; chat
     onEditGroup={() => openGroupDialog({ mode: 'edit', chatId: chat.id })}
     diffScope={panels.diffViews[chat.id] ?? SESSION_SCOPE}
     onDiffScope={(scope) => setDiffScope(chat.id, scope)}
-    onToggleDiff={(shown) => toggleFor(chat.id, 'diff', shown)}
+    onToggleDiff={(shown) => toggleFor(chat.id, 'diff', shown, 'agents')}
     onOpenFile={(path) => openFileFor(chat, path)}
     subagentPath={kit.subagentPath(chat.id)}
     onOpenSubagent={(toolCallId) => kit.pushSubagentView(chat.id, toolCallId)}

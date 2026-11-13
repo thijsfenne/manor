@@ -548,7 +548,7 @@ export function RepoFilesPanel({
                   <TextEditor
                     path={editor.path}
                     text={editor.text}
-                    extensions={sourceTextExtensions(editor.path, { lineNumbers: !isMarkdown(editor.path) })}
+                    extensions={sourceTextExtensions(editor.path, { lineNumbers: !isMarkdown(editor.path), firstLine: editor.text.split('\n', 1)[0] })}
                     onChange={(text) => setEditor((current) => (current === null ? null : { ...current, text }))}
                   />
                 </div>
@@ -676,7 +676,7 @@ function FilePreview({ path, result }: { path: string; result: RepoFileResult | 
         // geometry when Edit is pressed. Long lines wrap in both modes because this
         // panel is often narrower than the source it shows.
         <div className="min-h-0 overflow-y-auto bg-stage p-4">
-          <TextEditor path={path} text={result.content} extensions={sourceTextExtensions(path)} />
+          <TextEditor path={path} text={result.content} extensions={sourceTextExtensions(path, { firstLine: result.content.split('\n', 1)[0] })} />
         </div>
       )
     case 'too_large':

@@ -206,7 +206,7 @@ function Preview({
       </ScrollView>
     )
   }
-  return <CodeView code={result.content} language={languageOf(path)} />
+  return <CodeView code={result.content} language={languageOf(path, result.content.split('\n', 1)[0])} />
 }
 
 function Loading({ text }: { text: string }) {
