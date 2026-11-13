@@ -35,6 +35,7 @@ import { ConfirmStrip } from '../Confirm'
 import { Icon } from '../Icon'
 import { Markdown } from '../Markdown'
 import { formHintClass, formInputClass, formLabelClass } from '../ui/FormField'
+import { Button } from '../ui/Button'
 import { IconButton } from '../ui/IconButton'
 import { Pill } from '../ui/Pill'
 import { Switch } from '../ui/Switch'
@@ -44,6 +45,7 @@ import { ModelField } from './NewAgentFields'
 import { SkillsSection } from './SkillsSection'
 import { SubagentsSection, type PersonaSubagents } from './SubagentsSection'
 import { sendAfter, useAgentAutosave, type SaveState } from './useAgentAutosave'
+import { subscribeAgentPage, takeAgentPage } from '../../agentSettingsIntent'
 
 type Page = 'root' | 'face' | 'instructions' | 'notes' | 'skills' | 'connections' | 'subagents' | 'routines' | 'access'
 
@@ -89,10 +91,26 @@ export interface AgentSettingsProps {
 export function AgentSettings(props: AgentSettingsProps) {
   const { agent, agents, registry, skills, routines, subagentPolicy, status, requestEvents, onSaveAgent, onClose } = props
   const [page, setPage] = useState<Page>('root')
+  // A memory-off agent's offered rule, shown on Instructions until the user adds or drops it.
+  const [suggestion, setSuggestion] = useState<string | null>(null)
+  // Bumped by each chat line's View, so the notes page reads the file as it is now.
+  const [notesRead, setNotesRead] = useState(0)
+  // A chat line's View or Add to instructions, whether this editor was open already or opens now.
+  useEffect(() => {
+    const take = () => {
+      const intent = takeAgentPage(agent.id)
+      if (intent === null) return
+      setPage(intent.page)
+      setSuggestion(intent.line ?? null)
+      setNotesRead((count) => count + 1)
+    }
+    take()
+    return subscribeAgentPage(take)
+  }, [agent.id])
   const { onRequestSubagentPolicy } = props
   useEffect(() => onRequestSubagentPolicy(), [onRequestSubagentPolicy])
   const { draft, state, edit } = useAgentAutosave(agent, status, requestEvents, onSaveAgent)
-  const notes = useAgentNotes(agent.id, draft.memoryScope, status, requestEvents, props.onLoadNotes)
+  const notes = useAgentNotes(agent.id, draft.memoryScope, status, requestEvents, props.onLoadNotes, notesRead)
   const subagents = useSubagentsAutosave(agent.id, subagentPolicy, status, requestEvents, props.onSaveSubagentPolicy)
   const name = draft.name.trim() || agent.name
   const own = routines.filter((routine) => routine.agentId === agent.id)
@@ -136,12 +154,25 @@ export function AgentSettings(props: AgentSettingsProps) {
     case 'instructions':
       footnote = 'The whole system prompt. After the interview, only you change it.'
       body = (
-        <textarea
-          className={`${formInputClass} min-h-[360px] flex-1 resize-none font-mono text-label leading-relaxed`}
-          aria-label="Instructions"
-          value={draft.character}
-          onChange={(event) => edit({ character: event.target.value }, true)}
-        />
+        <>
+          {suggestion === null ? null : (
+            <SuggestedLine
+              name={name}
+              line={suggestion}
+              onAdd={() => {
+                edit({ character: withLine(draft.character, suggestion) })
+                setSuggestion(null)
+              }}
+              onDismiss={() => setSuggestion(null)}
+            />
+          )}
+          <textarea
+            className={`${formInputClass} min-h-[360px] flex-1 resize-none font-mono text-label leading-relaxed`}
+            aria-label="Instructions"
+            value={draft.character}
+            onChange={(event) => edit({ character: event.target.value }, true)}
+          />
+        </>
       )
       break
     case 'notes':
@@ -177,6 +208,26 @@ export function AgentSettings(props: AgentSettingsProps) {
       <div className="flex shrink-0 items-start gap-2 border-t border-line px-3 py-2 text-meta text-dim">
         <span className="min-w-0 flex-1">{footnote}</span>
         <SaveLine state={state} quiet={page !== 'root'} />
+      </div>
+    </div>
+  )
+}
+
+/** The instructions with one more line at the end, on its own line. */
+export const withLine = (instructions: string, line: string): string => {
+  const kept = instructions.trimEnd()
+  return kept === '' ? `${line}\n` : `${kept}\n\n${line}\n`
+}
+
+/** The rule a memory-off agent offered, added only when the user says so. */
+function SuggestedLine({ name, line, onAdd, onDismiss }: { name: string; line: string; onAdd: () => void; onDismiss: () => void }) {
+  return (
+    <div className="flex flex-col gap-2 rounded-lg border border-line bg-surface-2 px-3 py-2.5">
+      <span className="text-meta text-dim">{name} offered this line. It is not in the instructions until you add it.</span>
+      <span className="text-[14px] text-text [overflow-wrap:anywhere]">{line}</span>
+      <div className="flex gap-2">
+        <Button variant="primary" size="small" onClick={onAdd}>Add to instructions</Button>
+        <Button size="small" onClick={onDismiss}>Dismiss</Button>
       </div>
     </div>
   )
@@ -500,6 +551,8 @@ function useAgentNotes(
   status: ConnectionStatus,
   requestEvents: RequestEvents,
   onLoad: (agentId: string, requestId: string) => boolean,
+  /** A change reads the notes again. */
+  read: number,
 ): NotesLoad {
   const [load, setLoad] = useState<NotesLoad>({ kind: 'loading' })
   useEffect(() => {
@@ -517,7 +570,7 @@ function useAgentNotes(
     })
     if (!onLoad(agentId, requestId)) setLoad({ kind: 'error', message: 'Could not load the notes. Try again.' })
     return unsubscribe
-  }, [agentId, memory, status, requestEvents, onLoad])
+  }, [agentId, memory, status, requestEvents, onLoad, read])
   return load
 }
 

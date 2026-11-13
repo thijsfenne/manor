@@ -1,4 +1,6 @@
-import { readFile } from 'node:fs/promises'
+import { createHash } from 'node:crypto'
+import { readFile, rm, writeFile } from 'node:fs/promises'
+import { NOTES_UNDO_MAX, type NotesUpdate } from '@manor/contracts'
 import { agentNotesPath, type MemoryTarget } from './memoryTarget.js'
 
 /**
@@ -60,4 +62,61 @@ export async function composeAgentNotesBundle(
     sources: [{ path: filePath, content }],
     truncated,
   }
+}
+
+/** The notes file as it is on disk: null when there is none, undefined when it cannot be read. */
+export async function readNotesFile(filePath: string): Promise<string | null | undefined> {
+  try {
+    return await readFile(filePath, 'utf8')
+  } catch (error: unknown) {
+    return (error as NodeJS.ErrnoException).code === 'ENOENT' ? null : undefined
+  }
+}
+
+const hashOf = (text: string | null): string | null => text === null ? null : createHash('sha256').update(text).digest('hex')
+
+/** The lines a reader counts as notes: not blank, not a heading, not the capacity line. */
+const noteLines = (text: string | null): string[] => (text ?? '').split('\n')
+  .map((line) => line.trim())
+  .filter((line) => line.length > 0 && !line.startsWith('#') && !/^>\s*capacity:/i.test(line))
+
+/** Lines in `side` beyond the ones `other` holds, counting duplicates. */
+function surplus(side: readonly string[], other: readonly string[]): number {
+  const left = new Map<string, number>()
+  for (const line of other) left.set(line, (left.get(line) ?? 0) + 1)
+  let count = 0
+  for (const line of side) {
+    const held = left.get(line) ?? 0
+    if (held === 0) count += 1
+    else left.set(line, held - 1)
+  }
+  return count
+}
+
+/**
+ * What a turn did to the persona's notes, for the chat line and its Undo. Undefined when
+ * no note line changed (a capacity count alone is not news) or the file is too large to
+ * keep a copy of.
+ */
+export function notesUpdateOf(before: string | null, after: string | null): NotesUpdate | undefined {
+  if (before === after || (before?.length ?? 0) > NOTES_UNDO_MAX) return undefined
+  const added = surplus(noteLines(after), noteLines(before))
+  const removed = surplus(noteLines(before), noteLines(after))
+  if (added + removed === 0) return undefined
+  return { added, removed, before, afterHash: hashOf(after) }
+}
+
+/**
+ * Undo of one turn's notes change: puts the file back as the turn found it, only while it
+ * is still exactly as the turn left it. A later edit by anyone (the agent, the dream, the
+ * user) refuses it and changes nothing. A local file edit in the memory folder, like
+ * every other memory write.
+ */
+export async function undoNotesUpdate(filePath: string, update: NotesUpdate): Promise<'undone' | 'changed'> {
+  const current = await readNotesFile(filePath)
+  if (current === undefined) throw new Error('Could not read the notes file.')
+  if (hashOf(current) !== update.afterHash) return 'changed'
+  if (update.before === null) await rm(filePath, { force: true })
+  else await writeFile(filePath, update.before, 'utf8')
+  return 'undone'
 }

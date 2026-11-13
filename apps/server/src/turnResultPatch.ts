@@ -3,7 +3,9 @@ import type { Store } from './store.js'
 
 type TurnResultEvent = Extract<ThreadEvent, { type: 'turn_result' }>
 
-const queues = new WeakMap<Store, Map<string, Promise<void>>>()
+type PatchStore = Pick<Store, 'loadEvents' | 'replaceEvent'>
+
+const queues = new WeakMap<PatchStore, Map<string, Promise<void>>>()
 
 /**
  * Rewrites a finished turn's `turn_result` after the turn closed, and broadcasts it.
@@ -14,7 +16,7 @@ const queues = new WeakMap<Store, Map<string, Promise<void>>>()
  * read before the other's field landed. `change` returns undefined to leave it as is.
  */
 export function patchTurnResult(
-  store: Store,
+  store: PatchStore,
   emit: (event: TurnResultEvent) => void,
   chatId: string,
   turnId: string,

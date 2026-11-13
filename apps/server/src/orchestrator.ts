@@ -203,12 +203,16 @@ export interface OrchestratorOptions {
       allowSessionStatus?: boolean
       /** A new agent's interview turn: `write_instructions`; absent means off. */
       allowInstructions?: boolean
+      /** A memory-off persona's attended turn: `offer_instructions_line`. */
+      allowInstructionsOffer?: boolean
       canApprove: boolean
       relay?: RelayTurnContext
     },
   ) => AttachedMcpServer
   /** Whether this stored message starts the agent's interview turn, the only turn that writes its instructions. */
   interviewKickoff?: (agentId: string, messageId: string) => boolean
+  /** The line a memory-off persona offered for its instructions in this turn, taken once for its result. */
+  takeInstructionsOffer?: (turnId: string) => string | undefined
   /** Create and update this persona's own schedules, offered only in a manual DM turn. */
   routineMcp?: (chatId: string, agent: AgentConfig, turnId: string) => AttachedMcpServer
   /**

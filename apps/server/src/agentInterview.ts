@@ -1,4 +1,4 @@
-import type { AgentConfig } from '@manor/contracts'
+import { INSTRUCTIONS_OFFER_MAX, type AgentConfig } from '@manor/contracts'
 import { InvalidUserInputCapabilityError, type UserInputCapabilities, type UserInputContext } from './interactionCapability.js'
 import { isRecord } from './mcp/stdio.js'
 
@@ -85,4 +85,29 @@ export async function answerInstructionsCall(
     return { status: 409, payload: { error: error instanceof Error ? error.message : INSTRUCTIONS_CLOSED } }
   }
   return { status: 200, payload: { note: 'Saved. These are your instructions from your next turn on. Now tell the user in a short message what you left out.' } }
+}
+
+/**
+ * A memory-off persona's `offer_instructions_line`, on the interview's route: the line
+ * waits for the turn's result, where the chat shows it as "Add to instructions". It
+ * writes nothing; the user makes any edit on the Instructions page.
+ */
+export function answerInstructionsOffer(
+  capabilities: Pick<UserInputCapabilities, 'take'>,
+  offer: (context: UserInputContext, line: string) => void,
+  capability: string | undefined,
+  body: unknown,
+): { status: number; payload: { note: string } | { error: string } } {
+  let context: UserInputContext
+  try {
+    context = capabilities.take(capability, 'offer')
+  } catch (error: unknown) {
+    if (error instanceof InvalidUserInputCapabilityError) return { status: 404, payload: { error: 'Not found.' } }
+    return { status: 409, payload: { error: error instanceof Error ? error.message : 'Not offered here.' } }
+  }
+  const line = isRecord(body) && typeof body.line === 'string' ? body.line.replace(/\s+/g, ' ').trim() : ''
+  if (line === '') return { status: 422, payload: { error: 'offer_instructions_line needs the rule in line.' } }
+  if (line.length > INSTRUCTIONS_OFFER_MAX) return { status: 422, payload: { error: `Keep the line under ${INSTRUCTIONS_OFFER_MAX} characters.` } }
+  offer(context, line)
+  return { status: 200, payload: { note: 'Offered. Nothing was written. Now tell the user in one short sentence that with memory off you keep nothing, and that they can add it to your instructions.' } }
 }

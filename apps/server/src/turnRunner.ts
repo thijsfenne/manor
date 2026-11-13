@@ -72,14 +72,14 @@ import { liveProjectThread, threadSessions, threadSessionsBlock, type ProjectThr
 import type { OrchestratorOptions } from './orchestrator.js'
 import { DEFAULT_RELAY_DEPTH, type RelayTurnContext } from './agentRelay.js'
 import { collectMemoryReads } from './memoryTrace.js'
-import { memoryRoot } from './memoryTarget.js'
+import { agentNotesPath, memoryRoot } from './memoryTarget.js'
 import { memoryChangesFromEdits, turnEdits } from './memoryWriter.js'
 import { patchTurnResult } from './turnResultPatch.js'
 import { isResumeFailure } from './drivers/resumeFailure.js'
 import { resolveAttachments, withMcpOAuth } from './mcp/attachments.js'
 import { CODEX_COMPUTER_MCP_NAME, COMPUTER_MCP_NAME, COMPUTER_TOOLS } from './computerPolicy.js'
 import { CUA_DRIVER_PATH } from './mcp/computerAttachment.js'
-import { composeAgentNotesBundle } from './agentNotes.js'
+import { composeAgentNotesBundle, notesUpdateOf, readNotesFile } from './agentNotes.js'
 import { composeStandingContextBundle } from './standingContext.js'
 import { composeProjectMemoryBundle } from './projectMemory.js'
 import { composeStructuredMemoryBundle, type MemoryRowRanker, type StructuredMemoryBundle } from './structuredMemory.js'
@@ -239,6 +239,8 @@ export interface TurnRequest {
 export interface ActiveTurn {
   turnId: string
   agentId: string
+  /** Another turn of this persona kept notes while this one ran, so a notes change cannot be told apart. */
+  notesShared?: true
   /** Server clock, taken when `running` is announced; the client's timer reads it. */
   startedAt: number
   /** Undefined while the turn's inputs are still being prepared: there is no process yet. */
@@ -717,6 +719,11 @@ function liveRuntime(pin: ChatOverride | undefined, live: LiveSessionInfo): Chat
 }
 
 export class TurnRunner {
+  /**
+   * Per persona, its running turns that keep notes. Two at once cannot tell whose edit
+   * is whose, so neither offers the chat line and Undo: Undo would remove the other's line.
+   */
+  private readonly notesTurns = new Map<string, Set<ActiveTurn>>()
   /** Session ids already compacted in this process. A second crossing rolls over. */
   private readonly liveCompactedSessions = new Set<string>()
   /**
@@ -984,6 +991,8 @@ export class TurnRunner {
         // Capability cleanup must not replace the turn outcome or keep it active.
       }
       state.revokeSkillMcp = undefined
+      const notesTurns = this.notesTurns.get(agent.id)
+      if (notesTurns?.delete(state) === true && notesTurns.size === 0) this.notesTurns.delete(agent.id)
       chat.active = undefined
       // Derived context is infrastructure, not part of the visible turn. Schedule it
       // after every terminal outcome and never wait: a slow cheap model must not hold
@@ -1279,6 +1288,9 @@ export class TurnRunner {
       // A Session of a project with a thread; the tool itself checks the thread started it.
       allowSessionStatus: allowGoal && threadPaths !== undefined && !threadTurn,
       ...(turn.instructionsInterview === true ? { allowInstructions: true } : {}),
+      // Memory off keeps no lasting rule, so a chat persona offers it for its instructions instead.
+      ...(!agent.memoryScope && !single && !aside && canApprove && (room?.kind === 'dm' || room?.kind === 'group')
+        ? { allowInstructionsOffer: true } : {}),
       canApprove,
       ...(resolvedRelay === undefined ? {} : { relay: resolvedRelay }),
     })
@@ -1336,9 +1348,20 @@ export class TurnRunner {
       sources: [...standingContext.sources, ...folderInstructions.sources],
     }
     const structuredMemory = await structuredMemoryPromise
-    const agentNotes = !aside && !single && agent.memoryScope
+    const notesTracked = !aside && !single && agent.memoryScope
+    const agentNotes = notesTracked
       ? await composeAgentNotesBundle(this.options.memoryTarget, agent.id)
       : { text: '', sources: [] }
+    // The notes as this turn found them, so a change it makes gets its chat line and Undo.
+    // Undefined where the persona keeps no notes or the file cannot be read.
+    const notesPath = notesTracked ? agentNotesPath(this.options.memoryTarget, agent.id) : undefined
+    if (notesPath !== undefined) {
+      const turns = this.notesTurns.get(agent.id) ?? new Set<ActiveTurn>()
+      for (const other of turns) other.notesShared = true
+      if (turns.size > 0) state.notesShared = true
+      this.notesTurns.set(agent.id, turns.add(state))
+    }
+    const notesBefore = notesPath === undefined ? undefined : await readNotesFile(notesPath)
     const preferencesText = threadPaths === undefined ? '' : await readThreadFile(threadPaths.preferences)
     const notesText = threadTurn ? await readThreadFile(threadPaths.notes) : ''
     // What changes between turns travels in the turn's message rather than the prompt,
@@ -1582,7 +1605,7 @@ export class TurnRunner {
       cwd, mapping, repoPaths, manorFollowUp, aside, single, browserRoom, browserSession, isolatedRoutine,
       resolvedMcp, builtInMcp, turnMcpServers, workProjects, household, layered,
       availableSkills, selectedSkills, bundleRoots, pin, runningOn, memoryTraceEnabled, memoryRoots,
-      injectedMemoryReads, structuredMemory, agentNotes, noteSkillsUsed, noteSelectedSkillsUsed, files, offersWork, threadTurn,
+      injectedMemoryReads, structuredMemory, agentNotes, notesPath, notesBefore, noteSkillsUsed, noteSelectedSkillsUsed, files, offersWork, threadTurn,
       proposesWork: threadTurn && allowWorkHandoff && workMcp !== undefined,
       // A Session's own lead: a Single chat in a project that is not the project's thread.
       sessionLead: single && room?.kind === 'project' && project?.threadChatId !== chatId,
@@ -2257,7 +2280,7 @@ export class TurnRunner {
   ): Promise<TurnResult> {
     const { chat, chatId, agent } = turn
     const { turnId } = state
-    const { injectedMemoryReads, memoryTraceEnabled, structuredMemory, agentNotes, files, runningOn } = setup
+    const { injectedMemoryReads, memoryTraceEnabled, structuredMemory, agentNotes, notesPath, notesBefore, files, runningOn } = setup
     const {
       outcome, answerText, hasReply, carriedUsage, carriedMemoryReads, acting, volatileBlocks, skillChars, mcpServers,
       offered, sessionId, routineOutcome, routineIncomplete,
@@ -2283,6 +2306,11 @@ export class TurnRunner {
     const memoryChanges = root === undefined
       ? []
       : memoryChangesFromEdits(turnEdits(await this.options.store.loadEvents(chatId), turnId), root)
+    const notesAfter = notesPath === undefined || notesBefore === undefined ? undefined : await readNotesFile(notesPath)
+    const notesUpdate = notesBefore === undefined || notesAfter === undefined || state.notesShared === true
+      ? undefined
+      : notesUpdateOf(notesBefore, notesAfter)
+    const instructionsOffer = this.options.takeInstructionsOffer?.(turnId)
     await this.append(chat, chatId, {
       type: 'turn_result',
       agentId: agent.id,
@@ -2329,6 +2357,8 @@ export class TurnRunner {
       ...(routineIncomplete ? { routineIncomplete: true as const } : {}),
       ...(memoryTrace === undefined ? {} : { memoryTrace }),
       ...(memoryChanges.length === 0 ? {} : { memoryChanges }),
+      ...(notesUpdate === undefined ? {} : { notesUpdate }),
+      ...(instructionsOffer === undefined ? {} : { instructionsOffer: { line: instructionsOffer } }),
     })
     this.options.emit({ type: 'usage', chatId, perAgent: await this.usage(chatId) })
     this.emitTerminal(chatId, state, 'done', routineOutcome)

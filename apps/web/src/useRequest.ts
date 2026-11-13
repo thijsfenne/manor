@@ -11,12 +11,15 @@ export type RequestResponse =
   | (Extract<ServerMessage, { type: 'project_created' }> & { requestId: string })
 
 export interface RequestEvents {
-  subscribe: (listener: (response: RequestResponse) => void) => () => void
+  /** A listener returns true for a notice it shows in place, so the workspace toast stays quiet. */
+  subscribe: (listener: (response: RequestResponse) => boolean | void) => () => void
 }
 
 interface RequestCallbacks {
   onAck?: () => void
   onNotice?: (notice: Extract<ServerMessage, { type: 'notice' }>) => void
+  /** The caller shows the notice itself; the workspace does not toast it too. */
+  noticeInPlace?: boolean
 }
 
 interface PendingRequest extends RequestCallbacks {
@@ -46,7 +49,11 @@ export function useRequest(events: RequestEvents) {
       current.current = null
       setPending(false)
       if (response.type === 'ack') request.onAck?.()
-      else if (response.type === 'notice') request.onNotice?.(response)
+      else if (response.type === 'notice') {
+        request.onNotice?.(response)
+        return request.noticeInPlace === true
+      }
+      return undefined
     }),
     [events],
   )

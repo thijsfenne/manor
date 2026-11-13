@@ -8,7 +8,7 @@ export const INTERACTION_TOOL_NAMES = [
   'delegate_task', 'task_result', 'task_cancel', 'subagent_capabilities',
   'deliver_file', 'goal_reached', 'review_passed',
   'update_project_file', 'answer_session_question', 'report_to_project', 'send_to_session', 'set_session_status',
-  'write_instructions',
+  'write_instructions', 'offer_instructions_line',
 ] as const
 export const SUBAGENT_TOOLS = ['delegate_task', 'task_result', 'task_cancel', 'subagent_capabilities'] as const
 
@@ -72,6 +72,8 @@ export function interactionMcpAttachment(
     allowSessionStatus?: boolean
     /** Only a new agent's interview turn writes its instructions, once. */
     allowInstructions?: boolean
+    /** A memory-off persona's attended turn offers a lasting rule as a line for its instructions. */
+    allowInstructionsOffer?: boolean
     relayMode?: 'async' | 'sync'
   } = {},
 ): AttachedMcpServer {
@@ -100,6 +102,7 @@ export function interactionMcpAttachment(
     ...(runtime.allowProjectReport === true ? ['report_to_project'] : []),
     ...(runtime.allowSessionStatus === true ? ['set_session_status'] : []),
     ...(runtime.allowInstructions === true ? ['write_instructions'] : []),
+    ...(runtime.allowInstructionsOffer === true ? ['offer_instructions_line'] : []),
   ]
   return {
     server: {
@@ -124,7 +127,7 @@ export function interactionMcpAttachment(
         projectUrl,
         '--secret-url',
         secretUrl,
-        ...(runtime.allowInstructions === true ? ['--instructions-url', instructionsUrl] : []),
+        ...(runtime.allowInstructions === true || runtime.allowInstructionsOffer === true ? ['--instructions-url', instructionsUrl] : []),
         ...(runtime.allowRelay === true ? ['--relay-mode', runtime.relayMode ?? 'async'] : []),
         ...((runtime.allowAsk !== false || runtime.allowSecret === true) && runtime.askMode === 'deferred' ? ['--ask-mode', 'deferred'] : []),
         ...enabledTools.flatMap((tool) => ['--tool', tool]),
@@ -147,6 +150,7 @@ export function interactionMcpAttachment(
         ...(runtime.allowProjectReport === true ? ['Report a preference to its project thread with report_to_project.'] : []),
         ...(runtime.allowSessionStatus === true ? ['Keep this Session\'s status line in notes.md with set_session_status.'] : []),
         ...(runtime.allowInstructions === true ? ['Write your own instructions once, after the interview, with write_instructions.'] : []),
+        ...(runtime.allowInstructionsOffer === true ? ['Offer a lasting rule you cannot keep as a line for your instructions with offer_instructions_line.'] : []),
       ].join(' '),
       writes: false,
       effectPolicy: 'trusted',

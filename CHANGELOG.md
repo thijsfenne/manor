@@ -4,6 +4,7 @@ What changed for someone who uses Manor, newest first. A version is a tag on `ma
 
 ## Unreleased
 
+- A rule you give an agent in chat, such as "write follow-ups in Dutch", goes into its notes, never its instructions. The reply shows "Updated its notes +1 line" with View, which opens the notes in Agent settings, and Undo, which puts the notes back unless they changed since. With memory off the agent keeps nothing and says so, and "Add to instructions" opens its Instructions page with the line ready for you to add.
 - Agent settings open beside the agent's DM, from the Agent settings door or the face in the header. A short root holds the face, name, what it helps with and its model, with a page each for instructions, notes, skills, connections, subagents, routines and access. Changes save as you make them. Session agents open the same settings in Settings → Agents. The long agent form is gone.
 - Tool groups are gone. Every agent gets every built-in tool; connections stay per agent, and writes to outside services still ask you first.
 - New agent opens a short form over the workspace: a face, a name, what it should help with, and a model with effort. Create opens the agent's DM. The onboarding's first agent uses the same form. The Role field is gone from creation.

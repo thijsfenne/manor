@@ -144,7 +144,7 @@ import { HttpConnector } from './mcp/httpConnector.js'
 import { McpHttpHost, connectorEndpoint } from './mcp/httpHost.js'
 import { USER_INPUT_CAPABILITY_ENV, askModeFor, interactionMcpAttachment } from './mcp/interactionAttachment.js'
 import { interactionMcpServer } from './mcp/interactionServer.js'
-import { answerInstructionsCall } from './agentInterview.js'
+import { answerInstructionsCall, answerInstructionsOffer } from './agentInterview.js'
 import { FileDeliveryError } from './fileDelivery.js'
 import { ROUTINE_BROKER_CAPABILITY_ENV, routineMcpAttachment } from './mcp/routineAttachment.js'
 import { routineMcpServer } from './mcp/routineServer.js'
@@ -959,6 +959,7 @@ async function main(): Promise<void> {
         ...(permissions?.mayForward === true ? { mayForward: true as const } : {}),
         ...(permissions?.mayAnswer === true ? { mayAnswer: true as const } : {}),
         ...(permissions?.allowInstructions === true ? { mayWriteInstructions: true as const } : {}),
+        ...(permissions?.allowInstructionsOffer === true ? { mayOfferInstructions: true as const } : {}),
         ...(permissions?.allowRelay === true && permissions.relay !== undefined
           ? { relay: permissions.relay }
           : {}),
@@ -979,6 +980,7 @@ async function main(): Promise<void> {
         allowProjectReport: permissions?.allowProjectReport ?? false,
         allowSessionStatus: permissions?.allowSessionStatus ?? false,
         allowInstructions: permissions?.allowInstructions ?? false,
+        allowInstructionsOffer: permissions?.allowInstructionsOffer ?? false,
         relayMode: permissions?.relay?.depth === 0 ? 'async' : 'sync',
         relayBrokerUrl: agentRelayBrokerUrl,
         subagentBrokerUrl,
@@ -2317,8 +2319,12 @@ async function handleInstructionsRequest(
   try {
     const body = await readJsonBody(request)
     const header = request.headers['x-manor-user-input-capability']
-    const answer = await answerInstructionsCall(capabilities, (context, instructions) => service.writeInstructions(context, instructions),
-      Array.isArray(header) ? header[0] : header, body)
+    const token = Array.isArray(header) ? header[0] : header
+    // One route for both instruction tools: the interview's write carries the document,
+    // a memory-off offer carries one line.
+    const answer = isRecord(body) && 'line' in body
+      ? answerInstructionsOffer(capabilities, (context, line) => service.offerInstructionsLine(context, line), token, body)
+      : await answerInstructionsCall(capabilities, (context, instructions) => service.writeInstructions(context, instructions), token, body)
     json(response, answer.status, answer.payload)
   } catch {
     json(response, 400, { error: 'Invalid instructions call.' })

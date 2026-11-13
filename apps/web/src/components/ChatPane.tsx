@@ -64,6 +64,7 @@ import type { RequestEvents } from '../useRequest'
 import type { WorkResultActions } from './WorkResultBody'
 import { SingleRuntimeControl, defaultSingleRuntime } from './SingleRuntimeControl'
 import { LiveTranscript, type TranscriptReveal } from './Transcript'
+import { NotesActionsContext, type NotesActions } from './NotesLine'
 import { WorkDecisionDock, type SessionReadiness } from './WorkDecisionDock'
 import { RightRail, type RailItem } from './RightRail'
 import type { PanelLayout, RightPanelId } from '../useRightPanel'
@@ -109,6 +110,8 @@ interface ChatPaneProps {
   onFocus: () => void
   onEditProject?: () => void
   onEditPersona?: (agentId: string) => void
+  /** Undo on a turn's "Updated its notes" line. */
+  onUndoNotes?: (chatId: string, turnId: string, requestId: string) => boolean
   onAcceptWork: (handoffId: string, options: WorkAcceptanceOptions) => Promise<unknown> | void
   onRejectWork: (handoffId: string) => boolean
   onConfirmGoal: (handoffId: string, mergeInto?: string, version?: number, requestId?: string) => boolean
@@ -214,6 +217,7 @@ export function ChatPane({
   onFocus,
   onEditProject,
   onEditPersona,
+  onUndoNotes,
   onAcceptWork,
   onRejectWork,
   onConfirmGoal,
@@ -410,6 +414,12 @@ export function ChatPane({
   const houseAgents = browserHouse ? chatRoster(workspace.agents, chat, []) : NO_AGENTS
   // Mentions offer only who can sit in this room: Session personas in a Session.
   const composerAgents = singleChat ? NO_AGENTS : roomAgents(workspace.agents, chat)
+  const notesActions: NotesActions | undefined = onEditPersona === undefined || onUndoNotes === undefined ? undefined : {
+    requestEvents,
+    connected: status === 'live',
+    undo: (turnId, requestId) => onUndoNotes(chat.id, turnId, requestId),
+    editAgent: onEditPersona,
+  }
   const resultActions: WorkResultActions = {
     requestEvents,
     connected: status === 'live',
@@ -647,6 +657,7 @@ export function ChatPane({
 
         {split && !focused ? <div aria-hidden="true" className="split-focus-overlay" /> : null}
         <main className={`col-start-1 row-span-2 row-start-1 flex min-h-0 min-w-0 justify-center bg-bg ${covered ? 'invisible' : ''}`} {...coveredAttrs}>
+          <NotesActionsContext.Provider value={notesActions}>
           <LiveTranscript
             key={chat.id}
             chatId={chat.id}
@@ -686,6 +697,7 @@ export function ChatPane({
             {...(answerChange === undefined ? {} : { answerChange })}
             onWorkCardsInView={onWorkCardsInView}
           />
+          </NotesActionsContext.Provider>
         </main>
 
         <footer ref={footerRef} className={`pointer-events-none relative col-start-1 row-start-2 z-[4] flex min-w-0 flex-col items-center bg-transparent ${footerPadding} ${covered ? 'invisible' : ''}`} {...coveredAttrs}>

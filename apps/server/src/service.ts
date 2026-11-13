@@ -156,6 +156,8 @@ export interface ManorServiceOptions {
       allowSessionStatus?: boolean
       /** A new agent's interview turn: `write_instructions`. */
       allowInstructions?: boolean
+      /** A memory-off persona's attended turn: `offer_instructions_line`. */
+      allowInstructionsOffer?: boolean
       canApprove: boolean
       relay?: RelayTurnContext
     },
@@ -310,6 +312,8 @@ export class ManorService {
   private subagentPolicy: SubagentPolicy = DEFAULT_SUBAGENT_POLICY
   /** Read at boot and replaced on save, like the policy. */
   private userProfile: UserProfile = DEFAULT_USER_PROFILE
+  /** Turn id to the line its memory-off persona offered for its instructions; taken by the turn's result. */
+  private readonly instructionsOffers = new Map<string, string>()
   /** Read at boot and replaced on save; the lifecycle sweeps read it on every pass. */
   private settings: HouseSettings = DEFAULT_HOUSE_SETTINGS
   private readonly routineModule: RoutineModule
@@ -364,6 +368,11 @@ export class ManorService {
       ...(options.guardMcp === undefined ? {} : { guardMcp: options.guardMcp }),
       ...(options.interactionMcp === undefined ? {} : { interactionMcp: options.interactionMcp }),
       interviewKickoff: (agentId, messageId) => this.agentModule.interviews.isKickoff(agentId, messageId),
+      takeInstructionsOffer: (turnId) => {
+        const line = this.instructionsOffers.get(turnId)
+        this.instructionsOffers.delete(turnId)
+        return line
+      },
       subagentPolicy: () => this.subagentPolicy,
       ...(options.subagentMcp === undefined ? {} : { subagentMcp: options.subagentMcp }),
       ...(options.routineMcp === undefined ? {} : { routineMcp: options.routineMcp }),
@@ -683,6 +692,11 @@ export class ManorService {
     void this.orchestrator.runStoredUserMessage(chat.id, event)
       .catch((error: unknown) => console.warn('[manor] the interview turn failed', error))
       .finally(() => interviews.end(agent.id, event.id))
+  }
+
+  /** A memory-off persona's `offer_instructions_line`; its turn's result shows the latest one. Writes nothing. */
+  offerInstructionsLine(context: UserInputContext, line: string): void {
+    this.instructionsOffers.set(context.turnId, line)
   }
 
   /** The interview's `write_instructions`; refused once written or outside that turn. */
@@ -1020,6 +1034,7 @@ export class ManorService {
         return
       case 'get_chat_summary':
       case 'get_agent_notes':
+      case 'undo_notes_update':
       case 'send_message':
       case 'stop':
       case 'stop_background':

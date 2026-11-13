@@ -1,6 +1,6 @@
 import { REASONING_LIMIT, apiPricedInputEquivalent, modelTextOf, type AgentConfig, type AttachedMcpServer, type Driver, type LiveSessionEvent, type LiveSessionInfo, type ProviderUsage, type RuntimeEvent, type Usage, type TurnHandle, type TurnInput } from '@manor/contracts'
 import { execFile } from 'node:child_process'
-import { appendFile, readFile, writeFile } from 'node:fs/promises'
+import { appendFile, mkdir, readFile, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import path from 'node:path'
 import { promisify } from 'node:util'
@@ -677,6 +677,37 @@ function interviewScriptFor(input: TurnInput, request: typeof fetch): MockWorkSt
   }
 }
 
+/**
+ * "mock rule: <rule>", a lasting rule stated in chat. A memory-off turn holds
+ * `offer_instructions_line` and offers the rule; a memory-on one adds it to the notes
+ * file its memory block names, as a persona would with its edit tool.
+ */
+function ruleScriptFor(input: TurnInput, request: typeof fetch): MockWorkStep | undefined {
+  const rule = /\bmock rule:\s*([^\n]+)/i.exec(lastUserLine(input))?.[1]?.trim()
+  if (rule === undefined || rule === '') return undefined
+  const offer = manorEndpoint(input, 'offer_instructions_line', '--instructions-url')
+  if (offer !== undefined) {
+    return {
+      tool: 'mcp__manor__offer_instructions_line',
+      run: async (signal) => {
+        await postManor(request, offer, { line: rule }, signal)
+        return 'My memory is off, so I keep nothing. You can add it to my instructions.'
+      },
+    }
+  }
+  const notes = /notes that are only about how you work for the user live at (\S+\.md)\./.exec(input.agent.character)?.[1]
+  if (notes === undefined) return undefined
+  return {
+    tool: 'Edit',
+    run: async () => {
+      const current = await readFile(notes, 'utf8').catch(() => `# ${input.agent.name}'s notes\n> capacity: 0/400 words\n`)
+      await mkdir(path.dirname(notes), { recursive: true })
+      await writeFile(notes, `${current.trimEnd()}\n- ${rule}\n`)
+      return 'Got it, I will keep doing that.'
+    },
+  }
+}
+
 function projectScriptFor(input: TurnInput, request: typeof fetch): MockWorkStep | undefined {
   const text = lastUserLine(input)
   const ask = /\bmock ask:\s*([^|\n]+)\|([^\n]+)/i.exec(text)
@@ -930,6 +961,7 @@ export function createMockDriver(options: MockDriverOptions = {}): Driver {
       // A scripted line inside a delegated task is the child's to run, not its parent's.
       const workStep = delegations.length > 0 ? undefined : interviewScriptFor(input, options.request ?? fetch) ??
         workScriptFor(input, options.request ?? fetch) ??
+        ruleScriptFor(input, options.request ?? fetch) ??
         projectScriptFor(input, options.request ?? fetch) ??
         connectScriptFor(input, options.request ?? fetch) ??
         draftScriptFor(input, options.request ?? fetch) ??

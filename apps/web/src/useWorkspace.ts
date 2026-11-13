@@ -148,6 +148,8 @@ export interface Manor {
   getProjectMemory: (projectId: string, requestId: string) => boolean
   getChatSummary: (chatId: string, requestId: string) => boolean
   getAgentNotes: (agentId: string, requestId: string) => boolean
+  /** Undo on a turn's "Updated its notes" line; the server refuses it when the notes changed since. */
+  undoNotesUpdate: (chatId: string, turnId: string, requestId: string) => boolean
   /** One palette query; the answer arrives on `requestEvents` as `search_results` with this id. */
   search: (query: string, requestId: string) => boolean
   /** Direct replies for request-scoped UI lifecycles; broadcasts remain workspace state. */
@@ -558,7 +560,7 @@ export function useWorkspace(url: string, auth?: WorkspaceAuth): Manor {
   const workspace = useSyncExternalStore(store.subscribe, store.quiet, store.quiet)
   const [status, setStatus] = useState<ConnectionStatus>('connecting')
   const myMindRequestId = useRef<string | null>(null)
-  const requestListeners = useRef(new Set<(response: RequestResponse) => void>())
+  const requestListeners = useRef(new Set<(response: RequestResponse) => boolean | void>())
   const workAcceptance = useRef(createWorkAcceptance())
   const overrideRequests = useRef(new Map<string, string>())
   const requestEventsRef = useRef<RequestEvents | null>(null)
@@ -817,7 +819,10 @@ export function useWorkspace(url: string, auth?: WorkspaceAuth): Manor {
             setWorkspace((current) => settleChatOverride(current, chatId, requestId))
           }
           const response: RequestResponse = { ...parsed, requestId }
-          for (const listener of requestListeners.current) listener(response)
+          let inPlace = false
+          for (const listener of requestListeners.current) if (listener(response) === true) inPlace = true
+          // Shown where it was asked, as a refused Undo is on its own line: no toast as well.
+          if (inPlace) return
         }
         if (parsed.type === 'browser_tool_request') {
           // The request and its result bracket exactly the moment the page is not
@@ -1186,6 +1191,10 @@ export function useWorkspace(url: string, auth?: WorkspaceAuth): Manor {
   )
   const getAgentNotes = useCallback(
     (agentId: string, requestId: string) => send({ type: 'get_agent_notes', agentId, requestId }),
+    [send],
+  )
+  const undoNotesUpdate = useCallback(
+    (chatId: string, turnId: string, requestId: string) => send({ type: 'undo_notes_update', chatId, turnId, requestId }),
     [send],
   )
 
@@ -1704,6 +1713,7 @@ export function useWorkspace(url: string, auth?: WorkspaceAuth): Manor {
     getProjectMemory,
     getChatSummary,
     getAgentNotes,
+    undoNotesUpdate,
     search,
     browserActivity,
     browserUse,

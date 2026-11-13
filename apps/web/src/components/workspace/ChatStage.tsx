@@ -488,6 +488,7 @@ export function StageChatPane({
       ? {}
       : { onEditProject: () => openProjectDialog({ mode: 'edit', projectId: chat.projectId! }) })}
     onEditPersona={editAgent}
+    onUndoNotes={manor.undoNotesUpdate}
     {...(revealEvent?.chatId === chat.id ? { revealEvent, onEventRevealed: clearRevealEvent } : {})}
     onAcceptWork={manor.acceptWorkHandoff}
     onOpenProjectThread={openChat}

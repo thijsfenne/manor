@@ -20,6 +20,8 @@ export interface UserInputContext {
   commandCwd?: string
   /** Only a new agent's interview turn: `write_instructions`, which its open interview takes once. */
   mayWriteInstructions?: true
+  /** Only a memory-off persona's attended turn: `offer_instructions_line`, a suggestion the user may take. */
+  mayOfferInstructions?: true
   relay?: {
     originChatId: string
     originTurnId: string
@@ -46,7 +48,7 @@ export class UserInputCapabilities {
     return token
   }
 
-  take(token: string | undefined, use: 'ask' | 'draft' | 'relay' | 'subagent' | 'deliver' | 'goal' | 'project' | 'instructions' = 'ask'): UserInputContext {
+  take(token: string | undefined, use: 'ask' | 'draft' | 'relay' | 'subagent' | 'deliver' | 'goal' | 'project' | 'instructions' | 'offer' = 'ask'): UserInputContext {
     if (token === undefined || token === '') throw new InvalidUserInputCapabilityError()
     const capability = this.entries.get(token)
     if (capability === undefined) {
@@ -55,6 +57,9 @@ export class UserInputCapabilities {
     }
     if (use === 'instructions' && capability.mayWriteInstructions !== true) {
       throw new Error('Only a new agent\'s interview writes its instructions; after that only the user changes them.')
+    }
+    if (use === 'offer' && capability.mayOfferInstructions !== true) {
+      throw new Error('Only an agent with memory off offers a line for its instructions; with memory on, keep it in your notes.')
     }
     if (use === 'ask' && capability.askCalls >= USER_INPUT_CALL_LIMIT) {
       throw new Error(`Ask-user budget exhausted after ${USER_INPUT_CALL_LIMIT} questions.`)

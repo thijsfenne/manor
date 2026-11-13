@@ -1974,6 +1974,29 @@ export const MemoryChangeSchema = z.object({
 })
 export type MemoryChange = z.infer<typeof MemoryChangeSchema>
 
+/** The largest notes file a turn keeps a copy of for Undo; past it the chat line is not offered. */
+export const NOTES_UNDO_MAX = 20_000
+
+/**
+ * A persona's own standing notes changed in this turn (`memory/agents/<id>.md`). The
+ * chat shows "Updated its notes" with View and Undo. Undo puts `before` back only
+ * while the file still hashes to `afterHash`; a later change refuses it.
+ */
+export const NotesUpdateSchema = z.object({
+  /** Note lines added and removed, headings and the capacity line left out. */
+  added: z.number().int().min(0),
+  removed: z.number().int().min(0),
+  /** The file as the turn found it; null when it did not exist, so Undo removes it. */
+  before: z.string().max(NOTES_UNDO_MAX).nullable(),
+  /** SHA-256 of the file as the turn left it; null when the turn removed it. */
+  afterHash: z.string().max(128).nullable(),
+  undone: z.literal(true).optional(),
+})
+export type NotesUpdate = z.infer<typeof NotesUpdateSchema>
+
+/** The longest line a memory-off agent may offer for its instructions. */
+export const INSTRUCTIONS_OFFER_MAX = 500
+
 /**
  * Where one context figure came from, so a reader can tell a reading from a guess.
  *
@@ -2139,6 +2162,13 @@ export const TurnResultEventSchema = z.object({
    * the field can arrive after the turn already rendered.
    */
   memoryChanges: z.array(MemoryChangeSchema).max(MAX_MEMORY_CHANGE_FILES).optional(),
+  /** The persona's own notes changed in this turn; see `NotesUpdateSchema`. */
+  notesUpdate: NotesUpdateSchema.optional(),
+  /**
+   * A memory-off persona heard a lasting rule it cannot keep and offered it as a line
+   * for its instructions. The chat shows "Add to instructions"; only the user edits them.
+   */
+  instructionsOffer: z.object({ line: z.string().min(1).max(INSTRUCTIONS_OFFER_MAX) }).optional(),
 })
 
 /**
@@ -4166,6 +4196,8 @@ const ClientMessageWireSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('get_chat_summary'), chatId: z.string(), ...optionalRequestId }),
   /** An agent's standing notes as its turns receive them, for its Agent settings Notes page. */
   z.object({ type: z.literal('get_agent_notes'), agentId: z.string(), ...optionalRequestId }),
+  /** Puts an agent's notes back as a turn found them, only while nothing changed them since. */
+  z.object({ type: z.literal('undo_notes_update'), chatId: z.string(), turnId: z.string(), ...optionalRequestId }),
   z.object({
     type: z.literal('list_repo_files'),
     projectId: z.string(),

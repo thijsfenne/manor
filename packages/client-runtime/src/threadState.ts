@@ -198,7 +198,8 @@ export function reduceThread(state: ThreadState, msg: ThreadMessage, now: number
         // arrive later as a patched copy of its result.
         if (current?.type === 'turn_result' && event.type === 'turn_result' &&
           (JSON.stringify(current.memoryChanges) !== JSON.stringify(event.memoryChanges) ||
-            JSON.stringify(current.memoryTrace) !== JSON.stringify(event.memoryTrace))) {
+            JSON.stringify(current.memoryTrace) !== JSON.stringify(event.memoryTrace) ||
+            current.notesUpdate?.undone !== event.notesUpdate?.undone)) {
           const events = [...state.events]
           events[existing] = event
           return { ...state, events }

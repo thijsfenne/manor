@@ -7,6 +7,7 @@ import {
   OUTBOUND_SLACK_THREAD_TS_MAX,
   OUTBOUND_SLACK_THREAD_TS_PATTERN,
   GOAL_CLAIM_LEVELS,
+  INSTRUCTIONS_OFFER_MAX,
   GOAL_LIMITATIONS_MAX,
   GOAL_COMMIT_BODY_MAX,
   GOAL_COMMIT_SUBJECT_MAX,
@@ -466,6 +467,33 @@ async function writeInstructions(instructionsUrl: string, capability: string, ar
   return isRecord(payload) && typeof payload.note === 'string' ? payload.note : 'Saved.'
 }
 
+// A memory-off persona's attended turn: the line becomes an "Add to instructions" button.
+const instructionsOfferTool = {
+  name: 'offer_instructions_line',
+  description: 'Your memory is off, so you cannot keep a lasting rule the user just stated for how you work with them ("write follow-ups in Dutch"). Offer it as one line for your instructions: the chat shows an "Add to instructions" button and the user decides whether to add it. This writes nothing. Call it once, then say in one short sentence that you keep nothing with memory off.',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      line: { type: 'string', minLength: 1, maxLength: INSTRUCTIONS_OFFER_MAX, description: 'The rule as one instruction line addressed to yourself, such as "Write follow-ups in Dutch."' },
+    },
+    required: ['line'],
+    additionalProperties: false,
+  },
+} as const
+
+async function offerInstructionsLine(instructionsUrl: string, capability: string, arguments_: JsonRecord): Promise<string> {
+  const response = await fetch(instructionsUrl, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'x-manor-user-input-capability': capability },
+    body: JSON.stringify({ line: arguments_.line }),
+  })
+  const payload: unknown = await response.json().catch(() => undefined)
+  if (!response.ok) {
+    throw new Error(isRecord(payload) && typeof payload.error === 'string' ? payload.error : `Instructions offer returned HTTP ${response.status}.`)
+  }
+  return isRecord(payload) && typeof payload.note === 'string' ? payload.note : 'Offered.'
+}
+
 const sessionForwardTool = {
   name: 'send_to_session',
   description: 'Send the user\'s message on to the Session it follows up on, as their own message there: a correction or follow-up on work that Session already did, open or settled. A settled Session reopens and runs it; a running one takes the message into its current answer, subject to the same addressing and runtime safety guards as a message they type there. No Accept card. Pass their words as they wrote them, with only the context the Session needs after a blank line. New work or a different subject still gets start_work; when two Sessions could fit, ask the user with ask_user instead of guessing. Once per Session for each of their messages.',
@@ -705,7 +733,7 @@ export function interactionMcpServer(argv: readonly string[]): McpToolServer {
     tools: [
       askTool(askMode), secretTool(askMode), draftTool, relayTool(relayMode), ...(catalog === undefined ? [] : subagentTools(catalog)),
       deliverTool, goalTool, reviewTool, projectFileTool, sessionAnswerTool, projectReportTool, sessionForwardTool, sessionStatusTool,
-      instructionsTool,
+      instructionsTool, instructionsOfferTool,
     ].filter((tool) => enabled.has(tool.name)),
     failureMessage: 'The Manor tool failed.',
     concurrent: (name) => name === 'message_agent' || (SUBAGENT_TOOLS as readonly string[]).includes(name),
@@ -718,6 +746,7 @@ export function interactionMcpServer(argv: readonly string[]): McpToolServer {
       if (name === 'goal_reached') return text(await recordGoalClaims(goalUrl, capability, arguments_))
       if (isProjectTool(name)) return text(await projectThreadCall(projectUrl, capability, name, arguments_))
       if (name === 'write_instructions' && instructionsUrl !== undefined) return text(await writeInstructions(instructionsUrl, capability, arguments_))
+      if (name === 'offer_instructions_line' && instructionsUrl !== undefined) return text(await offerInstructionsLine(instructionsUrl, capability, arguments_))
       if (name === 'deliver_file') return text(await deliverFile(deliverUrl, capability, arguments_))
       if (name === 'message_agent') return text(await messageAgent(relayUrl, capability, arguments_))
       if ((SUBAGENT_TOOLS as readonly string[]).includes(name)) return text(await subagentCall(subagentUrl, capability, name, arguments_))

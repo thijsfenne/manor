@@ -218,7 +218,7 @@ export function composeMemoryBlock(
   const notesPath = agentNotesPath(target, agentId)
   const notes = notesPath === undefined
     ? undefined
-    : `Standing notes that are only about how you work for the user live at ${notesPath}. Create or edit that file the same way, with a heading, a capacity line (\`> capacity: N/400 words\`) and plain bullets. The test is whether another agent would also need to know it. If yes, it belongs in the shared memory layers instead.`
+    : `Standing notes that are only about how you work for the user live at ${notesPath}. Create or edit that file the same way, with a heading, a capacity line (\`> capacity: N/400 words\`) and plain bullets. The test is whether another agent would also need to know it. If yes, it belongs in the shared memory layers instead. A lasting rule the user states for how you work with them ("write follow-ups in Dutch") goes into these notes as one bullet, never into your instructions; Manor shows them the change with View and Undo.`
   const loops = openLoops
     ? `Open work lives at ${path.resolve(target.dailyDir, '..', 'open-loops.md')}. Read its maintenance rules before adding, updating or reminding about an item. Keep one current-state line with a concrete next action, owner, source reference and last checked date. Advice, doubt and intentions without an action are not tasks. Before every reminder, read the completion source; a stale ledger or missing evidence cannot prove the item is open. When you observe completion, close the matching item in this same turn with the evidence reference, preserving its identity and any declined/notified markers. Respect the user's explicit rejection without asking again. The observing persona maintains the line; a later maintenance pass only catches missed updates. Remembering work never grants permission to execute it.`
     : undefined
@@ -260,6 +260,7 @@ export const MEMORY_OFF_BLOCK = [
   "Personal memory is off for you in this chat. If the standing instructions above tell every session to append a line to the user's daily log, that part does not apply to you.",
   'So write nothing to memory/daily/, memory/structured/, memory/projects/, memory/agents/ or memory/open-loops.md, edit nothing there, and propose no changes to them. This overrides any memory-loop section of those instructions and nothing else; every other rule they carry still holds.',
   'Reporting to a project thread with report_to_project, goal_reached learnings or set_session_status is not a memory write and still applies: the thread owns those files and decides what lands.',
+  'When the user states a lasting rule for how you work with them ("write follow-ups in Dutch"), you keep nothing: say so in one short sentence. When you have offer_instructions_line, offer the rule with it, so they can add it to your instructions themselves; never edit your instructions.',
 ].join('\n')
 
 /** Opens the reply-length rules every persona gets appended to its character. */

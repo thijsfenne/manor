@@ -13,6 +13,7 @@ import type {
   EventImage,
   ImageAttachment,
   MemoryChange,
+  NotesUpdate,
   MemoryTrace,
   MessageReply,
   InlineQuote,
@@ -435,6 +436,10 @@ export interface TurnRow {
    * count as changed files.
    */
   memoryChanges?: MemoryChange[]
+  /** The persona's own notes changed in this turn: the "Updated its notes" line with View and Undo. */
+  notesUpdate?: NotesUpdate
+  /** A memory-off persona's lasting rule, offered as a line for its instructions. */
+  instructionsOffer?: string
   /**
    * In a project thread: the lines this turn wrote to preferences.md or notes.md, in
    * order. Clients show them as one footnote under the reply, not as rows of their own.
@@ -2897,6 +2902,8 @@ function durableRowsOf(events: ThreadEvent[], dmBeats: boolean): DurableRows {
         if (event.reportedModel !== undefined) turn.reportedModel = event.reportedModel
         if (event.memoryTrace !== undefined) turn.memoryTrace = event.memoryTrace
         if (event.memoryChanges !== undefined) turn.memoryChanges = event.memoryChanges
+        if (event.notesUpdate !== undefined) turn.notesUpdate = event.notesUpdate
+        if (event.instructionsOffer !== undefined) turn.instructionsOffer = event.instructionsOffer.line
         if (event.fileChanges !== undefined) turn.fileChanges = event.fileChanges
         if (event.fileChangeRoots !== undefined) turn.fileChangeRoots = event.fileChangeRoots
         if (event.fileChangeUnmeasured !== undefined) turn.fileChangeUnmeasured = event.fileChangeUnmeasured
