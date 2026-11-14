@@ -13,8 +13,13 @@
 @import '@fontsource-variable/instrument-sans';
 @import '@fontsource-variable/instrument-sans/wght-italic.css';
 
-/* These layers are also consumed by the guest registry's inline styles. */
+/* These layers are also consumed by the guest registry's inline styles.
+   `BrowserWebviewHost` reads the two page layers as `var(--z-browser-${presentation})`,
+   which no class names, so a sweep for unused tokens cannot see them. Without them a
+   page falls back to `auto` and an expanded or floating panel (z 8) covers it. */
 @theme static {
+  --z-browser-sidebar: 9;
+  --z-browser-floating: 5;
   --z-browser-controls: 6;
   /* A dragged tile's landing preview, over the browser page it may be aimed at. */
   --z-panel-drag: 10;
