@@ -29,8 +29,12 @@ function ProjectSessions() {
   const { threadId } = useLocalSearchParams<{ threadId: string }>()
   const { workspace, openChat } = useWorkspace()
   const overview = useMemo(
-    () => projectSessionOverview(workspace, threadId),
-    [workspace.projects, workspace.chats, workspace.workHandoffs, workspace.activity, workspace.subagents, workspace.backgroundChatIds, threadId],
+    // The slices the overview reads, not `workspace`, so the React Compiler keeps this screen.
+    () => projectSessionOverview({
+      projects: workspace.projects, chats: workspace.chats, workHandoffs: workspace.workHandoffs, activity: workspace.activity,
+      subagents: workspace.subagents, backgroundChatIds: workspace.backgroundChatIds, houseSettings: workspace.houseSettings,
+    }, threadId),
+    [workspace.projects, workspace.chats, workspace.workHandoffs, workspace.activity, workspace.subagents, workspace.backgroundChatIds, workspace.houseSettings, threadId],
   )
   const back = () => (router.canGoBack() ? router.back() : router.replace({ pathname: '/chat/[id]', params: { id: threadId } }))
 

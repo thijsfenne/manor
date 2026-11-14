@@ -22,7 +22,7 @@ import { chatFallbackTargets, composerShowsRecipients, draftRecipients, replyFal
 import { chatChangedFiles, resolveMarkdownRepoLink } from '@manor/client-runtime/changed-files'
 import { defaultSingleRuntime, effectiveDriver, isAutoPending, readSingleRuntime, runtimeLabel, runtimeParts, singleRuntimeVoice } from '@manor/client-runtime/runtime-choices'
 import type { ChangeableAnswer, OpenAsk, PendingDocument, Row, SessionLink, TurnConsultation, TurnRow, UnannouncedConsultation } from '@manor/client-runtime/state'
-import { activityOf, chatOf, dmMemoryMarks, isHomeRoom, isProjectThread, roomOf, sitsSettled, messageBrief, projectSessionOverview, sessionsDot, openAsk, sessionLiveOf, openThreadQuestion, openSubagentQuestion, subagentSummaryOf, changeableAnswers, personaOf, projectWorkHandoffs, repoListingKey, rowHasQuoteSource, rowsOf, feedIndexOf, NO_OPEN_THREAD_BUNDLES, openThreadBundleAt, setThreadBundleOpen, threadBundleOpen, threadBundleOpenItems, threadStretch, onlyConsulted, runtimeStartedAgentIds, sessionReadyRow, sessionThreadOf, stackedConsultationMarkers, projectThreadFeed, threadQuestionAdvice, threadOf, withSessionTitle, threadSpacing, unannouncedConsultations, workCardInView, workDecisionOpen, type ScreenSpan } from '@manor/client-runtime/state'
+import { activityOf, chatOf, dmMemoryMarks, isHomeRoom, isProjectThread, roomOf, sitsSettled, messageBrief, projectSessionOverview, sessionsDot, openAsk, sessionLiveOf, threadQuestionIn, openSubagentQuestion, subagentSummaryOf, changeableAnswers, personaOf, projectWorkHandoffs, repoListingKey, rowHasQuoteSource, rowsOf, feedIndexOf, NO_OPEN_THREAD_BUNDLES, openThreadBundleAt, setThreadBundleOpen, threadBundleOpen, threadBundleOpenItems, threadStretch, onlyConsulted, runtimeStartedAgentIds, sessionReadyRow, sessionThreadOf, stackedConsultationMarkers, projectThreadFeed, threadQuestionAdvice, threadOf, withSessionTitle, threadSpacing, unannouncedConsultations, workCardInView, workDecisionOpen, type ScreenSpan } from '@manor/client-runtime/state'
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router'
 import { KeyboardAwareLegendList, useKeyboardChatComposerInset, useKeyboardScrollToEnd } from '@legendapp/list/keyboard'
 import { historyStart, olderHistoryKey } from '@manor/client-runtime/history-window'
@@ -250,7 +250,13 @@ function ChatContent({ chatId }: { chatId: string | undefined }) {
   const thread = threadOf(workspace, chatId ?? '')
   const baseRows = useMemo(() => rowsOf(thread, chat?.kind), [thread, chat?.kind])
   // What runs in each Session, so its card says what its overview row says.
-  const sessionLive = useMemo(() => sessionLiveOf(workspace), [workspace.activity, workspace.subagents, workspace.backgroundChatIds])
+  // The selectors below get the slices they read, not `workspace`: a memo that hands the
+  // whole object over reads more than its dependencies name, and the React Compiler then
+  // skips this component altogether (`apps/web/test/phoneCompiledComponents.test.ts`).
+  const sessionLive = useMemo(
+    () => sessionLiveOf({ activity: workspace.activity, subagents: workspace.subagents, backgroundChatIds: workspace.backgroundChatIds }),
+    [workspace.activity, workspace.subagents, workspace.backgroundChatIds],
+  )
   const rows = useMemo(
     () => projectWorkHandoffs(baseRows, workspace.workHandoffs, workspace.chats, workspace.projects, workspace.agents, workspace.checkoutStatus, sessionLive, chatId),
     [baseRows, workspace.workHandoffs, workspace.chats, workspace.projects, workspace.agents, workspace.checkoutStatus, sessionLive, chatId],
@@ -363,8 +369,8 @@ function ChatContent({ chatId }: { chatId: string | undefined }) {
     return projectThread && state?.kind === 'consult' ? undefined : state
   }, [chat?.kind, projectThread, rows, runningChatIds])
   const startedBy = useMemo(
-    () => chatId === undefined ? undefined : sessionThreadOf(workspace, chatId),
-    [workspace.projects, workspace.workHandoffs, chatId],
+    () => chatId === undefined ? undefined : sessionThreadOf({ projects: workspace.projects, workHandoffs: workspace.workHandoffs, chats: workspace.chats }, chatId),
+    [workspace.projects, workspace.workHandoffs, workspace.chats, chatId],
   )
   // A session its thread started stands in its room, so its header names no project (2026-10-11).
   const openStartedBy = useMemo(() => {
@@ -376,14 +382,19 @@ function ChatContent({ chatId }: { chatId: string | undefined }) {
     }
   }, [startedBy, openChat])
   const sessionOverview = useMemo(
-    () => projectThread && chatId !== undefined ? projectSessionOverview(workspace, chatId) : null,
-    [projectThread, workspace.projects, workspace.chats, workspace.workHandoffs, workspace.activity, workspace.subagents, workspace.backgroundChatIds, chatId],
+    () => projectThread && chatId !== undefined
+      ? projectSessionOverview({
+          projects: workspace.projects, chats: workspace.chats, workHandoffs: workspace.workHandoffs, activity: workspace.activity,
+          subagents: workspace.subagents, backgroundChatIds: workspace.backgroundChatIds, houseSettings: workspace.houseSettings,
+        }, chatId)
+      : null,
+    [projectThread, workspace.projects, workspace.chats, workspace.workHandoffs, workspace.activity, workspace.subagents, workspace.backgroundChatIds, workspace.houseSettings, chatId],
   )
   // The Sessions button's one dot: the user is needed, a Session finished unseen, or one runs.
   const sessionsMark = useMemo(() => sessionOverview === null ? null : sessionsDot(sessionOverview), [sessionOverview])
   const threadQuestion = useMemo(
-    () => projectThread && chatId !== undefined ? openThreadQuestion(workspace, chatId) : null,
-    [projectThread, thread.events, workspace.activity, chatId],
+    () => projectThread ? threadQuestionIn(thread.events, { activity: workspace.activity }) : null,
+    [projectThread, thread.events, workspace.activity],
   )
   // The card the thread draws for its session's question: the session's title heads every
   // question, so the card says who is asking.
@@ -398,7 +409,7 @@ function ChatContent({ chatId }: { chatId: string | undefined }) {
   )
   // A subagent's question waits here, at the top of its line: its own screen takes no answers.
   const subagentQuestion = useMemo(
-    () => chatId === undefined ? null : openSubagentQuestion(workspace, chatId),
+    () => chatId === undefined ? null : openSubagentQuestion({ subagents: workspace.subagents }, chatId),
     [workspace.subagents, chatId],
   )
   const subagentAsk = useMemo<OpenAsk | null>(
@@ -411,7 +422,10 @@ function ChatContent({ chatId }: { chatId: string | undefined }) {
     [subagentQuestion],
   )
   const subagents = useMemo(() => chatSubagents(baseRows), [baseRows])
-  const subagentSummary = useCallback((childId: string) => subagentSummaryOf(workspace, childId), [workspace.subagents, workspace.threads])
+  const subagentSummary = useCallback(
+    (childId: string) => subagentSummaryOf({ subagents: workspace.subagents, threads: workspace.threads }, childId),
+    [workspace.subagents, workspace.threads],
+  )
   const subagentsRunning = useMemo(() => runningSubagents(subagents, subagentSummary).length, [subagents, subagentSummary])
   const openSubagent = useCallback((callId: string) => {
     if (chatId !== undefined) router.push({ pathname: '/subagent/[callId]', params: { callId, chatId, rootId: chatId } })
@@ -454,7 +468,7 @@ function ChatContent({ chatId }: { chatId: string | undefined }) {
   const activeTurn = thread.liveTurns.find((turn) => turn.state === 'running') ?? null
   // Children outlive the turn that started them, so the chat can wait with no turn running.
   const waiting = useMemo(() => activeTurn === null && chatWaitsOnBackground(rows), [activeTurn, rows])
-  const startedAgentIds = useMemo(() => runtimeStartedAgentIds(thread), [thread.events, thread.liveTurns])
+  const startedAgentIds = useMemo(() => runtimeStartedAgentIds({ events: thread.events, liveTurns: thread.liveTurns }), [thread.events, thread.liveTurns])
   const askTurn = ask === null
     ? null
     : rows.find(
@@ -1225,7 +1239,9 @@ interface TranscriptRowProps {
 
 const NO_OPEN_ITEMS: ReadonlySet<string> = new Set()
 
-const TranscriptRow = memo(function TranscriptRow(props: TranscriptRowProps) {
+// The function carries its own name, not the row's: a bundle draws its items as rows, and
+// a function that names itself there loses the React Compiler and renders them unmemoized.
+const TranscriptRow = memo(function TranscriptRowBody(props: TranscriptRowProps) {
   const {
     row,
     agents,

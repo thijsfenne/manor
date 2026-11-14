@@ -264,7 +264,7 @@ export function Composer({
   const toggleContext = useCallback(() => {
     setPlusOpen(false)
     setContextOpen((open) => !open)
-  }, [])
+  }, [setPlusOpen, setContextOpen])
   const inputFocused = useRef(false)
   /** Mirrors `inputFocused` for rendering: focus is what opens the pill into a card. */
   const [focused, setFocused] = useState(autoFocus)

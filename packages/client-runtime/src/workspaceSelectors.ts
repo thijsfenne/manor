@@ -53,7 +53,7 @@ export function openThread(state: WorkspaceShape): ThreadShape {
   return state.openChatId === null ? emptyThread : threadOf(state, state.openChatId)
 }
 
-export const activityOf = (state: WorkspaceShape, chatId: string): ChatActivity =>
+export const activityOf = (state: Pick<WorkspaceShape, 'activity'>, chatId: string): ChatActivity =>
   state.activity[chatId] ?? IDLE
 
 /** One parent's working children as its sidebar row nests them. */
@@ -177,14 +177,14 @@ export function subagentGroups(state: WorkspaceShape): Record<string, SubagentGr
  * two chats working at once would trade places for the whole run. It takes its real
  * place once the run ends, which is one move on a real event instead of a shuffle.
  */
-const orderAt = (state: WorkspaceShape, chat: Chat): number => {
+const orderAt = (state: Pick<WorkspaceShape, 'activity'>, chat: Chat): number => {
   const activity = activityOf(state, chat.id)
   return activity.runningTurns.length > 0 && activity.runStartedAt !== null
     ? activity.runStartedAt
     : chat.lastMessageAt
 }
 
-export const chatOf = (state: WorkspaceShape, chatId: string | null): Chat | null =>
+export const chatOf = (state: Pick<WorkspaceShape, 'chats'>, chatId: string | null): Chat | null =>
   chatId === null ? null : (state.chats.find((chat) => chat.id === chatId) ?? null)
 
 /** The three state marks a listed chat shows at rest: a running turn, an open question, an unread answer. */
@@ -460,8 +460,12 @@ const threadChatIds = (state: WorkspaceShape): Set<string> =>
 export const isProjectThread = (state: WorkspaceShape, chatId: string): boolean =>
   state.projects.some((project) => project.threadChatId === chatId)
 
-/** The live project thread that started this session, with the handoff that links them. A hidden project's Session stands alone. */
-export function sessionThreadOf(state: WorkspaceShape, chatId: string): { project: Project; threadChatId: string; handoff: WorkHandoff } | undefined {
+/**
+ * The live project thread that started this session, with the handoff that links them. A
+ * hidden project's Session stands alone. Typed by the slices it reads, here and on the
+ * selectors below, so a caller that memoizes can name exactly those as its dependencies.
+ */
+export function sessionThreadOf(state: Pick<WorkspaceShape, 'projects' | 'workHandoffs' | 'chats'>, chatId: string): { project: Project; threadChatId: string; handoff: WorkHandoff } | undefined {
   const handoff = handoffIndex(state).threadStarted.get(chatId)
   const project = handoff === undefined ? undefined : state.projects.find((entry) => entry.id === handoff.projectId)
   if (handoff === undefined || project?.threadChatId === undefined) return undefined
@@ -526,7 +530,10 @@ export interface SessionOverview extends Record<SessionOverviewGroup, SessionOve
  * session). Settled is the user's own stamp, or a result they confirmed. Sessions of the
  * project that the thread did not start are ordinary sessions and stay in the sidebar list.
  */
-export function projectSessionOverview(state: WorkspaceShape, threadChatId: string): SessionOverview {
+export function projectSessionOverview(
+  state: Pick<WorkspaceShape, 'projects' | 'chats' | 'workHandoffs' | 'activity' | 'subagents' | 'backgroundChatIds' | 'houseSettings'>,
+  threadChatId: string,
+): SessionOverview {
   const groups: SessionOverview = {
     waiting: [], working: [], settled: [], archived: [],
     archiveKeepMs: state.houseSettings === null ? ARCHIVE_KEEP_MS : daysToMs(state.houseSettings.archiveRetentionDays),
@@ -616,7 +623,11 @@ export interface ThreadQuestion {
  * session's turn still waits on it and no answer note followed it here.
  */
 export function openThreadQuestion(state: WorkspaceShape, threadChatId: string): ThreadQuestion | null {
-  const events = threadOf(state, threadChatId).events
+  return threadQuestionIn(threadOf(state, threadChatId).events, state)
+}
+
+/** The same reading from a thread's events, for a caller that already holds them. */
+export function threadQuestionIn(events: readonly ThreadEvent[], state: Pick<WorkspaceShape, 'activity'>): ThreadQuestion | null {
   const answered = new Set(events.flatMap((event) => event.type === 'system_note' && event.sessionAnswer !== undefined ? [event.sessionAnswer.requestId] : []))
   const open = events.flatMap((event) => {
     const question = event.type === 'system_note' ? event.sessionQuestion : undefined
