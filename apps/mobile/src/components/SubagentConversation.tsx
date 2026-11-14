@@ -143,12 +143,16 @@ function ChildConversation(props: SubagentConversationProps & { thread: ThreadSt
   const rows = useMemo(() => rowsOf(thread), [thread])
   const last = rows.at(-1)?.key
   const covered = useScreenCovered()
+  // What a row draws besides its own data: the list redraws a mounted row only when its
+  // item or this changes, so the connection dropping or a newer row has to be named here.
+  const rowContext = useMemo(() => ({ agents, connected, last, onOpenChild }), [agents, connected, last, onOpenChild])
   return (
     <TranscriptCovered.Provider value={covered}>
     <LegendList
       contentContainerStyle={[styles.feed, { paddingTop: top, paddingBottom: bottom }]}
       data={rows}
       estimatedItemSize={ESTIMATED_ROW}
+      extraData={rowContext}
       initialScrollAtEnd
       keyExtractor={(row) => row.key}
       ListEmptyComponent={<Text style={styles.empty}>{thread.hasSnapshot ? 'Nothing in this thread yet.' : 'Loading conversation…'}</Text>}

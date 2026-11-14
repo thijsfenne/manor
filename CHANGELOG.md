@@ -4,6 +4,7 @@ What changed for someone who uses Manor, newest first. A version is a tag on `ma
 
 ## Unreleased
 
+- On the phone, the cards in a chat notice when the connection to your Mac drops or returns. A mail card that was already on screen kept its Send and Discard buttons live while offline.
 - On the phone, a chat you went back from shows its unread dot when a reply lands in it, and a run that ends there waits for you instead of settling itself. Coming back to the app on the inbox no longer reloads the last chat you had open.
 - The phone app loads a third of the code it did. It bundled every icon in the set, about 6,000, to draw 174.
 - A DM's composer is one rounded row at the bottom, in an empty DM too: a plus, the message and send. It grows into the usual card once the message is longer than a line or carries an attachment. The model picker left it, because a DM runs on the model its agent's settings name. Auto no longer picks a model for a DM. A DM that still carries an earlier pick shows it in Agent settings, and choosing a model there replaces it.

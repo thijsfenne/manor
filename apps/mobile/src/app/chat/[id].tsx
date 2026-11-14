@@ -596,6 +596,13 @@ function ChatContent({ chatId }: { chatId: string | undefined }) {
     if (holder !== undefined) scrollToHolder(holder, (item) => rowHasQuoteSource(item, eventId), { viewPosition: 0.5 })
   }, [scrollToHolder, visibleRows])
 
+  // The same call for the memoized rows: `visibleRows` is new on every streamed frame.
+  const openQuoteSourceRef = useRef(openQuoteSource)
+  useEffect(() => {
+    openQuoteSourceRef.current = openQuoteSource
+  }, [openQuoteSource])
+  const openQuoteSourceStable = useCallback((eventId: string) => openQuoteSourceRef.current(eventId), [])
+
   const revealRow = useCallback((rowKey: string, place: RevealPlace = 'center') => {
     // A card at the end rests above the jump to the latest message, which floats there.
     const position = place === 'end' ? { viewPosition: 1, viewOffset: -JUMP_SPACE } : { viewPosition: 0.5 }
@@ -755,6 +762,29 @@ function ChatContent({ chatId }: { chatId: string | undefined }) {
   const subtitle = pairTitle === undefined ? (connection === null ? lead : `${lead} · ${connection}`) : (connection ?? 'Between agents')
   const topInset = insets.top + CHAT_HEADER_HEIGHT + spacing.lg
 
+  const connected = status === 'live'
+  const agents = workspace.agents
+  /**
+   * What a row draws besides its own data. The list redraws a mounted row only when its
+   * item or this object changes, never because `renderItem` did, so a value a row reads
+   * from this screen has to be named here to reach it: a thread reply that lands in an
+   * idle chat, the connection dropping, the file listing arriving, the newest turn moving
+   * on. Everything in it holds still through a streamed frame.
+   */
+  const rowContext = useMemo(
+    () => ({ openBundles, connected, links: replyLinks, draftActions, repoFiles, latestTurnKey, agents }),
+    [openBundles, connected, replyLinks, draftActions, repoFiles, latestTurnKey, agents],
+  )
+  // Named once, so a row redrawn for `rowContext` alone keeps its props and `memo` holds.
+  const openAgentRelay = useCallback((pairChatId: string) => {
+    openChat(pairChatId)
+    router.push({ pathname: '/chat/[id]', params: { id: pairChatId } })
+  }, [openChat])
+  const quoteSource = useCallback(
+    (source: QuoteSelectionSource) => setQuoteSelection({ ...source, text: plainDraftText(source.text) }),
+    [setQuoteSelection],
+  )
+
   return (
     <SubagentDirectory.Provider value={directory}>
     <SubagentLaunchesContext.Provider value={launches}>
@@ -770,7 +800,7 @@ function ChatContent({ chatId }: { chatId: string | undefined }) {
         contentInsetEndAdjustment={contentInsetEndAdjustment}
         data={pageRows}
         // A bundle's open state lives here, not in its row, so the list redraws when it changes.
-        extraData={openBundles}
+        extraData={rowContext}
         estimatedItemSize={ESTIMATED_ROW}
         freeze={freeze}
         initialScrollAtEnd
@@ -807,8 +837,8 @@ function ChatContent({ chatId }: { chatId: string | undefined }) {
         ref={listRef}
         renderItem={({ item, index }) => (
           <TranscriptRow
-            agents={workspace.agents}
-            connected={status === 'live'}
+            agents={agents}
+            connected={connected}
             bubbleReplies={chat?.kind === 'dm'}
             {...(userBubbleTint === undefined ? {} : { userBubbleTint })}
             showSpeaker={!singleChat}
@@ -819,7 +849,7 @@ function ChatContent({ chatId }: { chatId: string | undefined }) {
             latest={item.key === latestTurnKey}
             links={replyLinks}
             draftActions={draftActions}
-            repoFiles={listing?.files}
+            repoFiles={repoFiles}
             row={item}
             {...(item.kind === 'thread_bundle' ? { bundleOpen: threadBundleOpen(openBundles, stretch, item.key), bundleOpenItems: threadBundleOpenItems(openBundles, stretch, item), onBundleOpen: setBundleOpen } : {})}
             dateLabel={dateLabels[index]}
@@ -828,18 +858,15 @@ function ChatContent({ chatId }: { chatId: string | undefined }) {
             unannounced={item.kind === 'event' && item.event.type === 'agent_relay' && item.event.phase === 'sent' ? unannounced.get(item.event.turnId) : undefined}
             relayOffset={dateLabels[index] === undefined ? relayOffset(item, pageRows[index - 1]) : undefined}
             {...(projectThread && dateLabels[index] === undefined ? { threadOffset: threadOffset(item, pageRows[index - 1]) } : {})}
-            onOpenAgentRelay={(pairChatId) => {
-              openChat(pairChatId)
-              router.push({ pathname: '/chat/[id]', params: { id: pairChatId } })
-            }}
+            onOpenAgentRelay={openAgentRelay}
             {...(project === undefined || project.name === '' ? {} : { forwardSource: project.name })}
             onRejectWork={rejectWork}
             onReveal={revealRowStable}
             {...(memoryMarks === undefined || item.kind !== 'turn' ? {} : { memoryChanges: memoryMarks.get(item.key) })}
             onOpenSubagent={openSubagent}
-            onOpenQuoteSource={openQuoteSource}
+            onOpenQuoteSource={openQuoteSourceStable}
             {...(chat?.kind === 'dm' || chat?.kind === 'group' ? { onReply: chooseReply } : {})}
-            {...(isPair ? {} : { onQuoteSource: (source: QuoteSelectionSource) => setQuoteSelection({ ...source, text: plainDraftText(source.text) }) })}
+            {...(isPair ? {} : { onQuoteSource: quoteSource })}
           />
         )}
         scrollEventThrottle={80}
