@@ -22,12 +22,11 @@ export const usableProviders = (connections: readonly ProviderConnection[]): Pro
   [...inState(connections, 'ready'), ...inState(connections, 'attention')]
 
 /**
- * The first agent: the short New agent form's draft, plus the two things a workspace
- * with one agent needs. It takes every unaddressed message, and it has memory, which
- * is what the standing files and the daily log hang on.
+ * The first agent: the short New agent form's draft, plus the one thing a workspace
+ * with one agent needs. It takes every unaddressed message.
  */
 export function firstAgentDraft(agents: AgentConfig[], driver: Provider): AgentDraft {
-  return { ...newAgentDraft(agents, driver), isCos: true, memoryScope: true }
+  return { ...newAgentDraft(agents, driver), isCos: true }
 }
 
 /** What Create sends for the first agent: a blank job falls back to the catch-all line. */

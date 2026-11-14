@@ -3,8 +3,8 @@ import { defaultModel } from '../src/runtimes'
 import { draftToCreate, newAgentDraft, starterInstructions, withRuntime } from '../src/components/agents/newAgent'
 
 describe('the New agent form', () => {
-  it('starts on Claude with its default model, no role, no chief of staff and memory off', () => {
-    expect(newAgentDraft([])).toMatchObject({ name: '', role: '', description: '', driver: 'claude', model: defaultModel('claude'), isCos: false, memoryScope: false })
+  it('starts on Claude with its default model, no role, no chief of staff and memory on', () => {
+    expect(newAgentDraft([])).toMatchObject({ name: '', role: '', description: '', driver: 'claude', model: defaultModel('claude'), isCos: false, memoryScope: true })
   })
 
   it('takes the new provider default model on a switch, and keeps effort only where it is offered', () => {

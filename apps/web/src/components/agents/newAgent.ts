@@ -4,10 +4,14 @@ import { MODELS, defaultModel, effortsFor } from '../../runtimes'
 
 type Driver = AgentDraft['driver']
 
-/** A blank agent on `driver` with that provider's default model, for the short New agent form. */
+/**
+ * A blank agent on `driver` with that provider's default model, for the short New agent
+ * form. Memory starts on: the standing files and the daily log hang on it, and the
+ * switch in Agent settings is the way to turn it off.
+ */
 export function newAgentDraft(agents: AgentConfig[], driver: Driver = 'claude'): AgentDraft {
   const model = defaultModel(driver)
-  return { ...emptyDraft(agents), driver, ...(model === undefined ? {} : { model }) }
+  return { ...emptyDraft(agents), driver, ...(model === undefined ? {} : { model }), memoryScope: true }
 }
 
 /**
