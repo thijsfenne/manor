@@ -1,4 +1,4 @@
-import { GitBranchIcon } from '@hugeicons/core-free-icons'
+import GitBranchIcon from '@hugeicons/core-free-icons/GitBranchIcon'
 import { HugeiconsIcon } from '@hugeicons/react-native'
 import type { AgentConfig, Chat } from '@manor/contracts'
 import { StyleSheet, View } from 'react-native'

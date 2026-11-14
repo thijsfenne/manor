@@ -1,4 +1,4 @@
-import { Plug01Icon } from '@hugeicons/core-free-icons'
+import Plug01Icon from '@hugeicons/core-free-icons/Plug01Icon'
 import { HugeiconsIcon } from '@hugeicons/react-native'
 import type { ConnectRecord } from '@manor/client-runtime/state'
 import { StyleSheet, View } from 'react-native'

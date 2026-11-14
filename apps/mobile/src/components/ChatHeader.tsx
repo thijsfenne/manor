@@ -1,4 +1,6 @@
-import { ArrowLeft01Icon, AtomicPowerIcon, CheckListIcon } from '@hugeicons/core-free-icons'
+import ArrowLeft01Icon from '@hugeicons/core-free-icons/ArrowLeft01Icon'
+import AtomicPowerIcon from '@hugeicons/core-free-icons/AtomicPowerIcon'
+import CheckListIcon from '@hugeicons/core-free-icons/CheckListIcon'
 import { projectIcon } from '@manor/client-runtime/project-icons'
 import { isHomeRoom, knownAgentIds, type SessionsDot } from '@manor/client-runtime/state'
 import { HugeiconsIcon } from '@hugeicons/react-native'

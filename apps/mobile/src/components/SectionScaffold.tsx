@@ -1,4 +1,5 @@
-import { ArrowLeft01Icon, MenuTwoLineIcon } from '@hugeicons/core-free-icons'
+import ArrowLeft01Icon from '@hugeicons/core-free-icons/ArrowLeft01Icon'
+import MenuTwoLineIcon from '@hugeicons/core-free-icons/MenuTwoLineIcon'
 import { useState, type ReactNode } from 'react'
 import { StyleSheet, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'

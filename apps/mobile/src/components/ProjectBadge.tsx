@@ -1,4 +1,4 @@
-import { FolderOffIcon } from '@hugeicons/core-free-icons'
+import FolderOffIcon from '@hugeicons/core-free-icons/FolderOffIcon'
 import { HugeiconsIcon } from '@hugeicons/react-native'
 import type { Project } from '@manor/contracts'
 import { projectIcon } from '@manor/client-runtime/project-icons'

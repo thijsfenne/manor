@@ -6,16 +6,14 @@
  * FORM: Operate, a messaging inbox.
  * FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, DESIGN.md, and every shipping raster carrying its provenance
  */
-import {
-  ArrowDown01Icon,
-  BubbleChatIcon,
-  Cancel01Icon,
-  FolderOffIcon,
-  PencilEdit01Icon,
-  Search01Icon,
-  Tick02Icon,
-  Undo02Icon,
-} from '@hugeicons/core-free-icons'
+import ArrowDown01Icon from '@hugeicons/core-free-icons/ArrowDown01Icon'
+import BubbleChatIcon from '@hugeicons/core-free-icons/BubbleChatIcon'
+import Cancel01Icon from '@hugeicons/core-free-icons/Cancel01Icon'
+import FolderOffIcon from '@hugeicons/core-free-icons/FolderOffIcon'
+import PencilEdit01Icon from '@hugeicons/core-free-icons/PencilEdit01Icon'
+import Search01Icon from '@hugeicons/core-free-icons/Search01Icon'
+import Tick02Icon from '@hugeicons/core-free-icons/Tick02Icon'
+import Undo02Icon from '@hugeicons/core-free-icons/Undo02Icon'
 import { HugeiconsIcon } from '@hugeicons/react-native'
 import type { AgentConfig } from '@manor/contracts'
 import { projectIcon } from '@manor/client-runtime/project-icons'

@@ -1,4 +1,7 @@
-import { ArrowRight01Icon, FileEmpty02Icon, Folder01Icon, Search01Icon } from '@hugeicons/core-free-icons'
+import ArrowRight01Icon from '@hugeicons/core-free-icons/ArrowRight01Icon'
+import FileEmpty02Icon from '@hugeicons/core-free-icons/FileEmpty02Icon'
+import Folder01Icon from '@hugeicons/core-free-icons/Folder01Icon'
+import Search01Icon from '@hugeicons/core-free-icons/Search01Icon'
 import { HugeiconsIcon } from '@hugeicons/react-native'
 import type { AgentConfig, RepoFileResult } from '@manor/contracts'
 import { basename, dirname, entriesUnder, resolveRelativeFileLink, type TreeEntry } from '@manor/client-runtime/file-tree'

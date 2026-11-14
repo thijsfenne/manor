@@ -1,4 +1,5 @@
-import { ArrowLeft01Icon, Cancel01Icon } from '@hugeicons/core-free-icons'
+import ArrowLeft01Icon from '@hugeicons/core-free-icons/ArrowLeft01Icon'
+import Cancel01Icon from '@hugeicons/core-free-icons/Cancel01Icon'
 import type { ReactNode } from 'react'
 import { Modal, StyleSheet, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'

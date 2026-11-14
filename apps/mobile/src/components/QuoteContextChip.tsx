@@ -1,4 +1,5 @@
-import { BookOpen01Icon, Cancel01Icon } from '@hugeicons/core-free-icons'
+import BookOpen01Icon from '@hugeicons/core-free-icons/BookOpen01Icon'
+import Cancel01Icon from '@hugeicons/core-free-icons/Cancel01Icon'
 import { HugeiconsIcon } from '@hugeicons/react-native'
 import { quoteAuthorName } from '@manor/client-runtime/message-quotes'
 import type { AgentConfig, MessageQuote, NoteQuote } from '@manor/contracts'

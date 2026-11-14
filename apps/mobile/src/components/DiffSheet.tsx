@@ -1,4 +1,7 @@
-import { ArrowDown01Icon, FileEmpty02Icon, FileMinusIcon, FilePlusIcon } from '@hugeicons/core-free-icons'
+import ArrowDown01Icon from '@hugeicons/core-free-icons/ArrowDown01Icon'
+import FileEmpty02Icon from '@hugeicons/core-free-icons/FileEmpty02Icon'
+import FileMinusIcon from '@hugeicons/core-free-icons/FileMinusIcon'
+import FilePlusIcon from '@hugeicons/core-free-icons/FilePlusIcon'
 import { HugeiconsIcon } from '@hugeicons/react-native'
 import type { FileEdit } from '@manor/contracts'
 import { changedTotals, type ChangedFile } from '@manor/client-runtime/changed-files'

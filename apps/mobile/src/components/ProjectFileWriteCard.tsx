@@ -1,4 +1,6 @@
-import { MinusSignIcon, Tick02Icon, Undo02Icon } from '@hugeicons/core-free-icons'
+import MinusSignIcon from '@hugeicons/core-free-icons/MinusSignIcon'
+import Tick02Icon from '@hugeicons/core-free-icons/Tick02Icon'
+import Undo02Icon from '@hugeicons/core-free-icons/Undo02Icon'
 import { HugeiconsIcon } from '@hugeicons/react-native'
 import { projectFileWriteDetail, projectFileWriteLabel, type ProjectFileWrite } from '@manor/contracts'
 import { useState } from 'react'

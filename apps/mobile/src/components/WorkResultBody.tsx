@@ -1,4 +1,6 @@
-import { AlertCircleIcon, CheckmarkCircle02Icon, Tick02Icon } from '@hugeicons/core-free-icons'
+import AlertCircleIcon from '@hugeicons/core-free-icons/AlertCircleIcon'
+import CheckmarkCircle02Icon from '@hugeicons/core-free-icons/CheckmarkCircle02Icon'
+import Tick02Icon from '@hugeicons/core-free-icons/Tick02Icon'
 import { HugeiconsIcon } from '@hugeicons/react-native'
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { Pressable, StyleSheet, TextInput, View, type ColorValue } from 'react-native'

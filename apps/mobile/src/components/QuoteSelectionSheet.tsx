@@ -1,4 +1,4 @@
-import { TextSelectionIcon } from '@hugeicons/core-free-icons'
+import TextSelectionIcon from '@hugeicons/core-free-icons/TextSelectionIcon'
 import { HugeiconsIcon } from '@hugeicons/react-native'
 import type { MessageQuote } from '@manor/contracts'
 import { quoteFromRange } from '@manor/client-runtime/message-quotes'

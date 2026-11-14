@@ -1,4 +1,4 @@
-import { Tick02Icon } from '@hugeicons/core-free-icons'
+import Tick02Icon from '@hugeicons/core-free-icons/Tick02Icon'
 import { HugeiconsIcon } from '@hugeicons/react-native'
 import { Pressable, StyleSheet, View } from 'react-native'
 import { colors, radius, spacing } from '@/theme'

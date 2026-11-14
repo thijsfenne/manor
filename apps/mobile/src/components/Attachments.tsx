@@ -1,4 +1,6 @@
-import { Cancel01Icon, CancelCircleIcon, File01Icon } from '@hugeicons/core-free-icons'
+import Cancel01Icon from '@hugeicons/core-free-icons/Cancel01Icon'
+import CancelCircleIcon from '@hugeicons/core-free-icons/CancelCircleIcon'
+import File01Icon from '@hugeicons/core-free-icons/File01Icon'
 import { HugeiconsIcon } from '@hugeicons/react-native'
 import { eventImageSource, type EventDocument, type EventImage, type FileAttachment } from '@manor/contracts'
 import type { PendingDocument } from '@manor/client-runtime/state'

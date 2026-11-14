@@ -1,12 +1,10 @@
-import {
-  Clock01Icon,
-  Archive02Icon,
-  BookOpen01Icon,
-  CellsIcon,
-  DashboardSpeed02Icon,
-  Logout01Icon,
-  PuzzleIcon,
-} from '@hugeicons/core-free-icons'
+import Clock01Icon from '@hugeicons/core-free-icons/Clock01Icon'
+import Archive02Icon from '@hugeicons/core-free-icons/Archive02Icon'
+import BookOpen01Icon from '@hugeicons/core-free-icons/BookOpen01Icon'
+import CellsIcon from '@hugeicons/core-free-icons/CellsIcon'
+import DashboardSpeed02Icon from '@hugeicons/core-free-icons/DashboardSpeed02Icon'
+import Logout01Icon from '@hugeicons/core-free-icons/Logout01Icon'
+import PuzzleIcon from '@hugeicons/core-free-icons/PuzzleIcon'
 import {
   Clock01Icon as Clock01SolidIcon,
   Archive02Icon as Archive02SolidIcon,

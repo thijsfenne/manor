@@ -1,105 +1,103 @@
-import {
-  Airplane01Icon,
-  Analytics01Icon,
-  Apple01Icon,
-  ArchiveIcon,
-  Attachment01Icon,
-  Award01Icon,
-  Backpack02Icon,
-  BankIcon,
-  BeachIcon,
-  Bicycle01Icon,
-  BirthdayCakeIcon,
-  Book02Icon,
-  Bookmark01Icon,
-  Brain01Icon,
-  Briefcase01Icon,
-  Building03Icon,
-  Calculator01Icon,
-  Calendar03Icon,
-  CallIcon,
-  Camera01Icon,
-  Car01Icon,
-  CatIcon,
-  Chat01Icon,
-  CheckListIcon,
-  Clock01Icon,
-  CloudIcon,
-  Coffee01Icon,
-  Compass01Icon,
-  ComputerIcon,
-  ContactBookIcon,
-  CrownIcon,
-  DashboardSquare01Icon,
-  Database01Icon,
-  Download01Icon,
-  Dumbbell01Icon,
-  Edit01Icon,
-  Factory01Icon,
-  FavouriteIcon,
-  File01Icon,
-  FireIcon,
-  Flag01Icon,
-  FlowerIcon,
-  Folder01Icon,
-  GameController01Icon,
-  GiftIcon,
-  Globe02Icon,
-  HealthIcon,
-  Home01Icon,
-  Idea01Icon,
-  Key01Icon,
-  LabsIcon,
-  LanguageSkillIcon,
-  LaptopIcon,
-  LibraryIcon,
-  Link01Icon,
-  Location01Icon,
-  LockIcon,
-  Mail01Icon,
-  MapsIcon,
-  Medal01Icon,
-  MeetingRoomIcon,
-  Mic01Icon,
-  MicroscopeIcon,
-  Money01Icon,
-  MountainIcon,
-  MusicNote01Icon,
-  News01Icon,
-  PaintBrush01Icon,
-  Plant01Icon,
-  PuzzleIcon,
-  Restaurant01Icon,
-  Robot01Icon,
-  Rocket01Icon,
-  School01Icon,
-  Search01Icon,
-  SentIcon,
-  Settings01Icon,
-  Shield01Icon,
-  ShoppingBag01Icon,
-  SmartPhone01Icon,
-  SourceCodeIcon,
-  StarIcon,
-  Store01Icon,
-  Sun01Icon,
-  Target01Icon,
-  Task01Icon,
-  Telescope01Icon,
-  ToolsIcon,
-  Train01Icon,
-  Tree01Icon,
-  TruckIcon,
-  UmbrellaIcon,
-  Upload01Icon,
-  UserGroupIcon,
-  UserIcon,
-  Video01Icon,
-  Wallet01Icon,
-  Watch01Icon,
-  Wifi01Icon,
-  Wrench01Icon,
-} from '@hugeicons/core-free-icons'
+import Airplane01Icon from '@hugeicons/core-free-icons/Airplane01Icon'
+import Analytics01Icon from '@hugeicons/core-free-icons/Analytics01Icon'
+import Apple01Icon from '@hugeicons/core-free-icons/Apple01Icon'
+import ArchiveIcon from '@hugeicons/core-free-icons/ArchiveIcon'
+import Attachment01Icon from '@hugeicons/core-free-icons/Attachment01Icon'
+import Award01Icon from '@hugeicons/core-free-icons/Award01Icon'
+import Backpack02Icon from '@hugeicons/core-free-icons/Backpack02Icon'
+import BankIcon from '@hugeicons/core-free-icons/BankIcon'
+import BeachIcon from '@hugeicons/core-free-icons/BeachIcon'
+import Bicycle01Icon from '@hugeicons/core-free-icons/Bicycle01Icon'
+import BirthdayCakeIcon from '@hugeicons/core-free-icons/BirthdayCakeIcon'
+import Book02Icon from '@hugeicons/core-free-icons/Book02Icon'
+import Bookmark01Icon from '@hugeicons/core-free-icons/Bookmark01Icon'
+import Brain01Icon from '@hugeicons/core-free-icons/Brain01Icon'
+import Briefcase01Icon from '@hugeicons/core-free-icons/Briefcase01Icon'
+import Building03Icon from '@hugeicons/core-free-icons/Building03Icon'
+import Calculator01Icon from '@hugeicons/core-free-icons/Calculator01Icon'
+import Calendar03Icon from '@hugeicons/core-free-icons/Calendar03Icon'
+import CallIcon from '@hugeicons/core-free-icons/CallIcon'
+import Camera01Icon from '@hugeicons/core-free-icons/Camera01Icon'
+import Car01Icon from '@hugeicons/core-free-icons/Car01Icon'
+import CatIcon from '@hugeicons/core-free-icons/CatIcon'
+import Chat01Icon from '@hugeicons/core-free-icons/Chat01Icon'
+import CheckListIcon from '@hugeicons/core-free-icons/CheckListIcon'
+import Clock01Icon from '@hugeicons/core-free-icons/Clock01Icon'
+import CloudIcon from '@hugeicons/core-free-icons/CloudIcon'
+import Coffee01Icon from '@hugeicons/core-free-icons/Coffee01Icon'
+import Compass01Icon from '@hugeicons/core-free-icons/Compass01Icon'
+import ComputerIcon from '@hugeicons/core-free-icons/ComputerIcon'
+import ContactBookIcon from '@hugeicons/core-free-icons/ContactBookIcon'
+import CrownIcon from '@hugeicons/core-free-icons/CrownIcon'
+import DashboardSquare01Icon from '@hugeicons/core-free-icons/DashboardSquare01Icon'
+import Database01Icon from '@hugeicons/core-free-icons/Database01Icon'
+import Download01Icon from '@hugeicons/core-free-icons/Download01Icon'
+import Dumbbell01Icon from '@hugeicons/core-free-icons/Dumbbell01Icon'
+import Edit01Icon from '@hugeicons/core-free-icons/Edit01Icon'
+import Factory01Icon from '@hugeicons/core-free-icons/Factory01Icon'
+import FavouriteIcon from '@hugeicons/core-free-icons/FavouriteIcon'
+import File01Icon from '@hugeicons/core-free-icons/File01Icon'
+import FireIcon from '@hugeicons/core-free-icons/FireIcon'
+import Flag01Icon from '@hugeicons/core-free-icons/Flag01Icon'
+import FlowerIcon from '@hugeicons/core-free-icons/FlowerIcon'
+import Folder01Icon from '@hugeicons/core-free-icons/Folder01Icon'
+import GameController01Icon from '@hugeicons/core-free-icons/GameController01Icon'
+import GiftIcon from '@hugeicons/core-free-icons/GiftIcon'
+import Globe02Icon from '@hugeicons/core-free-icons/Globe02Icon'
+import HealthIcon from '@hugeicons/core-free-icons/HealthIcon'
+import Home01Icon from '@hugeicons/core-free-icons/Home01Icon'
+import Idea01Icon from '@hugeicons/core-free-icons/Idea01Icon'
+import Key01Icon from '@hugeicons/core-free-icons/Key01Icon'
+import LabsIcon from '@hugeicons/core-free-icons/LabsIcon'
+import LanguageSkillIcon from '@hugeicons/core-free-icons/LanguageSkillIcon'
+import LaptopIcon from '@hugeicons/core-free-icons/LaptopIcon'
+import LibraryIcon from '@hugeicons/core-free-icons/LibraryIcon'
+import Link01Icon from '@hugeicons/core-free-icons/Link01Icon'
+import Location01Icon from '@hugeicons/core-free-icons/Location01Icon'
+import LockIcon from '@hugeicons/core-free-icons/LockIcon'
+import Mail01Icon from '@hugeicons/core-free-icons/Mail01Icon'
+import MapsIcon from '@hugeicons/core-free-icons/MapsIcon'
+import Medal01Icon from '@hugeicons/core-free-icons/Medal01Icon'
+import MeetingRoomIcon from '@hugeicons/core-free-icons/MeetingRoomIcon'
+import Mic01Icon from '@hugeicons/core-free-icons/Mic01Icon'
+import MicroscopeIcon from '@hugeicons/core-free-icons/MicroscopeIcon'
+import Money01Icon from '@hugeicons/core-free-icons/Money01Icon'
+import MountainIcon from '@hugeicons/core-free-icons/MountainIcon'
+import MusicNote01Icon from '@hugeicons/core-free-icons/MusicNote01Icon'
+import News01Icon from '@hugeicons/core-free-icons/News01Icon'
+import PaintBrush01Icon from '@hugeicons/core-free-icons/PaintBrush01Icon'
+import Plant01Icon from '@hugeicons/core-free-icons/Plant01Icon'
+import PuzzleIcon from '@hugeicons/core-free-icons/PuzzleIcon'
+import Restaurant01Icon from '@hugeicons/core-free-icons/Restaurant01Icon'
+import Robot01Icon from '@hugeicons/core-free-icons/Robot01Icon'
+import Rocket01Icon from '@hugeicons/core-free-icons/Rocket01Icon'
+import School01Icon from '@hugeicons/core-free-icons/School01Icon'
+import Search01Icon from '@hugeicons/core-free-icons/Search01Icon'
+import SentIcon from '@hugeicons/core-free-icons/SentIcon'
+import Settings01Icon from '@hugeicons/core-free-icons/Settings01Icon'
+import Shield01Icon from '@hugeicons/core-free-icons/Shield01Icon'
+import ShoppingBag01Icon from '@hugeicons/core-free-icons/ShoppingBag01Icon'
+import SmartPhone01Icon from '@hugeicons/core-free-icons/SmartPhone01Icon'
+import SourceCodeIcon from '@hugeicons/core-free-icons/SourceCodeIcon'
+import StarIcon from '@hugeicons/core-free-icons/StarIcon'
+import Store01Icon from '@hugeicons/core-free-icons/Store01Icon'
+import Sun01Icon from '@hugeicons/core-free-icons/Sun01Icon'
+import Target01Icon from '@hugeicons/core-free-icons/Target01Icon'
+import Task01Icon from '@hugeicons/core-free-icons/Task01Icon'
+import Telescope01Icon from '@hugeicons/core-free-icons/Telescope01Icon'
+import ToolsIcon from '@hugeicons/core-free-icons/ToolsIcon'
+import Train01Icon from '@hugeicons/core-free-icons/Train01Icon'
+import Tree01Icon from '@hugeicons/core-free-icons/Tree01Icon'
+import TruckIcon from '@hugeicons/core-free-icons/TruckIcon'
+import UmbrellaIcon from '@hugeicons/core-free-icons/UmbrellaIcon'
+import Upload01Icon from '@hugeicons/core-free-icons/Upload01Icon'
+import UserGroupIcon from '@hugeicons/core-free-icons/UserGroupIcon'
+import UserIcon from '@hugeicons/core-free-icons/UserIcon'
+import Video01Icon from '@hugeicons/core-free-icons/Video01Icon'
+import Wallet01Icon from '@hugeicons/core-free-icons/Wallet01Icon'
+import Watch01Icon from '@hugeicons/core-free-icons/Watch01Icon'
+import Wifi01Icon from '@hugeicons/core-free-icons/Wifi01Icon'
+import Wrench01Icon from '@hugeicons/core-free-icons/Wrench01Icon'
 import { DEFAULT_PROJECT_COLOR, type ProjectIcon } from '@manor/contracts'
 
 /**

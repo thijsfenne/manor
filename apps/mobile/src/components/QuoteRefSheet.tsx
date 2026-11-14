@@ -1,4 +1,4 @@
-import { ArrowUpRight01Icon } from '@hugeicons/core-free-icons'
+import ArrowUpRight01Icon from '@hugeicons/core-free-icons/ArrowUpRight01Icon'
 import { HugeiconsIcon } from '@hugeicons/react-native'
 import { quoteText, type AgentConfig, type InlineQuote } from '@manor/contracts'
 import { quoteAuthorName } from '@manor/client-runtime/message-quotes'

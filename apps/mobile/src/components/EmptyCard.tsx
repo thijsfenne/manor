@@ -1,4 +1,4 @@
-import { Idea01Icon } from '@hugeicons/core-free-icons'
+import Idea01Icon from '@hugeicons/core-free-icons/Idea01Icon'
 import { HugeiconsIcon } from '@hugeicons/react-native'
 import { StyleSheet, View } from 'react-native'
 

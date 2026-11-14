@@ -1,4 +1,6 @@
-import { CheckmarkSquare02Icon, Globe02Icon, SquareIcon } from '@hugeicons/core-free-icons'
+import CheckmarkSquare02Icon from '@hugeicons/core-free-icons/CheckmarkSquare02Icon'
+import Globe02Icon from '@hugeicons/core-free-icons/Globe02Icon'
+import SquareIcon from '@hugeicons/core-free-icons/SquareIcon'
 import { HugeiconsIcon } from '@hugeicons/react-native'
 import { faviconSource, imageRefSpans, markdownImageSource, mentionSpans, quoteExcerpt, quoteRefSpans, webLinkOrigin, type AgentConfig, type InlineQuote } from '@manor/contracts'
 import { personaOf } from '@manor/client-runtime/state'

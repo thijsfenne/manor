@@ -2,7 +2,7 @@
  * THESIS: A project's Sessions read as the Mac's overview beside the thread, one step behind the thread, never as a second home list.
  * FIRST VIEWPORT: Back to the thread, then Waiting on you, Working and Settled with their counts.
  */
-import { ArrowLeft01Icon } from '@hugeicons/core-free-icons'
+import ArrowLeft01Icon from '@hugeicons/core-free-icons/ArrowLeft01Icon'
 import { projectSessionOverview } from '@manor/client-runtime/state'
 import { router, useLocalSearchParams } from 'expo-router'
 import { useMemo } from 'react'

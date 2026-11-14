@@ -1,13 +1,11 @@
-import {
-  ArrowDown01Icon,
-  BubbleChatDoneIcon,
-  BubbleChatQuestionIcon,
-  CellsIcon,
-  FileEditIcon,
-  Idea01Icon,
-  InformationCircleIcon,
-  Note01Icon,
-} from '@hugeicons/core-free-icons'
+import ArrowDown01Icon from '@hugeicons/core-free-icons/ArrowDown01Icon'
+import BubbleChatDoneIcon from '@hugeicons/core-free-icons/BubbleChatDoneIcon'
+import BubbleChatQuestionIcon from '@hugeicons/core-free-icons/BubbleChatQuestionIcon'
+import CellsIcon from '@hugeicons/core-free-icons/CellsIcon'
+import FileEditIcon from '@hugeicons/core-free-icons/FileEditIcon'
+import Idea01Icon from '@hugeicons/core-free-icons/Idea01Icon'
+import InformationCircleIcon from '@hugeicons/core-free-icons/InformationCircleIcon'
+import Note01Icon from '@hugeicons/core-free-icons/Note01Icon'
 import { HugeiconsIcon } from '@hugeicons/react-native'
 import { threadBundleView, type Row, type ThreadBundleEntry, type ThreadBundleGlyph, type ThreadBundleRow, type ThreadBundleTone } from '@manor/client-runtime/state'
 import { useContext, useMemo, useState, type ReactNode } from 'react'

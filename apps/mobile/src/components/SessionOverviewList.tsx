@@ -1,4 +1,4 @@
-import { ArrowDown01Icon } from '@hugeicons/core-free-icons'
+import ArrowDown01Icon from '@hugeicons/core-free-icons/ArrowDown01Icon'
 import { HugeiconsIcon } from '@hugeicons/react-native'
 import type { AgentConfig } from '@manor/contracts'
 import type { SessionOverview, SessionOverviewGroup, SessionOverviewRow } from '@manor/client-runtime/state'

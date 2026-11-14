@@ -1,13 +1,11 @@
-import {
-  Add01Icon,
-  ArrowLeft01Icon,
-  ArrowRight01Icon,
-  Cancel01Icon,
-  Delete02Icon,
-  Folder01Icon,
-  FolderOpenIcon,
-  Tick02Icon,
-} from '@hugeicons/core-free-icons'
+import Add01Icon from '@hugeicons/core-free-icons/Add01Icon'
+import ArrowLeft01Icon from '@hugeicons/core-free-icons/ArrowLeft01Icon'
+import ArrowRight01Icon from '@hugeicons/core-free-icons/ArrowRight01Icon'
+import Cancel01Icon from '@hugeicons/core-free-icons/Cancel01Icon'
+import Delete02Icon from '@hugeicons/core-free-icons/Delete02Icon'
+import Folder01Icon from '@hugeicons/core-free-icons/Folder01Icon'
+import FolderOpenIcon from '@hugeicons/core-free-icons/FolderOpenIcon'
+import Tick02Icon from '@hugeicons/core-free-icons/Tick02Icon'
 import { PROJECT_ICON_OPTIONS, projectColorChoices, projectIcon } from '@manor/client-runtime/project-icons'
 import { HugeiconsIcon } from '@hugeicons/react-native'
 import { MAX_PROJECT_FOLDERS, type Project } from '@manor/contracts'

@@ -1,4 +1,7 @@
-import { AlertCircleIcon, ArrowDown01Icon, CancelCircleIcon, CheckmarkCircle02Icon } from '@hugeicons/core-free-icons'
+import AlertCircleIcon from '@hugeicons/core-free-icons/AlertCircleIcon'
+import ArrowDown01Icon from '@hugeicons/core-free-icons/ArrowDown01Icon'
+import CancelCircleIcon from '@hugeicons/core-free-icons/CancelCircleIcon'
+import CheckmarkCircle02Icon from '@hugeicons/core-free-icons/CheckmarkCircle02Icon'
 import { HugeiconsIcon } from '@hugeicons/react-native'
 import type { SubagentSummary } from '@manor/contracts'
 import type { ToolStep } from '@manor/client-runtime/state'

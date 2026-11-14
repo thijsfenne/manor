@@ -1,4 +1,5 @@
-import { Cancel01Icon, ReplyIcon } from '@hugeicons/core-free-icons'
+import Cancel01Icon from '@hugeicons/core-free-icons/Cancel01Icon'
+import ReplyIcon from '@hugeicons/core-free-icons/ReplyIcon'
 import { HugeiconsIcon } from '@hugeicons/react-native'
 import type { MessageReply } from '@manor/contracts'
 import { Pressable, StyleSheet, View } from 'react-native'

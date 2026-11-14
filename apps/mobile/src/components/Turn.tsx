@@ -1,20 +1,18 @@
-import {
-  Clock01Icon,
-  ArrowDown01Icon,
-  ArrowRight01Icon,
-  Brain02Icon,
-  CancelCircleIcon,
-  Copy01Icon,
-  NoteEditIcon,
-  PencilEdit02Icon,
-  ReplyIcon,
-  Search01Icon,
-  TerminalIcon,
-  TextSelectionIcon,
-  Tick02Icon,
-  ViewIcon,
-  Wrench01Icon,
-} from '@hugeicons/core-free-icons'
+import Clock01Icon from '@hugeicons/core-free-icons/Clock01Icon'
+import ArrowDown01Icon from '@hugeicons/core-free-icons/ArrowDown01Icon'
+import ArrowRight01Icon from '@hugeicons/core-free-icons/ArrowRight01Icon'
+import Brain02Icon from '@hugeicons/core-free-icons/Brain02Icon'
+import CancelCircleIcon from '@hugeicons/core-free-icons/CancelCircleIcon'
+import Copy01Icon from '@hugeicons/core-free-icons/Copy01Icon'
+import NoteEditIcon from '@hugeicons/core-free-icons/NoteEditIcon'
+import PencilEdit02Icon from '@hugeicons/core-free-icons/PencilEdit02Icon'
+import ReplyIcon from '@hugeicons/core-free-icons/ReplyIcon'
+import Search01Icon from '@hugeicons/core-free-icons/Search01Icon'
+import TerminalIcon from '@hugeicons/core-free-icons/TerminalIcon'
+import TextSelectionIcon from '@hugeicons/core-free-icons/TextSelectionIcon'
+import Tick02Icon from '@hugeicons/core-free-icons/Tick02Icon'
+import ViewIcon from '@hugeicons/core-free-icons/ViewIcon'
+import Wrench01Icon from '@hugeicons/core-free-icons/Wrench01Icon'
 import { HugeiconsIcon, type IconSvgElement } from '@hugeicons/react-native'
 import { ROUTINE_LATE_AFTER_MS, SECRET_CLOSED_TEXT, userInputAnswerText, type AgentConfig, type Project, type FileEdit, type EventImage, type MessageReply, type UserInputQuestion, type UserInputAnswers } from '@manor/contracts'
 import {

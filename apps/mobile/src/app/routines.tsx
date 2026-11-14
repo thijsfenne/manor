@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { SINGLE_CHAT_VOICE, driverForModel, type AgentConfig, type Routine } from '@manor/contracts'
 import { calendarDaysUntil, DEFAULT_KIND, scheduledSections, type ScheduleKind } from '@manor/client-runtime/scheduled'
-import { ArrowDown01Icon } from '@hugeicons/core-free-icons'
+import ArrowDown01Icon from '@hugeicons/core-free-icons/ArrowDown01Icon'
 import { HugeiconsIcon } from '@hugeicons/react-native'
 import { Pressable, SectionList, StyleSheet, View } from 'react-native'
 import { FadeIn, FadeOut, ReduceMotion } from 'react-native-reanimated'

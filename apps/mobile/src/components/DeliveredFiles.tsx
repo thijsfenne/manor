@@ -1,4 +1,6 @@
-import { Download04Icon, File01Icon, SquareArrowUpRightIcon } from '@hugeicons/core-free-icons'
+import Download04Icon from '@hugeicons/core-free-icons/Download04Icon'
+import File01Icon from '@hugeicons/core-free-icons/File01Icon'
+import SquareArrowUpRightIcon from '@hugeicons/core-free-icons/SquareArrowUpRightIcon'
 import { HugeiconsIcon } from '@hugeicons/react-native'
 import type { DeliveredFile } from '@manor/contracts'
 import { describeBytes } from '@manor/client-runtime/attachments'

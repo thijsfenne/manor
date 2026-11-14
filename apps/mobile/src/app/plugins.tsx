@@ -8,15 +8,13 @@ import {
   occurrenceCount,
   statusStamp,
 } from '@manor/client-runtime/suggestions'
-import {
-  BoxIcon,
-  CancelCircleIcon,
-  Clock01Icon,
-  Flag02Icon,
-  PlugSocketIcon,
-  Tick02Icon,
-  ViewIcon,
-} from '@hugeicons/core-free-icons'
+import BoxIcon from '@hugeicons/core-free-icons/BoxIcon'
+import CancelCircleIcon from '@hugeicons/core-free-icons/CancelCircleIcon'
+import Clock01Icon from '@hugeicons/core-free-icons/Clock01Icon'
+import Flag02Icon from '@hugeicons/core-free-icons/Flag02Icon'
+import PlugSocketIcon from '@hugeicons/core-free-icons/PlugSocketIcon'
+import Tick02Icon from '@hugeicons/core-free-icons/Tick02Icon'
+import ViewIcon from '@hugeicons/core-free-icons/ViewIcon'
 import { HugeiconsIcon, type IconSvgElement } from '@hugeicons/react-native'
 import { Image } from 'expo-image'
 import { ScrollView, StyleSheet, View } from 'react-native'

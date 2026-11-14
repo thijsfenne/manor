@@ -1,4 +1,5 @@
-import { ArrowUpLeft01Icon, Clock01Icon } from '@hugeicons/core-free-icons'
+import ArrowUpLeft01Icon from '@hugeicons/core-free-icons/ArrowUpLeft01Icon'
+import Clock01Icon from '@hugeicons/core-free-icons/Clock01Icon'
 import { HugeiconsIcon } from '@hugeicons/react-native'
 import { LegendList } from '@legendapp/list/react-native'
 import type { Row, ThreadState } from '@manor/client-runtime/state'

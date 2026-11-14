@@ -1,14 +1,12 @@
 import { roomAgents } from '@manor/client-runtime/mentions'
 import { stageCommandContext } from '@manor/client-runtime/chat-commands'
-import {
-  Add01Icon,
-  ArrowLeft01Icon,
-  ArrowRight01Icon,
-  Cancel01Icon,
-  Folder01Icon,
-  FolderAddIcon,
-  UnfoldMoreIcon,
-} from '@hugeicons/core-free-icons'
+import Add01Icon from '@hugeicons/core-free-icons/Add01Icon'
+import ArrowLeft01Icon from '@hugeicons/core-free-icons/ArrowLeft01Icon'
+import ArrowRight01Icon from '@hugeicons/core-free-icons/ArrowRight01Icon'
+import Cancel01Icon from '@hugeicons/core-free-icons/Cancel01Icon'
+import Folder01Icon from '@hugeicons/core-free-icons/Folder01Icon'
+import FolderAddIcon from '@hugeicons/core-free-icons/FolderAddIcon'
+import UnfoldMoreIcon from '@hugeicons/core-free-icons/UnfoldMoreIcon'
 import { HugeiconsIcon, type IconSvgElement } from '@hugeicons/react-native'
 import {
   NEW_SINGLE_CHAT_DEFAULT,

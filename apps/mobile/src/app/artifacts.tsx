@@ -1,4 +1,4 @@
-import { Search01Icon } from '@hugeicons/core-free-icons'
+import Search01Icon from '@hugeicons/core-free-icons/Search01Icon'
 import { HugeiconsIcon } from '@hugeicons/react-native'
 import type { MyMindArtifact } from '@manor/contracts'
 import { Image } from 'expo-image'
