@@ -149,7 +149,7 @@ const NO_CHANGEABLE: ReadonlyMap<string, ChangeableAnswer> = new Map()
 
 function ChatContent({ chatId }: { chatId: string | undefined }) {
   const hostAuto = useHostAuto()
-  const { workspace, status, askProjectCheckout, askCheckoutStatus, openChat, sendMessage, stopTurn, stopBackground, stopSubagent, answerUserInput, answerSecretRequest, changeSessionAnswer, submitOutboundDraft, discardOutboundDraft, snoozeOutboundDraft, ignoreOutboundDraft, restoreOutboundDraft, readOutboundThread, setChatOverride, setChatSettled, rejectWorkHandoff, listRepoFiles, readRepoFile } = useWorkspace()
+  const { workspace, status, askProjectCheckout, askCheckoutStatus, openChat, leaveChat, sendMessage, stopTurn, stopBackground, stopSubagent, answerUserInput, answerSecretRequest, changeSessionAnswer, submitOutboundDraft, discardOutboundDraft, snoozeOutboundDraft, ignoreOutboundDraft, restoreOutboundDraft, readOutboundThread, setChatOverride, setChatSettled, rejectWorkHandoff, listRepoFiles, readRepoFile } = useWorkspace()
   const [draft, setDraft] = useState(() => readDraft(chatId).text)
   const [images, setImages] = useState<ImageAttachment[]>(() => readDraft(chatId).images)
   const [textFiles, setTextFiles] = useState<StagedFile[]>(() => readDraft(chatId).files)
@@ -184,9 +184,13 @@ function ChatContent({ chatId }: { chatId: string | undefined }) {
 
   // On focus, not only on mount: back from a chat pushed over this one makes this the
   // open chat again, so a run finishing in the chat he left is not settled as read.
+  // Losing focus gives the selection up, unless the screen above already took it: from
+  // the inbox no chat is open, so this one can show unread and a reconnect leaves it be.
   useFocusEffect(useCallback(() => {
-    if (chatId !== undefined) openChat(chatId)
-  }, [chatId, openChat]))
+    if (chatId === undefined) return
+    openChat(chatId)
+    return () => leaveChat(chatId)
+  }, [chatId, leaveChat, openChat]))
 
   /**
    * A draft belongs to its conversation, not to this screen: walking back to the list

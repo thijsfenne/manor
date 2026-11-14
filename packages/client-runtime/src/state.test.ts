@@ -25,7 +25,7 @@ import {
   dmMemoryMarks,
 } from './state'
 import type { NativeSubagent, SubagentSummary } from '@manor/contracts'
-import { askChildThread, clearRunningTurns, withRoutineRunsRead } from './workspaceActions'
+import { askChildThread, clearRunningTurns, leaveChat, selectChat, withRoutineRunsRead } from './workspaceActions'
 
 describe('runtime Auto eligibility', () => {
   it('tracks completed, failed and live turns without treating info notes as a turn', () => {
@@ -1339,5 +1339,24 @@ describe('accepting a Work proposal', () => {
     expect(listed.chats.map((row) => row.id)).toEqual(['dm_1', 'work_1'])
     expect(listed.openChatId).toBe('dm_1')
     expect(listed.pendingChatId).toBeNull()
+  })
+})
+
+describe('leaving a chat on the phone', () => {
+  const done = { type: 'turn_state' as const, chatId: 'dm_1', turnId: 'turn_1', agentId: 'sage', state: 'done' as const }
+
+  it('gives up the selection, so a turn that ends afterwards shows unread', () => {
+    const open = { ...emptyWorkspace, openChatId: 'dm_1' }
+    expect(reduce(open, done).activity.dm_1?.unread).toBe(false)
+
+    const left = leaveChat(open, 'dm_1')
+    expect(left.openChatId).toBeNull()
+    expect(left.pendingChatId).toBeNull()
+    expect(reduce(left, done).activity.dm_1?.unread).toBe(true)
+  })
+
+  it('leaves the selection with a chat that was pushed over it', () => {
+    const pushed = selectChat({ ...emptyWorkspace, openChatId: 'thread_1' }, 'session_1')
+    expect(leaveChat(pushed, 'thread_1')).toBe(pushed)
   })
 })

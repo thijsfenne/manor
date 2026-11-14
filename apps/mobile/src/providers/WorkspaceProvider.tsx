@@ -30,6 +30,7 @@ import {
   clearRunningTurns,
   emptyWorkspace,
   forgetDirs,
+  leaveChat as leaveChatSelection,
   reduce,
   selectChat,
   sendingUserMessage,
@@ -89,6 +90,8 @@ export interface WorkspaceActions {
   askCheckoutStatus: (chatId: string) => boolean
   askProjectCheckout: (projectId: string) => boolean
   openChat: (chatId: string) => boolean
+  /** The chat's screen lost focus; drops the selection while it is still this chat. */
+  leaveChat: (chatId: string) => void
   /**
    * Asks for a subagent's own thread to read in its screen. It is held for the chat that
    * started it and never becomes the open chat, so the screen below keeps its place.
@@ -384,6 +387,10 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     setWorkspace((current) => selectChat(current, chatId))
     return send(openChatRequest(chatId, workspaceRef.current.threads[chatId], connectionRef.current?.holds(chatId) === true))
   }, [send, setWorkspace])
+
+  const leaveChat = useCallback((chatId: string) => {
+    setWorkspace((current) => leaveChatSelection(current, chatId))
+  }, [setWorkspace])
 
   const openSubagentThread = useCallback((childId: string, parentId: string) => {
     setWorkspace((current) => askChildThread(current, childId, parentId))
@@ -700,6 +707,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       clearCreatedChat,
       clearCreatedProject,
       openChat,
+      leaveChat,
       setChatSettled,
       acceptWorkHandoff,
       rejectWorkHandoff,
@@ -742,7 +750,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       listArtifacts,
       loadMoreArtifacts,
     }),
-    [acceptWorkHandoff, answerSecretRequest, answerUserInput, changeSessionAnswer, askCheckoutStatus, askProjectCheckout, clearCreatedChat, clearCreatedProject, closeDirs, confirmWorkGoal, acceptWorkResult, reviseWorkResult, retryWorkResult, approveMergeFix, createChat, addFolder, removeFolder, deleteProject, discardOutboundDraft, ignoreOutboundDraft, listWorkflowSuggestions, listArtifacts, listDirs, listRepoFiles, listVault, loadMoreArtifacts, openChat, openSubagentThread, readOutboundThread, readRepoFile, readVaultFile, rejectWorkHandoff, restoreOutboundDraft, runRoutine, sendMessage, setChatOverride, setChatSettled, signOut, snoozeOutboundDraft, stopBackground, stopSubagent, stopTurn, submitOutboundDraft, updateProject],
+    [acceptWorkHandoff, answerSecretRequest, answerUserInput, changeSessionAnswer, askCheckoutStatus, askProjectCheckout, clearCreatedChat, clearCreatedProject, closeDirs, confirmWorkGoal, acceptWorkResult, reviseWorkResult, retryWorkResult, approveMergeFix, createChat, addFolder, removeFolder, deleteProject, discardOutboundDraft, ignoreOutboundDraft, listWorkflowSuggestions, listArtifacts, listDirs, listRepoFiles, listVault, loadMoreArtifacts, openChat, leaveChat, openSubagentThread, readOutboundThread, readRepoFile, readVaultFile, rejectWorkHandoff, restoreOutboundDraft, runRoutine, sendMessage, setChatOverride, setChatSettled, signOut, snoozeOutboundDraft, stopBackground, stopSubagent, stopTurn, submitOutboundDraft, updateProject],
   )
 
   const data = useMemo<WorkspaceData>(

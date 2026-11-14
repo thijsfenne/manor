@@ -278,6 +278,16 @@ export function clearChatSelection(state: WorkspaceState): WorkspaceState {
 }
 
 /**
+ * The phone left this chat's screen for one that shows no chat. Only while the chat is
+ * still the selection: a chat pushed over it has already taken the selection and keeps
+ * it. Without this the chat stays "viewed" from the inbox, so it never shows unread,
+ * a run ending in it is settled as read, and every reconnect asks for it whole.
+ */
+export function leaveChat(state: WorkspaceState, chatId: string): WorkspaceState {
+  return (state.pendingChatId ?? state.openChatId) === chatId ? clearChatSelection(state) : state
+}
+
+/**
  * Threads currently on screen. Unread goes out for each of them, without a second
  * server-side open: a split's other pane is being read even while focus stays put.
  */
