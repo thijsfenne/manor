@@ -355,7 +355,7 @@ export class ManorService {
   constructor(private readonly options: ManorServiceOptions) {
     this.orchestrator = new Orchestrator({
       // The placeholder profile of an install nobody has named yet is not a name.
-      userName: () => (this.userProfile.name === DEFAULT_USER_PROFILE.name ? undefined : this.userProfile.name),
+      userName: () => this.knownUserName(),
       ...(options.diagnostics === undefined ? {} : { diagnostics: options.diagnostics }),
       ...(options.openQuestions === undefined ? {} : { openQuestions: options.openQuestions }),
       agents: options.agents,
@@ -683,7 +683,7 @@ export class ManorService {
     const { store } = this.options
     const chat = await store.createChat({ kind: 'dm', memberIds: [agent.id] })
     const event = await store.appendEvent(chat.id, {
-      type: 'user_message', text: '', instruction: interviewInstruction(agent), mentions: [], dispatchState: 'pending',
+      type: 'user_message', text: '', instruction: interviewInstruction(agent, this.knownUserName()), mentions: [], dispatchState: 'pending',
     })
     if (event.type !== 'user_message') throw new Error('Could not store the interview kickoff.')
     const { interviews } = this.agentModule
@@ -692,6 +692,11 @@ export class ManorService {
     void this.orchestrator.runStoredUserMessage(chat.id, event)
       .catch((error: unknown) => console.warn('[manor] the interview turn failed', error))
       .finally(() => interviews.end(agent.id, event.id))
+  }
+
+  /** The name from the user's profile, undefined while it is still the placeholder. */
+  private knownUserName(): string | undefined {
+    return this.userProfile.name === DEFAULT_USER_PROFILE.name ? undefined : this.userProfile.name
   }
 
   /** A memory-off persona's `offer_instructions_line`; its turn's result shows the latest one. Writes nothing. */

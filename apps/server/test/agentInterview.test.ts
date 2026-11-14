@@ -91,19 +91,21 @@ async function harness(
 }
 
 describe('the new agent interview', () => {
-  it('opens the DM on a hidden kickoff and writes the instructions once from the answers', async () => {
+  it('opens the DM on a hidden kickoff, writes the instructions once and greets the user by name', async () => {
     const test = await harness((question) => question.options[0]!.label)
+    await test.manor.handle({ type: 'save_profile', profile: { name: 'Mara' } }, () => undefined)
     const { agentId, events } = await test.createWithInterview()
 
     const kickoff = events.find((event) => event.type === 'user_message')
     expect(kickoff?.type === 'user_message' && kickoff.text).toBe('')
     expect(kickoff?.type === 'user_message' && kickoff.instruction).toContain('Plan my week.')
+    expect(kickoff?.type === 'user_message' && kickoff.instruction).toContain("The user's name: Mara.")
     expect(test.turns.find((turn) => turn.agentId === agentId)?.tools).toContain('write_instructions')
     expect(test.nova()?.character).toBe([
       '# Nova', '', 'You are Nova. You help with this: Plan my week.', '',
       '## What the user asked for', '- Focus: Planning my week', '- Tone: Short and direct', '- Limits: Send anything without asking',
     ].join('\n'))
-    expect(events.some((event) => event.type === 'agent_message' && event.text.includes('My instructions are set'))).toBe(true)
+    expect(events.find((event) => event.type === 'agent_message')).toMatchObject({ text: 'Hi Mara! My instructions are set and I left nothing out. Where do you want to start with this: Plan my week?' })
   })
 
   it('refuses every later write by the agent: a second call in the same turn, a call from a later turn', async () => {
@@ -159,11 +161,16 @@ describe('the new agent interview', () => {
     expect(test.nova()?.character).toContain('## What the user asked for')
   })
 
-  it('leaves usable instructions built from the form when every question is skipped', async () => {
+  it('leaves usable instructions built from the form when every question is skipped, and still opens the work', async () => {
     const test = await harness(() => SKIPPED)
-    await test.createWithInterview()
+    const { events } = await test.createWithInterview()
 
     expect(test.nova()?.character).toBe('# Nova\n\nYou are Nova. You help with this: Plan my week.')
+    const kickoff = events.find((event) => event.type === 'user_message')
+    expect(kickoff?.type === 'user_message' && kickoff.instruction).not.toContain("The user's name")
+    expect(events.find((event) => event.type === 'agent_message')).toMatchObject({
+      text: 'Hi! My instructions are set; I left out what you skipped and built that part on the form. Where do you want to start with this: Plan my week?',
+    })
   })
 
   it('starts no interview for an update or a Session agent', async () => {

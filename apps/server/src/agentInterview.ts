@@ -44,15 +44,16 @@ export class AgentInterviews {
 }
 
 /** The kickoff the interview turn answers. Model-only: the DM shows the agent's cards, not this. */
-export function interviewInstruction(agent: Pick<AgentConfig, 'name' | 'description'>): string {
+export function interviewInstruction(agent: Pick<AgentConfig, 'name' | 'description'>, userName: string | undefined): string {
   const job = agent.description.trim()
   return [
     `[Manor] The user just created you with a short form. Your name: ${agent.name}. What you should help with: ${job === '' ? '(left blank)' : job}`,
+    ...(userName === undefined ? [] : [`The user's name: ${userName}.`]),
     '',
     'Before anything else, interview them so you can write your own instructions. Ask three short questions in one ask_user call that build on your name and job: what they most want from you, how you should sound and answer, and what you must always or never do. Give each two to four concrete options. Ask a fourth question in a second call only when an answer opens something that would change your instructions. Do not explain the process; the cards speak for themselves.',
     'An answer that says it was skipped leaves the choice to you: take a sensible default from the form. When every question is skipped, write the instructions from your name and job alone.',
     'Then call write_instructions once with the whole document: markdown, addressed to yourself ("You are …"), short and concrete, in English unless the user answered in another language, built only on the form and the answers. It becomes your whole system prompt from your next turn on; Manor adds its workspace rules around it. You may write it only in this turn and only once; after that only the user can change it.',
-    'After writing, reply in at most two short sentences, in the user\'s language: that your instructions are set, and what you left out of them and why, or that you left nothing out. Call them your instructions, never AGENTS.md.',
+    'After writing, send one short first message in the user\'s language, also when every question was skipped: greet the user by name (without a name when you do not know it), say in one sentence what you left out of your instructions and why, or that you left nothing out, then make one concrete suggestion or ask one question tied to your job and your new instructions, so the work starts right away. Call them your instructions, never AGENTS.md.',
   ].join('\n')
 }
 
