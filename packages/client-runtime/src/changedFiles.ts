@@ -33,14 +33,13 @@ export interface ChangedFile {
  */
 export function changedFiles(edits: readonly FileEdit[], listing?: readonly string[]): ChangedFile[] {
   const index = listing === undefined ? undefined : indexListing(listing)
-  const listed = listing === undefined ? undefined : new Set(listing)
   const rows = new Map<string, ChangedFile>()
 
   for (const edit of edits) {
     const stat = editStat(edit)
     const origin = normalizedAbsolute(edit.originPath ?? edit.path)
     const panelPath = edit.panelPath !== undefined
-      ? listed?.has(edit.panelPath) ? edit.panelPath : undefined
+      ? index?.listed.has(edit.panelPath) ? edit.panelPath : undefined
       : origin === undefined && index !== undefined ? resolve(edit.path, index) : undefined
     // Keyed on where the file actually is, not on how it was reported: two spellings
     // of one path would otherwise be two rows in the header's count and one row in
@@ -92,11 +91,10 @@ function reportedChangedFiles(turn: TurnRow, listing?: readonly string[]): Chang
   const roots = turn.fileChangeRoots.map((root) => root.replace(/\/$/, ''))
   const rootNames = roots.map((root) => root.split('/').at(-1) ?? root)
   const index = listing === undefined ? undefined : indexListing(listing)
-  const listed = listing === undefined ? undefined : new Set(listing)
   const measured = turn.fileChanges.map((change): ChangedFile => {
     const root = roots.find((candidate) => change.path.startsWith(`${candidate}/`))
     const relative = root === undefined ? change.path : change.path.slice(root.length + 1)
-    const panelPath = change.panelPath !== undefined && listed?.has(change.panelPath)
+    const panelPath = change.panelPath !== undefined && index?.listed.has(change.panelPath)
       ? change.panelPath : undefined
     const rootName = root === undefined ? undefined : rootNames[roots.indexOf(root)]
     const label = rootName === undefined ? undefined : rootNames.filter((name) => name === rootName).length === 1
@@ -277,6 +275,11 @@ function sort(node: ChangedNode) {
  */
 interface ListingIndex {
   bySuffix: Map<string, string[]>
+  /**
+   * Every listed path, for an exact lookup. Kept with the index so it is built once per
+   * listing: the phone asks for every turn of a chat on each streamed frame.
+   */
+  listed: Set<string>
   /** The one folder label to drop from a display path, when there is only one. */
   strip: string
 }
@@ -302,7 +305,7 @@ function indexListing(listing: readonly string[]): ListingIndex {
 
   // Only with a single linked folder is the label noise: with two, it is the one
   // thing telling `src/App.tsx` apart from the other `src/App.tsx`.
-  const index: ListingIndex = { bySuffix, strip: roots.size === 1 ? `${[...roots][0] as string}/` : '' }
+  const index: ListingIndex = { bySuffix, listed: new Set(listing), strip: roots.size === 1 ? `${[...roots][0] as string}/` : '' }
   indexes.set(listing, index)
   return index
 }
