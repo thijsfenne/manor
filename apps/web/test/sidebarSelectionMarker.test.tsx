@@ -34,8 +34,6 @@ const rowsFor = (openChatId: string | null) =>
   chatList({
     ...emptyWorkspace,
     agents: ROSTER,
-    hasRoster: true,
-    hasDirectory: true,
     // Jeeves has no DM yet, so his row is the one a draft can light.
     chats: [dm('dm_sage', 'sage', 'Sage', 300)],
     openChatId,

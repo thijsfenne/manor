@@ -200,7 +200,6 @@ describe('the inbox row menu', () => {
       <InboxView
         inbox={inbox({
           ...emptyWorkspace,
-          hasDirectory: true,
           projects: [project('manor', 'Manor')],
           chats: [chat({ id: 'spare', title: 'Spare thread' })],
         })}

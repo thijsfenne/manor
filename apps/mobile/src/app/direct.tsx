@@ -1,5 +1,5 @@
 import type { AgentConfig } from '@manor/contracts'
-import { chatList, chatListPins, type ChatListRow } from '@manor/client-runtime/state'
+import { chatList, chatListPins, createListedState, type ChatListRow } from '@manor/client-runtime/state'
 import { router, useFocusEffect } from 'expo-router'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { FlatList, Pressable, StyleSheet, View } from 'react-native'
@@ -33,9 +33,13 @@ export default function DirectScreen() {
  */
 function DirectList() {
   const { workspace, status, openChat, createChat, createdChat, clearCreatedChat } = useWorkspace()
-  const rows = useMemo(() => chatList(workspace), [workspace])
+  // On the slices the list reads, so a streamed reply elsewhere does not rebuild it.
+  const [listedOf] = useState(createListedState)
+  const listed = listedOf(workspace)
+  const agents = workspace.agents
+  const rows = useMemo(() => chatList(listed), [listed])
   // The personas pinned to the top on the Mac, at most two, chief first.
-  const heads = chatListPins(workspace.agents).flatMap((agent) => {
+  const heads = chatListPins(agents).flatMap((agent) => {
     const row = rows.find((candidate) => candidate.kind === 'dm' && candidate.agentId === agent.id)
     return row === undefined ? [] : [{ agent, row }]
   })
@@ -125,14 +129,14 @@ function DirectList() {
         </View>
       )}
       renderItem={({ item }) => {
-        const agent = item.agentId === null ? undefined : workspace.agents.find((candidate) => candidate.id === item.agentId)
+        const agent = item.agentId === null ? undefined : agents.find((candidate) => candidate.id === item.agentId)
         return (
           <ConversationRow
             agent={agent}
             disabled={pending !== null && item.chat === null}
             onPress={() => enter(item)}
             row={item}
-            roster={workspace.agents}
+            roster={agents}
           />
         )
       }}

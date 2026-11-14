@@ -6,6 +6,7 @@ import {
   clearArtifactRequest,
   chatList,
   consultationsByTurn,
+  createListedState,
   emptyThread,
   emptyWorkspace,
   failedFilesStill,
@@ -1358,5 +1359,22 @@ describe('leaving a chat on the phone', () => {
   it('leaves the selection with a chat that was pushed over it', () => {
     const pushed = selectChat({ ...emptyWorkspace, openChatId: 'thread_1' }, 'session_1')
     expect(leaveChat(pushed, 'thread_1')).toBe(pushed)
+  })
+})
+
+describe('the state the lists read', () => {
+  it('holds still through a streamed text frame and moves with a slice a list reads', () => {
+    const listedOf = createListedState()
+    const open = reduce(emptyWorkspace, { type: 'snapshot', chatId: 'dm_1', events: [], usage: {} })
+    const running = reduce(open, { type: 'turn_state', chatId: 'dm_1', turnId: 'turn_1', agentId: 'sage', state: 'running' })
+    const listed = listedOf(running)
+
+    const streamed = reduce(running, { type: 'delta', chatId: 'dm_1', turnId: 'turn_1', agentId: 'sage', messageId: 'm1', text: 'Hi' })
+    expect(streamed).not.toBe(running)
+    expect(listedOf(streamed)).toBe(listed)
+
+    const ended = reduce(streamed, { type: 'turn_state', chatId: 'dm_1', turnId: 'turn_1', agentId: 'sage', state: 'done' })
+    expect(listedOf(ended)).not.toBe(listed)
+    expect(listedOf(ended).activity).toBe(ended.activity)
   })
 })

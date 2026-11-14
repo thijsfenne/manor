@@ -18,6 +18,7 @@ const HOT: Record<string, readonly string[]> = {
   'components/Composer.tsx': ['Composer'],
   'components/Turn.tsx': ['Turn'],
   'app/index.tsx': ['ProjectInbox'],
+  'app/direct.tsx': ['DirectList'],
 }
 
 /** What the compiler said about one phone file, with the options Expo's preset gives it. */

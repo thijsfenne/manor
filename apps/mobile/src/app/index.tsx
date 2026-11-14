@@ -18,10 +18,10 @@ import { HugeiconsIcon } from '@hugeicons/react-native'
 import type { AgentConfig } from '@manor/contracts'
 import { projectIcon } from '@manor/client-runtime/project-icons'
 import {
+  createListedState,
   inbox,
   projectThreads,
   searchThreads,
-  sitsSettled,
   type InboxChat,
   type ProjectThreadRow,
   type ThreadSearchHit,
@@ -93,13 +93,20 @@ function ProjectInbox() {
   // The desktop sidebar's two sections from the same selectors (2026-10-12): Projects,
   // whose rows carry the Sessions their thread started, then Sessions, which leaves
   // those Sessions out. Search still reaches every Session, a thread's included.
-  const directory = useMemo(() => inbox(workspace, { hideThreadSessions: true }), [workspace])
-  const everySession = useMemo(() => inbox(workspace), [workspace])
+  // Memoized on the slices the lists read, not on `workspace`: a streamed reply gives the
+  // workspace a new identity every frame, and this screen stays mounted under an open chat.
+  const [listedOf] = useState(createListedState)
+  const listed = listedOf(workspace)
+  const agents = workspace.agents
+  const directory = useMemo(() => inbox(listed, { hideThreadSessions: true }), [listed])
+  const everySession = useMemo(() => inbox(listed), [listed])
+  // Where a search hit sits; a listed row already says so by its kind.
+  const settledIds = useMemo(() => new Set(everySession.settled.map((entry) => entry.chat.id)), [everySession.settled])
   const entriesById = useMemo(
     () => new Map([...everySession.unsettled, ...everySession.settled].map((entry) => [entry.chat.id, entry])),
     [everySession.settled, everySession.unsettled],
   )
-  const threads = useMemo(() => projectThreads(workspace), [workspace])
+  const threads = useMemo(() => projectThreads(listed), [listed])
   const searchHits = useMemo<ThreadSearchHit[]>(
     () => [...everySession.unsettled, ...everySession.settled].map((entry) => ({
       chatId: entry.chat.id,
@@ -224,12 +231,12 @@ function ProjectInbox() {
               </Pressable>
             )
           }
-          const settled = sitsSettled(workspace, item.entry.chat)
+          const settled = item.kind === 'settled' || settledIds.has(item.entry.chat.id)
           const row = item.kind === 'settled' ? (
-            <SettledRow agents={workspace.agents} entry={item.entry} onPress={() => enterChat(item.entry.chat.id)} />
+            <SettledRow agents={agents} entry={item.entry} onPress={() => enterChat(item.entry.chat.id)} />
           ) : (
             <ActiveRow
-              agents={workspace.agents}
+              agents={agents}
               entry={item.entry}
               searchResult={item.searchResult === true}
               settled={settled}

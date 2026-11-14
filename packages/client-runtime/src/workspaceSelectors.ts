@@ -218,7 +218,36 @@ export interface SidebarChat extends ChatStanding {
 }
 
 /** The chat the stage is on or heading to, which is the row a list lights. */
-const selectedChatId = (state: WorkspaceShape) => state.pendingChatId ?? state.openChatId
+const selectedChatId = (state: Pick<WorkspaceShape, 'openChatId' | 'pendingChatId'>) => state.pendingChatId ?? state.openChatId
+
+/**
+ * The slices the listed-chat selectors read: `inbox`, `projectThreads`, `chatList` and
+ * `sitsSettled`. They are typed by it, so one that reads another slice does not compile.
+ */
+const LISTED_SLICES = [
+  'chats', 'projects', 'agents', 'workHandoffs', 'activity', 'subagents', 'backgroundChatIds', 'houseSettings', 'openChatId', 'pendingChatId',
+] as const satisfies readonly (keyof WorkspaceShape)[]
+
+export type ListedState = Pick<WorkspaceShape, (typeof LISTED_SLICES)[number]>
+
+/**
+ * A selector that narrows a workspace to those slices and hands back its previous answer
+ * until one of them moves. A streamed text frame changes only `threads`, which no list
+ * reads, so a list memoized on this answer holds still through a reply; memoized on the
+ * workspace it rebuilt, and redrew every row, on every frame.
+ */
+export function createListedState(): (state: ListedState) => ListedState {
+  let last: ListedState | null = null
+  return (state) => {
+    if (last !== null && LISTED_SLICES.every((slice) => last![slice] === state[slice])) return last
+    last = {
+      chats: state.chats, projects: state.projects, agents: state.agents, workHandoffs: state.workHandoffs,
+      activity: state.activity, subagents: state.subagents, backgroundChatIds: state.backgroundChatIds,
+      houseSettings: state.houseSettings, openChatId: state.openChatId, pendingChatId: state.pendingChatId,
+    }
+    return last
+  }
+}
 
 export interface SidebarProject {
   project: Project
@@ -313,7 +342,7 @@ export const isSettled = (chat: Chat): boolean =>
  * shared status, so a confirmed result the user did not stamp is settled here too, the way
  * the overview groups it; any other chat keeps its own stamp.
  */
-export function sitsSettled(state: WorkspaceShape, chat: Chat, live = sessionLiveOf(state)) {
+export function sitsSettled(state: Pick<ListedState, 'projects' | 'workHandoffs' | 'activity' | 'subagents' | 'backgroundChatIds'>, chat: Chat, live = sessionLiveOf(state)) {
   const handoff = handoffIndex(state).byWorkChat.get(chat.id)
   return handoff === undefined ? isSettled(chat) : sessionGroup(sessionStatus(handoff, chat, live(chat.id))) === 'settled'
 }
@@ -359,7 +388,7 @@ export const isArchiveExpired = (archivedAt: number, now: number, keepMs = ARCHI
  * and a run are left out: the first two never settle, and a run already has a
  * row under its routine.
  */
-export function inbox(state: WorkspaceShape, options: { hideThreadSessions?: boolean } = {}): Inbox {
+export function inbox(state: ListedState, options: { hideThreadSessions?: boolean } = {}): Inbox {
   const rooms = new Map(state.projects.map((project) => [project.id, project]))
   // A project thread has its own row above the list (2026-10-10). The sessions it
   // started stay out of the Mac's list, whose project row carries their state.
@@ -411,7 +440,7 @@ export function inbox(state: WorkspaceShape, options: { hideThreadSessions?: boo
  * card says what its Work card and overview row say, settled included. A plain chat, or
  * a closed Session no list shows, keeps the chat's own reading.
  */
-function listedStanding(state: WorkspaceShape, chat: Chat, activity: ChatActivity, live: (chatId: string) => SessionLive) {
+function listedStanding(state: Pick<ListedState, 'projects' | 'workHandoffs'>, chat: Chat, activity: ChatActivity, live: (chatId: string) => SessionLive) {
   const handoff = handoffIndex(state).byWorkChat.get(chat.id)
   const session = live(chat.id)
   const status = handoff === undefined ? 'closed' : sessionStatus(handoff, chat, session)
@@ -453,7 +482,7 @@ function handoffIndex(state: Pick<WorkspaceShape, 'projects' | 'workHandoffs'>):
 }
 
 /** Every project's curated thread (decided 2026-10-10), a hidden project's archived one included. */
-const threadChatIds = (state: WorkspaceShape): Set<string> =>
+const threadChatIds = (state: Pick<WorkspaceShape, 'projects'>): Set<string> =>
   new Set(state.projects.flatMap((project) => project.threadChatId === undefined ? [] : [project.threadChatId]))
 
 /** Whether this chat is a project's curated thread. */
@@ -709,7 +738,7 @@ export function projectsByRecentActivity(state: Pick<WorkspaceShape, 'projects' 
 }
 
 /** The Projects section, in the projects' own order; a thread whose chat is gone or archived is left out. */
-export function projectThreads(state: WorkspaceShape): ProjectThreadRow[] {
+export function projectThreads(state: ListedState): ProjectThreadRow[] {
   return state.projects.flatMap((project) => {
     const chat = project.threadChatId === undefined ? null : chatOf(state, project.threadChatId)
     if (chat === null || chat.archivedAt !== null) return []
@@ -766,7 +795,7 @@ export interface ChatListRow {
  * Project chats are deliberately absent: they live in a room and the inbox is where
  * the whole house is listed. This view is the messaging one.
  */
-export function chatList(state: WorkspaceShape): ChatListRow[] {
+export function chatList(state: ListedState): ChatListRow[] {
   const childAsks = subagentAskChats(state.subagents)
   const standing = (chat: Chat) => {
     const activity = activityOf(state, chat.id)
