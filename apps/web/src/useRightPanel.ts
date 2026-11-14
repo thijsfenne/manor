@@ -6,7 +6,7 @@ export const DOCK_PANEL_GAP = 8
 const KEY = 'manor:right-panel-by-chat'
 
 /** The panels the rail can put in the region beside the chat. */
-export type RightPanelId = 'agent' | 'memory' | 'agents' | 'files' | 'browser' | 'runs' | 'routines' | 'side' | 'knowledge' | 'diff'
+export type RightPanelId = 'agent' | 'memory' | 'agents' | 'files' | 'browser' | 'runs' | 'side' | 'knowledge' | 'diff'
 
 /** The rail shortcuts, kept pure so a key cannot quietly steal a native command. */
 export function rightPanelShortcut(
@@ -63,7 +63,7 @@ export const TILE_MIN_WIDTH = 300
 /** The shortest a panel may get when it shares its column with another. */
 export const TILE_MIN_HEIGHT = 160
 
-const isList = (id: RightPanelId) => id === 'runs' || id === 'routines'
+const isList = (id: RightPanelId) => id === 'runs'
 
 /**
  * The panel whose width a column wears: the first one holding anything to read, else
@@ -126,7 +126,7 @@ export interface ExpandedPanels {
 export function rightRegionWidth(panel: RightPanelId | null, sharedWidth: number, expanded: ExpandedPanels) {
   if (panel === null) return 0
   if (panel === 'agents') return AGENTS_PANEL_WIDTH
-  if (panel === 'runs' || panel === 'routines') return LIST_PANEL_WIDTH
+  if (panel === 'runs') return LIST_PANEL_WIDTH
   if ((panel === 'files' || panel === 'knowledge' || panel === 'browser') && expanded[panel]) return 0
   return sharedWidth
 }
@@ -206,7 +206,7 @@ export const MAX_RIGHT_PANELS = 4
 
 export const NO_PANELS: PanelLayout = []
 
-const PANEL_IDS: readonly RightPanelId[] = ['agent', 'memory', 'agents', 'files', 'browser', 'runs', 'routines', 'side', 'knowledge', 'diff']
+const PANEL_IDS: readonly RightPanelId[] = ['agent', 'memory', 'agents', 'files', 'browser', 'runs', 'side', 'knowledge', 'diff']
 const isPanelId = (value: string): value is RightPanelId => (PANEL_IDS as readonly string[]).includes(value)
 
 export const layoutHas = (layout: PanelLayout, id: RightPanelId) => layout.some((column) => column.includes(id))

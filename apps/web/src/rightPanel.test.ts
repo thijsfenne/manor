@@ -16,9 +16,14 @@ import {
 const none = { files: false, knowledge: false, browser: false }
 
 describe('the right panel slot', () => {
-  test('reads a stored routines choice back as itself', () => {
-    expect(storedPanels('routines')).toEqual({ open: true, layout: [['routines']] })
-    expect(storedPanels('none:routines')).toEqual({ open: false, layout: [['routines']] })
+  test('reads a stored runs choice back as itself', () => {
+    expect(storedPanels('runs')).toEqual({ open: true, layout: [['runs']] })
+    expect(storedPanels('none:runs')).toEqual({ open: false, layout: [['runs']] })
+  })
+
+  test('forgets a stored door that no longer exists', () => {
+    // A DM's Scheduled tasks moved into Agent settings (2026-11-14).
+    expect(storedPanels('routines')).toEqual({ open: true, layout: [['agents']] })
   })
 
   test('a first visit opens on the roster, or on nothing where the chat starts closed', () => {
@@ -42,8 +47,8 @@ describe('the right panel slot', () => {
     expect(toggledPanels(four, four.layout, 'diff', 'agents').layout).toEqual([['files', 'diff'], ['side', 'browser']])
   })
 
-  test('keeps routines on its fixed room and gives memory the shared one', () => {
-    expect(rightRegionWidth('routines', 500, none)).toBe(LIST_PANEL_WIDTH)
+  test('keeps runs on its fixed room and gives memory the shared one', () => {
+    expect(rightRegionWidth('runs', 500, none)).toBe(LIST_PANEL_WIDTH)
     expect(rightRegionWidth('memory', 500, none)).toBe(500)
   })
 })

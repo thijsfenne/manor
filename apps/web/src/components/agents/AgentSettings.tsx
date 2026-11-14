@@ -1,39 +1,31 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { Suspense, lazy, useEffect, useRef, useState, type ReactNode } from 'react'
 import {
-  AiMagicIcon,
   AiNetworkIcon,
   ArrowLeft01Icon,
   ArrowRight01Icon,
   Book02Icon,
+  BoxIcon,
   Cancel01Icon,
   Clock01Icon,
+  ConnectIcon,
   Delete02Icon,
   File01Icon,
-  LinkSquare02Icon,
   PencilEdit02Icon,
   UserGroupIcon,
 } from '@hugeicons/core-free-icons'
-import {
-  supportsFastMode,
-  type AgentConfig,
-  type AgentDraft,
-  type McpServerConfig,
-  type Routine,
-  type ServerMessage,
-  type SkillConfig,
-  type SubagentPolicy,
-} from '@manor/contracts'
+import type { AgentConfig, AgentDraft, ChatOverride, McpServerConfig, Routine, SkillConfig, SubagentPolicy } from '@manor/contracts'
 import { attachedServers } from '../../mcp'
-import { cosOf, fastFor, safeHex } from '../../persona'
+import { cosOf, safeHex } from '../../persona'
 import { describeSchedule } from '../../routines'
 import { PROVIDERS, defaultModel } from '../../runtimes'
 import { CHAT_LIST_PIN_LIMIT } from '../../state'
 import { useRequest, type RequestEvents } from '../../useRequest'
 import type { ConnectionStatus } from '../../useWorkspace'
+import { AgentMemoryView, type AgentMemoryTab, type AgentNotesLoad } from '../AgentMemory'
 import { Avatar } from '../Avatar'
 import { ConfirmStrip } from '../Confirm'
 import { Icon } from '../Icon'
-import { Markdown } from '../Markdown'
+import type { ChatRoutinesProps } from '../routines/ChatRoutines'
 import { formHintClass, formInputClass, formLabelClass } from '../ui/FormField'
 import { Button } from '../ui/Button'
 import { IconButton } from '../ui/IconButton'
@@ -47,21 +39,24 @@ import { SubagentsSection, type PersonaSubagents } from './SubagentsSection'
 import { sendAfter, useAgentAutosave, type SaveState } from './useAgentAutosave'
 import { subscribeAgentPage, takeAgentPage } from '../../agentSettingsIntent'
 
-type Page = 'root' | 'face' | 'instructions' | 'notes' | 'skills' | 'connections' | 'subagents' | 'routines' | 'access'
+const ChatRoutines = lazy(() => import('../routines/ChatRoutines').then((module) => ({ default: module.ChatRoutines })))
+
+type Page = 'root' | 'face' | 'instructions' | 'memory' | 'skills' | 'connections' | 'subagents' | 'routines' | 'access'
+
+/** The part of an agent a DM's pin stands in for. */
+const runtimeKey = (agent: Pick<AgentDraft, 'driver' | 'model' | 'effort' | 'speed'>) =>
+  [agent.driver, agent.model ?? '', agent.effort, agent.speed ?? ''].join('\0')
 
 const PAGE_TITLES: Record<Exclude<Page, 'root'>, string> = {
   face: 'Face',
   instructions: 'Instructions',
-  notes: 'Notes',
+  memory: 'Memory',
   skills: 'Skills',
-  connections: 'Connections',
+  connections: 'Connectors',
   subagents: 'Subagents',
-  routines: 'Routines',
+  routines: 'Scheduled tasks',
   access: 'Access',
 }
-
-type Notes = Extract<ServerMessage, { type: 'agent_notes' }>['notes']
-type NotesLoad = { kind: 'loading' } | { kind: 'error'; message: string } | { kind: 'ready'; notes: Notes }
 
 export interface AgentSettingsProps {
   agent: AgentConfig
@@ -79,6 +74,23 @@ export interface AgentSettingsProps {
   /** Asks the server for the house policy, which holds this agent's subagent narrowing. */
   onRequestSubagentPolicy: () => void
   onLoadNotes: (agentId: string, requestId: string) => boolean
+  /**
+   * The agent's DM, where the editor sits beside it: its compacted conversation is the
+   * Memory page's Summary and its tasks are the Scheduled tasks page. Absent in Settings,
+   * where the agent has no DM.
+   */
+  dm?: {
+    chatId: string
+    /**
+     * What an earlier pick or Auto left on this DM. The Model field shows the DM as it
+     * runs, pin included. A pick there is saved to the agent, and the pin is cleared once
+     * that save is stored, so the agent's own Model is what the DM runs on from then.
+     */
+    pin: ChatOverride
+    onClearPin: () => void
+    onLoadSummary: (chatId: string, requestId: string) => boolean
+    scheduled: Omit<ChatRoutinesProps, 'selectedId' | 'onSelect'>
+  }
   /** Absent where the host has its own way out, as Settings does. */
   onClose?: () => void
 }
@@ -89,8 +101,11 @@ export interface AgentSettingsProps {
  * The same editor in the DM's panel and in Settings → Agents, so key it on the agent.
  */
 export function AgentSettings(props: AgentSettingsProps) {
-  const { agent, agents, registry, skills, routines, subagentPolicy, status, requestEvents, onSaveAgent, onClose } = props
+  const { agent, agents, registry, skills, routines, subagentPolicy, status, requestEvents, onSaveAgent, onClose, dm } = props
   const [page, setPage] = useState<Page>('root')
+  const [memoryTab, setMemoryTab] = useState<AgentMemoryTab>('summary')
+  // The task open on the Scheduled tasks page; the back arrow leaves it before the page.
+  const [taskId, setTaskId] = useState<string | null>(null)
   // A memory-off agent's offered rule, shown on Instructions until the user adds or drops it.
   const [suggestion, setSuggestion] = useState<string | null>(null)
   // Bumped by each chat line's View, so the notes page reads the file as it is now.
@@ -100,7 +115,8 @@ export function AgentSettings(props: AgentSettingsProps) {
     const take = () => {
       const intent = takeAgentPage(agent.id)
       if (intent === null) return
-      setPage(intent.page)
+      setPage(intent.page === 'notes' ? 'memory' : intent.page)
+      if (intent.page === 'notes') setMemoryTab('notes')
       setSuggestion(intent.line ?? null)
       setNotesRead((count) => count + 1)
     }
@@ -110,38 +126,59 @@ export function AgentSettings(props: AgentSettingsProps) {
   const { onRequestSubagentPolicy } = props
   useEffect(() => onRequestSubagentPolicy(), [onRequestSubagentPolicy])
   const { draft, state, edit } = useAgentAutosave(agent, status, requestEvents, onSaveAgent)
+  // The runtime picked over the DM's pin, until the agent is stored with it and nothing
+  // else is on its way. Only then does the pin go: a save that is held or refused, or an
+  // earlier pick still being stored, leaves the DM on what it ran.
+  const pickedOverPin = useRef<string | null>(null)
+  const stored = runtimeKey(agent)
+  const clearPin = dm?.onClearPin
+  useEffect(() => {
+    if (pickedOverPin.current !== stored || state.kind !== 'saved') return
+    pickedOverPin.current = null
+    clearPin?.()
+    // Keyed on what is stored only; the pick is read as it stands when that changes.
+  }, [stored, state.kind])
   const notes = useAgentNotes(agent.id, draft.memoryScope, status, requestEvents, props.onLoadNotes, notesRead)
   const subagents = useSubagentsAutosave(agent.id, subagentPolicy, status, requestEvents, props.onSaveSubagentPolicy)
   const name = draft.name.trim() || agent.name
   const own = routines.filter((routine) => routine.agentId === agent.id)
+  const task = page === 'routines' && dm?.scheduled.routines.some((routine) => routine.id === taskId) === true ? taskId : null
 
   const header = page === 'root' ? (
     <PanelHeader onClose={onClose}>
       <span className="truncate text-text">Agent settings</span>
     </PanelHeader>
   ) : (
-    <PanelHeader onClose={onClose} onBack={() => setPage('root')}>
-      <span className="truncate text-dim">{name}</span>
-      <Icon icon={ArrowRight01Icon} size={11} />
+    <PanelHeader onClose={onClose} onBack={() => (task !== null ? setTaskId(null) : setPage(page === 'subagents' ? 'access' : 'root'))}>
       <span className="truncate text-text">{PAGE_TITLES[page]}</span>
     </PanelHeader>
   )
 
   let body: ReactNode
-  let footnote: string
+  let footnote: string | null
   switch (page) {
     case 'root':
-      footnote = 'Changes save as you make them.'
+      footnote = null
       body = (
         <RootPage
           draft={draft}
           agent={agent}
           registry={registry}
           notes={notes}
-          routineCount={own.length}
-          subagents={subagents.own}
+          taskCount={dm === undefined ? own.length : dm.scheduled.routines.length}
+          {...(dm === undefined || Object.keys(dm.pin).length === 0 ? {} : {
+            pin: dm.pin,
+            onPinPicked: (next: AgentDraft) => {
+              if (runtimeKey(next) === stored && state.kind === 'saved') dm.onClearPin()
+              else pickedOverPin.current = runtimeKey(next)
+            },
+          })}
           edit={edit}
-          open={setPage}
+          open={(next) => {
+            // Memory reads the notes file as it is now, the way its summary asks again on opening.
+            if (next === 'memory') setNotesRead((count) => count + 1)
+            setPage(next)
+          }}
           requestEvents={requestEvents}
           onDeleteAgent={props.onDeleteAgent}
         />
@@ -175,9 +212,22 @@ export function AgentSettings(props: AgentSettingsProps) {
         </>
       )
       break
-    case 'notes':
+    case 'memory':
       footnote = `Kept by ${name} from your chats. Facts about you go to your shared memory.`
-      body = <NotesPage name={name} memory={draft.memoryScope} notes={notes} />
+      body = (
+        <AgentMemoryView
+          chatId={dm?.chatId}
+          name={name}
+          memory={draft.memoryScope}
+          notes={notes}
+          tab={memoryTab}
+          status={status}
+          requestEvents={requestEvents}
+          onLoadSummary={dm?.onLoadSummary}
+          onTab={setMemoryTab}
+          onRefreshNotes={() => setNotesRead((count) => count + 1)}
+        />
+      )
       break
     case 'skills':
       footnote = `${name} loads a skill when the task asks for it.`
@@ -192,23 +242,34 @@ export function AgentSettings(props: AgentSettingsProps) {
       body = <SubagentsSection agentId={agent.id} driver={draft.driver} policy={subagentPolicy} own={subagents.own} onChange={subagents.change} />
       break
     case 'routines':
-      footnote = 'Routines also show on the Scheduled page.'
-      body = <RoutinesPage name={name} routines={own} />
+      footnote = 'These also show on the Scheduled tasks page.'
+      body = dm === undefined ? <RoutinesPage name={name} routines={own} /> : (
+        <Suspense fallback={null}>
+          <ChatRoutines {...dm.scheduled} selectedId={task} onSelect={setTaskId} />
+        </Suspense>
+      )
       break
     case 'access':
       footnote = 'Who this agent is to the rest of the house.'
-      body = <AccessPage draft={draft} agent={agent} agents={agents} edit={edit} />
+      body = <AccessPage draft={draft} agent={agent} agents={agents} subagents={subagents.own} edit={edit} onOpenSubagents={() => setPage('subagents')} />
       break
   }
 
+  const unsaved = state.kind === 'held' || state.kind === 'failed' ? state.text : null
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       {header}
-      <div className="flex min-h-0 flex-1 flex-col gap-3.5 overflow-y-auto px-4 pt-[18px] pb-5 [&>*]:shrink-0">{body}</div>
-      <div className="flex shrink-0 items-start gap-2 border-t border-line px-3 py-2 text-meta text-dim">
-        <span className="min-w-0 flex-1">{footnote}</span>
-        <SaveLine state={state} quiet={page !== 'root'} />
-      </div>
+      {/* Memory and a DM's tasks bring their own bar and scroll, edge to edge. */}
+      {page === 'memory' || (page === 'routines' && dm !== undefined)
+        ? <div className="flex min-h-0 flex-1 flex-col">{body}</div>
+        : <div className="flex min-h-0 flex-1 flex-col gap-3.5 overflow-y-auto px-4 pt-[18px] pb-5 [&>*]:shrink-0">{body}</div>}
+      {/* Saving is silent. The bar holds a page's own note, and a save that did not go through. */}
+      {footnote === null && unsaved === null ? null : (
+        <div className="flex shrink-0 items-start gap-2 border-t border-line px-3 py-2 text-meta text-dim">
+          <span className="min-w-0 flex-1">{footnote}</span>
+          {unsaved === null ? null : <span role="alert" className="min-w-0 max-w-[60%] text-right text-danger">{unsaved}</span>}
+        </div>
+      )}
     </div>
   )
 }
@@ -244,12 +305,6 @@ function PanelHeader({ onBack, onClose, children }: { onBack?: () => void; onClo
 }
 
 /** Saved stays implicit on a page; anything else is said wherever the user is. */
-function SaveLine({ state, quiet }: { state: SaveState; quiet: boolean }) {
-  if (state.kind === 'saved') return quiet ? null : <span role="status" className="flex-none">Saved</span>
-  if (state.kind === 'saving') return <span role="status" className="flex-none">Saving…</span>
-  return <span role="alert" className="min-w-0 max-w-[60%] text-right text-danger">{state.text}</span>
-}
-
 function Group({ title, children }: { title?: string; children: ReactNode }) {
   return (
     <div className="flex flex-col gap-1.5">
@@ -305,13 +360,15 @@ function SwitchRow({ label, hint, warn = false, checked, disabled = false, onCha
   )
 }
 
-function RootPage({ draft, agent, registry, notes, routineCount, subagents, edit, open, requestEvents, onDeleteAgent }: {
+function RootPage({ draft, agent, registry, notes, taskCount, pin, onPinPicked, edit, open, requestEvents, onDeleteAgent }: {
   draft: AgentDraft
+  /** The DM's pin, when it carries one, and what to do with a model picked over it. */
+  pin?: ChatOverride
+  onPinPicked?: (next: AgentDraft) => void
   agent: AgentConfig
   registry: McpServerConfig[]
-  notes: NotesLoad
-  routineCount: number
-  subagents: PersonaSubagents
+  notes: AgentNotesLoad
+  taskCount: number
   edit: ReturnType<typeof useAgentAutosave>['edit']
   open: (page: Page) => void
   requestEvents: RequestEvents
@@ -357,10 +414,14 @@ function RootPage({ draft, agent, registry, notes, routineCount, subagents, edit
         <input className={formInputClass} value={draft.name} onChange={(event) => edit({ name: event.target.value }, true)} />
       </label>
       <label className="flex flex-col gap-1.5">
+        <span className={formLabelClass}>Title</span>
+        <input className={formInputClass} value={draft.role} placeholder="Assistant" onChange={(event) => edit({ role: event.target.value }, true)} />
+      </label>
+      <label className="flex flex-col gap-1.5">
         <span className={formLabelClass}>What does {name} help with?</span>
         <textarea
-          className={`${formInputClass} resize-none leading-relaxed`}
-          rows={2}
+          className={`${formInputClass} min-h-[64px] resize-y leading-relaxed`}
+          rows={4}
           value={draft.description}
           onChange={(event) => edit({ description: event.target.value }, true)}
         />
@@ -375,30 +436,24 @@ function RootPage({ draft, agent, registry, notes, routineCount, subagents, edit
           providers={providers}
           disabled={false}
           opens="down"
-          onChange={(next) => edit({ ...next, speed: fastFor(next.driver, next.model, next.speed) })}
+          {...(pin === undefined ? {} : { pin })}
+          // Named so that switching Fast mode off clears it: a patch only changes the keys it has.
+          onChange={(next) => {
+            edit({ ...next, speed: next.speed })
+            onPinPicked?.(next)
+          }}
         />
       </div>
-      <Group>
-        {supportsFastMode(draft.driver, draft.model) ? (
-          <SwitchRow
-            label="Fast mode"
-            hint="Answers sooner, at a higher cost per turn."
-            checked={draft.speed === 'fast'}
-            onChange={(fast) => edit(fast ? { speed: 'fast' } : { speed: undefined })}
-          />
-        ) : null}
-        <Row icon={AiNetworkIcon} label="Subagents" value={subagents === undefined ? 'As in Settings' : 'Narrowed'} onClick={() => open('subagents')} />
-      </Group>
 
       <Group title="Knows">
         <Row icon={File01Icon} label="Instructions" value={`${lines} ${lines === 1 ? 'line' : 'lines'}`} onClick={() => open('instructions')} />
-        <Row icon={Book02Icon} label="Notes" value={notesValue(draft.memoryScope, notes)} onClick={() => open('notes')} />
-        <Row icon={AiMagicIcon} label="Skills" value={`${draft.skillIds?.length ?? 0} on`} onClick={() => open('skills')} />
-        <Row icon={LinkSquare02Icon} label="Connections" value={`${attachedServers(draft, registry).length} on`} onClick={() => open('connections')} />
+        <Row icon={Book02Icon} label="Memory" value={notesValue(draft.memoryScope, notes)} onClick={() => open('memory')} />
+        <Row icon={BoxIcon} label="Skills" value={`${draft.skillIds?.length ?? 0} on`} onClick={() => open('skills')} />
+        <Row icon={ConnectIcon} label="Connectors" value={`${attachedServers(draft, registry).length} on`} onClick={() => open('connections')} />
       </Group>
 
       <Group title="Does">
-        <Row icon={Clock01Icon} label="Routines" value={routineCount === 0 ? 'None yet' : `${routineCount}`} onClick={() => open('routines')} />
+        <Row icon={Clock01Icon} label="Scheduled tasks" value={taskCount === 0 ? 'None yet' : `${taskCount}`} onClick={() => open('routines')} />
         <Row icon={UserGroupIcon} label="Access" value={access} onClick={() => open('access')} />
       </Group>
 
@@ -421,7 +476,7 @@ function RootPage({ draft, agent, registry, notes, routineCount, subagents, edit
   )
 }
 
-function notesValue(memory: boolean, load: NotesLoad): string {
+function notesValue(memory: boolean, load: AgentNotesLoad): string {
   if (!memory) return 'Memory off'
   if (load.kind !== 'ready') return ''
   if (load.notes === undefined || load.notes.content.trim() === '') return 'Empty'
@@ -429,28 +484,11 @@ function notesValue(memory: boolean, load: NotesLoad): string {
   return `${words} ${words === 1 ? 'word' : 'words'}`
 }
 
-function NotesPage({ name, memory, notes }: { name: string; memory: boolean; notes: NotesLoad }) {
-  if (!memory) {
-    return <p className="m-0 text-[14px] text-dim">Memory is off, so {name} keeps no notes. Turn memory on under Access, or put lasting rules in the instructions.</p>
-  }
-  if (notes.kind === 'loading') return <p role="status" className="m-0 text-[14px] text-dim">Loading notes…</p>
-  if (notes.kind === 'error') return <p role="alert" className="m-0 text-[14px] text-danger">{notes.message}</p>
-  if (notes.notes === undefined || notes.notes.content.trim() === '') {
-    return <p className="m-0 text-[14px] text-dim">{name} has no notes yet. When you tell it how you want it to work, it writes that here.</p>
-  }
-  return (
-    <article className="text-label leading-[1.6] text-text">
-      <Markdown text={notes.notes.content} variant="panel" />
-      {notes.notes.truncated ? <p className="mt-3 mb-0 text-meta text-dim">Over the cap, the rest is only in the file.</p> : null}
-    </article>
-  )
-}
-
 function RoutinesPage({ name, routines }: { name: string; routines: Routine[] }) {
   if (routines.length === 0) {
     return (
       <p className="m-0 text-[14px] text-dim">
-        No routines yet. Ask {name} in the chat to do something on a schedule, for example "every Friday at 16:00, draft the weekly status".
+        No scheduled tasks yet. Ask {name} in the chat to do something on a schedule, for example "every Friday at 16:00, draft the weekly status".
       </p>
     )
   }
@@ -466,10 +504,12 @@ function RoutinesPage({ name, routines }: { name: string; routines: Routine[] })
   )
 }
 
-function AccessPage({ draft, agent, agents, edit }: {
+function AccessPage({ draft, agent, agents, subagents, edit, onOpenSubagents }: {
   draft: AgentDraft
   agent: AgentConfig
   agents: AgentConfig[]
+  subagents: PersonaSubagents
+  onOpenSubagents: () => void
   edit: ReturnType<typeof useAgentAutosave>['edit']
 }) {
   const session = draft.placement === 'session'
@@ -540,6 +580,9 @@ function AccessPage({ draft, agent, agents, edit }: {
           <span className={formHintClass}>Private messages are not restricted.</span>
         </div>
       )}
+      <Group>
+        <Row icon={AiNetworkIcon} label="Subagents" value={subagents === undefined ? 'As in Settings' : 'Narrowed'} onClick={onOpenSubagents} />
+      </Group>
     </>
   )
 }
@@ -553,8 +596,8 @@ function useAgentNotes(
   onLoad: (agentId: string, requestId: string) => boolean,
   /** A change reads the notes again. */
   read: number,
-): NotesLoad {
-  const [load, setLoad] = useState<NotesLoad>({ kind: 'loading' })
+): AgentNotesLoad {
+  const [load, setLoad] = useState<AgentNotesLoad>({ kind: 'loading' })
   useEffect(() => {
     if (!memory) return
     if (status !== 'live') {

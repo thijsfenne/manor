@@ -1230,7 +1230,9 @@ export function createSqliteStore(options: SqliteStoreOptions): Store & {
         // Both values are stored, because absent now means Auto is on: dropping a
         // `false` would turn one chat's opt-out back into the default on next read.
         ...(override.auto === undefined ? {} : { auto: override.auto }),
-        ...(override.autoResolved === true || pins.get(key)?.autoResolved === true ? { autoResolved: true } : {}),
+        // A DM is the exception: Auto never claims it, and an empty pin there is the
+        // user handing the chat back to its agent's own Model, so nothing is kept.
+        ...(override.autoResolved === true || (chats.get(chatId)!.kind !== 'dm' && pins.get(key)?.autoResolved === true) ? { autoResolved: true } : {}),
       }
       // Nothing left in it is the delete the `chat_overrides_not_empty` check forces.
       if (pin.driver === undefined &&

@@ -405,6 +405,13 @@ describe('persistent SQLite store', () => {
     await reopened.setChatOverride(chat.id, sage.id, { auto: true })
     expect((await reopened.loadChatOverrides(chat.id))[sage.id]).toEqual({ auto: true, autoResolved: true })
   })
+  it('drops a DM pin whole when it is cleared, the Auto lock included', async () => {
+    const { store } = fixture()
+    const dm = await store.createChat({ kind: 'dm', memberIds: [sage.id], title: 'Sage' })
+    await store.setChatOverride(dm.id, sage.id, { auto: true, autoResolved: true, model: 'claude-sonnet-5', effort: 'low' })
+    await store.setChatOverride(dm.id, sage.id, {})
+    expect(await store.loadChatOverrides(dm.id)).toEqual({})
+  })
   it('migrates old chats to house mode without changing their transcript', async () => {
     const { store, filename } = fixture()
     const chat = (await store.listChats())[0]!

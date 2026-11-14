@@ -2,7 +2,7 @@ import { CURRENT_CHECKOUT, type AgentConfig, type Chat, type Project, type Routi
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import type { ComponentProps, ReactNode } from 'react'
-import { ChatRoutinesPanel, RunHistory } from '../src/components/routines/ChatRoutinesPanel'
+import { ChatRoutines, RunHistory } from '../src/components/routines/ChatRoutines'
 import { RoutineDetail, runDate } from '../src/components/routines/RoutineDetailView'
 import { RoutineRunsPanel } from '../src/components/routines/RoutineRunsPanel'
 import { RoutinesView, foldEarlierFor } from '../src/components/routines/RoutinesView'
@@ -342,7 +342,7 @@ describe('routine management surfaces', () => {
     const now = Date.now()
     const once = { ...routine, projectId: null, chatId: 'dm-smith', cron: '', nextRunAt: null, lastRunAt: null }
     const panel = (routines: Routine[]) => renderToStaticMarkup(
-      <ChatRoutinesPanel
+      <ChatRoutines
         chatId="dm-smith"
         agentId="smith"
         routines={routines}
@@ -360,7 +360,8 @@ describe('routine management surfaces', () => {
         onRunNow={() => true}
         onDismissNotice={() => {}}
         onDialogChange={() => {}}
-        onClose={() => {}}
+        selectedId={null}
+        onSelect={() => {}}
       />,
     )
     const recurring = { ...routine, chatId: 'dm-smith', projectId: null }
@@ -370,7 +371,7 @@ describe('routine management surfaces', () => {
     // Unpicked, the panel opens on Recurring even while one-time tasks exist.
     const html = panel([recurring, tea, call])
     expect(html).toMatch(/aria-selected="true"[^>]*>(?:(?!<\/button>).)*Recurring/)
-    const order = ['>Scheduled tasks<', '>Recurring<', '>Once<', recurring.name]
+    const order = ['>Recurring<', '>Once<', recurring.name]
     const at = order.map((text) => html.indexOf(text))
     expect(at.every((index) => index >= 0)).toBe(true)
     expect(at).toEqual([...at].sort((a, b) => a - b))

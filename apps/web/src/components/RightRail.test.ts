@@ -14,11 +14,10 @@ describe('chatRailItems', () => {
   it('keeps every door in a plain Single chat', () => {
     expect(ids(false)).toEqual(['agents', 'side', 'files', 'knowledge', 'browser'])
   })
-  it('draws Files as a folder and both Context and DM Agent memory as pages', () => {
+  it('draws Files as a folder and Context as pages', () => {
     const icon = (kind: Chat['kind'], id: string) => chatRailItems({ kind } as Chat, { ...options, projectThread: true }).find((item) => item.id === id)?.icon
     expect(icon('group', 'files')).toBe(Folder01Icon)
     expect(icon('group', 'memory')).toBe(Files01Icon)
-    expect(icon('dm', 'memory')).toBe(Files01Icon)
   })
   describe('the Session panel door for subagents', () => {
     const bare = { ...options, hasProject: false, canBrowseFiles: false, hasVault: false, hasBrowser: false, hasRoster: false, hasRepo: false }
@@ -49,7 +48,14 @@ describe('chatRailItems', () => {
     it('is false in a DM, whatever else its rail offers', () => {
       expect(offers('dm')).toBe(false)
       expect(offers('dm', { hasProject: false, hasVault: false, hasBrowser: false })).toBe(false)
-      expect(chatRailItems({ kind: 'dm' } as Chat, options).map((item) => item.id)).toEqual(['routines', 'files', 'knowledge', 'browser', 'memory', 'agent'])
+      expect(chatRailItems({ kind: 'dm' } as Chat, options).map((item) => item.id)).toEqual(['files', 'knowledge', 'browser', 'agent'])
+    })
+    it('gives a DM one door for its agent: memory and scheduled tasks are pages of Agent settings', () => {
+      const dm = chatRailItems({ kind: 'dm' } as Chat, options).map((item) => item.label)
+      expect(dm).toContain('Agent settings')
+      expect(dm).not.toContain('Agent memory')
+      expect(dm).not.toContain('Scheduled tasks')
+      expect(chatRailItems({ kind: 'dm' } as Chat, { ...options, phone: true }).map((item) => item.id)).toEqual(['agent'])
     })
     it('is false in a project thread, a project Session, a pair chat and on the phone', () => {
       expect(offers('group', { projectThread: true })).toBe(false)

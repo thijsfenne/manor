@@ -700,7 +700,9 @@ function ChatContent({ chatId }: { chatId: string | undefined }) {
    * keeps saying where it lives, because there the project is the identity.
    */
   const dmAgent = chat?.kind === 'dm' ? roster[0] : undefined
-  const dmOverride = dmAgent === undefined ? {} : thread.overrides[dmAgent.id] ?? {}
+  // Auto never claims a DM (the server skips it), so its pin reads as Auto off: the
+  // labels and the sheet then name the model the agent runs on.
+  const dmOverride = { ...(dmAgent === undefined ? undefined : thread.overrides[dmAgent.id]), auto: false }
   // A Single Session names its runtime instead of its project (2026-11-12), so a model
   // change shows where the eye already is. A Multiple Session has no one runtime.
   const singleDefault = defaultSingleRuntime(workspace.agents)
@@ -1099,7 +1101,7 @@ function ChatContent({ chatId }: { chatId: string | undefined }) {
           open={sheet === 'model'}
           agent={dmAgent}
           override={dmOverride}
-          allowAuto={!startedAgentIds.includes(dmAgent.id) && dmOverride.autoResolved !== true}
+          allowAuto={false}
           disabled={status !== 'live'}
           onChange={(override) => setChatOverride(chatId, dmAgent.id, override)}
           onClose={() => setSheet(null)}

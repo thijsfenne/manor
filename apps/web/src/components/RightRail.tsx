@@ -43,7 +43,6 @@ const ACTIVE_ICON: Record<RightPanelId, RailItem['icon']> = {
   agent: Settings01SolidIcon,
   runs: Clock01SolidIcon,
   agents: SessionListSolidIcon,
-  routines: Clock01SolidIcon,
   side: BubbleChatQuestionSolidIcon,
   files: Folder01SolidIcon,
   knowledge: BookOpen01SolidIcon,
@@ -94,7 +93,8 @@ export function chatRailItems(
   }
   const memory: RailItem[] =
     chat.kind === 'dm'
-      ? [{ id: 'memory', label: 'Agent memory', icon: Files01Icon }, { id: 'agent', label: 'Agent settings', icon: Settings01Icon }]
+      // One door: the agent's memory and scheduled tasks are pages of its settings.
+      ? [{ id: 'agent', label: 'Agent settings', icon: Settings01Icon }]
       : !options.hasProject || (options.singleChat && options.projectThread !== true)
         ? []
         : [{ id: 'memory', label: 'Context', icon: Files01Icon }]
@@ -111,7 +111,6 @@ export function chatRailItems(
         // The whole Session (roster, branch, repository, editor).
         ? [{ id: 'agents' as const, label: 'Session', icon: SessionListIcon, ...busy }]
         : options.singleChat && !hasHelpers ? [] : [{ id: 'agents' as const, label: 'Agents', icon: SessionListIcon, ...busy }]),
-    ...(chat.kind === 'dm' ? [{ id: 'routines' as const, label: 'Scheduled tasks', icon: Clock01Icon }] : []),
     ...(projectThread || !chatKindOffersSideChat(chat.kind) ? [] : [{ id: 'side' as const, label: 'Side chat', icon: BubbleChatQuestionIcon }]),
     ...(options.canBrowseFiles ? [{ id: 'files' as const, label: 'Files', icon: Folder01Icon }] : []),
     ...(options.hasVault && !projectThread ? [{ id: 'knowledge' as const, label: 'Knowledge', icon: BookOpen01Icon }] : []),

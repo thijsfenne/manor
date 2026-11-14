@@ -142,10 +142,10 @@ export function RuntimeMenu({
         open={open}
         className={
           layout === 'split'
-            ? `absolute bottom-[calc(100%+8px)] left-0 z-[6] overflow-hidden rounded-xl border border-line surface-floating ${
+            ? `absolute bottom-[calc(100%+8px)] left-0 z-[6] ${SPLIT_PICKER_SHELL} ${
                 compact
                   ? 'w-[min(360px,calc(var(--side-width)-36px),calc(100vw-48px))]'
-                  : 'w-[360px] max-w-[calc(100vw-24px)]'
+                  : SPLIT_PICKER_WIDTH
               }`
             : 'absolute bottom-[calc(100%+8px)] left-0 z-[6] w-[236px] rounded-xl border border-line surface-floating p-1.5'
         }
@@ -166,6 +166,10 @@ export function RuntimeMenu({
     </div>
   )
 }
+
+/** The split picker's card and its width, shared with the Model field of Agent settings. */
+export const SPLIT_PICKER_SHELL = 'overflow-hidden rounded-xl border border-line surface-floating'
+export const SPLIT_PICKER_WIDTH = 'w-[360px] max-w-[calc(100vw-24px)]'
 
 /**
  * The Provider, Model and Reasoning sections of one persona's choice, with Fast mode as a toggle
@@ -190,6 +194,7 @@ export function RuntimeSections({
   allowSpeed = true,
   allowAuto = true,
   effortDefault = agent.effort,
+  marksDefault = true,
 }: {
   agent: AgentConfig
   override: ChatOverride
@@ -201,6 +206,8 @@ export function RuntimeSections({
   allowSpeed?: boolean
   allowAuto?: boolean
   effortDefault?: AgentConfig['effort']
+  /** False where the pick is the agent's own setting: nothing is a pin, so no Default mark and no reset. */
+  marksDefault?: boolean
 }) {
   const hostAuto = useHostAuto()
   const driver = effectiveDriver(agent, override)
@@ -221,8 +228,8 @@ export function RuntimeSections({
     .filter((option) => allowedDrivers === undefined || allowedDrivers.includes(option.value))
     .map((option) => ({
       value: option.value,
-      label: `${option.label}${option.value === agent.driver ? ', Default' : ''}`,
-      title: `${option.label}${option.value === agent.driver ? ' · Default' : ''}`,
+      label: `${option.label}${marksDefault && option.value === agent.driver ? ', Default' : ''}`,
+      title: `${option.label}${marksDefault && option.value === agent.driver ? ' · Default' : ''}`,
       symbol: <ProviderMark driver={option.value} size={18} />,
     }))
 
@@ -260,6 +267,7 @@ export function RuntimeSections({
               // Under a pinned provider her own model belongs to the other CLI, so
               // nothing here is her default and the provider row above is the way back.
               isDefault={
+                marksDefault &&
                 pinnedDriver(agent, override) === undefined &&
                 row.value === (agent.model ?? defaultModel(agent.driver))
               }
@@ -271,7 +279,7 @@ export function RuntimeSections({
       <div aria-hidden="true" className="invisible col-start-1 row-start-1">
         {modelHeading}
         {Array.from({ length: tallestModelList }, (_, index) => (
-          <MenuRow key={index} label={'\u00a0'} size="lg" selected={false} isDefault={index === 0} onSelect={() => {}} />
+          <MenuRow key={index} label={'\u00a0'} size="lg" selected={false} isDefault={marksDefault && index === 0} onSelect={() => {}} />
         ))}
       </div>
     </div>
@@ -296,14 +304,16 @@ export function RuntimeSections({
         <span className="text-center text-label font-medium text-text">
           {effortOptions.find((option) => option.value === effort)?.label}
         </span>
-        <IconButton
-          icon={RefreshIcon}
-          iconSize={14}
-          size={24}
-          label="Reset reasoning to default"
-          disabled={effort === defaultEffort}
-          onClick={() => onChange(withEffort(agent, override, effortDefault))}
-        />
+        {marksDefault ? (
+          <IconButton
+            icon={RefreshIcon}
+            iconSize={14}
+            size={24}
+            label="Reset reasoning to default"
+            disabled={effort === defaultEffort}
+            onClick={() => onChange(withEffort(agent, override, effortDefault))}
+          />
+        ) : <span aria-hidden="true" />}
       </div>
       <SteppedSlider
         label="Reasoning effort"

@@ -1,4 +1,5 @@
-import { useLayoutEffect, useRef, type RefObject } from 'react'
+import { useLayoutEffect, useRef, useState, type RefObject } from 'react'
+import { flushSync } from 'react-dom'
 import { animate, useReducedMotion } from 'motion/react'
 import { COMPOSER_GROW } from '../motion'
 
@@ -142,4 +143,114 @@ export function useComposerCardHeight(card: RefObject<HTMLDivElement | null>, ma
   }, [card, max, draftKey, reduceMotion])
 
   useLayoutEffect(() => () => easingMax.current?.stop(), [])
+}
+
+/** The one-row card at rest: the round controls with the card's padding around them. */
+const COMPOSER_ROW_HEIGHT = 48
+
+/**
+ * Whether a one-row composer stands in its row: plus, text and send on one line, the
+ * way a DM's composer rests. It stacks into the usual card, text above its controls,
+ * once the draft is more than one plain line (`plain` false, or the line wrapped), and
+ * stays stacked until the draft is `blank`: the stacked text is wider, so a draft that
+ * fell back at once would land in the row it just outgrew. The switch eases the card's
+ * height on the clock the draft grows by.
+ *
+ * Needs the card's `[data-composer-scroller]` and `[data-composer-editor]`. Owns the
+ * card's inline min-height (`rest` while stacked, 0 for none), and its height and
+ * overflow while it eases.
+ */
+export function useComposerRow(card: RefObject<HTMLDivElement | null>, enabled: boolean, plain: boolean, blank: boolean, rest: number, draftKey: string | undefined): boolean {
+  const reduceMotion = useReducedMotion() === true
+  const [stacked, setStacked] = useState(!plain)
+  const [stackedKey, setStackedKey] = useState(draftKey)
+  if (stackedKey !== draftKey) {
+    setStackedKey(draftKey)
+    setStacked(!plain)
+  } else if (stacked ? blank && plain : !plain) setStacked(!stacked)
+  const row = enabled && plain && !stacked
+
+  useLayoutEffect(() => {
+    if (!row) return
+    const editor = card.current?.querySelector('[data-composer-editor]')
+    if (editor == null) return
+    const observer = new ResizeObserver(() => {
+      const style = getComputedStyle(editor)
+      const line = parseFloat(style.lineHeight)
+      const oneLine = line + parseFloat(style.paddingTop) + parseFloat(style.paddingBottom)
+      // Before the frame paints, so the row never shows with two lines in it.
+      if (editor.getBoundingClientRect().height > oneLine + line / 2) flushSync(() => setStacked(true))
+    })
+    observer.observe(editor)
+    return () => observer.disconnect()
+  }, [card, row, draftKey])
+
+  // The height that last showed, which is where a switch eases from.
+  const shown = useRef<number | null>(null)
+  useLayoutEffect(() => {
+    const box = card.current
+    if (box === null || !enabled) return
+    const observer = new ResizeObserver(() => {
+      shown.current = box.getBoundingClientRect().height
+    })
+    observer.observe(box)
+    return () => observer.disconnect()
+  }, [card, enabled])
+
+  const stood = useRef({ row, draftKey })
+  const easing = useRef<{ stop: () => void } | null>(null)
+  useLayoutEffect(() => {
+    const box = card.current
+    // Opening another draft is not a switch of this one, and never animates.
+    const switched = stood.current.row !== row && stood.current.draftKey === draftKey
+    stood.current = { row, draftKey }
+    if (box === null || !enabled) return
+    const min = row ? COMPOSER_ROW_HEIGHT : rest
+    const settle = () => {
+      easing.current?.stop()
+      easing.current = null
+      box.style.height = ''
+      box.style.overflow = ''
+      box.style.minHeight = min > 0 ? `${min}px` : ''
+    }
+    settle()
+    const from = shown.current
+    const scroller = box.querySelector<HTMLElement>('[data-composer-scroller]')
+    const editor = scroller?.querySelector('[data-composer-editor]')
+    if (!switched || reduceMotion || from === null || scroller == null || editor == null) return
+    // The draft's box goes straight to the text it holds, so the card is measured at the
+    // height it will keep and eases there as one move.
+    scroller.style.height = `${editor.getBoundingClientRect().height}px`
+    const to = box.getBoundingClientRect().height
+    if (Math.abs(to - from) < 0.5) return
+    // The height alone leads while it eases: the min would hold the card at its end
+    // height, and the stacked controls do not fit the row's height it starts from.
+    box.style.minHeight = '0'
+    box.style.height = `${from}px`
+    box.style.overflow = 'hidden'
+    const controls = animate(from, to, {
+      ...COMPOSER_GROW,
+      onUpdate: (height) => {
+        box.style.height = `${height}px`
+      },
+      onComplete: settle,
+    })
+    easing.current = { stop: () => controls.stop() }
+  }, [card, enabled, row, rest, draftKey, reduceMotion])
+
+  // Lets go of everything it set once the card stops being a one-row card, as when the
+  // window narrows to touch width, and when it unmounts.
+  useLayoutEffect(() => {
+    const box = card.current
+    if (box === null || !enabled) return
+    return () => {
+      easing.current?.stop()
+      easing.current = null
+      box.style.height = ''
+      box.style.overflow = ''
+      box.style.minHeight = ''
+    }
+  }, [card, enabled])
+
+  return row
 }

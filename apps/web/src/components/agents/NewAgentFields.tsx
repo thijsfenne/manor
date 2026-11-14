@@ -1,21 +1,20 @@
 import { useRef, useState } from 'react'
 import { ArrowDown01Icon, ColorPickerIcon } from '@hugeicons/core-free-icons'
-import type { AgentDraft } from '@manor/contracts'
+import type { AgentConfig, AgentDraft, ChatOverride } from '@manor/contracts'
 import { BLOB_SHAPES, blobShapeOf } from '../../blobShapes'
 import { personaColorChoices, safeHex } from '../../persona'
-import { MODELS, PROVIDERS, effortsFor } from '../../runtimes'
+import { activeEffort, activeModel, activeSpeed, effectiveDriver, runtimeParts } from '../../runtimeChoices'
 import { Avatar } from '../Avatar'
 import { Icon } from '../Icon'
 import { ProviderMark } from '../ProviderMark'
-import { MenuRow } from '../RuntimeMenu'
+import { RuntimeLabel } from '../RuntimeLabel'
+import { RuntimeSections, SPLIT_PICKER_SHELL, SPLIT_PICKER_WIDTH } from '../RuntimeMenu'
 import { FormField, formFieldClass, formInputClass, formLabelClass } from '../ui/FormField'
 import { Popover } from '../ui/Popover'
-import { SegmentedControl } from '../ui/SegmentedControl'
-import { SteppedSlider } from '../ui/SteppedSlider'
 import { useDismiss } from '../ui/useDismiss'
-import { withRuntime } from './newAgent'
 
 type Driver = AgentDraft['driver']
+const NO_PIN: ChatOverride = {}
 
 const tileClass = 'grid cursor-pointer place-items-center rounded-full border p-0 leading-none outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary'
 const pickedClass = 'border-[var(--color-text)]'
@@ -108,31 +107,42 @@ export function NewAgentFields({ draft, providers, disabled = false, onChange }:
 }
 
 /**
- * Provider, model and effort as one field: a row naming the pick, opening a card with
- * the providers as a rail, that provider's models and an effort slider. The card opens
- * above the row at a dialog's foot and below it near a panel's top.
+ * Provider, model, effort and Fast mode as one field: a row naming the pick, opening the
+ * composer's own picker. There the picker pins a chat; here the pick is the agent's own
+ * setting, so nothing in it is marked Default. The card opens above the row at a
+ * dialog's foot and below it near a panel's top.
  */
-export function ModelField({ draft, providers, disabled, opens = 'up', onChange }: {
+export function ModelField({ draft, providers, disabled, opens = 'up', pin = NO_PIN, onChange }: {
   draft: AgentDraft
   providers: readonly Driver[]
   disabled: boolean
   opens?: 'up' | 'down'
+  /**
+   * A pin the agent's DM still carries. The field then names what the DM runs, and a
+   * pick is the whole runtime it shows, for the caller to save and clear the pin with.
+   */
+  pin?: ChatOverride
   onChange: (draft: AgentDraft) => void
 }) {
   const rootRef = useRef<HTMLDivElement>(null)
   const triggerRef = useRef<HTMLButtonElement>(null)
   const [open, setOpen] = useState(false)
   useDismiss(open, () => setOpen(false), { within: [rootRef] })
-  const models = MODELS[draft.driver]
-  const modelLabel = models.find((option) => option.value === draft.model)?.label ?? draft.model ?? 'No model'
-  const efforts = effortsFor(draft.driver, draft.model)
-  const effortLabel = efforts.find((option) => option.value === draft.effort)?.label
-  const providerOptions = PROVIDERS.filter((option) => providers.includes(option.value)).map((option) => ({
-    value: option.value,
-    label: option.label,
-    title: option.label,
-    symbol: <ProviderMark driver={option.value} size={18} />,
-  }))
+  const voice: AgentConfig = { ...draft, id: draft.id ?? '', allowedTools: [] }
+  const parts = runtimeParts(voice, pin, false)
+
+  const pick = (next: ChatOverride) => {
+    const { model: _model, speed: _speed, ...rest } = draft
+    const driver = effectiveDriver(voice, next)
+    const model = activeModel(voice, next)
+    onChange({
+      ...rest,
+      driver,
+      ...(model === undefined ? {} : { model }),
+      effort: activeEffort(voice, next),
+      ...(activeSpeed(voice, next) === 'fast' ? { speed: 'fast' as const } : {}),
+    })
+  }
 
   return (
     <div
@@ -160,58 +170,31 @@ export function ModelField({ draft, providers, disabled, opens = 'up', onChange 
         className={`${formInputClass} flex cursor-pointer items-center gap-2 text-left disabled:cursor-default disabled:opacity-45`}
         aria-haspopup="menu"
         aria-expanded={open}
-        aria-label={`Model, ${modelLabel}${effortLabel === undefined ? '' : ` ${effortLabel}`}`}
+        aria-label={`Model, ${[parts.model, parts.effort, parts.speed].filter((part) => part !== undefined && part !== '').join(' ')}`}
         disabled={disabled}
         onClick={() => setOpen((current) => !current)}
       >
         <span className="flex-1 text-muted">Model</span>
-        <ProviderMark driver={draft.driver} size={13} />
-        <span className="truncate text-text">{modelLabel}</span>
-        {effortLabel === undefined ? null : <span className="flex-none text-muted">{effortLabel}</span>}
+        <ProviderMark driver={effectiveDriver(voice, pin)} size={13} />
+        <RuntimeLabel {...parts} />
         <Icon icon={ArrowDown01Icon} size={12} />
       </button>
       <Popover
         open={open}
-        origin={opens === 'up' ? 'bottom' : 'top'}
-        className={`absolute inset-x-0 ${opens === 'up' ? 'bottom-[calc(100%+8px)]' : 'top-[calc(100%+8px)]'} z-10 overflow-hidden rounded-xl border border-line surface-floating`}
+        origin={opens === 'up' ? 'bottom-right' : 'top-right'}
+        className={`absolute right-0 ${opens === 'up' ? 'bottom-[calc(100%+8px)]' : 'top-[calc(100%+8px)]'} z-10 ${SPLIT_PICKER_SHELL} ${SPLIT_PICKER_WIDTH} max-w-full`}
         role="menu"
         aria-label="Model"
       >
-        <div className="grid grid-cols-[52px_minmax(0,1fr)]">
-          <div className="border-r border-line p-1.5">
-            <SegmentedControl
-              label="Provider"
-              options={providerOptions}
-              value={draft.driver}
-              variant="symbols"
-              floating
-              orientation="vertical"
-              onChange={(driver) => onChange(withRuntime(draft, driver))}
-            />
-          </div>
-          <div className="min-w-0 p-1.5">
-            <p className="m-0 px-2 pt-1.5 pb-0.5 text-meta font-medium text-dim">{PROVIDERS.find((option) => option.value === draft.driver)?.label}</p>
-            {models.map((option) => (
-              <MenuRow
-                key={option.value}
-                label={option.label}
-                size="lg"
-                selected={option.value === draft.model}
-                isDefault={false}
-                onSelect={() => onChange(withRuntime(draft, draft.driver, option.value))}
-              />
-            ))}
-          </div>
-        </div>
-        {efforts.length === 0 ? null : (
-          <div className="border-t border-line px-3 pt-2 pb-1">
-            <div className="flex items-center justify-between text-label">
-              <span className="text-muted">Effort</span>
-              <span className="font-medium text-text">{effortLabel}</span>
-            </div>
-            <SteppedSlider label="Reasoning effort" options={efforts} value={draft.effort} onChange={(effort) => onChange({ ...draft, effort })} />
-          </div>
-        )}
+        <RuntimeSections
+          agent={voice}
+          override={pin}
+          allowedDrivers={providers}
+          layout="split"
+          allowAuto={false}
+          marksDefault={false}
+          onChange={pick}
+        />
       </Popover>
     </div>
   )

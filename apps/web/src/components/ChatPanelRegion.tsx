@@ -21,7 +21,6 @@ import { chatHasRepo, sessionHandoffKey, waitingGoal } from '../sessionRepo'
 import type { WorkResultActions } from './WorkResultBody'
 import { BrowserPanel } from './BrowserPanel'
 import { SideChatPanel } from './SideChatPanel'
-import { AgentMemoryPanel } from './AgentMemoryPanel'
 import { AgentSettingsPanel } from './agents/AgentSettingsPanel'
 import { ProjectMemoryPanel } from './ProjectMemoryPanel'
 import { ChatAgentsPanel } from './agents/ChatAgentsPanel'
@@ -32,7 +31,6 @@ import { TileDropPreview, useTileDrag } from './TileDrag'
 const FILES_COMPACT_ACTIONS_WIDTH = 360
 const RepoFilesPanel = lazy(() => import('./RepoFilesPanel').then((module) => ({ default: module.RepoFilesPanel })))
 const KnowledgePanel = lazy(() => import('./knowledge/KnowledgePanel').then((module) => ({ default: module.KnowledgePanel })))
-const ChatRoutinesPanel = lazy(() => import('./routines/ChatRoutinesPanel').then((module) => ({ default: module.ChatRoutinesPanel })))
 const RoutineRunsPanel = lazy(() => import('./routines/RoutineRunsPanel').then((module) => ({ default: module.RoutineRunsPanel })))
 
 interface ChatPanelRegionProps {
@@ -168,8 +166,10 @@ export function ChatPanelRegion({
   const shown = useMemo(() => keepPanels(layout, (id) => !(
     (id === 'agents' && rosterAgents.length === 0 && !hasRepo && helperCount === 0)
     || (id === 'runs' && chatRoutines.length === 0)
-    || ((id === 'routines' || id === 'agent') && dmAgent === undefined)
-  )), [layout, rosterAgents.length, hasRepo, helperCount, chatRoutines.length, dmAgent])
+    || (id === 'agent' && dmAgent === undefined)
+    // A DM's memory lives in Agent settings; only a project still has this door.
+    || (id === 'memory' && open.kind === 'dm')
+  )), [layout, rosterAgents.length, hasRepo, helperCount, chatRoutines.length, dmAgent, open.kind])
   const shownKey = shown.length === 0 ? null : layoutKey(shown)
 
   // The Session's Changes and Branch are read while its panel or its diff is on screen:
@@ -537,21 +537,6 @@ export function ChatPanelRegion({
         onClose={close}
       />
     )
-    if (id === 'memory' && open.kind === 'dm') return (
-      <AgentMemoryPanel
-        chatId={open.id}
-        status={status}
-        requestEvents={manor.requestEvents}
-        onLoad={manor.getChatSummary}
-        overlay={dock.overlay}
-        revealed={dock.revealed}
-        phone={phone}
-        width={dock.width}
-        resizing={dock.resizing}
-        resizeProps={dock.resizeProps}
-        onClose={close}
-      />
-    )
     if (id === 'agent' && dmAgent !== undefined) return (
       <AgentSettingsPanel
         agent={dmAgent}
@@ -567,6 +552,36 @@ export function ChatPanelRegion({
         onSaveSubagentPolicy={manor.saveSubagentPolicy}
         onRequestSubagentPolicy={manor.requestSubagentPolicy}
         onLoadNotes={manor.getAgentNotes}
+        dm={{
+          chatId: open.id,
+          pin: thread.overrides[dmAgent.id] ?? {},
+          onClearPin: () => manor.setChatOverride(dmAgent.id, {}, open.id),
+          onLoadSummary: manor.getChatSummary,
+          scheduled: {
+            chatId: open.id,
+            agentId: dmAgent.id,
+            routines: routinesHere,
+            loaded: workspace.hasRoutines,
+            histories: workspace.routineHistories,
+            projects: workspace.projects,
+            chats: workspace.chats,
+            // The real roster, not `namedRoster`: that one carries the side chat's
+            // synthetic voice for naming a transcript, and offering it as a routine's
+            // persona would build a routine the server refuses to save.
+            agents: workspace.agents,
+            // Never blanked while a dialog is open, the way the agents card's is: the
+            // dialog is the surface a refused save has to be readable on.
+            notice: workspace.notice,
+            requestEvents: manor.requestEvents,
+            onRequestHistory: manor.getRoutineRuns,
+            onSave: manor.saveRoutine,
+            onDelete: manor.deleteRoutine,
+            onSetEnabled: manor.setRoutineEnabled,
+            onRunNow: manor.runRoutineNow,
+            onDismissNotice: manor.dismissNotice,
+            onDialogChange,
+          },
+        }}
         overlay={dock.overlay}
         revealed={dock.revealed}
         phone={phone}
@@ -595,36 +610,6 @@ export function ChatPanelRegion({
         // A folder reads memory the way No project does (2026-11-13).
         memoryScope={openProject.memoryScope === 'knowledge' || isFolder(openProject) ? 'knowledge' : 'project'}
         {...(isProjectThread(workspace, open.id) ? { summaryChatId: open.id, onLoadSummary: manor.getChatSummary } : {})}
-        onClose={close}
-      />
-    )
-    if (id === 'routines' && dmAgent !== undefined) return (
-      <ChatRoutinesPanel
-        chatId={open.id}
-        agentId={dmAgent.id}
-        routines={routinesHere}
-        loaded={workspace.hasRoutines}
-        histories={workspace.routineHistories}
-        projects={workspace.projects}
-        chats={workspace.chats}
-        // The real roster, not `namedRoster`: that one carries the side chat's
-        // synthetic voice for naming a transcript, and offering it as a routine's
-        // persona would build a routine the server refuses to save.
-        agents={workspace.agents}
-        // Never blanked while a dialog is open, the way the agents card's is: the
-        // dialog is the surface a refused save has to be readable on.
-        notice={workspace.notice}
-        requestEvents={manor.requestEvents}
-        width={tiled ? dock.width : LIST_PANEL_WIDTH}
-        overlay={dock.overlay}
-        revealed={dock.revealed}
-        onRequestHistory={manor.getRoutineRuns}
-        onSave={manor.saveRoutine}
-        onDelete={manor.deleteRoutine}
-        onSetEnabled={manor.setRoutineEnabled}
-        onRunNow={manor.runRoutineNow}
-        onDismissNotice={manor.dismissNotice}
-        onDialogChange={onDialogChange}
         onClose={close}
       />
     )

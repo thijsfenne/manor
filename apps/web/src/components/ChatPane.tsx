@@ -400,14 +400,6 @@ export function ChatPane({
   // No switch on a host without Auto: the picker stays open and names the model.
   const singleCanAuto =
     hostAuto && !started.includes(SINGLE_CHAT_VOICE.id) && openSingleOverride.autoResolved !== true
-  const dmOverride = dmAgent === undefined ? undefined : thread.overrides[dmAgent.id] ?? {}
-  const dmCanAuto =
-    hostAuto &&
-    dmAgent !== undefined &&
-    dmOverride !== undefined &&
-    dmAgent.driver !== 'mock' &&
-    !started.includes(dmAgent.id) &&
-    dmOverride.autoResolved !== true
   // A Browser session has no rail to hold the Agents roster, so its household's
   // models are picked where the draft house chat picks them, in the composer.
   const browserHouse = chat.kind === 'browser' && !singleChat
@@ -475,6 +467,7 @@ export function ChatPane({
 
   // The runtime row under the box, and the box itself, outside the footer's ternary: there
   // they would share one cache block with the ask dock, which takes the rows a token changes.
+  // A DM has no row: its model is its agent's own, set in Agent settings beside the chat.
   const composerControls = singleChat ? (
     <ComposerAutoRow
       {...(singleCanAuto
@@ -500,32 +493,6 @@ export function ChatPane({
           allowAuto={false}
           disabled={status !== 'live'}
           onChange={(override) => setChatOverride(SINGLE_CHAT_VOICE.id, override, chat.id)}
-        />
-      }
-    />
-  ) : dmAgent !== undefined ? (
-    <ComposerAutoRow
-      {...(dmCanAuto && dmOverride !== undefined
-        ? {
-            auto: {
-              checked: isAutoOn(dmOverride, hostAuto),
-              disabled: status !== 'live',
-              onChange: (checked: boolean) =>
-                setChatOverride(dmAgent.id, withAuto(dmOverride, checked), chat.id),
-            },
-          }
-        : {})}
-      pickerOpen={!dmCanAuto || dmOverride === undefined || !isAutoOn(dmOverride, hostAuto)}
-      pickerCollapsible={dmCanAuto}
-      picker={
-        <RuntimeControls
-          agents={[dmAgent]}
-          overrides={thread.overrides}
-          disabled={status !== 'live'}
-          startedAgentIds={startedAgentIds}
-          allowAuto={false}
-          directLayout="split"
-          onChange={(agentId, override) => setChatOverride(agentId, override, chat.id)}
         />
       }
     />
@@ -556,7 +523,8 @@ export function ChatPane({
       showRecipients={!singleChat && composerShowsRecipients(chat.kind, thread.events, thread.pending.length)}
       {...(chat.kind === 'group' ? { memberIds: chat.memberIds } : {})}
       recipientsUnknown={runningTurnIds.length > 0 || thread.pending.length > 0}
-      placeholder={projectThread ? 'Reply…' : 'Ask anything…'}
+      placeholder={projectThread ? 'Reply…' : dmAgent === undefined ? 'Ask anything…' : `Message ${dmAgent.name}`}
+      oneRow={dmAgent !== undefined}
       touchMode={phone}
       compact={sessionDensity}
       {...(phone ? {} : { heights: 'session' as const })}

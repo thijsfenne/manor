@@ -152,9 +152,11 @@ describe('the panel layout', () => {
   })
 
   it('drops a remembered side chat from a DM, whose rail no longer has the door', () => {
-    const dmDoors = ['routines', 'knowledge', 'browser', 'memory'] as const
-    expect(offeredLayout([['side'], ['memory']], dmDoors)).toEqual([['memory']])
+    const dmDoors = ['knowledge', 'browser', 'agent'] as const
+    expect(offeredLayout([['side'], ['agent']], dmDoors)).toEqual([['agent']])
     expect(offeredLayout([['side']], dmDoors)).toEqual([])
+    // Agent memory moved into Agent settings (2026-11-14), so its remembered panel goes too.
+    expect(offeredLayout([['memory'], ['agent']], dmDoors)).toEqual([['agent']])
   })
 })
 
@@ -193,7 +195,7 @@ describe('tiledColumnWidths', () => {
     expect(columnSizingPanel(['side'])).toBe('side')
     expect(columnSizingPanel(['agents', 'files'])).toBe('files')
     expect(columnSizingPanel(['agents'])).toBe('agents')
-    expect(columnSizingPanel(['runs', 'routines'])).toBe('runs')
+    expect(columnSizingPanel(['runs', 'agents'])).toBe('runs')
   })
 
   it('gives each column what it asks for when that fits', () => {
@@ -262,9 +264,7 @@ describe('rightRegionWidth', () => {
 
   it('keeps the roster and the list panels on their own fixed widths', () => {
     expect(rightRegionWidth('agents', 512, none)).toBe(AGENTS_PANEL_WIDTH)
-    for (const panel of ['runs', 'routines'] as const) {
-      expect(rightRegionWidth(panel, 512, none)).toBe(LIST_PANEL_WIDTH)
-    }
+    expect(rightRegionWidth('runs', 512, none)).toBe(LIST_PANEL_WIDTH)
   })
 
   it('gives an expanded panel no room at all: it is over the stage, not beside it', () => {

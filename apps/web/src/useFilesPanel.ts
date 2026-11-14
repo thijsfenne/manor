@@ -90,7 +90,6 @@ export function rightPanelDefaultWidth(panel: RightPanelId) {
     // Code wants the room of a page: stacked lines with both gutters, split once it is wider.
     case 'diff': return DIFF_DEFAULT_WIDTH
     case 'runs':
-    case 'routines': return LIST_PANEL_WIDTH
     // Files and Knowledge open with their tree and preview side by side.
     default: return FILES_DEFAULT_WIDTH
   }

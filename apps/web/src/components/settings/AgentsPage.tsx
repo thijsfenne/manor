@@ -4,15 +4,14 @@ import { AgentSettings, type AgentSettingsProps } from '../agents/AgentSettings'
 import { Avatar } from '../Avatar'
 import { Icon } from '../Icon'
 import { Button } from '../ui/Button'
-import { STAGE_PANEL_SHELL } from '../ui/dockPanel'
 import { SelectionMarker } from '../ui/SelectionMarker'
 
 const ROW_MARKER = 'settings-agent-row'
 
-/** One list, placement as its subheaders: chat agents first, Session agents below. */
+/** One list, placement as its subheaders: Session agents first, chat agents below. */
 const listOrder = (agents: readonly AgentConfig[]) => [
-  ...agents.filter((agent) => agent.placement !== 'session'),
   ...agents.filter((agent) => agent.placement === 'session'),
+  ...agents.filter((agent) => agent.placement !== 'session'),
 ]
 
 /** The DM an agent's settings dock in. A Session agent has none, nor does an agent never talked to. */
@@ -91,8 +90,8 @@ export function AgentsPage({ agentId, chats, onSelect, onOpenDm, onNewAgent, ...
 
         <div className="grid grid-cols-[minmax(0,264px)_minmax(0,1fr)] gap-6 px-6 pb-10 @max-[720px]:grid-cols-1">
           <nav aria-label="Agents list" className="self-start">
-            {group('Chat agents', ordered.filter((agent) => agent.placement !== 'session'))}
             {group('Session agents', ordered.filter((agent) => agent.placement === 'session'))}
+            {group('Chat agents', ordered.filter((agent) => agent.placement !== 'session'))}
           </nav>
 
           {selected === undefined ? (
@@ -100,7 +99,8 @@ export function AgentsPage({ agentId, chats, onSelect, onOpenDm, onNewAgent, ...
           ) : (
             <section
               aria-label="Agent settings"
-              className={`${STAGE_PANEL_SHELL} flex h-[min(760px,calc(100dvh-12rem))] min-h-[480px] w-full max-w-[420px] flex-col`}
+              // No card: the editor is the page's own content here, as wide as the page has room.
+              className="flex h-[min(760px,calc(100dvh-12rem))] min-h-[480px] w-full flex-col"
             >
               {/* Keyed on the agent so another agent never shows this one's draft or page. */}
               <AgentSettings key={selected.id} agent={selected} {...settings} />

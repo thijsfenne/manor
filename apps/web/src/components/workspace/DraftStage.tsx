@@ -83,18 +83,16 @@ export function DraftStage({
     : [draftAgent]
   const draftComposerAutoOn = draftMode === 'single'
     ? isAutoOn(draft.overrides[SINGLE_CHAT_VOICE.id] ?? {}, hostAuto)
-    : draftAgent !== undefined
-      ? isAutoOn(draft.overrides[draftAgent.id] ?? {}, hostAuto)
-      : draftRuntimeAgents
-          .filter((agent) => effectiveDriver(agent, draft.overrides[agent.id] ?? {}) !== 'mock')
-          .every((agent) => isAutoOn(draft.overrides[agent.id] ?? {}, hostAuto))
+    : draftRuntimeAgents
+        .filter((agent) => effectiveDriver(agent, draft.overrides[agent.id] ?? {}) !== 'mock')
+        .every((agent) => isAutoOn(draft.overrides[agent.id] ?? {}, hostAuto))
   const blockedNote = draftBlockedNote({
     live: status === 'live',
     starting: draft.submitting || creating,
     mode: draftMode,
     seatedAgents: draftRuntimeAgents.length,
   })
-  const draftPickerCollapsible = draftMode === 'single' || draftAgent !== undefined
+  const draftPickerCollapsible = draftMode === 'single'
   // The project whose files the composer's `@` menu may offer.
   const composerFiles = draftProject === undefined ? undefined : workspace.repoFiles[repoListingKey(draftProject.id, undefined)]
 
@@ -244,11 +242,13 @@ export function DraftStage({
         : {})}
       allowWorkDestination={draft.target.kind === 'dm'}
       allSkillsAvailable={draftMode === 'single'}
-      placeholder="Ask anything…"
-      controls={
+      placeholder={draftAgent === undefined ? 'Ask anything…' : `Message ${draftAgent.name}`}
+      oneRow={draftAgent !== undefined}
+      // A DM takes its model from its agent's settings, so its draft has no runtime row.
+      {...(draftAgent !== undefined ? {} : { controls: (
         <ComposerAutoRow
           {...(draftMode === undefined ? {} : { mode: draftMode, onModeChange: setDraftMode })}
-          {...((draftMode === undefined && draftAgent === undefined) || !hostAuto
+          {...(draftMode === undefined || !hostAuto
             ? {}
             : {
                 auto: {
@@ -297,13 +297,12 @@ export function DraftStage({
                 overrides={draft.overrides}
                 disabled={status !== 'live' || draft.submitting}
                 directLayout="split"
-                allowAuto={draftAgent === undefined}
                 onChange={draftOverride}
               />
             )
           }
         />
-      }
+      ) })}
       {...(draftAgent !== undefined
         ? {}
         : {
@@ -333,12 +332,15 @@ export function DraftStage({
     />
   )
 
+  // A DM's composer stands where it will stand once the chat has messages, so the
+  // first send moves nothing.
+  const docked = draftAgent !== undefined
   return (
     <>
       {/* `min-w-0` is load-bearing beside a wide panel: without it this grid
           item will not shrink below the transcript's 780px column, and that
           column paints under the browser. */}
-      <main className={birthing === null ? 'relative flex h-full min-h-0 min-w-0 flex-col items-center justify-center bg-bg' : 'flex min-h-0 min-w-0 justify-center bg-bg'}>
+      <main className={birthing === null ? `relative flex ${docked ? '' : 'h-full '}min-h-0 min-w-0 flex-col items-center justify-center bg-bg` : 'flex min-h-0 min-w-0 justify-center bg-bg'}>
         {birthing === null ? (
           <>
           <StageBackdrop theme={theme} />
@@ -355,7 +357,7 @@ export function DraftStage({
             ) : (
               draftHeading
             )}
-            {stageComposer}
+            {docked ? null : stageComposer}
           </div>
           </>
         ) : (
@@ -372,9 +374,9 @@ export function DraftStage({
         )}
       </main>
 
-      {birthing !== null ? (
+      {birthing !== null || docked ? (
         <footer className={`pointer-events-none relative z-[4] -mt-[var(--radius-composer)] flex min-w-0 flex-col items-center bg-transparent ${inPane ? 'px-3 pb-3' : phone ? 'px-3 pb-[max(12px,env(safe-area-inset-bottom))]' : 'px-5 pb-3'}`}>
-          <div className="pointer-events-auto flex min-w-0 w-full flex-col items-center" {...BIRTHING_BOX}>
+          <div className="pointer-events-auto flex min-w-0 w-full flex-col items-center" {...(birthing === null ? {} : BIRTHING_BOX)}>
             {stageComposer}
           </div>
         </footer>

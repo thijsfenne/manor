@@ -40,7 +40,7 @@ import type { ContextMeter } from '@manor/client-runtime/context-meter'
 import { chatCommandRows, commandDraft, draftCommandRefusal, type ChatCommandRow } from '@manor/client-runtime/chat-commands'
 import { ComposerEditor, IMAGE_REF_DRAG_TYPE, type ComposerEditorHandle } from './ComposerEditor'
 import { ImageNumberBadge } from './MentionText'
-import { COMPOSER_CARD_HEIGHTS, useComposerCardHeight, type ComposerCardHeights } from './useComposerCardHeight'
+import { COMPOSER_CARD_HEIGHTS, useComposerCardHeight, useComposerRow, type ComposerCardHeights } from './useComposerCardHeight'
 import { Icon } from './Icon'
 import { ProviderMark } from './ProviderMark'
 import { PageContextChip } from './PageContextChip'
@@ -53,6 +53,8 @@ import { ZoomableImage } from './ui/ZoomableImage'
 import { useHostAuto } from '../useHostAuto'
 
 const MAX_TEXTAREA_PX = 200
+/** A one-row card is a pill. `rounded-full` is also what opts a corner out of the squircle. */
+const PILL = 'rounded-full'
 const NO_MENTIONABLE_AGENTS: AgentConfig[] = []
 const NO_RECIPIENTS: AgentConfig[] = []
 const NO_FILES: string[] = []
@@ -250,6 +252,12 @@ interface ComposerProps {
    */
   heights?: ComposerCardHeights
   /**
+   * Rests as one row, plus, text and send on a line, and stacks into the usual card once
+   * the draft is more than one plain line. For a DM, whose composer has nothing else to
+   * hold. Needs `heights`, so it is ignored under `touchMode` too.
+   */
+  oneRow?: boolean
+  /**
    * The composer's own box, for whoever has to read where it was standing before it
    * was replaced by another one.
    */
@@ -290,7 +298,7 @@ interface ComposerProps {
 const CARD_REACH = '[&:not(:has([data-composer-above]:not(:empty)))]:[--composer-reach:12px]'
 const CARD_REACH_DENSE = '[&:not(:has([data-composer-above]:not(:empty)))]:[--composer-reach:8px]'
 
-export function Composer({ agents, commandContext, household, overrides = NO_OVERRIDES, files = NO_FILES, filesTruncated = false, skills = NO_SKILLS, fallbackTargets, allowAgentMentions = true, onAgentMention, allowWorkDestination = true, allowBrowserMentions = true, allowComputerMentions, allowAttachments = true, allowSkills = true, allSkillsAvailable = false, showRecipients = false, memberIds, recipientsUnknown = false, placeholder = 'Ask anything…', draftKey, onSend, pageContexts = NO_PAGE_CONTEXTS, onRemovePageContext, replyTo, onRemoveReply, canSend, blockedNote, autoFocus = false, controls, contextMeter, checkout, onStop, running = false, touchMode = false, compact = false, heights, boxRef, travelFrom = null, focusMode = false, onEscapeIdle }: ComposerProps) {
+export function Composer({ agents, commandContext, household, overrides = NO_OVERRIDES, files = NO_FILES, filesTruncated = false, skills = NO_SKILLS, fallbackTargets, allowAgentMentions = true, onAgentMention, allowWorkDestination = true, allowBrowserMentions = true, allowComputerMentions, allowAttachments = true, allowSkills = true, allSkillsAvailable = false, showRecipients = false, memberIds, recipientsUnknown = false, placeholder = 'Ask anything…', draftKey, onSend, pageContexts = NO_PAGE_CONTEXTS, onRemovePageContext, replyTo, onRemoveReply, canSend, blockedNote, autoFocus = false, controls, contextMeter, checkout, onStop, running = false, touchMode = false, compact = false, heights, oneRow = false, boxRef, travelFrom = null, focusMode = false, onEscapeIdle }: ComposerProps) {
   const hostAuto = useHostAuto()
   const canMentionComputer = (allowComputerMentions ?? desktopComputer() !== undefined) && !touchMode
   const reduceMotion = useReducedMotion()
@@ -432,9 +440,24 @@ export function Composer({ agents, commandContext, household, overrides = NO_OVE
     liveCaret.current = caret
   })
   const parkedKey = useRef(draftKey)
+  // The draft the state below holds. One render behind `draftKey` on a switch, when the
+  // row reads the incoming draft from where it is parked instead.
+  const [heldKey, setHeldKey] = useState(draftKey)
 
   const empty = value.trim() === '' && images.length === 0 && textFiles.length === 0 && documents.length === 0 && pageContexts.length === 0
   const showStop = running && empty && onStop !== undefined
+  const rowDraft = heldKey === draftKey ? { text: value, images, files: textFiles, documents } : readDraft(draftKey)
+  const row = useComposerRow(
+    cardRef,
+    oneRow && cardRange !== undefined,
+    !rowDraft.text.includes('\n') && rowDraft.images.length === 0 && rowDraft.files.length === 0 && (rowDraft.documents ?? []).length === 0 &&
+      pageContexts.length === 0 && replyTo === undefined &&
+      // A note, an error or a read still under way belongs to the draft being left.
+      (heldKey !== draftKey || (commandNote === null && attachError === null && reading === 0)),
+    rowDraft.text === '',
+    cardRange?.rest ?? 0,
+    draftKey,
+  )
 
   const mention = activeMention(value, caret)
   // A `$` that opens nothing is left as the character it is, so a price or a variable
@@ -518,6 +541,7 @@ export function Composer({ agents, commandContext, household, overrides = NO_OVE
     if (parkedKey.current === draftKey) return
     writeDraft(parkedKey.current, { text: value, images, files: textFiles, documents, quotes })
     parkedKey.current = draftKey
+    setHeldKey(draftKey)
     const next = readDraft(draftKey)
     setValue(next.text)
     setImages(next.images)
@@ -809,7 +833,7 @@ export function Composer({ agents, commandContext, household, overrides = NO_OVE
    * house with no skills imported has no `$` worth advertising.
    */
   const plus = !hasPlusRows ? null : (
-    <div ref={plusRef} className="relative flex-none">
+    <div ref={plusRef} className={`relative flex-none ${row ? '-order-1' : ''}`}>
       <button
         type="button"
         className={`grid cursor-pointer place-items-center rounded-full border-0 bg-transparent text-muted hover:bg-user-bg hover:text-text ${controlSize}`}
@@ -929,7 +953,7 @@ export function Composer({ agents, commandContext, household, overrides = NO_OVE
   ) : null
 
   const actions = (
-    <>
+    <div className="flex flex-none items-center gap-2">
       {contextMeter === undefined ? null : <ContextRing controlSize={controlSize} {...contextMeter} />}
       {/* One button rather than two, which is what lets the mark change in place: two
           of them would remount on the switch and there would be nothing to cross-fade
@@ -951,7 +975,7 @@ export function Composer({ agents, commandContext, household, overrides = NO_OVE
         </IconSwap>
         <span className="sr-only">{showStop ? 'Stop' : 'Send'}</span>
       </button>
-    </>
+    </div>
   )
 
   /**
@@ -1246,8 +1270,9 @@ export function Composer({ agents, commandContext, household, overrides = NO_OVE
           two. The card's own border and the tray's darker fill are the seam instead. */}
       <div
         ref={cardRef}
-        className={`relative z-[1] rounded-composer border ${cardRange === undefined ? '' : `flex flex-col ${dense ? CARD_REACH_DENSE : CARD_REACH}`} ${dense ? 'p-2' : 'p-3'} ${dropping ? 'border-text/40' : 'border-composer-line'}`}
-        {...(cardRange === undefined ? {} : { style: { minHeight: cardRange.rest || undefined } })}
+        className={`relative z-[1] border ${row ? `${PILL} grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-1.5 p-[7px]` : `rounded-composer ${cardRange === undefined ? '' : `flex flex-col ${dense ? CARD_REACH_DENSE : CARD_REACH}`} ${dense ? 'p-2' : 'p-3'}`} ${dropping ? 'border-text/40' : 'border-composer-line'}`}
+        // A one-row card's min-height is its hook's, which lets go of it while the card eases.
+        {...(cardRange === undefined || oneRow ? {} : { style: { minHeight: cardRange.rest || undefined } })}
         onDragEnter={(event) => {
           if (!carriesFiles(event)) return
           event.preventDefault()
@@ -1283,7 +1308,7 @@ export function Composer({ agents, commandContext, household, overrides = NO_OVE
             inside the border, because a negative layer paints over its own card's border. */}
         <span
           aria-hidden="true"
-          className="pointer-events-none absolute inset-0 -z-10 rounded-[calc(var(--radius-composer)-var(--default-border-width))] bg-[color-mix(in_srgb,var(--color-composer)_82%,transparent)] backdrop-blur-[16px] backdrop-saturate-[1.08]"
+          className={`pointer-events-none absolute inset-0 -z-10 ${row ? PILL : 'rounded-[calc(var(--radius-composer)-var(--default-border-width))]'} bg-[color-mix(in_srgb,var(--color-composer)_82%,transparent)] backdrop-blur-[16px] backdrop-saturate-[1.08]`}
         />
         {/* Over the card rather than replacing it: what is already typed and already
             attached stays readable, so a drop reads as adding to this draft and not as
@@ -1291,7 +1316,7 @@ export function Composer({ agents, commandContext, household, overrides = NO_OVE
             answering still lands on the card underneath. */}
         <motion.div
           aria-hidden="true"
-          className="pointer-events-none absolute inset-0 z-[2] grid place-items-center rounded-composer bg-composer/85 text-[13px] font-medium text-text"
+          className={`pointer-events-none absolute inset-0 z-[2] grid place-items-center ${row ? PILL : 'rounded-composer'} bg-composer/85 text-[13px] font-medium text-text`}
           initial={false}
           animate={{ opacity: dropping ? 1 : 0 }}
           transition={{ duration: reduceMotion ? 0 : 0.12 }}
@@ -1325,7 +1350,7 @@ export function Composer({ agents, commandContext, household, overrides = NO_OVE
         {/* Everything staged beside the text scrolls as one region once the card is at its
             max. The text's scroller shrinks far faster, so this region gives way only when
             the text is down to its rest, and always keeps what the text leaves it. */}
-        <div className={cardRange === undefined ? undefined : 'min-h-0 overflow-y-auto'} data-composer-above="">
+        <div className={row ? 'hidden' : cardRange === undefined ? undefined : 'min-h-0 overflow-y-auto'} data-composer-above="">
           {textFiles.length > 0 || documents.length > 0 ? (
             <div className="mb-2 flex flex-wrap gap-1.5">
               {[
@@ -1435,7 +1460,7 @@ export function Composer({ agents, commandContext, household, overrides = NO_OVE
             placeholder={placeholder}
             autoFocus={autoFocus}
             dense={dense}
-            {...(cardRange === undefined ? {} : { fill: cardRange.rest > 0 ? 'line' : 'rest' })}
+            {...(cardRange === undefined ? {} : { fill: row || cardRange.rest > 0 ? 'line' : 'rest' })}
             onChange={(nextValue, nextCaret) => {
               setValue(nextValue)
               setCaret(nextCaret)
@@ -1449,12 +1474,13 @@ export function Composer({ agents, commandContext, household, overrides = NO_OVE
             speaks when something is wrong — a refused image or a blocked send. */}
         {/* A size container, so a control in the row can shorten itself by the
             composer's width rather than the window's (split panes, side panel). */}
-        <div className={`${dense ? 'mt-1' : 'mt-2'} flex items-center gap-2 shrink-0 @container`}>
+        {/* In the row the plus and the send are the card's own cells, either side of the text. */}
+        <div className={row ? 'contents' : `${dense ? 'mt-1' : 'mt-2'} flex items-center gap-2 shrink-0 @container`}>
           {plus}
           {mentionShortcut}
           {recipientLabel}
           {controls !== undefined ? <div className="flex min-w-0 items-center">{controls}</div> : null}
-          <span className="min-w-0 flex-1 truncate text-[12px] text-dim">{note}</span>
+          {row ? null : <span className="min-w-0 flex-1 truncate text-[12px] text-dim">{note}</span>}
           {actions}
         </div>
       </div>

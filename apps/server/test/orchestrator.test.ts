@@ -5495,6 +5495,19 @@ describe('Orchestrator, chat overrides', () => {
     expect(select.mock.calls[0]?.[1]).not.toContain('later queued question')
   })
 
+  it('leaves a DM to its agent: Auto neither selects nor pins there', async () => {
+    const select = vi.fn<NonNullable<OrchestratorOptions['selectAutoRuntime']>>()
+      .mockResolvedValue({ runtime: { driver: 'claude', model: 'claude-fable-5-2', effort: 'high' }, category: 'hardest', confidence: 0.9 })
+    const seen: TurnInput[] = []
+    const { orchestrator, store } = await harness(recording(createMockDriver({ deltaDelayMs: 0 }), seen), { selectAutoRuntime: select })
+    const dm = await store.createChat({ kind: 'dm', memberIds: ['sage'], title: 'Sage' })
+    await orchestrator.setOverride(dm.id, 'sage', { auto: true })
+    await orchestrator.submitUserMessage(dm.id, 'design the backend')
+    expect(seen).toHaveLength(1)
+    expect(select).not.toHaveBeenCalled()
+    expect((await orchestrator.overrides(dm.id)).sage).toEqual({ auto: true })
+  })
+
   it('switches provider once with Auto, removes unsupported speed and reuses the pin after restart', async () => {
     const select = vi.fn<NonNullable<OrchestratorOptions['selectAutoRuntime']>>()
       .mockResolvedValue({ runtime: { driver: 'claude', model: 'claude-fable-5-2', effort: 'high' }, category: 'hardest', confidence: 0.9 })
