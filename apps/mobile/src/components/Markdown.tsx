@@ -747,7 +747,9 @@ const styles = StyleSheet.create({
   },
   sourcePillPressed: { opacity: 0.6 },
   sourcePillText: { flexShrink: 1, color: colors.muted, fontFamily: fonts.sans, fontSize: 14, lineHeight: 17 },
-  itemText: { flex: 1 },
+  // Shrink, never `flex: 1`: a sent bubble sizes to its content, and a zero flex basis
+  // left the item out of that size, so the bubble ended before its list did.
+  itemText: { flexShrink: 1 },
   tableScroll: { flexGrow: 0 },
   table: { minWidth: '100%', flexDirection: 'row' },
   // Spare width is shared out rather than left over, so the rules run to the edge like a
