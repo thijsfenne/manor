@@ -2,7 +2,7 @@ import ArrowUpLeft01Icon from '@hugeicons/core-free-icons/ArrowUpLeft01Icon'
 import Clock01Icon from '@hugeicons/core-free-icons/Clock01Icon'
 import { HugeiconsIcon } from '@hugeicons/react-native'
 import { LegendList } from '@legendapp/list/react-native'
-import type { Row, ThreadState } from '@manor/client-runtime/state'
+import type { Row } from '@manor/client-runtime/state'
 import { messageBrief, rowsOf } from '@manor/client-runtime/state'
 import { launchDriver, subagentBarStatus, subagentNow, subagentRuntime, subagentStepLabel, type ChatSubagent, type SubagentState } from '@manor/client-runtime/turn-trace'
 import type { AgentConfig, SubagentSummary } from '@manor/contracts'
@@ -21,6 +21,7 @@ import { ShimmerText } from '@/components/ShimmerText'
 import { Text } from '@/components/Text'
 import { TranscriptCovered, Turn } from '@/components/Turn'
 import { useScreenCovered } from '@/lib/useScreenCovered'
+import { useLiveThread } from '@/providers/WorkspaceProvider'
 import { colors, fonts, radius, spacing, squircle } from '@/theme'
 
 const NOT_REPORTED = 'Not reported'
@@ -34,8 +35,8 @@ interface SubagentConversationProps {
   subagent: ChatSubagent
   state: SubagentState
   summary: SubagentSummary | undefined
-  /** The child's own thread; absent for a helper its provider ran inside its own turn. */
-  thread: ThreadState | undefined
+  /** The child's own chat, whose thread it reads; absent for a helper its provider ran inside its own turn. */
+  childId: string | undefined
   agents: AgentConfig[]
   connected: boolean
   onOpenChild: (toolCallId: string) => void
@@ -50,12 +51,12 @@ export function SubagentConversation(props: SubagentConversationProps) {
   const insets = useSafeAreaInsets()
   const top = insets.top + CHAT_HEADER_HEIGHT + spacing.lg
   const bottom = insets.bottom + BAR_SPACE
-  const { thread } = props
+  const { childId } = props
   return (
     <>
-      {thread === undefined
+      {childId === undefined
         ? <ProviderRecord {...props} bottom={bottom} top={top} />
-        : <ChildConversation {...props} bottom={bottom} thread={thread} top={top} />}
+        : <ChildConversation {...props} bottom={bottom} childId={childId} top={top} />}
       <SubagentBar {...props} />
     </>
   )
@@ -137,9 +138,13 @@ function SubagentBar({ subagent: { step }, state, summary, onOpenParent }: Pick<
   )
 }
 
-/** A Manor-run child's own thread: its task opens it in the starter's voice, its answer closes it. */
-function ChildConversation(props: SubagentConversationProps & { thread: ThreadState; top: number; bottom: number }) {
-  const { thread, agents, connected, onOpenChild, top, bottom } = props
+/**
+ * A Manor-run child's own thread: its task opens it in the starter's voice, its answer
+ * closes it. It reads the live thread, so a streamed frame renders this list and not the screen.
+ */
+function ChildConversation(props: SubagentConversationProps & { childId: string; top: number; bottom: number }) {
+  const { childId, agents, connected, onOpenChild, top, bottom } = props
+  const thread = useLiveThread(childId)
   const rows = useMemo(() => rowsOf(thread), [thread])
   const last = rows.at(-1)?.key
   const covered = useScreenCovered()

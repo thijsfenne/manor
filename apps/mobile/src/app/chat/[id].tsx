@@ -21,14 +21,14 @@ import { chatSubagents, chatWaitsOnBackground, dmWorking, runningSubagents } fro
 import { chatFallbackTargets, composerShowsRecipients, draftRecipients, replyFallbackTargets, roomAgents } from '@manor/client-runtime/mentions'
 import { chatChangedFiles, resolveMarkdownRepoLink } from '@manor/client-runtime/changed-files'
 import { defaultSingleRuntime, effectiveDriver, isAutoPending, readSingleRuntime, runtimeLabel, runtimeParts, singleRuntimeVoice } from '@manor/client-runtime/runtime-choices'
-import type { ChangeableAnswer, OpenAsk, PendingDocument, Row, SessionLink, TurnConsultation, TurnRow, UnannouncedConsultation } from '@manor/client-runtime/state'
+import type { ChangeableAnswer, OpenAsk, PendingDocument, QuietWorkspace, Row, SessionLink, ThreadShape, TurnConsultation, TurnRow, UnannouncedConsultation } from '@manor/client-runtime/state'
 import { activityOf, chatOf, dmMemoryMarks, isHomeRoom, isProjectThread, roomOf, sitsSettled, messageBrief, projectSessionOverview, sessionsDot, openAsk, sessionLiveOf, threadQuestionIn, openSubagentQuestion, subagentSummaryOf, changeableAnswers, personaOf, projectWorkHandoffs, repoListingKey, rowHasQuoteSource, rowsOf, feedIndexOf, NO_OPEN_THREAD_BUNDLES, openThreadBundleAt, setThreadBundleOpen, threadBundleOpen, threadBundleOpenItems, threadStretch, onlyConsulted, runtimeStartedAgentIds, sessionReadyRow, sessionThreadOf, stackedConsultationMarkers, projectThreadFeed, threadQuestionAdvice, threadOf, withSessionTitle, threadSpacing, unannouncedConsultations, workCardInView, workDecisionOpen, type ScreenSpan } from '@manor/client-runtime/state'
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router'
 import { KeyboardAwareLegendList, useKeyboardChatComposerInset, useKeyboardScrollToEnd } from '@legendapp/list/keyboard'
 import { historyStart, olderHistoryKey } from '@manor/client-runtime/history-window'
 import { plainDraftText } from '@manor/client-runtime/plain-preview'
 import type { LegendListRef } from '@legendapp/list/react-native'
-import { memo, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
+import { memo, useCallback, useContext, useEffect, useMemo, useRef, useState, type RefObject } from 'react'
 import { Platform, Pressable, StyleSheet, View, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native'
 import { KeyboardStickyView, useKeyboardState } from 'react-native-keyboard-controller'
 import Animated from 'react-native-reanimated'
@@ -69,7 +69,7 @@ import { takeThreadReveal } from '@/lib/threadReveal'
 import { EMPTY_DRAFT, readDraft, writeDraft } from '@/lib/drafts'
 import { glassRise, glassSink } from '@/lib/glassMotion'
 import { useScreenCovered } from '@/lib/useScreenCovered'
-import { useWorkspace } from '@/providers/WorkspaceProvider'
+import { useLiveThread, useWorkspace, useWorkspaceData } from '@/providers/WorkspaceProvider'
 import { Text } from '@/components/Text'
 import { colors, fonts, radius, spacing, squircle } from '@/theme'
 import { useHostAuto } from '@/useHostAuto'
@@ -146,6 +146,37 @@ function dateLabelsFor(rows: readonly Row[], enabled: boolean): (string | undefi
 }
 
 const NO_CHANGEABLE: ReadonlyMap<string, ChangeableAnswer> = new Map()
+
+type SessionLive = ReturnType<typeof sessionLiveOf>
+
+/**
+ * The rows a chat shows, from its thread. The screen runs this over the quiet thread, for
+ * its docks, its question card and where a row sits in the list. The list runs it over the
+ * live thread, which carries the streamed text. Both give the same rows under the same keys.
+ */
+function useTranscriptRows(thread: ThreadShape, workspace: QuietWorkspace, chatId: string | undefined, projectThread: boolean, sessionLive: SessionLive) {
+  const chatKind = chatOf(workspace, chatId ?? null)?.kind
+  const baseRows = useMemo(() => rowsOf(thread, chatKind), [thread, chatKind])
+  const rows = useMemo(
+    () => projectWorkHandoffs(baseRows, workspace.workHandoffs, workspace.chats, workspace.projects, workspace.agents, workspace.checkoutStatus, sessionLive, chatId),
+    [baseRows, workspace.workHandoffs, workspace.chats, workspace.projects, workspace.agents, workspace.checkoutStatus, sessionLive, chatId],
+  )
+  const consultationMarkers = useMemo(
+    () => chatKind === 'dm' ? stackedConsultationMarkers(rows) : new Map(),
+    [chatKind, rows],
+  )
+  // A project thread bundles what needs nothing from the user; the docks and the question card read the full rows.
+  const feedRows = useMemo(() => projectThread ? projectThreadFeed(rows) : rows, [projectThread, rows])
+  // A DM turn that draws nothing gets no row: an empty one still takes a slot and its gap,
+  // and inserting it as a turn starts pushes the working indicator down, then back.
+  const visibleRows = useMemo(
+    () => feedRows.filter((row) => row.kind === 'event'
+      ? consultationMarkers.get(row.event.id)?.length !== 0
+      : !(chatKind === 'dm' && row.kind === 'turn' && (onlyConsulted(row) || dmTurnDrawsNothing(row)))),
+    [chatKind, consultationMarkers, feedRows],
+  )
+  return { baseRows, rows, consultationMarkers, visibleRows }
+}
 
 function ChatContent({ chatId }: { chatId: string | undefined }) {
   const hostAuto = useHostAuto()
@@ -247,8 +278,9 @@ function ChatContent({ chatId }: { chatId: string | undefined }) {
   const rejectWork = rejectWorkHandoff
 
   const chat = chatOf(workspace, chatId ?? null)
+  // The quiet thread: it holds still while a reply streams, and so does this screen. Only
+  // `LiveTranscript` below reads the streamed text.
   const thread = threadOf(workspace, chatId ?? '')
-  const baseRows = useMemo(() => rowsOf(thread, chat?.kind), [thread, chat?.kind])
   // What runs in each Session, so its card says what its overview row says.
   // The selectors below get the slices they read, not `workspace`: a memo that hands the
   // whole object over reads more than its dependencies name, and the React Compiler then
@@ -257,10 +289,11 @@ function ChatContent({ chatId }: { chatId: string | undefined }) {
     () => sessionLiveOf({ activity: workspace.activity, subagents: workspace.subagents, backgroundChatIds: workspace.backgroundChatIds }),
     [workspace.activity, workspace.subagents, workspace.backgroundChatIds],
   )
-  const rows = useMemo(
-    () => projectWorkHandoffs(baseRows, workspace.workHandoffs, workspace.chats, workspace.projects, workspace.agents, workspace.checkoutStatus, sessionLive, chatId),
-    [baseRows, workspace.workHandoffs, workspace.chats, workspace.projects, workspace.agents, workspace.checkoutStatus, sessionLive, chatId],
-  )
+  // A project thread (2026-10-10) lists its open sessions in the bar and holds their
+  // questions; a session it started asks and confirms there.
+  const projectThread = chatId !== undefined && isProjectThread(workspace, chatId)
+  // Without streamed text: the docks, the question card and Stop read structure only.
+  const { baseRows, rows, visibleRows } = useTranscriptRows(thread, workspace, chatId, projectThread, sessionLive)
   // Recheck pending Work when its folders change or this client reconnects.
   const pendingWorkCheckouts = JSON.stringify(rows.flatMap((row) => {
     if (row.kind !== 'work_handoff' || row.acceptedAt !== null || row.status !== 'Working') return []
@@ -279,9 +312,6 @@ function ChatContent({ chatId }: { chatId: string | undefined }) {
     ? workspace.agents.find((agent) => agent.id === chat.memberIds[0] && agent.placement === 'session')
     : undefined
   const singleChat = chat?.mode === 'single'
-  // A project thread (2026-10-10) lists its open sessions in the bar and holds their
-  // questions; a session it started asks and confirms there.
-  const projectThread = chatId !== undefined && isProjectThread(workspace, chatId)
   const project = roomOf(workspace, chat?.projectId)
   // Changes only with a new server reading, never with the text streaming beside it.
   const liveContext = liveSessionContext(thread.liveTurns)
@@ -293,35 +323,13 @@ function ChatContent({ chatId }: { chatId: string | undefined }) {
         : undefined,
     [singleChat, projectThread, thread.events, thread.overrides, workspace.agents, liveContext],
   )
-  const consultationMarkers = useMemo(
-    () => chat?.kind === 'dm' ? stackedConsultationMarkers(rows) : new Map(),
-    [chat?.kind, rows],
-  )
-  // In a DM, memory writes are reached through a reply's long-press actions only.
-  const memoryMarks = useMemo(() => chat?.kind === 'dm' ? dmMemoryMarks(rows) : undefined, [chat?.kind, rows])
   // A Session has no card of its own result, so its Ready row comes from the handoff.
   const sessionReady = useMemo(
     () => chat == null ? undefined : sessionReadyRow(chat, workspace.workHandoffs, workspace.chats, workspace.projects, workspace.agents, workspace.checkoutStatus, sessionLive),
     [chat, workspace.workHandoffs, workspace.chats, workspace.projects, workspace.agents, workspace.checkoutStatus, sessionLive],
   )
-  // A project thread bundles what needs nothing from the user; the docks and the question card read the full rows.
-  const feedRows = useMemo(() => projectThread ? projectThreadFeed(rows) : rows, [projectThread, rows])
-  // A DM turn that draws nothing gets no row: an empty one still takes a slot and its gap,
-  // and inserting it as a turn starts pushes the working indicator down, then back.
-  const visibleRows = useMemo(
-    () => feedRows.filter((row) => row.kind === 'event'
-      ? consultationMarkers.get(row.event.id)?.length !== 0
-      : !(chat?.kind === 'dm' && row.kind === 'turn' && (onlyConsulted(row) || dmTurnDrawsNothing(row)))),
-    [chat?.kind, consultationMarkers, feedRows],
-  )
-  const unannounced = useMemo(() => unannouncedConsultations(rows), [rows])
   const historyOffset = historyStart(visibleRows, firstKey)
   const pageRows = useMemo(() => visibleRows.slice(historyOffset), [visibleRows, historyOffset])
-  // A sent message keeps its pending row's list key once stored. Updated while rendering,
-  // so the list never sees the stored row under a key of its own.
-  const [listKeys, setListKeys] = useState<{ rows: readonly Row[]; carried: ReadonlyMap<string, string> }>(() => ({ rows: pageRows, carried: new Map() }))
-  if (listKeys.rows !== pageRows) setListKeys({ rows: pageRows, carried: carryPendingKeys(listKeys.rows, pageRows, listKeys.carried) })
-  const listKeyOf = useCallback((row: Row) => listKeys.carried.get(row.key) ?? row.key, [listKeys.carried])
   // The project thread's open bundles; the user's next message folds them all again.
   const [openBundles, setOpenBundles] = useState(NO_OPEN_THREAD_BUNDLES)
   const stretch = useMemo(() => threadStretch(visibleRows), [visibleRows])
@@ -332,42 +340,13 @@ function ChatContent({ chatId }: { chatId: string | undefined }) {
   // Stable, so the memoized rows do not re-render when the stretch moves.
   const setBundleOpen = useCallback((key: string, open: boolean) =>
     setOpenBundles((current) => setThreadBundleOpen(current, stretchRef.current, key, open)), [])
-  const dateLabels = useMemo(() => dateLabelsFor(pageRows, isPair), [isPair, pageRows])
   useEffect(() => {
     setFirstKey(visibleRows[historyOffset]?.key)
   }, [visibleRows, historyOffset])
   const loadOlder = () => {
     if (historyOffset > 0) setFirstKey(olderHistoryKey(visibleRows, historyOffset))
   }
-  const waitingOnByTurn = useMemo(() => {
-    const waiting = new Map<string, string>()
-    for (const row of rows) {
-      if (row.kind !== 'event' || row.event.type !== 'agent_relay') continue
-      if (row.event.phase === 'sent') waiting.set(row.event.turnId, row.event.peerAgentId)
-      else waiting.delete(row.event.turnId)
-    }
-    return waiting
-  }, [rows])
-  // The one face that moves: whoever spoke last.
-  const latestTurnKey = useMemo(() => {
-    for (let index = rows.length - 1; index >= 0; index -= 1) {
-      const row = rows[index]
-      if (row?.kind === 'turn') return row.key
-    }
-    return undefined
-  }, [rows])
   const ask = useMemo(() => openAsk(rows), [rows])
-  // A DM's indicator waits on a consulted colleague only while her pair chat still runs.
-  const runningChatIds = useMemo(
-    () => new Set(Object.entries(workspace.activity).filter(([, activity]) => activity.runningTurns.length > 0).map(([id]) => id)),
-    [workspace.activity],
-  )
-  // A project thread's face leaves with its own turn; it never waits on a consult.
-  const working = useMemo(() => {
-    if (chat?.kind !== 'dm' && !projectThread) return undefined
-    const state = dmWorking(rows, runningChatIds)
-    return projectThread && state?.kind === 'consult' ? undefined : state
-  }, [chat?.kind, projectThread, rows, runningChatIds])
   const startedBy = useMemo(
     () => chatId === undefined ? undefined : sessionThreadOf({ projects: workspace.projects, workHandoffs: workspace.workHandoffs, chats: workspace.chats }, chatId),
     [workspace.projects, workspace.workHandoffs, workspace.chats, chatId],
@@ -596,7 +575,7 @@ function ChatContent({ chatId }: { chatId: string | undefined }) {
     if (holder !== undefined) scrollToHolder(holder, (item) => rowHasQuoteSource(item, eventId), { viewPosition: 0.5 })
   }, [scrollToHolder, visibleRows])
 
-  // The same call for the memoized rows: `visibleRows` is new on every streamed frame.
+  // The same call for the memoized rows: `visibleRows` is new on every event in the thread.
   const openQuoteSourceRef = useRef(openQuoteSource)
   useEffect(() => {
     openQuoteSourceRef.current = openQuoteSource
@@ -719,6 +698,16 @@ function ChatContent({ chatId }: { chatId: string | undefined }) {
     if (projectId !== undefined) readRepoFile(projectId, path, chatId)
   }
 
+  // Named once, so a row the list redraws for its context alone keeps its props and `memo` holds.
+  const openAgentRelay = useCallback((pairChatId: string) => {
+    openChat(pairChatId)
+    router.push({ pathname: '/chat/[id]', params: { id: pairChatId } })
+  }, [openChat])
+  const quoteSource = useCallback(
+    (source: QuoteSelectionSource) => setQuoteSelection({ ...source, text: plainDraftText(source.text) }),
+    [setQuoteSelection],
+  )
+
   if (chatId === undefined) return null
 
   /**
@@ -763,27 +752,6 @@ function ChatContent({ chatId }: { chatId: string | undefined }) {
   const topInset = insets.top + CHAT_HEADER_HEIGHT + spacing.lg
 
   const connected = status === 'live'
-  const agents = workspace.agents
-  /**
-   * What a row draws besides its own data. The list redraws a mounted row only when its
-   * item or this object changes, never because `renderItem` did, so a value a row reads
-   * from this screen has to be named here to reach it: a thread reply that lands in an
-   * idle chat, the connection dropping, the file listing arriving, the newest turn moving
-   * on. Everything in it holds still through a streamed frame.
-   */
-  const rowContext = useMemo(
-    () => ({ openBundles, connected, links: replyLinks, draftActions, repoFiles, latestTurnKey, agents }),
-    [openBundles, connected, replyLinks, draftActions, repoFiles, latestTurnKey, agents],
-  )
-  // Named once, so a row redrawn for `rowContext` alone keeps its props and `memo` holds.
-  const openAgentRelay = useCallback((pairChatId: string) => {
-    openChat(pairChatId)
-    router.push({ pathname: '/chat/[id]', params: { id: pairChatId } })
-  }, [openChat])
-  const quoteSource = useCallback(
-    (source: QuoteSelectionSource) => setQuoteSelection({ ...source, text: plainDraftText(source.text) }),
-    [setQuoteSelection],
-  )
 
   return (
     <SubagentDirectory.Provider value={directory}>
@@ -791,86 +759,33 @@ function ChatContent({ chatId }: { chatId: string | undefined }) {
     <AnswerChange.Provider value={answerChange}>
     <TranscriptCovered.Provider value={covered}>
     <View style={styles.screen}>
-      <KeyboardAwareLegendList
-        // Short threads sit at the bottom, long ones open there, and the end stays
-        // pinned while a reply streams or a message lands, as long as the user is near
-        // it. Rows keep their own fold state, so they are not recycled.
-        alignItemsAtEnd
-        contentContainerStyle={[styles.feed, { paddingTop: topInset }]}
+      <LiveTranscript
+        chatId={chatId}
+        listRef={listRef}
+        sessionLive={sessionLive}
+        projectThread={projectThread}
+        firstKey={firstKey}
+        onLoadOlder={loadOlder}
+        openBundles={openBundles}
+        onBundleOpen={setBundleOpen}
+        connected={connected}
+        covered={covered}
+        links={replyLinks}
+        draftActions={draftActions}
+        repoFiles={repoFiles}
+        userBubbleTint={userBubbleTint}
+        topInset={topInset}
+        keyboardSink={keyboardSink}
         contentInsetEndAdjustment={contentInsetEndAdjustment}
-        data={pageRows}
-        // A bundle's open state lives here, not in its row, so the list redraws when it changes.
-        extraData={rowContext}
-        estimatedItemSize={ESTIMATED_ROW}
         freeze={freeze}
-        initialScrollAtEnd
-        keyboardDismissMode="interactive"
-        keyboardLiftBehavior="always"
-        keyboardOffset={keyboardSink}
-        keyExtractor={listKeyOf}
-        // Under a subagent's screen the list stays where it was left.
-        maintainScrollAtEnd={covered ? false : { animated: false, on: { dataChange: true, footerLayout: true, itemLayout: true, layout: true } }}
-        maintainScrollAtEndThreshold={0.15}
-        maintainVisibleContentPosition
-        onStartReached={loadOlder}
-        onStartReachedThreshold={0.3}
-        ListHeaderComponent={historyOffset > 0 ? (
-          <Pressable accessibilityRole="button" onPress={loadOlder} style={{ alignSelf: 'center', padding: spacing.md }}>
-            <Text style={{ color: colors.dim }}>Load earlier messages</Text>
-          </Pressable>
-        ) : null}
-        ListFooterComponent={working === undefined ? null : (
-          <DmWorkingIndicator
-            agents={workspace.agents}
-            persona={personaOf(workspace.agents, working.kind === 'turn' ? working.turn.agentId : working.kind === 'consult' ? working.agentId : projectThread ? SINGLE_CHAT_VOICE.id : chat?.memberIds[0] ?? 'unknown')}
-            working={working}
-            bare={projectThread}
-          />
-        )}
-        recycleItems={false}
-        ListEmptyComponent={
-          thread.hasSnapshot
-            ? <View style={styles.empty}><Text style={styles.emptyTitle}>An empty conversation</Text><Text style={styles.emptyCopy}>Say something to get started.</Text></View>
-            : <View style={styles.empty}><Text style={styles.emptyCopy}>Loading conversation…</Text></View>
-        }
         onScroll={trackScroll}
-        ref={listRef}
-        renderItem={({ item, index }) => (
-          <TranscriptRow
-            agents={agents}
-            connected={connected}
-            bubbleReplies={chat?.kind === 'dm'}
-            {...(userBubbleTint === undefined ? {} : { userBubbleTint })}
-            showSpeaker={!singleChat}
-            quoteAuthors={chat !== null && quoteNamesAuthor(chat, projectThread)}
-            {...(projectThread && project !== undefined ? { threadProject: project } : {})}
-            pinPlan={chat?.kind === 'project' && !projectThread}
-            compactUser={dateLabels[index] === undefined && isUserBubbleRow(item) && isUserBubbleRow(pageRows[index - 1])}
-            latest={item.key === latestTurnKey}
-            links={replyLinks}
-            draftActions={draftActions}
-            repoFiles={repoFiles}
-            row={item}
-            {...(item.kind === 'thread_bundle' ? { bundleOpen: threadBundleOpen(openBundles, stretch, item.key), bundleOpenItems: threadBundleOpenItems(openBundles, stretch, item), onBundleOpen: setBundleOpen } : {})}
-            dateLabel={dateLabels[index]}
-            waitingOnAgentId={item.kind === 'turn' ? waitingOnByTurn.get(item.turnId) : undefined}
-            consultationMarker={item.kind === 'event' ? consultationMarkers.get(item.event.id) : undefined}
-            unannounced={item.kind === 'event' && item.event.type === 'agent_relay' && item.event.phase === 'sent' ? unannounced.get(item.event.turnId) : undefined}
-            relayOffset={dateLabels[index] === undefined ? relayOffset(item, pageRows[index - 1]) : undefined}
-            {...(projectThread && dateLabels[index] === undefined ? { threadOffset: threadOffset(item, pageRows[index - 1]) } : {})}
-            onOpenAgentRelay={openAgentRelay}
-            {...(project === undefined || project.name === '' ? {} : { forwardSource: project.name })}
-            onRejectWork={rejectWork}
-            onReveal={revealRowStable}
-            {...(memoryMarks === undefined || item.kind !== 'turn' ? {} : { memoryChanges: memoryMarks.get(item.key) })}
-            onOpenSubagent={openSubagent}
-            onOpenQuoteSource={openQuoteSourceStable}
-            {...(chat?.kind === 'dm' || chat?.kind === 'group' ? { onReply: chooseReply } : {})}
-            {...(isPair ? {} : { onQuoteSource: quoteSource })}
-          />
-        )}
-        scrollEventThrottle={80}
-        scrollIndicatorInsets={{ top: topInset - spacing.lg }}
+        onOpenAgentRelay={openAgentRelay}
+        onRejectWork={rejectWork}
+        onReveal={revealRowStable}
+        onOpenSubagent={openSubagent}
+        onOpenQuoteSource={openQuoteSourceStable}
+        onReply={chooseReply}
+        onQuoteSource={quoteSource}
       />
 
       <ChatHeader
@@ -1205,6 +1120,194 @@ function ChatContent({ chatId }: { chatId: string | undefined }) {
     </AnswerChange.Provider>
     </SubagentLaunchesContext.Provider>
     </SubagentDirectory.Provider>
+  )
+}
+
+interface LiveTranscriptProps {
+  chatId: string
+  listRef: RefObject<LegendListRef | null>
+  sessionLive: SessionLive
+  projectThread: boolean
+  /** The oldest row on the page. The screen holds it, because a reveal moves it. */
+  firstKey: string | undefined
+  onLoadOlder: () => void
+  /** The project thread's open bundles. The screen holds them, because a reveal opens one. */
+  openBundles: typeof NO_OPEN_THREAD_BUNDLES
+  onBundleOpen: (key: string, open: boolean) => void
+  connected: boolean
+  /** Under a subagent's screen the list stays where it was left. */
+  covered: boolean
+  links: MarkdownLinks | undefined
+  draftActions: DraftActions
+  repoFiles: string[] | undefined
+  userBubbleTint: BubbleTint | undefined
+  topInset: number
+  keyboardSink: number
+  contentInsetEndAdjustment: ReturnType<typeof useKeyboardChatComposerInset>['contentInsetEndAdjustment']
+  freeze: ReturnType<typeof useKeyboardScrollToEnd>['freeze']
+  onScroll: (event: NativeSyntheticEvent<NativeScrollEvent>) => void
+  onOpenAgentRelay: (chatId: string) => void
+  onRejectWork: (chatId: string) => void
+  onReveal: (rowKey: string, place?: RevealPlace) => void
+  onOpenSubagent: (toolCallId: string) => void
+  onOpenQuoteSource: (eventId: string) => void
+  onReply: (reply: MessageReply) => void
+  onQuoteSource: (source: QuoteSelectionSource) => void
+}
+
+/**
+ * The transcript over the live thread. The screen reads the quiet workspace, so a streamed
+ * text frame renders this list and the turn that grew, not the header, the composer or the
+ * sheets. Everything a row draws from the thread is worked out here, from rows that carry
+ * the text.
+ */
+function LiveTranscript({
+  chatId, listRef, sessionLive, projectThread, firstKey, onLoadOlder, openBundles, onBundleOpen, connected, covered, links, draftActions,
+  repoFiles, userBubbleTint, topInset, keyboardSink, contentInsetEndAdjustment, freeze, onScroll, onOpenAgentRelay, onRejectWork, onReveal,
+  onOpenSubagent, onOpenQuoteSource, onReply, onQuoteSource,
+}: LiveTranscriptProps) {
+  const { workspace } = useWorkspaceData()
+  const thread = useLiveThread(chatId)
+  const chat = chatOf(workspace, chatId)
+  const chatKind = chat?.kind
+  const isPair = chatKind === 'pair'
+  const singleChat = chat?.mode === 'single'
+  const project = roomOf(workspace, chat?.projectId)
+  const agents = workspace.agents
+  const { rows, consultationMarkers, visibleRows } = useTranscriptRows(thread, workspace, chatId, projectThread, sessionLive)
+  // In a DM, memory writes are reached through a reply's long-press actions only.
+  const memoryMarks = useMemo(() => chatKind === 'dm' ? dmMemoryMarks(rows) : undefined, [chatKind, rows])
+  const unannounced = useMemo(() => unannouncedConsultations(rows), [rows])
+  const historyOffset = historyStart(visibleRows, firstKey)
+  const pageRows = useMemo(() => visibleRows.slice(historyOffset), [visibleRows, historyOffset])
+  // A sent message keeps its pending row's list key once stored. Updated while rendering,
+  // so the list never sees the stored row under a key of its own.
+  const [listKeys, setListKeys] = useState<{ rows: readonly Row[]; carried: ReadonlyMap<string, string> }>(() => ({ rows: pageRows, carried: new Map() }))
+  if (listKeys.rows !== pageRows) setListKeys({ rows: pageRows, carried: carryPendingKeys(listKeys.rows, pageRows, listKeys.carried) })
+  const listKeyOf = useCallback((row: Row) => listKeys.carried.get(row.key) ?? row.key, [listKeys.carried])
+  const stretch = useMemo(() => threadStretch(visibleRows), [visibleRows])
+  const dateLabels = useMemo(() => dateLabelsFor(pageRows, isPair), [isPair, pageRows])
+  const waitingOnByTurn = useMemo(() => {
+    const waiting = new Map<string, string>()
+    for (const row of rows) {
+      if (row.kind !== 'event' || row.event.type !== 'agent_relay') continue
+      if (row.event.phase === 'sent') waiting.set(row.event.turnId, row.event.peerAgentId)
+      else waiting.delete(row.event.turnId)
+    }
+    return waiting
+  }, [rows])
+  // The one face that moves: whoever spoke last.
+  const latestTurnKey = useMemo(() => {
+    for (let index = rows.length - 1; index >= 0; index -= 1) {
+      const row = rows[index]
+      if (row?.kind === 'turn') return row.key
+    }
+    return undefined
+  }, [rows])
+  // A DM's indicator waits on a consulted colleague only while her pair chat still runs.
+  const runningChatIds = useMemo(
+    () => new Set(Object.entries(workspace.activity).filter(([, activity]) => activity.runningTurns.length > 0).map(([id]) => id)),
+    [workspace.activity],
+  )
+  // A project thread's face leaves with its own turn; it never waits on a consult.
+  const working = useMemo(() => {
+    if (chatKind !== 'dm' && !projectThread) return undefined
+    const state = dmWorking(rows, runningChatIds)
+    return projectThread && state?.kind === 'consult' ? undefined : state
+  }, [chatKind, projectThread, rows, runningChatIds])
+  /**
+   * What a row draws besides its own data. The list redraws a mounted row only when its
+   * item or this object changes, never because `renderItem` did, so a value a row reads
+   * from the screen has to be named here to reach it: a thread reply that lands in an
+   * idle chat, the connection dropping, the file listing arriving, the newest turn moving
+   * on. Everything in it holds still through a streamed frame.
+   */
+  const rowContext = useMemo(
+    () => ({ openBundles, connected, links, draftActions, repoFiles, latestTurnKey, agents }),
+    [openBundles, connected, links, draftActions, repoFiles, latestTurnKey, agents],
+  )
+
+  return (
+    <KeyboardAwareLegendList
+      // Short threads sit at the bottom, long ones open there, and the end stays
+      // pinned while a reply streams or a message lands, as long as the user is near
+      // it. Rows keep their own fold state, so they are not recycled.
+      alignItemsAtEnd
+      contentContainerStyle={[styles.feed, { paddingTop: topInset }]}
+      contentInsetEndAdjustment={contentInsetEndAdjustment}
+      data={pageRows}
+      // A bundle's open state lives in the screen, not in its row, so the list redraws when it changes.
+      extraData={rowContext}
+      estimatedItemSize={ESTIMATED_ROW}
+      freeze={freeze}
+      initialScrollAtEnd
+      keyboardDismissMode="interactive"
+      keyboardLiftBehavior="always"
+      keyboardOffset={keyboardSink}
+      keyExtractor={listKeyOf}
+      maintainScrollAtEnd={covered ? false : { animated: false, on: { dataChange: true, footerLayout: true, itemLayout: true, layout: true } }}
+      maintainScrollAtEndThreshold={0.15}
+      maintainVisibleContentPosition
+      onStartReached={onLoadOlder}
+      onStartReachedThreshold={0.3}
+      ListHeaderComponent={historyOffset > 0 ? (
+        <Pressable accessibilityRole="button" onPress={onLoadOlder} style={{ alignSelf: 'center', padding: spacing.md }}>
+          <Text style={{ color: colors.dim }}>Load earlier messages</Text>
+        </Pressable>
+      ) : null}
+      ListFooterComponent={working === undefined ? null : (
+        <DmWorkingIndicator
+          agents={agents}
+          persona={personaOf(agents, working.kind === 'turn' ? working.turn.agentId : working.kind === 'consult' ? working.agentId : projectThread ? SINGLE_CHAT_VOICE.id : chat?.memberIds[0] ?? 'unknown')}
+          working={working}
+          bare={projectThread}
+        />
+      )}
+      recycleItems={false}
+      ListEmptyComponent={
+        thread.hasSnapshot
+          ? <View style={styles.empty}><Text style={styles.emptyTitle}>An empty conversation</Text><Text style={styles.emptyCopy}>Say something to get started.</Text></View>
+          : <View style={styles.empty}><Text style={styles.emptyCopy}>Loading conversation…</Text></View>
+      }
+      onScroll={onScroll}
+      ref={listRef}
+      renderItem={({ item, index }) => (
+        <TranscriptRow
+          agents={agents}
+          connected={connected}
+          bubbleReplies={chatKind === 'dm'}
+          {...(userBubbleTint === undefined ? {} : { userBubbleTint })}
+          showSpeaker={!singleChat}
+          quoteAuthors={chat !== null && quoteNamesAuthor(chat, projectThread)}
+          {...(projectThread && project !== undefined ? { threadProject: project } : {})}
+          pinPlan={chatKind === 'project' && !projectThread}
+          compactUser={dateLabels[index] === undefined && isUserBubbleRow(item) && isUserBubbleRow(pageRows[index - 1])}
+          latest={item.key === latestTurnKey}
+          links={links}
+          draftActions={draftActions}
+          repoFiles={repoFiles}
+          row={item}
+          {...(item.kind === 'thread_bundle' ? { bundleOpen: threadBundleOpen(openBundles, stretch, item.key), bundleOpenItems: threadBundleOpenItems(openBundles, stretch, item), onBundleOpen } : {})}
+          dateLabel={dateLabels[index]}
+          waitingOnAgentId={item.kind === 'turn' ? waitingOnByTurn.get(item.turnId) : undefined}
+          consultationMarker={item.kind === 'event' ? consultationMarkers.get(item.event.id) : undefined}
+          unannounced={item.kind === 'event' && item.event.type === 'agent_relay' && item.event.phase === 'sent' ? unannounced.get(item.event.turnId) : undefined}
+          relayOffset={dateLabels[index] === undefined ? relayOffset(item, pageRows[index - 1]) : undefined}
+          {...(projectThread && dateLabels[index] === undefined ? { threadOffset: threadOffset(item, pageRows[index - 1]) } : {})}
+          onOpenAgentRelay={onOpenAgentRelay}
+          {...(project === undefined || project.name === '' ? {} : { forwardSource: project.name })}
+          onRejectWork={onRejectWork}
+          onReveal={onReveal}
+          {...(memoryMarks === undefined || item.kind !== 'turn' ? {} : { memoryChanges: memoryMarks.get(item.key) })}
+          onOpenSubagent={onOpenSubagent}
+          onOpenQuoteSource={onOpenQuoteSource}
+          {...(chatKind === 'dm' || chatKind === 'group' ? { onReply } : {})}
+          {...(isPair ? {} : { onQuoteSource })}
+        />
+      )}
+      scrollEventThrottle={80}
+      scrollIndicatorInsets={{ top: topInset - spacing.lg }}
+    />
   )
 }
 

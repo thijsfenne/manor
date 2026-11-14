@@ -4,6 +4,7 @@ What changed for someone who uses Manor, newest first. A version is a tag on `ma
 
 ## Unreleased
 
+- On the phone, a reply that streams in redraws only its own text. The header, the composer, the menu and the list under the chat used to redraw with every piece of text, in a DM too, where the reply shows only once it is whole. Scrolling and typing stay smooth while an agent writes.
 - On the phone, the cards in a chat notice when the connection to your Mac drops or returns. A mail card that was already on screen kept its Send and Discard buttons live while offline.
 - On the phone, a chat you went back from shows its unread dot when a reply lands in it, and a run that ends there waits for you instead of settling itself. Coming back to the app on the inbox no longer reloads the last chat you had open.
 - The phone app loads a third of the code it did. It bundled every icon in the set, about 6,000, to draw 174.

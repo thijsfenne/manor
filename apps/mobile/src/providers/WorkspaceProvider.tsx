@@ -28,15 +28,20 @@ import {
   clearArtifactRequest,
   clearNotice,
   clearRunningTurns,
+  createWorkspaceStore,
   emptyWorkspace,
   forgetDirs,
   leaveChat as leaveChatSelection,
+  liveThreadOf,
   reduce,
   selectChat,
   sendingUserMessage,
   shouldSettleOpenRun,
   settleChatOverride,
   WORK_RESULT_CONNECTION_LOST,
+  type LiveWorkspace,
+  type QuietWorkspace,
+  type ThreadState,
   type WorkspaceState,
 } from '@manor/client-runtime/state'
 import {
@@ -47,6 +52,7 @@ import {
   useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
   type ReactNode,
 } from 'react'
 import { AppState } from 'react-native'
@@ -73,9 +79,13 @@ export interface Opening {
   files?: StagedFile[]
 }
 
-/** Changes with every stream event; read it only where the screen shows workspace state. */
+/**
+ * The quiet workspace: it keeps its identity while a reply streams and moves on every
+ * other change. It holds no streamed text, so a view that draws a reply reads its
+ * thread through `useLiveThread`.
+ */
 export interface WorkspaceData {
-  workspace: WorkspaceState
+  workspace: QuietWorkspace
   createdChat: { chatId: string; requestId?: string } | null
   createdProject: { projectId: string; requestId?: string } | null
 }
@@ -163,6 +173,7 @@ export type ProjectEdit = Pick<Project, 'name' | 'icon' | 'color' | 'repoPaths' 
 type WorkspaceContextValue = WorkspaceData & WorkspaceActions & { status: ConnectionStatus }
 
 const WorkspaceDataContext = createContext<WorkspaceData | null>(null)
+const WorkspaceLiveContext = createContext<LiveWorkspace | null>(null)
 const WorkspaceStatusContext = createContext<ConnectionStatus | null>(null)
 const WorkspaceActionsContext = createContext<WorkspaceActions | null>(null)
 
@@ -175,14 +186,13 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     authRef.current = auth
   }, [auth])
 
-  const [workspace, applyWorkspace] = useState<WorkspaceState>(emptyWorkspace)
+  // Outside React: a text frame changes the store, and only its live readers render.
+  const [store] = useState(() => createWorkspaceStore(emptyWorkspace))
+  const { update: applyWorkspace } = store
+  const workspace = useSyncExternalStore(store.subscribe, store.quiet, store.quiet)
   const [status, setStatus] = useState<ConnectionStatus>('offline')
   const [createdChat, setCreatedChat] = useState<{ chatId: string; requestId?: string } | null>(null)
   const [createdProject, setCreatedProject] = useState<{ projectId: string; requestId?: string } | null>(null)
-  const workspaceRef = useRef(workspace)
-  useEffect(() => {
-    workspaceRef.current = workspace
-  }, [workspace])
   const connectionRef = useRef<WorkspaceConnection | null>(null)
   /** Kept while the app is closed or reconnecting; a socket opening re-registers it. */
   const pushTokenRef = useRef<string | null>(null)
@@ -222,7 +232,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const setWorkspace = useCallback((change: (state: WorkspaceState) => WorkspaceState) => {
     framesRef.current?.flush()
     applyWorkspace(change)
-  }, [])
+  }, [applyWorkspace])
 
   const send = useCallback((message: ClientMessage) => connectionRef.current?.send(message) === true, [])
   // Built per call: the React Compiler refuses a ref-reading `send` handed to a function during render.
@@ -261,7 +271,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         const token = pushTokenRef.current
         if (token !== null) connection.send({ type: 'register_push_token', token })
         pushRefreshRef.current()
-        const reopen = workspaceRef.current.pendingChatId ?? workspaceRef.current.openChatId
+        const reopen = store.get().pendingChatId ?? store.get().openChatId
         if (reopen !== null) connection.send({ type: 'open_chat', chatId: reopen })
       },
       onInvalidMessage: () => console.warn('manor mobile received a message outside the contract'),
@@ -331,7 +341,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       connection.dispose()
       if (connectionRef.current === connection) connectionRef.current = null
     }
-  }, [auth.enabled, auth.ready, auth.sessionKey, setWorkspace, signedIn])
+  }, [auth.enabled, auth.ready, auth.sessionKey, setWorkspace, signedIn, store])
 
   useEffect(() => {
     if (!auth.ready || (auth.enabled && !signedIn)) return
@@ -385,8 +395,8 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
 
   const openChat = useCallback((chatId: string) => {
     setWorkspace((current) => selectChat(current, chatId))
-    return send(openChatRequest(chatId, workspaceRef.current.threads[chatId], connectionRef.current?.holds(chatId) === true))
-  }, [send, setWorkspace])
+    return send(openChatRequest(chatId, store.get().threads[chatId], connectionRef.current?.holds(chatId) === true))
+  }, [send, setWorkspace, store])
 
   const leaveChat = useCallback((chatId: string) => {
     setWorkspace((current) => leaveChatSelection(current, chatId))
@@ -394,8 +404,8 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
 
   const openSubagentThread = useCallback((childId: string, parentId: string) => {
     setWorkspace((current) => askChildThread(current, childId, parentId))
-    return send(openChatRequest(childId, workspaceRef.current.threads[childId], connectionRef.current?.holds(childId) === true))
-  }, [send, setWorkspace])
+    return send(openChatRequest(childId, store.get().threads[childId], connectionRef.current?.holds(childId) === true))
+  }, [send, setWorkspace, store])
 
   const setChatSettled = useCallback(
     (chatId: string, settled: boolean) => commands().setChatSettled(chatId, settled),
@@ -680,7 +690,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const listArtifacts = useCallback(
     (query: string) => {
       const id = requestId('artifacts')
-      const previous = workspaceRef.current.artifacts.requestId
+      const previous = store.get().artifacts.requestId
       const sent = send(
         previous === null
           ? { type: 'list_mymind_objects', query, requestId: id }
@@ -690,14 +700,14 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       setWorkspace((current) => askMyMindObjects(current, query, id))
       return id
     },
-    [send, setWorkspace],
+    [send, setWorkspace, store],
   )
 
   const loadMoreArtifacts = useCallback(() => {
-    const id = workspaceRef.current.artifacts.requestId
+    const id = store.get().artifacts.requestId
     if (id === null) return false
     return commands().loadMoreMyMindObjects(id)
-  }, [commands])
+  }, [commands, store])
 
   const clearCreatedChat = useCallback(() => setCreatedChat(null), [])
   const clearCreatedProject = useCallback(() => setCreatedProject(null), [])
@@ -761,7 +771,9 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   return (
     <WorkspaceActionsContext.Provider value={actions}>
       <WorkspaceStatusContext.Provider value={status}>
-        <WorkspaceDataContext.Provider value={data}>{children}</WorkspaceDataContext.Provider>
+        <WorkspaceLiveContext.Provider value={store}>
+          <WorkspaceDataContext.Provider value={data}>{children}</WorkspaceDataContext.Provider>
+        </WorkspaceLiveContext.Provider>
       </WorkspaceStatusContext.Provider>
     </WorkspaceActionsContext.Provider>
   )
@@ -786,7 +798,18 @@ export function useWorkspaceData(): WorkspaceData {
   return required(useContext(WorkspaceDataContext), 'useWorkspaceData')
 }
 
-/** Everything at once; re-renders on every stream event. Prefer a narrower hook where it fits. */
+/**
+ * One chat's thread with its streamed text. It renders on every text frame of that chat
+ * alone, so only the views that draw the text read it: the transcript and a subagent's
+ * conversation. Everything else reads the quiet workspace.
+ */
+export function useLiveThread(chatId: string | null): ThreadState {
+  const live = required(useContext(WorkspaceLiveContext), 'useLiveThread')
+  const read = () => liveThreadOf(live, chatId)
+  return useSyncExternalStore(live.subscribe, read, read)
+}
+
+/** Everything at once; re-renders on every change but streamed text. Prefer a narrower hook where it fits. */
 export function useWorkspace(): WorkspaceContextValue {
   const data = useWorkspaceData()
   const status = useWorkspaceStatus()

@@ -1,5 +1,5 @@
-import type { LiveMessage, LiveTurn, ThreadState } from './threadState'
-import type { WorkspaceState } from './workspaceState'
+import { emptyThread, type LiveMessage, type LiveTurn, type ThreadState } from './threadState'
+import { emptyWorkspace, type WorkspaceState } from './workspaceState'
 
 /**
  * The quiet view is the workspace as everything except the streamed text sees it. A
@@ -177,6 +177,17 @@ export interface WorkspaceStore {
 
 /** What a live reader needs: the state as it is, and a call when it moves. */
 export type LiveWorkspace = Pick<WorkspaceStore, 'get' | 'subscribe'>
+
+/** A live reader with no store behind it: the empty workspace, which never moves. */
+export const NO_LIVE_WORKSPACE: LiveWorkspace = { get: () => emptyWorkspace, subscribe: () => () => {} }
+
+/**
+ * One chat's thread with its streamed text, as a store snapshot. It keeps its identity
+ * until that chat moves, so a reader renders on the text frames of its own chat alone.
+ */
+export function liveThreadOf(live: LiveWorkspace, chatId: string | null): ThreadState {
+  return (chatId === null ? undefined : live.get().threads[chatId]) ?? emptyThread
+}
 
 export function createWorkspaceStore(initial: WorkspaceState): WorkspaceStore {
   const toQuiet = createQuietWorkspace()

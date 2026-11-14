@@ -32,7 +32,6 @@ function SubagentContent({ callId, chatId, rootId }: { callId: string; chatId: s
   const launched = useMemo(() => chatSubagents(rowsOf(launchThread)), [launchThread])
   const subagent = launched.find((candidate) => candidate.step.toolCallId === callId)
   const childId = subagent?.step.subagent?.childChatId
-  const childThread = threadOf(workspace, childId ?? '')
   const summaryOf = useCallback((id: string) => subagentSummaryOf(workspace, id), [workspace.subagents, workspace.threads])
   // The child's own turn rows read the directory from context, as the chat screen's do.
   const listedSubagents = workspace.subagents
@@ -92,7 +91,7 @@ function SubagentContent({ callId, chatId, rootId }: { callId: string; chatId: s
         state={subagentStateOf(subagent, summaryOf)}
         subagent={subagent}
         summary={childId === undefined ? undefined : summaryOf(childId)}
-        thread={childId === undefined ? undefined : childThread}
+        childId={childId}
       />
       {header}
     </View>

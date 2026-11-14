@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import type { ServerMessage } from '@manor/contracts'
-import { createQuietWorkspace, createWorkspaceStore, liveWritten, streamedMessages } from './quietState'
+import { createQuietWorkspace, createWorkspaceStore, liveThreadOf, liveWritten, NO_LIVE_WORKSPACE, streamedMessages } from './quietState'
 import { emptyThread } from './threadState'
+import { rowsOf } from './transcriptState'
 import { emptyWorkspace, reduce, type WorkspaceState } from './workspaceState'
 
 const opened: WorkspaceState = { ...emptyWorkspace, threads: { work: emptyThread, other: emptyThread } }
@@ -87,5 +88,42 @@ describe('quiet workspace', () => {
     stop()
     store.update((state) => apply(state, delta('!')))
     expect(calls).toBe(2)
+  })
+
+  it('hands a live reader its own thread, held while another chat streams', () => {
+    const store = createWorkspaceStore(opened)
+    store.update((state) => apply(state, running, delta('Hello')))
+    const other = liveThreadOf(store, 'other')
+    const work = liveThreadOf(store, 'work')
+    store.update((state) => apply(state, delta(' world')))
+    expect(liveThreadOf(store, 'other')).toBe(other)
+    expect(liveThreadOf(store, 'work')).not.toBe(work)
+    expect(streamedMessages(liveThreadOf(store, 'work').liveTurns[0])[0]?.text).toBe('Hello world')
+    expect(liveThreadOf(store, 'missing')).toBe(emptyThread)
+    expect(liveThreadOf(store, null)).toBe(emptyThread)
+    expect(liveThreadOf(NO_LIVE_WORKSPACE, 'work')).toBe(emptyThread)
+  })
+
+  // A screen places a row by the quiet rows and a list draws the live ones, so the two
+  // must agree on which rows there are, steered turn and DM included.
+  it.each(['dm', 'project'] as const)('builds the same rows from the quiet and the live %s thread', (kind) => {
+    const steer: ServerMessage = {
+      type: 'event',
+      chatId: 'work',
+      event: { id: 'u2', ts: 6, type: 'user_message', text: 'And shorter', mentions: [], steersTurnId: 't1', steerAfter: { messageId: 'm1', textOffset: 5 } },
+    }
+    const live = apply(
+      opened,
+      { type: 'event', chatId: 'work', event: { id: 'u1', ts: 1, type: 'user_message', text: 'Write it', mentions: [] } },
+      running,
+      { type: 'event', chatId: 'work', event: { id: 'e1', ts: 4, type: 'tool_use', turnId: 't1', agentId: 'sage', toolCallId: 'c1', tool: 'Read', detail: 'a.ts' } },
+      delta('Hello there'),
+      steer,
+      delta(', and more', 'm2'),
+    )
+    const liveRows = rowsOf(live.threads.work!, kind)
+    const quietRows = rowsOf(createQuietWorkspace()(live).threads.work!, kind)
+    expect(quietRows.map((row) => `${row.kind}:${row.key}`)).toEqual(liveRows.map((row) => `${row.kind}:${row.key}`))
+    expect(liveRows.some((row) => row.kind === 'turn')).toBe(true)
   })
 })

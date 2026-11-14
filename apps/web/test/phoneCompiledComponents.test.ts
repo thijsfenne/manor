@@ -14,7 +14,8 @@ const phone = path.resolve(import.meta.dirname, '../../mobile/src')
  * This test sits with the web tests because the phone package has no Babel of its own.
  */
 const HOT: Record<string, readonly string[]> = {
-  'app/chat/[id].tsx': ['ChatContent', 'TranscriptRowBody'],
+  'app/chat/[id].tsx': ['ChatContent', 'LiveTranscript', 'useTranscriptRows', 'TranscriptRowBody'],
+  'components/SubagentConversation.tsx': ['ChildConversation'],
   'components/Composer.tsx': ['Composer'],
   'components/Turn.tsx': ['Turn'],
   'app/index.tsx': ['ProjectInbox'],

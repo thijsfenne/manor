@@ -1,5 +1,5 @@
 import { createContext, useContext, useSyncExternalStore, type ReactNode } from 'react'
-import { emptyThread, emptyWorkspace, type LiveWorkspace, type ThreadState } from './state'
+import { liveThreadOf, NO_LIVE_WORKSPACE, type LiveWorkspace, type ThreadState } from './state'
 
 const LiveWorkspaceContext = createContext<LiveWorkspace | null>(null)
 
@@ -14,10 +14,7 @@ export function LiveWorkspaceProvider({ live, children }: { live: LiveWorkspace;
  * workspace. Outside a provider it is the empty thread.
  */
 export function useLiveThread(chatId: string | null): ThreadState {
-  const live = useContext(LiveWorkspaceContext)
-  const { subscribe, get } = live ?? NO_LIVE
-  const read = () => (chatId === null ? undefined : get().threads[chatId]) ?? emptyThread
-  return useSyncExternalStore(subscribe, read, read)
+  const live = useContext(LiveWorkspaceContext) ?? NO_LIVE_WORKSPACE
+  const read = () => liveThreadOf(live, chatId)
+  return useSyncExternalStore(live.subscribe, read, read)
 }
-
-const NO_LIVE: LiveWorkspace = { get: () => emptyWorkspace, subscribe: () => () => {} }
