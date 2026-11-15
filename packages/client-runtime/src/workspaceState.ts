@@ -170,11 +170,26 @@ function mergeSnapshotEvents(current: ThreadEvent[], snapshot: ThreadEvent[]): T
  * already arrived as a broadcast or is new, and the copy keeps its identity when nothing
  * is, so the rows built from it are not rebuilt for a reopen that changed nothing.
  */
-function continueEvents(current: ThreadEvent[], following: ThreadEvent[]): ThreadEvent[] {
-  if (following.length === 0) return current
-  const held = new Set(current.map((event) => event.id))
-  const fresh = following.filter((event) => !held.has(event.id))
-  return fresh.length === 0 ? current : [...current, ...fresh]
+function continueEvents(current: ThreadEvent[], after: string, following: ThreadEvent[], replaced: readonly ThreadEvent[] = []): ThreadEvent[] {
+  // Events this copy holds that were rewritten in place while it was away.
+  const rewritten = new Map(replaced.map((event) => [event.id, event]))
+  const base = rewritten.size === 0 || !current.some((event) => rewritten.has(event.id))
+    ? current
+    : current.map((event) => rewritten.get(event.id) ?? event)
+  if (following.length === 0) return base
+  // What the copy holds past `after` came as broadcasts, possibly ahead of events it
+  // missed while away. The server's order stands; what it did not send stays behind it.
+  const found = base.map((event) => event.id).lastIndexOf(after)
+  const cut = found === -1 ? base.length - 1 : found
+  const head = new Set(base.slice(0, cut + 1).map((event) => event.id))
+  const past = base.slice(cut + 1)
+  const heard = new Map(past.map((event) => [event.id, event]))
+  const sent = new Set(following.map((event) => event.id))
+  const tail = [
+    ...following.filter((event) => !head.has(event.id)).map((event) => heard.get(event.id) ?? event),
+    ...past.filter((event) => !sent.has(event.id)),
+  ]
+  return tail.length === past.length && tail.every((event, index) => event === past[index]) ? base : [...base.slice(0, cut + 1), ...tail]
 }
 
 function sameCheckoutBranches(
@@ -1066,8 +1081,9 @@ export function reduce(
       // `running` exactly once, so rebuilding it here is the only way a client that
       // arrived mid-turn gets a timer, a current step and a Stop control.
       const held = state.threads[msg.chatId]
-      const continues = msg.after !== undefined && held !== undefined
-      const events = continues ? continueEvents(held.events, msg.events) : mergeSnapshotEvents(held?.events ?? [], msg.events)
+      const events = msg.after !== undefined && held !== undefined
+        ? continueEvents(held.events, msg.after, msg.events, msg.replaced)
+        : mergeSnapshotEvents(held?.events ?? [], msg.events)
       // The snapshot can be older than a terminal event that already landed here.
       // Rebuilding that turn as `running` would leave the spinner on forever.
       const active =

@@ -1213,6 +1213,25 @@ describe('a snapshot that continues the held copy', () => {
     const reopened = reduce(heard, { type: 'snapshot', chatId: 'dm', usage: {}, events: [said('evt_3', 3), said('evt_4', 4)], after: 'evt_2' })
     expect(reopened.threads.dm?.events.map((event) => event.id)).toEqual(['evt_1', 'evt_2', 'evt_3', 'evt_4'])
   })
+
+  // On a new socket a broadcast can land before the reply that carries what was missed.
+  it('keeps the order of the thread when a broadcast arrived ahead of the events this copy missed', () => {
+    const heard = reduce(sending, { type: 'event', chatId: 'dm', event: said('evt_5', 5) })
+    const reopened = reduce(heard, { type: 'snapshot', chatId: 'dm', usage: {}, events: [said('evt_3', 3), said('evt_4', 4), said('evt_5', 5)], after: 'evt_2' })
+    expect(reopened.threads.dm?.events.map((event) => event.id)).toEqual(['evt_1', 'evt_2', 'evt_3', 'evt_4', 'evt_5'])
+    // A reply read before that broadcast was written does not name it; it stays behind what the reply brought.
+    const earlier = reduce(heard, { type: 'snapshot', chatId: 'dm', usage: {}, events: [said('evt_3', 3), said('evt_4', 4)], after: 'evt_2' })
+    expect(earlier.threads.dm?.events.map((event) => event.id)).toEqual(['evt_1', 'evt_2', 'evt_3', 'evt_4', 'evt_5'])
+  })
+
+  it('takes an event that was rewritten while this copy was away, in its place', () => {
+    const rewritten = { ...said('evt_1', 1), text: 'rewritten' }
+    const reopened = reduce(sending, { type: 'snapshot', chatId: 'dm', usage: {}, events: [said('evt_3', 3)], after: 'evt_2', replaced: [rewritten] })
+    expect(reopened.threads.dm?.events).toEqual([rewritten, said('evt_2', 2), said('evt_3', 3)])
+    // A rewrite of an event this copy does not hold changes nothing.
+    const other = reduce(sending, { type: 'snapshot', chatId: 'dm', usage: {}, events: [], after: 'evt_2', replaced: [said('evt_9', 9)] })
+    expect(other.threads.dm?.events).toBe(whole.threads.dm?.events)
+  })
 })
 
 describe('notes that stand with what they are about', () => {

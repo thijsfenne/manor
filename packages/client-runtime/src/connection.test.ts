@@ -145,6 +145,50 @@ describe('workspace connection', () => {
     connection.dispose()
   })
 
+  it('keeps the rewrite position of a thread across a reconnect, and drops it with a frame it could not read', () => {
+    const { factory, sockets } = fakeSockets()
+    const connection = createWorkspaceConnection({ url: 'wss://manor.test/ws', sockets: factory, onStatus: () => undefined, onMessage: () => undefined })
+    const thread = { events: [{ id: 'evt_000001' }, { id: 'evt_000002' }] as ThreadEvent[] }
+    const sync = { epoch: 'run-1', rev: 3 }
+    const request = () => openChatRequest('chat-1', thread, connection.holds('chat-1'), connection.syncOf('chat-1'))
+
+    sockets[0]?.open()
+    sockets[0]?.receive({ type: 'snapshot', chatId: 'chat-1', events: [], usage: {}, sync })
+    expect(request()).toEqual({ type: 'open_chat', chatId: 'chat-1', after: 'evt_000002', count: 2, sync })
+    connection.reconnect()
+    sockets[1]?.open()
+    expect(connection.holds('chat-1')).toBe(false)
+    expect(request()).toEqual({ type: 'open_chat', chatId: 'chat-1', after: 'evt_000002', count: 2, sync })
+    // A server that sends no position leaves a copy from before a reconnect unusable, as before.
+    sockets[1]?.receive({ type: 'snapshot', chatId: 'chat-1', events: [], usage: {} })
+    connection.reconnect()
+    sockets[2]?.open()
+    expect(request()).toEqual({ type: 'open_chat', chatId: 'chat-1' })
+    sockets[2]?.receive({ type: 'snapshot', chatId: 'chat-1', events: [], usage: {}, sync })
+    sockets[2]?.onmessage?.({ data: '{"type":"event","chatId":"chat-1"}' })
+    expect(connection.syncOf('chat-1')).toBeUndefined()
+    connection.dispose()
+  })
+
+  // The copy missed events before that broadcast, and the count check alone can match by chance.
+  it('drops the position of a thread when a broadcast lands on a copy the new socket was not sent', () => {
+    const { factory, sockets } = fakeSockets()
+    const connection = createWorkspaceConnection({ url: 'wss://manor.test/ws', sockets: factory, onStatus: () => undefined, onMessage: () => undefined })
+    const sync = { epoch: 'run-1', rev: 3 }
+    const said = { type: 'event', chatId: 'chat-1', event: { id: 'evt_000005', ts: 5, type: 'user_message', text: 'later', mentions: [] } } as const
+
+    sockets[0]?.open()
+    sockets[0]?.receive({ type: 'snapshot', chatId: 'chat-1', events: [], usage: {}, sync })
+    sockets[0]?.receive(said)
+    expect(connection.syncOf('chat-1')).toEqual(sync)
+    connection.reconnect()
+    sockets[1]?.open()
+    expect(connection.syncOf('chat-1')).toEqual(sync)
+    sockets[1]?.receive(said)
+    expect(connection.syncOf('chat-1')).toBeUndefined()
+    connection.dispose()
+  })
+
   it('rebuilds each directory patch into a whole directory that keeps unchanged chats', () => {
     const { factory, sockets } = fakeSockets()
     const messages: ServerMessage[] = []

@@ -1,4 +1,4 @@
-import type { AgentConfig, ClientMessage, ServerMessage } from '@manor/contracts'
+import type { AgentConfig, ClientMessage, EventSync, ServerMessage } from '@manor/contracts'
 import { SINGLE_CHAT_VOICE, isModelOnlyMessage, placeQuotesAfterText, splitUserMessage, summaryInContext } from '@manor/contracts'
 import { NEW_CHAT_TITLE, type GenerateChatTitle } from './chatTitle.js'
 import { composeAgentNotesBundle, undoNotesUpdate } from './agentNotes.js'
@@ -19,7 +19,7 @@ type ChatMessage = Extract<
 
 type OpeningMessage = NonNullable<Extract<ClientMessage, { type: 'create_chat' }>['openingMessage']>
 
-type ChatStore = Pick<Store, 'getChat' | 'getProject' | 'loadEvents' | 'replaceEvent' | 'setChatTitle' | 'getChatSummary'>
+type ChatStore = Pick<Store, 'getChat' | 'getProject' | 'loadEvents' | 'loadThread' | 'replaceEvent' | 'setChatTitle' | 'getChatSummary'>
 
 type ChatRuntime = Pick<
   Orchestrator,
@@ -237,7 +237,7 @@ export class ChatModule {
         await this.undoNotes(message.chatId, message.turnId, reply, ack)
         return
       case 'open_chat':
-        reply(await this.snapshot(message.chatId, message.after, message.count))
+        reply(await this.snapshot(message.chatId, message.after, message.count, message.sync))
         return
       case 'send_message':
         const room = await this.options.store.getChat(message.chatId)
@@ -386,13 +386,15 @@ export class ChatModule {
 
   /**
    * The whole thread, or only what follows `after` when the client holds exactly the
-   * `count` events up to it. Reads active state last so a turn that settled while
-   * events, usage and overrides were loading cannot be resurrected as running by the
-   * snapshot response.
+   * `count` events up to it. A copy from the same socket heard every rewrite. A copy
+   * that names its `since` may be from an earlier socket: it also gets the events
+   * rewritten since then, or the whole thread when those cannot be named. Reads active
+   * state last so a turn that settled while events, usage and overrides were loading
+   * cannot be resurrected as running by the snapshot response.
    */
-  private async snapshot(chatId: string, after?: string, count?: number): Promise<ServerMessage> {
-    const [events, usage, overrides, chat] = await Promise.all([
-      this.options.store.loadEvents(chatId),
+  private async snapshot(chatId: string, after?: string, count?: number, since?: EventSync): Promise<ServerMessage> {
+    const [{ events, sync, rewritten }, usage, overrides, chat] = await Promise.all([
+      this.options.store.loadThread(chatId, since),
       this.options.orchestrator.usage(chatId),
       this.options.orchestrator.overrides(chatId),
       this.options.store.getChat(chatId),
@@ -400,12 +402,16 @@ export class ChatModule {
     const activeTurn = this.options.orchestrator.activeTurn(chatId)
     const subagent = chat === undefined ? undefined : subagentSummary(chat)
     const at = after === undefined ? -1 : events.map((event) => event.id).lastIndexOf(after)
-    const held = at >= 0 && at + 1 === count ? at : -1
+    const held = at >= 0 && at + 1 === count && (since === undefined || rewritten !== undefined) ? at : -1
+    const again = new Set(held < 0 ? [] : rewritten)
+    const replaced = again.size === 0 ? [] : events.slice(0, held + 1).filter((event) => again.has(event.id))
     return {
       type: 'snapshot',
       chatId,
       events: held < 0 ? [...events] : events.slice(held + 1),
       ...(held < 0 ? {} : { after }),
+      ...(replaced.length === 0 ? {} : { replaced }),
+      sync,
       usage,
       ...(activeTurn === undefined ? {} : { activeTurn }),
       ...(Object.keys(overrides).length === 0 ? {} : { overrides }),

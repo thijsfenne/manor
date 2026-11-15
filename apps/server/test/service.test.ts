@@ -767,6 +767,54 @@ describe('ManorService', () => {
     expect(whole()).toBe(2)
   })
 
+  // A client that was away missed the broadcasts. It asks with the rewrite position its
+  // last snapshot carried and gets the tail plus the events rewritten under it.
+  it('sends a copy from an earlier socket what follows and what was rewritten, or the whole thread when that cannot be told', async () => {
+    const store = createMemoryStore({ agents: roster })
+    const { chatId } = await seededChat(store)
+    const first = await store.appendEvent(chatId, { type: 'user_message', text: 'hello', mentions: ['sage'] })
+    const second = await store.appendEvent(chatId, { type: 'user_message', text: 'again', mentions: ['sage'] })
+    if (first.type !== 'user_message') throw new Error('expected a user message')
+    const { manor, replies, reply } = service(store)
+    const last = () => {
+      const snapshot = replies.at(-1)
+      if (snapshot?.type !== 'snapshot') throw new Error('expected a snapshot')
+      return snapshot
+    }
+    await manor.handle({ type: 'open_chat', chatId }, reply)
+    const sync = last().sync
+    if (sync === undefined) throw new Error('expected a rewrite position')
+
+    // Nothing happened: an empty tail, and the copy stays as it is.
+    expect(ClientMessageSchema.parse({ type: 'open_chat', chatId, after: second.id, count: 2, sync })).toMatchObject({ sync })
+    await manor.handle({ type: 'open_chat', chatId, after: second.id, count: 2, sync }, reply)
+    expect(last()).toMatchObject({ after: second.id, events: [], sync })
+    expect(last().replaced).toBeUndefined()
+
+    await store.replaceEvent(chatId, { ...first, text: 'hello, rewritten' })
+    await store.appendEvent(chatId, { type: 'user_message', text: 'third', mentions: ['sage'] })
+    await manor.handle({ type: 'open_chat', chatId, after: second.id, count: 2, sync }, reply)
+    expect(last()).toMatchObject({ after: second.id, events: [{ text: 'third' }], replaced: [{ id: first.id, text: 'hello, rewritten' }] })
+    expect(last().sync).toEqual({ epoch: sync.epoch, rev: sync.rev + 1 })
+
+    // A copy that already holds the rewrite is not sent it again.
+    await manor.handle({ type: 'open_chat', chatId, after: second.id, count: 2, sync: last().sync }, reply)
+    expect(last().replaced).toBeUndefined()
+
+    // Another server run counted differently, and a position never handed out is no position.
+    await manor.handle({ type: 'open_chat', chatId, after: second.id, count: 2, sync: { epoch: 'another-run', rev: 0 } }, reply)
+    expect(last().after).toBeUndefined()
+    expect(last().events).toHaveLength(3)
+    await manor.handle({ type: 'open_chat', chatId, after: second.id, count: 2, sync: { epoch: sync.epoch, rev: sync.rev + 9 } }, reply)
+    expect(last().after).toBeUndefined()
+
+    // More rewrites than the log names: the oldest position no longer reaches.
+    for (let round = 0; round < 300; round += 1) await store.replaceEvent(chatId, { ...first, text: `round ${round}` })
+    await manor.handle({ type: 'open_chat', chatId, after: second.id, count: 2, sync }, reply)
+    expect(last().after).toBeUndefined()
+    expect(last().events).toHaveLength(3)
+  })
+
   it("carries a child thread's stored row, so an older child keeps why it stopped", async () => {
     const store = createMemoryStore({ agents: roster })
     const { chatId } = await seededChat(store)

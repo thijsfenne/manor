@@ -2559,6 +2559,14 @@ export const ThreadEventSchema = ThreadEventWireSchema.superRefine((event, conte
 })
 export type ThreadEvent = z.infer<typeof ThreadEventSchema>
 
+/**
+ * Where a chat's rewrites stand on this server. Events are appended and, rarely,
+ * rewritten in place under the same id. `rev` counts those rewrites, and `epoch`
+ * names the server run that counted them, because the count lives in memory.
+ */
+export const EventSyncSchema = z.object({ epoch: z.string().min(1).max(64), rev: z.number().int().nonnegative() })
+export type EventSync = z.infer<typeof EventSyncSchema>
+
 // ---------------------------------------------------------------------------
 // Projects and chats — the sidebar. A project is a container, a room in the
 // house; a chat is one conversation inside it.
@@ -4032,14 +4040,21 @@ const ClientMessageWireSchema = z.discriminatedUnion('type', [
     type: z.literal('open_chat'),
     chatId: z.string(),
     /**
-     * The last event this client holds of a thread it was sent whole on the same
-     * socket, and how many events that copy holds. Events reach every socket as they
-     * are written, so the reply only needs what follows `after`. When the server's
+     * The last event this client holds of a thread it was sent whole, and how many
+     * events that copy holds. Events reach every socket as they are written, so on
+     * the same socket the reply only needs what follows `after`; a copy from an
+     * earlier socket names its `sync` as well. When the server's
      * thread up to `after` is not exactly `count` long, something was written without
      * a broadcast and the whole thread comes back instead.
      */
     after: z.string().optional(),
     count: z.number().int().nonnegative().optional(),
+    /**
+     * The rewrite position the last snapshot of this chat carried. With it the copy
+     * may come from an earlier socket: the reply then also names what was rewritten
+     * since, which that copy missed while it was away.
+     */
+    sync: EventSyncSchema.optional(),
   }),
   z.object({
     type: z.literal('send_message'),
@@ -4761,6 +4776,10 @@ export const ServerMessageSchema = z.discriminatedUnion('type', [
      * client keeps its own copy and appends them; absent means `events` are whole.
      */
     after: z.string().optional(),
+    /** With `after`: events the client already holds that were rewritten since its `sync`. */
+    replaced: z.array(ThreadEventSchema).optional(),
+    /** Where this chat's rewrites stand. The client hands it back on its next `open_chat`. */
+    sync: EventSyncSchema.optional(),
     usage: z.record(z.string(), UsageSchema),
     // The turn this chat has in flight right now, when it has one. `running` is
     // announced once and never repeated, so without this a client that reconnects

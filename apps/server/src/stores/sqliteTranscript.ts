@@ -1,5 +1,6 @@
+import { randomUUID } from 'node:crypto'
 import type { DatabaseSync } from 'node:sqlite'
-import { searchWords, type SearchMessageHit, type ThreadEvent } from '@manor/contracts'
+import { searchWords, type EventSync, type SearchMessageHit, type ThreadEvent } from '@manor/contracts'
 import type { SkillBundleFile, UnresolvedOutboundSubmission } from '../store.js'
 import { previewLine } from './previewLine.js'
 import { foldUsageEvent, usageRunKey, type UsageRun } from '../usageReport.js'
@@ -7,9 +8,20 @@ import { SqliteRecords } from './sqliteDatabase.js'
 
 type Metadata = { preview: string | null; participants: Record<string, number> }
 
+/** How many rewrites of one chat stay nameable. A client further behind gets the whole thread. */
+const REWRITE_LOG = 256
+
 export class SqliteTranscript {
   private cache = new Map<string, { events: ThreadEvent[]; bytes: number }>()
   private dataVersion = -1
+  /**
+   * Which events were rewritten in place, per chat, since this process started. A
+   * client that was away asks with the position it last saw and gets those events
+   * again. Memory only: a restart changes `epoch`, and every older position then
+   * reads as unknown.
+   */
+  private epoch = randomUUID()
+  private rewrites = new Map<string, { rev: number; log: { rev: number; id: string }[] }>()
   private metadata: SqliteRecords<Metadata>
   private runs: SqliteRecords<UsageRun>
   private outbound: SqliteRecords<UnresolvedOutboundSubmission>
@@ -33,7 +45,8 @@ export class SqliteTranscript {
   }
   get(chatId: string): ThreadEvent[] {
     const version = Number(this.db.prepare('PRAGMA data_version').get()?.data_version)
-    if (version !== this.dataVersion) { this.cache.clear(); this.dataVersion = version }
+    // Another connection wrote. What it rewrote is unknown, so no older position holds.
+    if (version !== this.dataVersion) { this.cache.clear(); this.rewrites.clear(); this.epoch = randomUUID(); this.dataVersion = version }
     const held = this.cache.get(chatId)
     if (held !== undefined) {
       this.cache.delete(chatId)
@@ -72,12 +85,37 @@ export class SqliteTranscript {
     const result = this.db.prepare('UPDATE events SET payload = ? WHERE chat_id = ? AND event_id = ?')
       .run(payload, chatId, event.id)
     if (result.changes === 0) throw new Error(`unknown event ${event.id}`)
+    // Counted before anything can return early. A rewrite that is rolled back stays
+    // counted, which only sends that event once more.
+    const rewritten = this.rewrites.get(chatId) ?? { rev: 0, log: [] }
+    rewritten.rev += 1
+    rewritten.log.push({ rev: rewritten.rev, id: event.id })
+    if (rewritten.log.length > REWRITE_LOG) rewritten.log.shift()
+    this.rewrites.set(chatId, rewritten)
     const cached = this.cache.get(chatId)
     if (cached === undefined) return
     const index = cached.events.findIndex((held) => held.id === event.id)
     if (index === -1) return
     cached.bytes += payload.length * 4 - JSON.stringify(cached.events[index]).length * 4
     cached.events[index] = event
+  }
+  /** Where this chat's rewrites stand. Read it together with `get`, which can start a new epoch. */
+  sync(chatId: string): EventSync {
+    return { epoch: this.epoch, rev: this.rewrites.get(chatId)?.rev ?? 0 }
+  }
+  /**
+   * Ids rewritten after `since`, or undefined when that cannot be told: the position
+   * is from another run, was never handed out, or lies before what the log still holds.
+   */
+  rewrittenSince(chatId: string, since: EventSync): string[] | undefined {
+    if (since.epoch !== this.epoch) return undefined
+    const held = this.rewrites.get(chatId)
+    const rev = held?.rev ?? 0
+    if (since.rev === rev) return []
+    if (held === undefined || since.rev > rev) return undefined
+    const oldest = held.log[0]?.rev ?? rev + 1
+    if (since.rev < oldest - 1) return undefined
+    return [...new Set(held.log.filter((entry) => entry.rev > since.rev).map((entry) => entry.id))]
   }
   participants(chatId: string): string[] {
     return Object.entries(this.metadata.get(chatId)?.participants ?? {}).sort(([, a], [, b]) => b - a).map(([id]) => id)
@@ -144,6 +182,7 @@ export class SqliteTranscript {
     this.db.prepare('DELETE FROM events WHERE chat_id = ?').run(chatId)
     this.db.prepare('DELETE FROM documents WHERE chat_id = ?').run(chatId)
     this.metadata.delete(chatId)
+    this.rewrites.delete(chatId)
     this.db.prepare("DELETE FROM records WHERE collection IN ('usageRuns', 'outboundSubmissions') AND json_extract(value, '$.chatId') = ?").run(chatId)
   }
 }

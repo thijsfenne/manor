@@ -1075,6 +1075,12 @@ export function createSqliteStore(options: SqliteStoreOptions): Store & {
       return undefined
     },
     loadEvents: (chatId) => events.get(chatId) ?? [],
+    loadThread(chatId, since) {
+      // Read first: it is `get` that notices a write from outside and starts a new epoch.
+      const thread = events.get(chatId) ?? []
+      const rewritten = since === undefined ? undefined : events.rewrittenSince(chatId, since)
+      return { events: thread, sync: events.sync(chatId), ...(rewritten === undefined ? {} : { rewritten }) }
+    },
     loadDocument: (chatId, documentId) => events.loadDocument(chatId, documentId),
     listUnresolvedOutboundSubmissions() {
       return events.unresolved()
@@ -1528,7 +1534,7 @@ type SyncStore = { [K in keyof Store]: (...args: Parameters<Store[K]>) => Awaite
 const READS = new Set<keyof SyncStore>([
   'listPushTokens', 'listProjects', 'listChats', 'sideChatOf', 'getSideSession', 'getChat',
   'getProject', 'chatsForProject', 'listWorkHandoffs', 'workHandoffForSourceTurn',
-  'workHandoffForTarget', 'loadRoster', 'listMcpServers', 'listSkills', 'loadSkillBundle', 'loadEvents', 'loadDocument',
+  'workHandoffForTarget', 'loadRoster', 'listMcpServers', 'listSkills', 'loadSkillBundle', 'loadEvents', 'loadThread', 'loadDocument',
   'listUnresolvedOutboundSubmissions', 'getOutboundThreadDecision', 'getChatSummary', 'getSessions',
   'loadChatOverrides', 'loadChatWorktrees', 'usageRuns', 'searchMessages', 'listRoutines', 'listRuns', 'getSubagentPolicy',
   'getProfile', 'getHouseSettings', 'getProjectSetup',

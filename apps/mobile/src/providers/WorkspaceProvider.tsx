@@ -243,7 +243,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const stopSubagent = useCallback((chatId: string, toolCallId: string) => commands().stopSubagent(chatId, toolCallId), [commands])
   const openSubagentThread = useCallback(
     (childId: string, parentId: string) =>
-      commands().openSubagentThread(childId, parentId, store.get().threads[childId], connectionRef.current?.holds(childId) === true),
+      commands().openSubagentThread(childId, parentId, store.get().threads[childId], connectionRef.current?.holds(childId) === true, connectionRef.current?.syncOf(childId)),
     [commands, store],
   )
   const answerUserInput = useCallback(
@@ -309,7 +309,8 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         if (token !== null) connection.send({ type: 'register_push_token', token })
         pushRefreshRef.current()
         const reopen = store.get().pendingChatId ?? store.get().openChatId
-        if (reopen !== null) connection.send({ type: 'open_chat', chatId: reopen })
+        // A new socket holds nothing. A copy that knows its rewrite position still asks only for what it missed.
+        if (reopen !== null) connection.send(openChatRequest(reopen, store.get().threads[reopen], false, connection.syncOf(reopen)))
       },
       onInvalidMessage: () => console.warn('manor mobile received a message outside the contract'),
       onClose: () => {
@@ -432,7 +433,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
 
   const openChat = useCallback((chatId: string) => {
     setWorkspace((current) => selectChat(current, chatId))
-    return send(openChatRequest(chatId, store.get().threads[chatId], connectionRef.current?.holds(chatId) === true))
+    return send(openChatRequest(chatId, store.get().threads[chatId], connectionRef.current?.holds(chatId) === true, connectionRef.current?.syncOf(chatId)))
   }, [send, setWorkspace, store])
 
   const leaveChat = useCallback((chatId: string) => {

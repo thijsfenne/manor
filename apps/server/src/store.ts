@@ -7,6 +7,7 @@ import type {
   ChatOverride,
   ConfirmRequest,
   Effort,
+  EventSync,
   ProjectIcon,
   ProjectMemoryScope,
   McpServerConfig,
@@ -427,6 +428,13 @@ export interface Store {
   /** Removes a skill and detaches its id from every persona holding it. */
   deleteSkill(skillId: string): Promise<void>
   loadEvents(chatId: string): Promise<readonly ThreadEvent[]>
+  /**
+   * The thread with where its rewrites stand, read in one go so the two agree.
+   * `rewritten` names the events rewritten in place after `since`; it is absent when
+   * no `since` was given or when that cannot be told, and the caller then sends the
+   * whole thread.
+   */
+  loadThread(chatId: string, since?: EventSync): Promise<{ events: readonly ThreadEvent[]; sync: EventSync; rewritten?: readonly string[] }>
   /** Original bytes of a PDF or Word attachment, deleted with the chat. */
   loadDocument(chatId: string, documentId: string): Promise<Uint8Array | undefined>
   /**

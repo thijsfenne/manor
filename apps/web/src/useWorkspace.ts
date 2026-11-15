@@ -729,7 +729,7 @@ export function useWorkspace(url: string, auth?: WorkspaceAuth): Manor {
   const { stopTurn, stopBackground, stopSubagent, answerUserInput, answerSecretRequest, changeSessionAnswer, submitOutboundDraft, discardOutboundDraft, snoozeOutboundDraft, ignoreOutboundDraft, restoreOutboundDraft } = commands
   const openSubagentThread = useCallback(
     (childId: string, parentId: string) =>
-      void commands.openSubagentThread(childId, parentId, threadsRef.current[childId], socketRef.current?.holds(childId) === true),
+      void commands.openSubagentThread(childId, parentId, threadsRef.current[childId], socketRef.current?.holds(childId) === true, socketRef.current?.syncOf(childId)),
     [commands],
   )
   const readOutboundThread = useCallback(
@@ -777,7 +777,8 @@ export function useWorkspace(url: string, auth?: WorkspaceAuth): Manor {
         for (const id of resumeChatIdsRef.current) {
           if (!resume.includes(id)) resume.push(id)
         }
-        for (const chatId of resume) send({ type: 'open_chat', chatId })
+        // A new socket holds nothing. A copy that knows its rewrite position still asks only for what it missed.
+        for (const chatId of resume) send(openChatRequest(chatId, threadsRef.current[chatId], false, socketRef.current?.syncOf(chatId)))
       },
       onClose: () => {
         // The server can no longer disarm Escape through this socket, so the shell
@@ -958,14 +959,14 @@ export function useWorkspace(url: string, auth?: WorkspaceAuth): Manor {
     (chatId: string) => {
       const alreadyOpen = openIdRef.current === chatId && pendingIdRef.current === null
       setWorkspace((current) => selectChat(current, chatId))
-      if (!alreadyOpen) send(openChatRequest(chatId, threadsRef.current[chatId], socketRef.current?.holds(chatId) === true))
+      if (!alreadyOpen) send(openChatRequest(chatId, threadsRef.current[chatId], socketRef.current?.holds(chatId) === true, socketRef.current?.syncOf(chatId)))
     },
     [send],
   )
 
   const loadChat = useCallback(
     (chatId: string) => {
-      send(openChatRequest(chatId, threadsRef.current[chatId], socketRef.current?.holds(chatId) === true))
+      send(openChatRequest(chatId, threadsRef.current[chatId], socketRef.current?.holds(chatId) === true, socketRef.current?.syncOf(chatId)))
       setWorkspace((current) => askThreadInBackground(current, chatId))
     },
     [send],

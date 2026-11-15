@@ -6,6 +6,7 @@ import {
   applyDirectoryPatch,
   type ClientMessage,
   type DirectoryMessage,
+  type EventSync,
   type ServerMessage,
   type ThreadEvent,
   type WorkHandoff,
@@ -44,6 +45,12 @@ export interface WorkspaceConnection {
    * reopen asks only for what follows it (`openChatRequest`).
    */
   holds(chatId: string): boolean
+  /**
+   * The rewrite position of the last snapshot this connection was sent for the chat.
+   * It outlives a reconnect: with it a copy that missed frames can still ask for what
+   * follows, because the server then also names what was rewritten meanwhile.
+   */
+  syncOf(chatId: string): EventSync | undefined
   reconnect(): void
   dispose(): void
 }
@@ -105,10 +112,13 @@ export function parseServerMessage(raw: string): ServerMessage | null {
     return parsed.data
   }
   if (!isRecord(json) || json.type !== 'snapshot' || !Array.isArray(json.events)) return null
-  const events = json.events.filter((event) => ThreadEventSchema.safeParse(event).success)
-  if (events.length === json.events.length) return null
-  console.warn(`[manor] dropped ${json.events.length - events.length} unreadable events from a snapshot`)
-  const retry = ServerMessageSchema.safeParse({ ...json, events })
+  const readable = (event: unknown) => ThreadEventSchema.safeParse(event).success
+  const events = json.events.filter(readable)
+  const replaced = Array.isArray(json.replaced) ? json.replaced.filter(readable) : undefined
+  const dropped = json.events.length - events.length + (Array.isArray(json.replaced) ? json.replaced.length - (replaced?.length ?? 0) : 0)
+  if (dropped === 0) return null
+  console.warn(`[manor] dropped ${dropped} unreadable events from a snapshot`)
+  const retry = ServerMessageSchema.safeParse({ ...json, events, ...(replaced === undefined ? {} : { replaced }) })
   return retry.success ? retry.data : null
 }
 
@@ -153,10 +163,15 @@ export function withMediaOrigin(message: ServerMessage, socketUrl: string): Serv
     : { ...message, event: resolve(message.event) }
 }
 
-/** Opens a chat; a thread the socket already holds asks only for the events after its last. */
-export function openChatRequest(chatId: string, thread: { events: readonly ThreadEvent[] } | undefined, held: boolean): ClientMessage {
-  const after = held ? thread?.events[thread.events.length - 1]?.id : undefined
-  return after === undefined || thread === undefined ? { type: 'open_chat', chatId } : { type: 'open_chat', chatId, after, count: thread.events.length }
+/**
+ * Opens a chat. A thread the socket already holds asks only for the events after its
+ * last. So does a copy from before a reconnect, when it knows its rewrite position
+ * (`sync`); without one such a copy cannot be trusted and the whole thread is asked for.
+ */
+export function openChatRequest(chatId: string, thread: { events: readonly ThreadEvent[] } | undefined, held: boolean, sync?: EventSync): ClientMessage {
+  const after = held || sync !== undefined ? thread?.events[thread.events.length - 1]?.id : undefined
+  if (after === undefined || thread === undefined) return { type: 'open_chat', chatId }
+  return { type: 'open_chat', chatId, after, count: thread.events.length, ...(sync === undefined ? {} : { sync }) }
 }
 
 /**
@@ -171,6 +186,8 @@ export function createWorkspaceConnection(options: WorkspaceConnectionOptions): 
   let watchdog: ReturnType<typeof setTimeout> | undefined
   let activeSocket: SocketAdapter | null = null
   const held = new Set<string>()
+  // Not cleared with the socket: a position is what makes a copy from before a reconnect usable.
+  const synced = new Map<string, EventSync>()
 
   const open = () => {
     if (disposed) return
@@ -225,10 +242,18 @@ export function createWorkspaceConnection(options: WorkspaceConnectionOptions): 
       if (message === null) {
         // It may have been some chat's event, so no copy can be trusted to be whole.
         held.clear()
+        synced.clear()
         options.onInvalidMessage?.(frame.data)
         return
       }
-      if (message.type === 'snapshot') held.add(message.chatId)
+      if (message.type === 'snapshot') {
+        held.add(message.chatId)
+        if (message.sync === undefined) synced.delete(message.chatId)
+        else synced.set(message.chatId, message.sync)
+      }
+      // A broadcast for a chat this socket did not send whole lands on a copy that may
+      // have missed events before it. Its position no longer describes that copy.
+      if (message.type === 'event' && !held.has(message.chatId)) synced.delete(message.chatId)
       observeOutboundDraftEdits(message)
       if (message.type !== 'heartbeat') options.onMessage(message)
     }
@@ -254,6 +279,7 @@ export function createWorkspaceConnection(options: WorkspaceConnectionOptions): 
       return true
     },
     holds: (chatId) => activeSocket !== null && held.has(chatId),
+    syncOf: (chatId) => synced.get(chatId),
     reconnect() {
       if (disposed) return
       clearTimeout(retryTimer)

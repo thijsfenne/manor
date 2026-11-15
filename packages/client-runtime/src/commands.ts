@@ -4,6 +4,7 @@ import type {
   CheckoutRequest,
   ClientMessage,
   DocumentUpload,
+  EventSync,
   FileAttachment,
   ImageAttachment,
   InlineQuote,
@@ -265,12 +266,12 @@ export function createWorkspaceCommands(send: Send, update: Update) {
     stopBackground: (chatId: string) => send({ type: 'stop_background', chatId }),
     stopSubagent: (chatId: string, toolCallId: string) => send({ type: 'stop_subagent', chatId, toolCallId }),
     /**
-     * Asks for a subagent's child thread. `thread` and `held` are the client's own copy
-     * and whether its socket still holds it: a held thread asks only for what follows.
+     * Asks for a subagent's child thread. `thread`, `held` and `sync` are the client's
+     * own copy and what its connection knows of it (`openChatRequest`).
      */
-    openSubagentThread: (childId: string, parentId: string, thread: { events: readonly ThreadEvent[] } | undefined, held: boolean) => {
+    openSubagentThread: (childId: string, parentId: string, thread: { events: readonly ThreadEvent[] } | undefined, held: boolean, sync?: EventSync) => {
       update((state) => askChildThread(state, childId, parentId))
-      return send(openChatRequest(childId, thread, held))
+      return send(openChatRequest(childId, thread, held, sync))
     },
     answerUserInput: (chatId: string, requestId: string, answers: UserInputAnswers) =>
       send({ type: 'answer_user_input', chatId, requestId, answers }),

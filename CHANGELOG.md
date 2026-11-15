@@ -4,6 +4,7 @@ What changed for someone who uses Manor, newest first. A version is a tag on `ma
 
 ## Unreleased
 
+- Coming back to a chat after the connection dropped loads only what was added or changed meanwhile, on the phone and on the Mac. It used to download the whole conversation again, megabytes for a long one. After a restart of Manor on your Mac the first open still loads everything.
 - On the Mac, opening a subagent's view again, or a chat in a second pane, asks only for what was added since. Each open used to download the whole thread.
 - On the phone, the label next to the plus names who you mention while an agent is still answering, as on the Mac. It read as unknown for every draft during a running turn.
 - On the phone, an answer typed on a question card stops at the 2,000 characters the Mac allows. A longer one made Send do nothing, without a word. A question you skipped on the Mac now reads Skipped on the phone, as it does there, and no longer the sentence meant for the agent.
