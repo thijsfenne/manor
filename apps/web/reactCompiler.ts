@@ -96,7 +96,7 @@ export const PURE_MODULES: Readonly<Record<string, { file: string; functions: re
     file: 'src/mentions.ts',
     functions: [
       'activeImageRef', 'activeMention', 'activeSkill', 'applyImageRef', 'applyMention',
-      'applySkill', 'chatFallbackTargets', 'composerShowsRecipients', 'draftRecipients',
+      'applySkill', 'chatFallbackTargets', 'composerRecipients', 'composerShowsRecipients', 'draftRecipients',
       'eligibleSkills', 'insertTrigger', 'matchAgents', 'matchFiles', 'matchImageRefs',
       'matchSkills', 'matchesBrowserMention', 'matchesWorkMention', 'mentionSegments',
       'parseMentions', 'remarkAgentMentions', 'remarkMessageChips', 'remarkSoftBreaks',

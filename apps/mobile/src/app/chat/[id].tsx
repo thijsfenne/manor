@@ -18,7 +18,7 @@ import { chatCommandContext } from '@manor/client-runtime/chat-commands'
 import { quoteNamesAuthor } from '@manor/client-runtime/message-quotes'
 import { wakeLine } from '@manor/client-runtime/turn-labels'
 import { chatSubagents, chatWaitsOnBackground, dmWorking, runningSubagents } from '@manor/client-runtime/turn-trace'
-import { chatFallbackTargets, composerShowsRecipients, draftRecipients, replyFallbackTargets, roomAgents } from '@manor/client-runtime/mentions'
+import { chatFallbackTargets, composerRecipients, composerShowsRecipients, replyFallbackTargets, roomAgents } from '@manor/client-runtime/mentions'
 import { chatChangedFiles, resolveMarkdownRepoLink } from '@manor/client-runtime/changed-files'
 import { defaultSingleRuntime, effectiveDriver, isAutoPending, readSingleRuntime, runtimeLabel, runtimeParts, singleRuntimeVoice } from '@manor/client-runtime/runtime-choices'
 import type { ChangeableAnswer, OpenAsk, PendingDocument, QuietWorkspace, Row, SessionLink, ThreadShape, TurnConsultation, TurnRow, UnannouncedConsultation } from '@manor/client-runtime/state'
@@ -493,14 +493,14 @@ function ChatContent({ chatId }: { chatId: string | undefined }) {
   // Who an unmarked draft reaches, as the Mac says next to its plus. Only a thread
   // that has begun earns the label; a running or queued turn makes it unknowable.
   // Read per draft by the composer, which holds the text.
-  const recipientsOf = ((): ((draft: string) => AgentConfig[]) | 'unknown' | undefined => {
+  const recipientsOf = ((): ((draft: string) => AgentConfig[] | 'unknown') | undefined => {
     if (chat === null || singleChat || !composerShowsRecipients(chat.kind, thread.events, thread.pending.length)) return undefined
-    if (replyTo === undefined && (activeTurn !== null || thread.pending.length > 0)) return 'unknown'
     const members = chat.kind === 'group' ? chat.memberIds : undefined
+    const busy = activeTurn !== null || thread.pending.length > 0
     // Parsed against the whole roster, then filtered to the room, as the server does:
     // an outsider's name in a group, or a chat persona's in a Session, is a mention
     // that reaches nobody, not no mention.
-    return (draft) => draftRecipients(draft, workspace.agents, effectiveFallbackTargets, members, roomAgents(workspace.agents, chat))
+    return (draft) => composerRecipients(draft, workspace.agents, { fallback: effectiveFallbackTargets, memberIds: members, seats: roomAgents(workspace.agents, chat), busy, replying: replyTo !== undefined })
   })()
 
   /**
@@ -1101,7 +1101,7 @@ function ChatContent({ chatId }: { chatId: string | undefined }) {
 type ChatComposerProps = Omit<ComposerProps, 'draft' | 'onChangeDraft' | 'images' | 'onChangeImages' | 'textFiles' | 'onChangeTextFiles' | 'onSend' | 'recipients'> & {
   chatId: string
   /** Who a draft reaches if sent now. `'unknown'` and absent mean what they mean on `Composer`. */
-  recipientsOf?: ((draft: string) => AgentConfig[]) | 'unknown'
+  recipientsOf?: (draft: string) => AgentConfig[] | 'unknown'
   /** Says whether the message left: a refused send keeps what was typed and staged. */
   onSend: (text: string, images: ImageAttachment[], files: StagedFile[]) => boolean
 }
@@ -1138,7 +1138,7 @@ function ChatComposer({ chatId, recipientsOf, onSend, ...composer }: ChatCompose
     setImages([])
     setTextFiles([])
   }
-  const recipients = typeof recipientsOf === 'function' ? recipientsOf(draft) : recipientsOf
+  const recipients = recipientsOf?.(draft)
   return (
     <Composer
       {...composer}

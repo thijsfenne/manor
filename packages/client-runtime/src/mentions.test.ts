@@ -2,7 +2,7 @@ import type { AgentConfig, SkillConfig, ThreadEvent } from '@manor/contracts'
 import { describe, expect, it } from 'vitest'
 
 import { imageRefSpans, snapRefDeletion } from '@manor/contracts'
-import { agentMentionSpans, activeImageRef, activeMention, applyImageRef, applyMention, matchAgents, matchImageRefs, matchesBrowserMention, matchesWorkMention, chatFallbackTargets, composerShowsRecipients, draftRecipients, eligibleSkills, followUpTargets, replyFallbackTargets, roomAgents } from './mentions'
+import { agentMentionSpans, activeImageRef, activeMention, applyImageRef, applyMention, matchAgents, matchImageRefs, matchesBrowserMention, matchesWorkMention, chatFallbackTargets, composerRecipients, composerShowsRecipients, draftRecipients, eligibleSkills, followUpTargets, replyFallbackTargets, roomAgents } from './mentions'
 
 const agent = (id: string, name: string, isCos = false) => ({ id, name, isCos }) as AgentConfig
 const smith = agent('smith', 'Smith', true)
@@ -64,6 +64,24 @@ describe('chatFallbackTargets', () => {
   it('follows up with a former DM-only speaker in a group it sits in', () => {
     const watcher = { ...ada, id: 'watcher', name: 'Watcher' }
     expect(chatFallbackTargets({ kind: 'group', memberIds: ['smith', 'watcher'] }, [user, reply('watcher')], [...roster, watcher])).toEqual([watcher])
+  })
+})
+
+describe('composerRecipients', () => {
+  const room = { fallback: [ada], memberIds: ['smith', 'ada'], busy: true, replying: false }
+
+  it('does not know an unmarked follow up while a turn runs, and names it once the turn ended', () => {
+    expect(composerRecipients('en dan?', roster, room)).toBe('unknown')
+    expect(composerRecipients('en dan?', roster, { ...room, busy: false })).toEqual([ada])
+  })
+
+  it('names a mention typed during a running turn, and says no one for an outsider', () => {
+    expect(composerRecipients('@Smith kijk even', roster, room)).toEqual([smith])
+    expect(composerRecipients('@Bob kijk even', roster, room)).toEqual([])
+  })
+
+  it('names the persona a reply targets during a running turn', () => {
+    expect(composerRecipients('en dan?', roster, { ...room, replying: true })).toEqual([ada])
   })
 })
 

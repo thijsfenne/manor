@@ -12,7 +12,7 @@ import {
   applyImageRef,
   applyMention,
   applySkill,
-  draftRecipients,
+  composerRecipients,
   eligibleSkills,
   insertTrigger,
   matchAgents,
@@ -21,7 +21,6 @@ import {
   matchFiles,
   matchImageRefs,
   matchSkills,
-  parseMentions,
   replyFallbackTargets,
 } from '../mentions'
 import { desktopComputer } from '../desktopBrowser'
@@ -502,8 +501,11 @@ export function Composer({ agents, commandContext, household, overrides = NO_OVE
    * Who the draft reaches, for the label next to the plus. Parsed like the server
    * (`parsedAgents`, empty in a DM), then limited to who this room can seat.
    */
-  const recipients = showRecipients ? draftRecipients(value, parsedAgents, effectiveFallbackTargets, memberIds, mentionableAgents) : NO_RECIPIENTS
-  const followUpUnknown = showRecipients && recipientsUnknown && replyTo === undefined && parseMentions(value, parsedAgents).length === 0
+  const reached = showRecipients
+    ? composerRecipients(value, parsedAgents, { fallback: effectiveFallbackTargets, memberIds, seats: mentionableAgents, busy: recipientsUnknown, replying: replyTo !== undefined })
+    : NO_RECIPIENTS
+  const followUpUnknown = reached === 'unknown'
+  const recipients = reached === 'unknown' ? NO_RECIPIENTS : reached
   const matches: MentionRow[] = completion?.kind === 'command' && commandContext !== undefined
     ? chatCommandRows(commandContext(), completion.query).map((command): MentionRow => ({ kind: 'command', command }))
     : completion?.kind === 'skill'

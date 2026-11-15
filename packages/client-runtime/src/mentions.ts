@@ -57,6 +57,28 @@ export function draftRecipients(
 }
 
 /**
+ * Who the label next to the plus names for this draft. `'unknown'` is an unmarked
+ * follow-up while a turn runs or a message is queued (`busy`): the server picks its
+ * target from who answered last, and that is not known yet. A mention or a targeted
+ * reply names the target itself, so neither is ever unknown. The rest is
+ * `draftRecipients`, whose arguments `room` carries.
+ */
+export function composerRecipients(
+  text: string,
+  agents: readonly AgentConfig[],
+  room: {
+    fallback?: readonly AgentConfig[] | undefined
+    memberIds?: readonly string[] | undefined
+    seats?: readonly AgentConfig[] | undefined
+    busy: boolean
+    replying: boolean
+  },
+): AgentConfig[] | 'unknown' {
+  if (room.busy && !room.replying && parseMentions(text, agents).length === 0) return 'unknown'
+  return draftRecipients(text, agents, room.fallback, room.memberIds, room.seats)
+}
+
+/**
  * The recipient label only where routing is history-dependent and the thread
  * has actually started. A DM already names its addressee in the header; a
  * freshly created group has a snapshot and no messages, and showing a target

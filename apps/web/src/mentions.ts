@@ -6,6 +6,7 @@ export { parseMentions, mentionSpans }
 // client runtime, so the phone's composer and the Mac's answer the same rules.
 export {
   chatFallbackTargets,
+  composerRecipients,
   composerShowsRecipients,
   draftRecipients,
   eligibleSkills,
