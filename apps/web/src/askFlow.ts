@@ -1,19 +1,11 @@
 import {
+  SKIPPED_ANSWER,
   USER_INPUT_ANSWER_MAX,
   userInputAnswerLines,
   type UserInputAnswerValue,
   type UserInputAnswers,
   type UserInputQuestion,
 } from '@manor/contracts'
-
-/**
- * What the agent reads for a question that was passed over. The button says "Skip",
- * which is for the user; this line is for the model, and it has to say carry on without
- * me rather than stop, because an agent that halts leaves them with nothing.
- */
-export const SKIPPED_ANSWER = 'Skipped. Decide this one yourself.'
-
-export const isSkipped = (answer: string) => answer === SKIPPED_ANSWER
 
 /**
  * Where the free-text row sits: one past the last option the model offered, so the

@@ -14,7 +14,7 @@ import Tick02Icon from '@hugeicons/core-free-icons/Tick02Icon'
 import ViewIcon from '@hugeicons/core-free-icons/ViewIcon'
 import Wrench01Icon from '@hugeicons/core-free-icons/Wrench01Icon'
 import { HugeiconsIcon, type IconSvgElement } from '@hugeicons/react-native'
-import { ROUTINE_LATE_AFTER_MS, SECRET_CLOSED_TEXT, userInputAnswerText, type AgentConfig, type Project, type FileEdit, type EventImage, type MessageReply, type UserInputQuestion, type UserInputAnswers } from '@manor/contracts'
+import { ROUTINE_LATE_AFTER_MS, SECRET_CLOSED_TEXT, isSkippedAnswer, userInputAnswerText, type AgentConfig, type Project, type FileEdit, type EventImage, type MessageReply, type UserInputQuestion, type UserInputAnswers } from '@manor/contracts'
 import {
   answerTextOf,
   fileWriteGroups,
@@ -1024,7 +1024,8 @@ function AskAnswers({ questions, answers }: { questions: readonly UserInputQuest
             {given === undefined ? (
               <Text style={styles.askMissing}>{question.secret === undefined ? 'Never answered. The turn ended first.' : SECRET_CLOSED_TEXT}</Text>
             ) : (
-              <Text style={styles.askAnswer}>{userInputAnswerText(given)}</Text>
+              // A passed over question says so. The answer itself is a line meant for the model.
+              <Text style={isSkippedAnswer(given) ? styles.askSkipped : styles.askAnswer}>{isSkippedAnswer(given) ? 'Skipped' : userInputAnswerText(given)}</Text>
             )}
           </View>
         )
@@ -1218,6 +1219,7 @@ const styles = StyleSheet.create({
   askHeader: { color: colors.dim, fontFamily: fonts.sans, fontSize: 12 },
   askQuestion: { color: colors.dim, fontFamily: fonts.sans, fontSize: 15, lineHeight: 21 },
   askAnswer: { color: colors.text, fontFamily: fonts.sans, fontSize: 15, lineHeight: 21 },
+  askSkipped: { color: colors.dim, fontFamily: fonts.sans, fontSize: 15, lineHeight: 21 },
   askMissing: { color: colors.warning, fontFamily: fonts.sans, fontSize: 15, lineHeight: 21 },
   reply: { gap: spacing.sm },
   replySwipe: { position: 'relative', alignSelf: 'stretch' },

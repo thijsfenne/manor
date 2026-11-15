@@ -5,7 +5,7 @@ import {
   SECRET_CLOSED_TEXT,
   SUBAGENT_VOICE,
   USER_INPUT_ANSWER_MAX,
-  userInputAnswerLines,
+  isSkippedAnswer,
   userInputAnswerText,
   type AgentConfig,
   type UserInputAnswers,
@@ -18,7 +18,6 @@ import {
   hasOther,
   isMulti,
   isPicked,
-  isSkipped,
   mayLeave,
   otherIndexOf,
   payloadOf,
@@ -538,7 +537,7 @@ export function AskDock({
         onSubmit: (answers: UserInputAnswers) => {
           const changed = Object.fromEntries(Object.entries(answers).filter(([id, value]) => {
             const given = changeAnswer.answer.answers[id]
-            return !userInputAnswerLines(value).every(isSkipped) && (given === undefined || userInputAnswerText(value) !== userInputAnswerText(given))
+            return !isSkippedAnswer(value) && (given === undefined || userInputAnswerText(value) !== userInputAnswerText(given))
           }))
           if (Object.keys(changed).length === 0) {
             changeAnswer.onCancel()
@@ -640,7 +639,7 @@ export function AskAnswers({
     <div className={`flex min-w-0 flex-col gap-3 rounded-xl px-3.5 py-3 ${SIDE_SURFACE}`}>
       {questions.map((question) => {
         const given = answers?.[question.id]
-        const skipped = given !== undefined && userInputAnswerLines(given).every((line) => isSkipped(line))
+        const skipped = given !== undefined && isSkippedAnswer(given)
         return (
           <div key={question.id} className="flex min-w-0 flex-col gap-0.5">
             {question.header === undefined || question.header.length === 0 ? null : (

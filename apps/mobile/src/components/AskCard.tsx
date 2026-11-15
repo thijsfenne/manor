@@ -1,4 +1,4 @@
-import type { UserInputAnswers } from '@manor/contracts'
+import { USER_INPUT_ANSWER_MAX, type UserInputAnswers } from '@manor/contracts'
 import type { OpenAsk } from '@manor/client-runtime/state'
 import { useMemo, useState } from 'react'
 import { Pressable, StyleSheet, TextInput, View } from 'react-native'
@@ -117,6 +117,8 @@ export function AskCard({
                   options already hold, and a typed answer only reads as a refusal. */}
               {question.optionsOnly === true || macOnly ? null : (
                 <TextInput
+                  // The wire's own limit. A longer answer is a frame the server drops without a word.
+                  maxLength={USER_INPUT_ANSWER_MAX}
                   onChangeText={(custom) => setDrafts((current) => ({
                     ...current,
                     [question.id]: {

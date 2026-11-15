@@ -1,13 +1,11 @@
-import type { UserInputQuestion } from '@manor/contracts'
+import { SKIPPED_ANSWER, isSkippedAnswer, type UserInputQuestion } from '@manor/contracts'
 import { describe, expect, it } from 'vitest'
 import {
   EMPTY_DRAFT,
-  SKIPPED_ANSWER,
   answerOf,
   askKeyAction,
   hasOther,
   isPicked,
-  isSkipped,
   mayLeave,
   otherIndexOf,
   otherIsEmpty,
@@ -211,7 +209,7 @@ describe('what goes out', () => {
       dir: 'Left',
       pace: SKIPPED_ANSWER,
     })
-    expect(isSkipped(SKIPPED_ANSWER)).toBe(true)
+    expect(isSkippedAnswer(SKIPPED_ANSWER)).toBe(true)
   })
 
   // Dismissing the card is the same send with everything still open skipped, so the

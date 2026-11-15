@@ -1,7 +1,6 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
-import type { AgentConfig, ThreadEvent, UserInputQuestion } from '@manor/contracts'
-import { SKIPPED_ANSWER } from '../src/askFlow'
+import { SKIPPED_ANSWER, type AgentConfig, type ThreadEvent, type UserInputQuestion } from '@manor/contracts'
 import { AskAnswers, AskCard, AskDock } from '../src/components/AskCard'
 import { Transcript } from '../src/components/Transcript'
 import { TodoList } from '../src/components/TodoList'

@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { isModelOnlyMessage, modelTextOf, splitUserMessage } from './userMessage.js'
-import { DriverSchema, EffortSchema, EventImageSchema, GoalClaimsSchema, GoalReportSchema, GOAL_POINT_MAX, SystemNoteEventSchema, placeQuotesAfterText, ImageAttachmentSchema, McpServerDraftSchema, SingleRuntimeSchema, defaultSingleRuntime, isOpenRoom, isSoloRoom } from './index.js'
+import { DriverSchema, EffortSchema, EventImageSchema, GoalClaimsSchema, GoalReportSchema, GOAL_POINT_MAX, SystemNoteEventSchema, placeQuotesAfterText, ImageAttachmentSchema, McpServerDraftSchema, SKIPPED_ANSWER, SingleRuntimeSchema, defaultSingleRuntime, isOpenRoom, isSkippedAnswer, isSoloRoom } from './index.js'
 
 test('single mode preserves the wire choice and closes household routing', () => {
   const runtime = { driver: 'codex', model: 'gpt-5.6-sol', effort: 'medium' }
@@ -265,4 +265,11 @@ test('a goal report carries up to three short points, and older reports parse wi
   assert.equal(GoalReportSchema.safeParse({ result: 'Done.', points: [...points, 'One more'] }).success, false)
   assert.equal(GoalReportSchema.safeParse({ result: 'Done.', points: [] }).success, false)
   assert.equal(GoalReportSchema.safeParse({ result: 'Done.', points: ['x'.repeat(GOAL_POINT_MAX + 1)] }).success, false)
+})
+
+test('a question counts as skipped only when every line of its answer is the skip line', () => {
+  assert.equal(isSkippedAnswer(SKIPPED_ANSWER), true)
+  assert.equal(isSkippedAnswer([SKIPPED_ANSWER]), true)
+  assert.equal(isSkippedAnswer('Skipped'), false)
+  assert.equal(isSkippedAnswer(['Left', SKIPPED_ANSWER]), false)
 })

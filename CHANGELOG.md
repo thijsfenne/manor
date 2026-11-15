@@ -4,6 +4,7 @@ What changed for someone who uses Manor, newest first. A version is a tag on `ma
 
 ## Unreleased
 
+- On the phone, an answer typed on a question card stops at the 2,000 characters the Mac allows. A longer one made Send do nothing, without a word. A question you skipped on the Mac now reads Skipped on the phone, as it does there, and no longer the sentence meant for the agent.
 - On the phone, what you type under Request changes stays when its card scrolls out of view or you leave the chat. The field used to come back open and empty, and a picked Your call choice was lost with it.
 - On the phone, typing redraws only the composer. Every character used to redraw the whole chat screen, its header and its list with it.
 - On the phone, a reply that streams in redraws only its own text. The header, the composer, the menu and the list under the chat used to redraw with every piece of text, in a DM too, where the reply shows only once it is whole. Scrolling and typing stay smooth while an agent writes.

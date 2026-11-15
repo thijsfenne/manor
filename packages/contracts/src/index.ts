@@ -1595,6 +1595,17 @@ export const userInputAnswerLines = (answer: UserInputAnswerValue): string[] =>
 export const userInputAnswerText = (answer: UserInputAnswerValue): string =>
   userInputAnswerLines(answer).join(', ')
 
+/**
+ * What the agent reads for a question that was passed over. The button says "Skip",
+ * which is for the user; this line is for the model, and it has to say carry on without
+ * me rather than stop, because an agent that halts leaves them with nothing.
+ */
+export const SKIPPED_ANSWER = 'Skipped. Decide this one yourself.'
+
+/** Whether a question was passed over. A transcript says "Skipped" for it, never the model's line. */
+export const isSkippedAnswer = (answer: UserInputAnswerValue): boolean =>
+  userInputAnswerLines(answer).every((line) => line === SKIPPED_ANSWER)
+
 /** One to three prompts, each with a unique snake_case id so one answer cannot stand for two questions. */
 export const UserInputQuestionsSchema = z
   .array(UserInputQuestionSchema)
