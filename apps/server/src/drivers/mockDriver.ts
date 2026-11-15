@@ -634,7 +634,8 @@ function draftScriptFor(input: TurnInput, request: typeof fetch): MockWorkStep |
  * A new agent's interview: whenever the turn holds `write_instructions`, the mock asks
  * three questions through the real ask broker, then writes instructions from the form and
  * the answers it got. A skipped answer ("Skipped. …") adds nothing, so skipping them all
- * leaves instructions built from the name and the job alone.
+ * leaves instructions built from the name and the job alone. Its first message greets the
+ * user by the name the kickoff gives and ends on a question about the job.
  */
 function interviewScriptFor(input: TurnInput, request: typeof fetch): MockWorkStep | undefined {
   const asker = manorEndpoint(input, 'ask_user', '--broker-url')
@@ -669,9 +670,14 @@ function interviewScriptFor(input: TurnInput, request: typeof fetch): MockWorkSt
           ...(kept.length === 0 ? [] : ['', '## What the user asked for', ...kept]),
         ].join('\n')
         await postManor(request, writer, { instructions }, signal)
-        return kept.length === questions.length
-          ? 'My instructions are set. I left nothing out.'
-          : 'My instructions are set. I left out what you skipped and built that part on the form.'
+        const userName = /The user's name: ([^\n]+)\.$/m.exec(lastUserLine(input))?.[1]
+        return [
+          userName === undefined ? 'Hi!' : `Hi ${userName}!`,
+          kept.length === questions.length
+            ? 'My instructions are set and I left nothing out.'
+            : 'My instructions are set; I left out what you skipped and built that part on the form.',
+          job === '' ? 'What should we start with?' : `Where do you want to start with this: ${job.replace(/[.!?]+$/, '')}?`,
+        ].join(' ')
       },
     },
   }

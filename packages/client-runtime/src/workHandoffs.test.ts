@@ -259,8 +259,8 @@ describe('the shared Work handoff projection', () => {
     const merging = (stage: NonNullable<WorkHandoff['goalCompletion']>['merge']) => project_({
       ...reported, goalConfirmedAt: 6, goalCompletion: { ...completion, operation: 'merge', status: 'pending', merge: stage },
     }, history).at(-1) as WorkHandoffRow
-    expect(workCardStatus(merging({ stage: 'queued', after: 'Exportknop', ahead: 1 }))).toEqual({ tone: 'busy', text: 'Merging next · after Exportknop' })
-    expect(workCardStatus(merging({ stage: 'queued', after: 'Exportknop', ahead: 2 }))).toEqual({ tone: 'busy', text: 'Waiting to merge · after Exportknop' })
+    expect(workCardStatus(merging({ stage: 'queued', after: 'Exportknop', ahead: 1 }))).toEqual({ tone: 'busy', text: 'Merging next, after Exportknop' })
+    expect(workCardStatus(merging({ stage: 'queued', after: 'Exportknop', ahead: 2 }))).toEqual({ tone: 'busy', text: 'Waiting to merge, after Exportknop' })
     expect(workCardLine(merging({ stage: 'queued', after: 'Exportknop', ahead: 1 }))).toBeNull()
     const fix = { repo: '/wt', tip: 'abc', files: ['a.ts'], diff: '+mine' }
     const approving = merging({ stage: 'approve', fix, approved: { '/wt': 'old' }, trouble: { kind: 'conflict', text: 'x', repo: '/wt', tip: 'old' } })
@@ -348,9 +348,9 @@ describe('the shared Work handoff projection', () => {
     const solo = { ...team, handoffId: 'solo', supportingAgentIds: [], supportingAgentNames: [], worktreeAvailable: true }
     const choices = (row: WorkHandoffRow) => workProposalChoices(row, workProposalDraft(row, [lead]), [lead])
     expect(choices(team)).toEqual([])
-    expect(choices(solo)).toEqual([expect.stringMatching(/ · /)])
+    expect(choices(solo)).toEqual([expect.stringMatching(/, /)])
     updateWorkProposal('team', { mode: 'single' })
-    expect(choices(team)).toEqual([expect.stringMatching(/ · /)])
+    expect(choices(team)).toEqual([expect.stringMatching(/, /)])
     updateWorkProposal('solo', { mode: 'house', task: 'Edited.' })
     expect(choices(solo)).toEqual(['Multiple', 'Edited prompt'])
   })
@@ -387,11 +387,11 @@ describe('the shared Work handoff projection', () => {
     const claudeCos: AgentConfig = { ...lead, id: 'cos', isCos: true, driver: 'claude', model: 'claude-fable-5-2', effort: 'medium' }
     const codexCos: AgentConfig = { ...claudeCos, driver: 'codex', model: 'gpt-6-luna' }
     expect(workProposalDraft(solo, [claudeCos]).runtime).toEqual({ driver: 'claude', model: 'claude-opus-5-5', effort: 'high' })
-    expect(workProposalChoices(solo, workProposalDraft(solo, [claudeCos]), [claudeCos])).toEqual(['Opus 5.5 · High'])
+    expect(workProposalChoices(solo, workProposalDraft(solo, [claudeCos]), [claudeCos])).toEqual(['Opus 5.5, High'])
     expect(workProposalDraft(solo, [codexCos]).runtime).toEqual({ driver: 'codex', model: 'gpt-6-luna', effort: 'medium' })
     updateWorkProposal('cos-default', { runtime: { driver: 'claude', model: 'claude-sonnet-5-5', effort: 'high' } })
     expect(workProposalDraft(solo, [claudeCos]).runtime.model).toBe('claude-sonnet-5-5')
-    expect(workProposalChoices(solo, workProposalDraft(solo, [claudeCos]), [claudeCos])).toEqual(['Sonnet 5.5 · High'])
+    expect(workProposalChoices(solo, workProposalDraft(solo, [claudeCos]), [claudeCos])).toEqual(['Sonnet 5.5, High'])
   })
 
   it('opens a thread card in Single on its proposed runtime, with the reason until the user picks another', () => {
@@ -404,11 +404,11 @@ describe('the shared Work handoff projection', () => {
     const draft = workProposalDraft(row, [lead])
     expect(draft).toMatchObject({ mode: 'single', runtime: proposedRuntime.runtime })
     expect(workProposalReason(row, draft)).toBe('small UI change')
-    expect(workProposalChoices(row, draft, [lead])).toEqual(['Sonnet 5.5 · High'])
+    expect(workProposalChoices(row, draft, [lead])).toEqual(['Sonnet 5.5, High'])
     updateWorkProposal('thread-card', { runtime: { driver: 'claude', model: 'claude-opus-5-5', effort: 'high' } })
     const overridden = workProposalDraft(row, [lead])
     expect(workProposalReason(row, overridden)).toBeUndefined()
-    expect(workProposalChoices(row, overridden, [lead])).toEqual(['Opus 5.5 · High'])
+    expect(workProposalChoices(row, overridden, [lead])).toEqual(['Opus 5.5, High'])
   })
 
   it('accepts a proposal with what was chosen on its card, once, from either surface', async () => {
@@ -440,7 +440,7 @@ describe('workByline', () => {
   it('names the lead in Multiple, and the starter only when someone else starts', () => {
     expect(workByline({ single: false, lead: 'Wren' })).toBe('led by Wren')
     expect(workByline({ single: false, lead: 'Wren', starter: 'Wren' })).toBe('led by Wren')
-    expect(workByline({ single: false, lead: 'Wren', starter: 'Smith' })).toBe('led by Wren · Smith starts')
+    expect(workByline({ single: false, lead: 'Wren', starter: 'Smith' })).toBe('led by Wren, Smith starts')
   })
 })
 

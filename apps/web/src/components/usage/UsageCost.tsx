@@ -54,7 +54,7 @@ export function UsageCost({ summary, prices }: { summary: UsageSummary; prices: 
       <section className="grid gap-x-12 gap-y-8 lg:grid-cols-[minmax(0,19rem)_minmax(0,1fr)]">
         <div className="flex min-w-0 flex-col gap-6">
           <div className="flex flex-col">
-            <h2 className="m-0 text-meta font-medium tracking-[0.06em] text-muted uppercase">Raw token cost</h2>
+            <h2 className="m-0 text-meta font-medium tracking-[0.06em] text-muted uppercase">API-rate equivalent</h2>
             <p className="m-0 mt-1.5 text-[36px] leading-none font-semibold tracking-[-0.01em] text-text tabular-nums">
               <Cost totals={summary} />
             </p>

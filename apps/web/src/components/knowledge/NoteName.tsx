@@ -41,7 +41,7 @@ export function NoteName({ path, editing, busy, disabled, error, onStart, onCanc
         <IconButton icon={Tick02Icon} size={24} label="Apply note name" disabled={busy} onClick={() => onSubmit(name)} />
         <IconButton icon={Cancel01Icon} size={24} label="Cancel rename" disabled={busy} onClick={onCancel} />
       </form>
-      <p className="mt-1 mb-0 font-sans text-[12px] font-normal leading-normal text-muted">{busy ? 'Saving and renaming…' : 'Enter to rename · Esc to cancel'}</p>
+      <p className="mt-1 mb-0 font-sans text-[12px] font-normal leading-normal text-muted">{busy ? 'Saving and renaming…' : 'Enter to rename, Esc to cancel'}</p>
       {error === null ? null : <p role="alert" className="mt-1 mb-0 font-sans text-[12px] font-normal leading-normal text-danger">{error}</p>}
     </div>
   )

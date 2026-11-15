@@ -146,17 +146,16 @@ export function RuntimeRoster({
                       name do: whoever is in the chat reads at full strength on both
                       edges of the row, and the rest of the household sits behind her.
                       The mark carries brand colour rather than text colour, so its
-                      half of the pair fades by opacity instead. */}
+                      half of the pair fades by opacity instead. The model sits a step
+                      quieter than the name and without its reasoning level: the people
+                      lead the roster, the level lives one click in. */}
                   <span
                     className={`flex flex-none items-center gap-2 ${inactive ? 'opacity-40' : ''}`}
                   >
                     {isAutoPending(agent, override, hostAuto) ? null : (
                       <ProviderMark driver={effectiveDriver(agent, override)} size={12} />
                     )}
-                    <RuntimeLabel
-                      {...runtimeParts(agent, override, hostAuto)}
-                      className="max-w-[140px] flex-none text-meta"
-                    />
+                    <RuntimeLabel {...withoutEffort(runtimeParts(agent, override, hostAuto))} className="max-w-[140px] flex-none text-meta" />
                   </span>
                   <Icon icon={ArrowRight01Icon} size={12} {...(panel ? { className: PANEL_ROW_ARROW } : {})} />
                 </button>
@@ -193,3 +192,5 @@ export function RuntimeRoster({
     </>
   )
 }
+
+const withoutEffort = ({ effort: _effort, ...parts }: ReturnType<typeof runtimeParts>) => parts

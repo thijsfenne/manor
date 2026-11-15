@@ -59,7 +59,7 @@ export function ComposioConnectedRow({ slug, name, aliases, onDisconnect }: {
       <span className="flex min-w-0 flex-1 flex-col">
         <span className="truncate text-[16px] font-medium text-text">{name}</span>
         <span className="truncate text-label text-muted">
-          {aliases.length === 0 ? 'Composio · no alias' : `Composio · ${aliases.map(aliasLabel).join(', ')}`}
+          {aliases.length === 0 ? 'Composio, no alias' : `Composio, ${aliases.map(aliasLabel).join(', ')}`}
         </span>
       </span>
       <Button variant="ghost" size="compact" className="inline-flex flex-none items-center gap-1" onClick={disconnect} aria-label={`Disconnect ${name}`}>
@@ -89,7 +89,7 @@ export function ComposioAppRow({ app, state, canConnect, onConnect }: {
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null)
   const open = openAliases(state.aliases, COMPOSIO_ALIASES)
   const waiting = state.connect?.status === 'waiting'
-  const connectedLine = state.aliases.length === 0 ? undefined : `Connected · ${state.aliases.map(aliasLabel).join(', ')}`
+  const connectedLine = state.aliases.length === 0 ? undefined : `Connected, ${state.aliases.map(aliasLabel).join(', ')}`
   const detail = state.connect?.status === 'failed' ? state.connect.reason ?? 'The sign-in did not finish.' : undefined
 
   const chooseAlias = (event: MouseEvent<HTMLButtonElement>) => {

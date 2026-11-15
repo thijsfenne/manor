@@ -107,18 +107,15 @@ export function ArtifactDetailDialog({
               {/* "Artifact" is what mymind calls anything it could not type, which on a
                   post tells you nothing the address already said better. */}
               <span>{post ? 'X post' : kindLabel(artifact.kind)}</span>
-              <span aria-hidden="true">·</span>
-              <span>Saved {formatDate(artifact.created)}</span>
+                            <span>Saved {formatDate(artifact.created)}</span>
               {host === undefined ? null : (
                 <>
-                  <span aria-hidden="true">·</span>
-                  <span className="max-w-[180px] truncate">{host}</span>
+                                    <span className="max-w-[180px] truncate">{host}</span>
                 </>
               )}
               {!attached ? null : (
                 <>
-                  <span aria-hidden="true">·</span>
-                  <span className="text-muted">In this chat</span>
+                                    <span className="text-muted">In this chat</span>
                 </>
               )}
             </p>

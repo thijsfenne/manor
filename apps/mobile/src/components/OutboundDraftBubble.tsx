@@ -131,7 +131,7 @@ export function OutboundDraftBubble({ draft, connected = true, actions = {}, unf
         channel={draft.channel}
         expanded={expanded}
         {...(toggle === undefined ? {} : { onToggle: toggle })}
-        status={showHeaderStatus ? `${draftStatusLabel(draft)}${snoozedUntil} · ${draft.to}` : undefined}
+        status={showHeaderStatus ? `${draftStatusLabel(draft)}${snoozedUntil}, ${draft.to}` : undefined}
         danger={open && draft.failure !== undefined}
         action={restorable ? (
           <TextButton accessibilityLabel="Restore this draft" disabled={!connected} label="Restore" onPress={() => onRestore(draft.draftId)} />
@@ -372,7 +372,7 @@ function ThreadSheet({
       ? 'Loading…'
       : result.status === 'error'
         ? 'Could not load the thread'
-        : `${String(result.messages.length)} ${result.messages.length === 1 ? 'message' : 'messages'} · read only`
+        : `${String(result.messages.length)} ${result.messages.length === 1 ? 'message' : 'messages'}, read only`
   return (
     <Sheet onClose={onClose} onDismiss={onDismiss} open={open} subtitle={subtitle} title={draft.subject?.trim().length ? draft.subject : draft.to}>
       <ScrollView contentContainerStyle={styles.sheetContent} keyboardShouldPersistTaps="handled">

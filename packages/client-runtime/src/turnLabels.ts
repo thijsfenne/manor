@@ -141,7 +141,12 @@ function clamp(detail: string): string {
  *  nonsense labels ("Ran src --include=*.tsx") this replaces. */
 export const shortTarget = (path: string): string => pathTail(path)
 
+/** Where Claude Code parks a long tool output or a background task's log: a random
+ *  name such as `bfbh0os7c.txt` that tells the user nothing. */
+const SCRATCH_PATH = /[\\/]\.claude[\\/]projects[\\/].*[\\/]tool-results[\\/]|^(?:[\\/]private)?[\\/]tmp[\\/]claude-\d+[\\/]/
+
 const pathTail = (path: string): string => {
+  if (SCRATCH_PATH.test(path)) return 'a scratch file'
   const parts = path.split(/[\\/]/).filter(Boolean)
   const file = parts.at(-1) ?? path
   // Every imported skill uses the same filename. Its parent is the actual identity;
@@ -350,7 +355,7 @@ export function settledLabel(activity: ToolStep): string {
   if (isShellTool(activity.tool)) {
     const stopped = activity.background === true && activity.status === 'stopped'
     const said = describedShell(activity)
-    if (said !== undefined) return stopped ? `${said} · stopped` : said
+    if (said !== undefined) return stopped ? `${said}, stopped` : said
     const plain = stopped || activity.detail === undefined ? undefined : plainCommand(activity.detail, false)
     if (plain !== undefined) return plain
     const object = commandObject(activity)

@@ -69,7 +69,7 @@ export function ContextRingCopy({ used, window, estimate }: ContextMeter) {
           {breakdown.rows.map((row) => (
             <View key={row.key} style={styles.row}>
               <Text style={[styles.meta, styles.rowLabel]}>{BLOCK_LABELS[row.key]}</Text>
-              <Text style={styles.value}>{row.tokens}{row.percent === null ? '' : ` · ${row.percent}`}</Text>
+              <Text style={styles.value}>{row.tokens}{row.percent === null ? '' : `, ${row.percent}`}</Text>
             </View>
           ))}
           <Text style={styles.meta}>Estimated split</Text>

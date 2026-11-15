@@ -145,7 +145,7 @@ describe('what a routine row says about time', () => {
   })
 
   it('shows the run beside the slot it was meant for when they differ', () => {
-    expect(routineStatus(routine({ lastRunAt: AT_0914 }), AT_0914).text).toBe('Ran 09:14 · scheduled 07:00')
+    expect(routineStatus(routine({ lastRunAt: AT_0914 }), AT_0914).text).toBe('Ran 09:14, scheduled 07:00')
     expect(routineStatus(routine({ lastRunAt: AT_0700 }), AT_0700).text).toBe('Ran 07:00')
   })
 
@@ -153,7 +153,7 @@ describe('what a routine row says about time', () => {
     const afterRun = routine({ lastRunAt: AT_0700, nextRunAt: AT_0914 })
     expect(routineStatus(afterRun, AT_0700).text).toBe('Ran 07:00')
     expect(routineNextRun(afterRun, AT_0700)).toBe('today at 09:14')
-    expect(routineTimeline(afterRun, AT_0700).text).toBe('Ran 07:00 · Next today at 09:14')
+    expect(routineTimeline(afterRun, AT_0700).text).toBe('Ran 07:00, Next today at 09:14')
     expect(routineNextRun(routine({ enabled: false }), AT_0700)).toBe('Not scheduled while off')
   })
 

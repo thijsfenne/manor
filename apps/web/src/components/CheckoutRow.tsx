@@ -75,7 +75,7 @@ export function checkoutView(base: CheckoutBase, status: CheckoutStatus | null, 
       : base.mode === 'current'
         ? 'Local checkout'
         : (branch ?? 'No shared branch'),
-    worktreeOption: resume === null ? 'New worktree' : `New worktree · ${resume}`,
+    worktreeOption: resume === null ? 'New worktree' : `New worktree, ${resume}`,
     branch,
     modeEditable: planned,
     branchEditable: planned || base.mode === 'worktree',

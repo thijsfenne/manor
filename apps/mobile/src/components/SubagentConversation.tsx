@@ -88,7 +88,7 @@ function SubagentFacts({ subagent: { step, agentId }, state, summary, agents, be
         </View>
         <View style={styles.badge}>
           {driver === undefined ? null : <ProviderMark driver={driver} size={12} />}
-          <Text numberOfLines={1} style={styles.badgeText}>{runtime === undefined ? (driver === undefined ? NOT_REPORTED : 'Its provider') : [runtime.model, runtime.effort].filter(Boolean).join(' · ')}</Text>
+          <Text numberOfLines={1} style={styles.badgeText}>{runtime === undefined ? (driver === undefined ? NOT_REPORTED : 'Its provider') : [runtime.model, runtime.effort].filter(Boolean).join(', ')}</Text>
         </View>
       </View>
       {role === undefined ? null : <Fact label="Role"><Text style={styles.factText}>{role}</Text></Fact>}

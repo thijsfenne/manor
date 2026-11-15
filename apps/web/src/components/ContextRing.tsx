@@ -40,7 +40,7 @@ export const ContextRing = memo(function ContextRing({ used, window, estimate, c
   // such; a reading that exists is shown against a window that says where it came from.
   const usage = meter.usedLabel === null
     ? source.used?.source === 'unknown' ? 'This provider reports no fill' : 'Not reported yet'
-    : `${meter.percent}% · ${meter.usedLabel}/${meter.limitLabel}`
+    : `${meter.percent}%, ${meter.usedLabel}/${meter.limitLabel}`
 
   return (
     <div ref={rootRef} className="relative flex-none">
@@ -112,7 +112,7 @@ export const ContextRing = memo(function ContextRing({ used, window, estimate, c
               window the card leads with. The model's own size is context, not a second scale. */}
           <p className="m-0 text-meta text-dim">
             {meter.limitIsCompact
-              ? `Compacts at ${meter.limitLabel} · model window ${source.window?.tokens ?? meter.windowLabel}`
+              ? `Compacts at ${meter.limitLabel}, model window ${source.window?.tokens ?? meter.windowLabel}`
               : 'Compacts automatically when needed.'}
           </p>
         </div>

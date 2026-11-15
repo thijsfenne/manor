@@ -186,9 +186,9 @@ export function changedGroups(files: readonly ChangedFile[], limit = 4): { name:
   const counts = new Map<string, number>()
   for (const file of files) {
     const segments = file.path.split('/').filter(Boolean)
-    // A file with no folder above it is not in a group of its own name; it is at
-    // the root, and saying so beats naming it twice.
-    const name = segments.length > 1 ? (segments[0] as string) : 'root'
+    // A file with no folder above it is not in a group of its own name. The card only
+    // prints group names when there are several, so this one reads as a place.
+    const name = segments.length > 1 ? (segments[0] as string) : 'Top level'
     counts.set(name, (counts.get(name) ?? 0) + 1)
   }
   const groups = [...counts].map(([name, count]) => ({ name, count }))

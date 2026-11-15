@@ -83,6 +83,6 @@ describe('Cursor runtime choices', () => {
     const agent = cursorAgent('cursor-grok-4.6')
     const pin = withModel(agent, { speed: 'fast', effort: 'xhigh' }, 'cursor-grok-4.7')
     expect(activeModel(agent, {})).toBe('cursor-grok-4.6')
-    expect(runtimeLabel(agent, pin, true)).toBe('Cursor Grok 4.7 · Extra · Fast')
+    expect(runtimeLabel(agent, pin, true)).toBe('Cursor Grok 4.7, Extra, Fast')
   })
 })

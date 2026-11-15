@@ -87,7 +87,7 @@ function Connectors() {
           key={`composio-${app.toolkit}`}
           mark={<Image source={composioLogoUrl(app.toolkit)} style={styles.logo} contentFit="contain" />}
           title={appLabel(app.toolkit)}
-          description={app.aliases.length === 0 ? 'Composio' : `Composio · ${app.aliases.join(', ')}`}
+          description={app.aliases.length === 0 ? 'Composio' : `Composio, ${app.aliases.join(', ')}`}
         />
       ))}
     </View>

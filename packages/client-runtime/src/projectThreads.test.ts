@@ -329,6 +329,11 @@ describe('a DM brief handed to its project thread', () => {
     expect(forwardedLine(card([withLink, { ...report, goalConfirmedAt: 4 }]))).toBe('Closed in project thread Manor')
     const [running] = projectWorkHandoffs([note(2)], [withLink, report], [chat('thread'), chat('session')], [project], [], {}, () => ({ running: true, asking: false }))
     expect(running?.kind === 'work_handoff' && forwardedLine(running)).toBe('Running via project thread Manor')
+    // The Session asks: the overview lists it under Waiting on you, and so does the line.
+    const [asking] = projectWorkHandoffs([note(2)], [withLink, linked], [chat('thread'), chat('session')], [project], [], {}, () => ({ running: true, asking: true }))
+    expect(asking?.kind === 'work_handoff' && forwardedLine(asking)).toBe('Waiting on you in project thread Manor')
+    // A brief whose Session has not started yet is neither running nor waiting.
+    expect(forwardedLine(card([brief]))).toBe('To project thread Manor')
   })
 })
 
@@ -571,7 +576,7 @@ describe('the project thread feed', () => {
     // The answered question, the thread's turn for it and the answer; the wake labels never draw.
     const bundle = feed[3]
     expect(bundle?.kind === 'thread_bundle' ? bundle.items.map((row) => row.key) : []).toEqual(['e4', 'turn:t2:__single__', 'e8'])
-    expect(bundle?.kind === 'thread_bundle' ? bundle.summary : '').toBe('1 answer · 1 update')
+    expect(bundle?.kind === 'thread_bundle' ? bundle.summary : '').toBe('1 answer, 1 update')
     // Its chips count the same way: the answered question stands as a card, not as a chip.
     const chips = bundle?.kind === 'thread_bundle' ? threadBundleView(bundle.items).chips : []
     expect(chips.map((chip) => `${chip.count} ${chip.label}`)).toEqual(['1 answer', '1 update'])
@@ -688,7 +693,7 @@ describe('the project thread bundle', () => {
     expect(feed.map((row) => row.key)).toEqual(['u1', 'turn:t1:__single__', 'work:h4', 'work:h3', 'bundle:u1'])
     const [bundle] = bundles(feed)
     expect(bundle?.items.map((row) => row.key)).toEqual(['work:h1', 'n1', 'work:h2', 'n2', 'n3', 'l1'])
-    expect(bundle?.summary).toBe('1 Session done · 1 waiting on you · 2 lines in notes.md · 1 line in preferences.md · learnings from 1 Session')
+    expect(bundle?.summary).toBe('1 Session done, 1 waiting on you, 2 lines in notes.md, 1 line in preferences.md, learnings from 1 Session')
   })
 
   it('shows one chip per kind of thing that happened, and one tile per item, kind by kind in the chips\' order', () => {
@@ -744,7 +749,7 @@ describe('the project thread bundle', () => {
       ['turn:t2:__single__#1', 'file', 'w2', 'notes.md'],
       ['n1', 'file', 'Status', 'notes.md'],
       ['turn:t2:__single__#2', 'file', 'w3', 'preferences.md'],
-      ['turn:t2:__single__#3', 'file', expect.any(String), 'Removed · preferences.md'],
+      ['turn:t2:__single__#3', 'file', expect.any(String), 'Removed, preferences.md'],
     ])
     // A turn that only wrote: its first write takes the turn's key, so a jump to the turn opens a line.
     const silent = feedOf([mine('u1', 1), ...reply('t1', 2), wake('k2', 10), { id: 'm_t2', ts: 11, type: 'agent_message', turnId: 't2', agentId: '__single__', messageId: 'm_t2', text: '' },
@@ -769,7 +774,7 @@ describe('the project thread bundle', () => {
     const overview = projectSessionOverview(state, 'thread')
     expect(overview.settled.map((row) => row.key)).toEqual(['loose'])
     expect(overview.waiting.map((row) => row.key)).toContain('session')
-    expect(bundle?.summary).toBe('1 Session done · 1 waiting on you')
+    expect(bundle?.summary).toBe('1 Session done, 1 waiting on you')
   })
 
   it('starts a new bundle at each message from the user and leaves the earlier one where it was', () => {
@@ -828,7 +833,7 @@ describe('the project thread bundle', () => {
       { id: 'a1', ts: 3, type: 'system_note', kind: 'info', text: 'Answered: Round', sessionAnswer: { sessionChatId: 'session', requestId: 'r1', answers: {}, by: 'user' } },
       note('n2', 4, 'notes.md', 'Two'),
     ])
-    expect(bundles(feed).map((row) => row.summary)).toEqual(['1 line in notes.md · 1 question', '1 line in notes.md · 1 answer'])
+    expect(bundles(feed).map((row) => row.summary)).toEqual(['1 line in notes.md, 1 question', '1 line in notes.md, 1 answer'])
   })
 
   it('finds a row folded into a bundle by its bundle', () => {

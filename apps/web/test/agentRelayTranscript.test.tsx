@@ -152,7 +152,7 @@ describe('agent relay transcript surfaces', () => {
 
     const waiting = render(silent)
     expect(waiting).toContain('“Which change is smallest?”')
-    expect(waiting).toContain('· reply follows')
+    expect(waiting).toContain(', reply follows')
     // The silent turn draws nothing, so its row leaves the list instead of leaving a gap.
     expect(waiting).not.toContain('data-transcript-row="turn:')
     expect(waiting).toContain('aria-expanded="false"')

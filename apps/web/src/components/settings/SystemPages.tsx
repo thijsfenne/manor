@@ -45,7 +45,7 @@ export function ProviderConnectionStatus({ connection, onSignIn, onCancelSignIn,
     case 'ready':
       return (
         <span className="text-label text-muted" title={connection.account}>
-          Signed in{connection.plan === undefined ? '' : ` · ${connection.plan}`}
+          Signed in{connection.plan === undefined ? '' : `, ${connection.plan}`}
         </span>
       )
     case 'signing_in':
@@ -347,7 +347,7 @@ export function AboutPage({ info, notice, onRequest, onRevealLog, onDismissNotic
           <SettingsGroup title="Manor">
             <SettingsRow label="Version">
               <span className="text-label text-muted tabular-nums">
-                {info.version}{info.commit === null ? '' : ` · ${info.commit}`}
+                {info.version}{info.commit === null ? '' : `, ${info.commit}`}
               </span>
             </SettingsRow>
             <SettingsRow label="Server running since">

@@ -359,7 +359,7 @@ function ResultRow({ result, words, author }: {
 }) {
   const pill = KIND_PILL[result.kind]
   const title = result.kind === 'message' ? result.chatTitle : result.title
-  const meta = result.kind === 'message' ? `${author} · ${relativeTime(result.at)}`
+  const meta = result.kind === 'message' ? `${author}, ${relativeTime(result.at)}`
     : result.kind === 'chat' ? relativeTime(result.at)
     : result.kind === 'note' ? result.folder
     : result.listTitle

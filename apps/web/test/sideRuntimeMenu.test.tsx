@@ -28,7 +28,7 @@ describe('the menu in the composer', () => {
     // Two spans, not one string: the model reads in text colour, the level muted.
     expect(html).toContain('>Sonnet 5.5<')
     expect(html).toContain('>Medium<')
-    expect(html).not.toContain('Sonnet 5.5 · Medium')
+    expect(html).not.toContain('Sonnet 5.5, Medium')
     expect(html).toContain('aria-haspopup="menu"')
     // Closed: the rows themselves need a press, which this suite has no DOM for.
     expect(html).not.toContain('Reasoning')

@@ -84,7 +84,7 @@ export function subagentNow(steps: readonly TurnStep[]): string | undefined {
 
 /** One line per step for the detail views: reasoning reads as "Thought". */
 export const subagentStepLabel = (step: TurnStep): string =>
-  isToolStep(step) ? `${settledLabel(step)}${step.status === 'error' ? ' · issue' : ''}` : 'Thought'
+  isToolStep(step) ? `${settledLabel(step)}${step.status === 'error' ? ', issue' : ''}` : 'Thought'
 
 /**
  * Adjacent work and landed edits belong to the same act until narration cuts it.
@@ -205,7 +205,7 @@ export const isManorSubagent = (step: ToolStep): boolean =>
 export const launchDriver = (launch: SubagentLaunch | undefined) =>
   launch?.driver ?? (launch?.model === undefined ? undefined : driverForModel(launch.model))
 
-/** "Subagent · GPT-6.1 Sol · High", as far as the launch itself reported it. */
+/** "Subagent, GPT-6.1 Sol, High", as far as the launch itself reported it. */
 export function subagentKindLine(step: ToolStep): string {
   const { model, effort } = step.subagent ?? {}
   const driver = launchDriver(step.subagent)
@@ -213,7 +213,7 @@ export function subagentKindLine(step: ToolStep): string {
     'Subagent',
     ...(model === undefined ? [] : [driver === undefined ? model : modelLabel(driver, model)]),
     ...(effort === undefined ? [] : [EFFORTS.find((option) => option.value === effort)?.label ?? effort]),
-  ].join(' · ')
+  ].join(', ')
 }
 
 /** What the brief says, or an honest fallback when the provider sent none. */
@@ -266,7 +266,7 @@ export function subagentStepState(step: ToolStep, turnRunning: boolean, summary?
  */
 export interface SubagentRowModel {
   title: string
-  /** "Subagent · GPT-6.1 Sol · High", for the row's hover note. */
+  /** "Subagent, GPT-6.1 Sol, High", for the row's hover note. */
   kind: string
   state: SubagentState
   detail?: string
@@ -645,12 +645,12 @@ export function groupLabel(group: Extract<TraceRow, { kind: 'group' }>): string 
       const place = searchQuery(step)?.place
       return place === undefined ? [] : [place]
     }))]
-    return `Searched ${group.steps.length} times${places.length === 0 ? '' : ` in ${places.join(' · ')}`}`
+    return `Searched ${group.steps.length} times${places.length === 0 ? '' : ` in ${places.join(', ')}`}`
   }
   const objects = groupObjects(group.steps)
   const verb = 'Read'
   if (objects.length === 0) return group.family === 'read' ? `Read ${group.steps.length} files` : `Searched ${group.steps.length} times`
-  return `${verb} ${objects.join(' · ')}`
+  return `${verb} ${objects.join(', ')}`
 }
 
 /** What one step's row opens onto: the exact command, every full path, and why it failed. */
@@ -675,4 +675,4 @@ export function stepDetail(step: ToolStep): StepDetail | undefined {
 
 /** The settled or live line for one step row, with a failure named in words, not colour. */
 export const stepLabel = (step: ToolStep, active: boolean): string =>
-  active && step.status !== 'error' ? currentLabel(step) : `${settledLabel(step)}${step.status === 'error' ? ' · failed' : ''}`
+  active && step.status !== 'error' ? currentLabel(step) : `${settledLabel(step)}${step.status === 'error' ? ', failed' : ''}`

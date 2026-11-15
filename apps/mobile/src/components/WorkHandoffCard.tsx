@@ -138,7 +138,7 @@ export function WorkHandoffCard({ row, agents, onReject, onReveal, inThread = fa
       >
         {shape === null ? null : <View style={styles.tileMark}><HugeiconsIcon color={WORK_STATUS_TONE[done.status.tone]} icon={CellsIcon} size={tile ? 15 : 14} strokeWidth={1.8} /></View>}
         <Text numberOfLines={1} style={styles.doneText}>
-          <Text style={tile ? styles.tileTitle : styles.doneTitle}>{row.title}</Text>{done.summary === '' ? '' : ` · ${done.summary}`}
+          <Text style={tile ? styles.tileTitle : styles.doneTitle}>{row.title}</Text>{done.summary === '' ? '' : `, ${done.summary}`}
         </Text>
         <View style={styles.doneStatus}>
           {/* A finished Session that waits on no Confirm still gets the check, in its muted tone. */}
@@ -257,7 +257,7 @@ export function WorkHandoffCard({ row, agents, onReject, onReveal, inThread = fa
             {singleMode
               ? <ProviderMark driver={singleDriver} size={13} />
               : <AgentStack agentIds={[row.leadAgentId, ...row.supportingAgentIds]} agents={agents} size={14} footprint={18} />}
-            {choices.length === 0 ? null : <Text numberOfLines={1} style={[styles.workActionLabel, styles.optionsChoices]}>{choices.join(' · ')}</Text>}
+            {choices.length === 0 ? null : <Text numberOfLines={1} style={[styles.workActionLabel, styles.optionsChoices]}>{choices.join(', ')}</Text>}
             <DisclosureChevron open={optionsOpen}>
               <HugeiconsIcon color={colors.dim} icon={ArrowDown01Icon} size={14} strokeWidth={1.7} />
             </DisclosureChevron>

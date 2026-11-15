@@ -32,8 +32,8 @@ export interface DiffTurn {
   at?: string
 }
 
-/** `Smith · 14:02`, or `Turn · 14:02` where a Single Session's model answered. */
-const turnName = (turn: DiffTurn, first = turn.who ?? 'Turn') => [first, ...(turn.who !== undefined && first !== turn.who ? [turn.who] : []), ...(turn.at === undefined ? [] : [turn.at])].join(' · ')
+/** `Smith, 14:02`, or `Turn, 14:02` where a Single Session's model answered. */
+const turnName = (turn: DiffTurn, first = turn.who ?? 'Turn') => [first, ...(turn.who !== undefined && first !== turn.who ? [turn.who] : []), ...(turn.at === undefined ? [] : [turn.at])].join(', ')
 
 /** Split needs both sides at a readable width; below this the pane only stacks. */
 export const SPLIT_MIN_WIDTH = 900

@@ -59,7 +59,6 @@ export function SourceContextChip({
     >
       <Icon icon={icon} size={13} className="flex-none" />
       <span className="max-w-[150px] flex-none truncate font-medium text-text">{name}</span>
-      <span aria-hidden="true" className="text-dim">·</span>
       <span className="min-w-0 truncate">{detail}</span>
       {onRemove === undefined ? null : (
         <button

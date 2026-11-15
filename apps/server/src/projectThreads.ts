@@ -443,7 +443,7 @@ export class ProjectThreads {
     await this.append(threadChatId, {
       type: 'system_note',
       kind: 'info',
-      text: `${handoff.title} ${permission ? 'is waiting for your approval' : `asks ${project?.name ?? 'the project'}`}: ${questions.map((question) => question.question).join(' · ').slice(0, QUESTION_TEXT_MAX)}`,
+      text: `${handoff.title} ${permission ? 'is waiting for your approval' : `asks ${project?.name ?? 'the project'}`}: ${questions.map((question) => question.question).join('; ').slice(0, QUESTION_TEXT_MAX)}`,
       sessionQuestion: { sessionChatId, requestId, agentId, title: handoff.title.slice(0, 200), questions: [...questions] },
       ...(permission || capped ? {} : { threadPending: questionPrompt(handoff.title, asker, requestId, questions) }),
     })
@@ -560,7 +560,7 @@ export class ProjectThreads {
     const question = asked?.type === 'system_note' ? asked.sessionQuestion : undefined
     if (question === undefined) return
     if (fromPreference === undefined) this.streaks.delete(sessionChatId)
-    const text = Object.values(answers).map(userInputAnswerText).join(' · ')
+    const text = Object.values(answers).map(userInputAnswerText).join('; ')
     // Their own answer waits for the thread's next turn, which keeps it only when it is lasting.
     const keep = fromPreference === undefined && !isPermission(question.questions)
     await this.append(linked.threadChatId, {
@@ -619,7 +619,7 @@ export class ProjectThreads {
     await this.append(threadChatId, {
       type: 'system_note',
       kind: 'info',
-      text: `Changed to: ${Object.values(answers).map(userInputAnswerText).join(' · ')}`,
+      text: `Changed to: ${Object.values(answers).map(userInputAnswerText).join('; ')}`,
       sessionAnswer: { sessionChatId, requestId, answers, by: 'user' },
       threadPending: changedAnswerPrompt(linked.handoff.title, changed, answers, given.sessionAnswer.preference),
     })

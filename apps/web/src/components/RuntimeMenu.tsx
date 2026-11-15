@@ -230,7 +230,7 @@ export function RuntimeSections({
     .map((option) => ({
       value: option.value,
       label: `${option.label}${marksDefault && option.value === agent.driver ? ', Default' : ''}`,
-      title: `${option.label}${marksDefault && option.value === agent.driver ? ' · Default' : ''}`,
+      title: `${option.label}${marksDefault && option.value === agent.driver ? ', Default' : ''}`,
       symbol: <ProviderMark driver={option.value} size={18} />,
     }))
 

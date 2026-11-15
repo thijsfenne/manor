@@ -268,7 +268,7 @@ export function ProjectMemoryPanel({
                 const used = usedPaths.has(file.path)
                 const followsUsed = !knowledge && index > 0 && usedPaths.has(listItems[index - 1]!.file.path) && !used
                 const rowClass = `flex min-h-9 w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left [font:inherit] ${used ? 'text-text' : 'text-muted'}`
-                const rowTitle = `${file.path}${!knowledge && used ? ' · Selected this turn' : ''}`
+                const rowTitle = `${file.path}${!knowledge && used ? ', Selected this turn' : ''}`
                 const label = titles.get(fileName(file.path)) ?? fallbackTitle(file.path)
                 const body = (
                   <>
@@ -316,7 +316,7 @@ export function ProjectMemoryPanel({
                       <button
                         type="button"
                         className="flex min-h-9 w-full cursor-pointer items-center gap-2.5 rounded-lg border-0 bg-transparent px-2.5 py-1.5 text-left text-muted [font:inherit] hover:bg-tree-hover hover:text-text"
-                        title={`${file.path.slice(USER_KEY.length)} · read-only`}
+                        title={`${file.path.slice(USER_KEY.length)}, read-only`}
                         onClick={() => setSelectedPath(file.path)}
                       >
                         <Icon icon={File01Icon} size={16} className="flex-none text-dim" />
@@ -360,7 +360,7 @@ function SummaryRow({ load, onOpen }: { load: ReturnType<typeof useChatSummary>;
     <button
       type="button"
       className={`${rowClass} cursor-pointer border-0 bg-transparent text-muted hover:bg-tree-hover hover:text-text`}
-      title={`${SUMMARY_TITLE} · read-only`}
+      title={`${SUMMARY_TITLE}, read-only`}
       onClick={onOpen}
     >
       <Icon icon={BubbleChatIcon} size={16} className="flex-none text-dim" />

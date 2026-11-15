@@ -22,7 +22,7 @@ export function usageCopy(
   meter: { percent: number; usedLabel: string | null; limitLabel: string },
   used: ContextFigureRead | undefined,
 ): string {
-  if (meter.usedLabel !== null) return `${meter.percent}% · ${meter.usedLabel}/${meter.limitLabel}`
+  if (meter.usedLabel !== null) return `${meter.percent}%, ${meter.usedLabel}/${meter.limitLabel}`
   return used?.source === 'unknown' ? 'This provider reports no fill' : 'Not reported yet'
 }
 

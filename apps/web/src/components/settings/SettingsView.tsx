@@ -1,12 +1,12 @@
-import { useEffect, useRef, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react'
-import { ArrowLeft01Icon } from '@hugeicons/core-free-icons'
+import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react'
+import { ArrowLeft01Icon, Cancel01Icon, Search01Icon } from '@hugeicons/core-free-icons'
 import { Icon } from '../Icon'
 import { Modal } from '../Modal'
 import { Button } from '../ui/Button'
 import { IconButton } from '../ui/IconButton'
 import { Select } from '../ui/Select'
 import { SelectionMarker } from '../ui/SelectionMarker'
-import { isWorkspaceShortcut, settingsGroups, type SettingsSection } from './sections'
+import { filterSettingsGroups, isWorkspaceShortcut, pageAfterSearch, settingsGroups, type SettingsSection } from './sections'
 import { useHostAuto } from '../../useHostAuto'
 
 const SECTION_MARKER = 'settings-section'
@@ -32,6 +32,8 @@ export function SettingsView({ section, onSection, onClose, leaving, onDiscard, 
   const hostAuto = useHostAuto()
   const rootRef = useRef<HTMLDivElement>(null)
   const groups = settingsGroups(hostAuto)
+  const [query, setQuery] = useState('')
+  const shown = filterSettingsGroups(groups, query)
   const closeRef = useRef(onClose)
   closeRef.current = onClose
 
@@ -82,6 +84,25 @@ export function SettingsView({ section, onSection, onClose, leaving, onDiscard, 
     rows[at + (event.key === 'ArrowDown' ? 1 : -1)]?.focus()
   }
 
+  // The open page follows the results: once it stops matching, the first match opens.
+  const search = (next: string) => {
+    setQuery(next)
+    const page = pageAfterSearch(groups, next, section)
+    if (page !== undefined) onSection(page)
+  }
+
+  // Enter opens the first match. Escape clears a typed query and stays; on an empty
+  // field it is left unclaimed, so it closes Settings as everywhere else.
+  const searchKey = (event: ReactKeyboardEvent<HTMLInputElement>) => {
+    if (event.key === 'Enter') {
+      const first = shown[0]?.sections[0]
+      if (first !== undefined) onSection(first.id)
+    } else if (event.key === 'Escape' && query !== '') {
+      event.preventDefault()
+      setQuery('')
+    }
+  }
+
   return (
     // Two boxes: a container query reads an ancestor, so the grid that folds sits inside
     // the box whose width it reads.
@@ -103,9 +124,32 @@ export function SettingsView({ section, onSection, onClose, leaving, onDiscard, 
           <div className="mt-1 flex h-10 items-center px-2.5">
             <h2 className="m-0 min-w-0 flex-1 truncate pl-3 font-display text-[16px] font-semibold tracking-[-0.01em]">Settings</h2>
           </div>
+          <div className="mx-2.5 mt-1 flex h-8 items-center gap-2 rounded-lg border border-line bg-stage px-2.5 text-muted focus-within:border-dim">
+            <Icon icon={Search01Icon} size={16} className="flex-none" />
+            <input
+              value={query}
+              onChange={(event) => search(event.target.value)}
+              onKeyDown={searchKey}
+              placeholder="Search settings"
+              aria-label="Search settings"
+              className="min-w-0 flex-1 border-0 bg-transparent p-0 text-label text-text outline-none placeholder:text-dim"
+            />
+            {query === '' ? null : (
+              <button
+                type="button"
+                aria-label="Clear settings search"
+                className="grid size-6 flex-none cursor-pointer place-items-center rounded-md border-0 bg-transparent p-0 text-muted hover:bg-surface-2 hover:text-text"
+                onPointerDown={(event) => event.preventDefault()}
+                onClick={() => setQuery('')}
+              >
+                <Icon icon={Cancel01Icon} size={14} />
+              </button>
+            )}
+          </div>
         </div>
         <div className="min-h-0 overflow-y-auto overscroll-y-none px-2.5 pb-4" onKeyDown={walk}>
-          {groups.map((group) => (
+          {shown.length === 0 ? <p className="m-0 px-3 pt-3 text-label text-dim">No settings match</p> : null}
+          {shown.map((group) => (
             <div key={group.label} role="group" aria-label={group.label} className="pt-3 first:pt-1">
               <h3 className="m-0 px-3 pb-1 text-meta font-medium text-dim">{group.label}</h3>
               {group.sections.map((entry) => {

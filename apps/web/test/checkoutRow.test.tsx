@@ -41,7 +41,7 @@ describe('what the row reads', () => {
       false,
     )
 
-    expect(view.worktreeOption).toBe('New worktree · manor/ab12cd34')
+    expect(view.worktreeOption).toBe('New worktree, manor/ab12cd34')
   })
 
   it('keeps a null live branch, rather than filling it from the stored mapping', () => {

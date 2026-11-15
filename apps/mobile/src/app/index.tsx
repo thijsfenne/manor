@@ -447,7 +447,7 @@ function Standing({ entry, settled }: { entry: InboxChat; settled: boolean }) {
   if (entry.waiting) return <Text style={styles.waiting}>Waiting</Text>
   if (entry.running) return <Text style={styles.runningText}>Working</Text>
   if (entry.unread) return <Text style={styles.doneText}>Done</Text>
-  return <Text style={styles.time}>{settled ? 'Settled · ' : ''}{relativeTime(entry.chat.lastMessageAt)}</Text>
+  return <Text style={styles.time}>{settled ? 'Settled, ' : ''}{relativeTime(entry.chat.lastMessageAt)}</Text>
 }
 
 function SettledRow({ entry, agents, onPress }: { entry: InboxChat; agents: AgentConfig[]; onPress: () => void }) {

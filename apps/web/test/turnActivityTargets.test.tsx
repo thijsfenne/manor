@@ -71,4 +71,18 @@ describe('multi-file activity targets', () => {
     expect(html).toContain('Reading code-review/SKILL.md')
     expect(html).toContain('text-[14px]')
   })
+
+  it('calls a parked tool output or task log a scratch file, not its random name', () => {
+    for (const path of [
+      '/Users/sam/.claude/projects/-Users-sam-x/1a8f521e/tool-results/bfbh0os7c.txt',
+      '/private/tmp/claude-501/-Users-sam-x/tasks/b8x7k2.output',
+    ]) {
+      const html = renderRead([path])
+      expect(html).toContain('Reading a scratch file')
+      expect(html).not.toMatch(/bfbh0os7c|b8x7k2/)
+    }
+    expect(renderRead(['/Users/sam/notes/tmp/brief.md'])).toContain('Reading brief.md')
+    expect(renderRead(['/repo/tool-results/report.md'])).toContain('Reading report.md')
+    expect(renderRead(['/repo/tmp/claude-501/notes.md'])).toContain('Reading notes.md')
+  })
 })

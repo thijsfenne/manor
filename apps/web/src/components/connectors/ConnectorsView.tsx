@@ -438,7 +438,7 @@ function MyMindConnectorDialog({
       </p>
 
       <section className="rounded-xl border border-line bg-surface-2 px-3.5 py-3">
-        <p className="m-0 text-[13px] font-medium text-text">2 read-only tools · available to all agents</p>
+        <p className="m-0 text-[13px] font-medium text-text">2 read-only tools, available to all agents</p>
         <p className="mt-1 mb-0 text-label text-muted">Not attached per persona and never searched automatically.</p>
       </section>
 

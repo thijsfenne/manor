@@ -57,7 +57,7 @@ describe('Auto runtime choices', () => {
     expect(isPinned(disabled)).toBe(true)
     expect(isAutoOn(disabled, true)).toBe(false)
     expect(isAutoPending(persona, disabled, true)).toBe(false)
-    expect(runtimeLabel({ ...persona, model: 'gpt-6-astra', effort: 'high' }, disabled, true)).toBe('GPT-6 Astra · High')
+    expect(runtimeLabel({ ...persona, model: 'gpt-6-astra', effort: 'high' }, disabled, true)).toBe('GPT-6 Astra, High')
     expect(withAuto(disabled, true)).toEqual({ auto: true })
   })
 
@@ -67,7 +67,7 @@ describe('Auto runtime choices', () => {
     // A switch left on by another host changes nothing here either.
     expect(isAutoOn({ auto: true }, false)).toBe(false)
     expect(isAutoPending(persona, {}, false)).toBe(false)
-    expect(runtimeLabel(persona, {}, false)).toBe('GPT-6 Astra · High')
+    expect(runtimeLabel(persona, {}, false)).toBe('GPT-6 Astra, High')
   })
 
   it('tells its readers when the host answers differently, and only then', () => {
@@ -197,7 +197,7 @@ describe('a pinned provider', () => {
     const sage = agent('grok', 'grok-4.6')
     expect(activeModel(sage, {})).toBe('grok-4.6')
     const pin = withModel(sage, {}, 'grok-4.7')
-    expect(runtimeLabel(sage, pin, true)).toBe('Grok 4.7 · Medium')
+    expect(runtimeLabel(sage, pin, true)).toBe('Grok 4.7, Medium')
     expect(activeEffort(sage, { ...pin, effort: 'xhigh' })).toBe('xhigh')
   })
 
@@ -212,7 +212,7 @@ describe('a pinned provider', () => {
     const sage = agent('claude', 'claude-opus-5')
     expect(effectiveDriver(sage, { driver: 'codex' })).toBe('codex')
     expect(activeModel(sage, { driver: 'codex' })).toBe('gpt-6-luna')
-    expect(runtimeLabel(sage, { driver: 'codex' }, true)).toBe('GPT-6 Luna · Medium')
+    expect(runtimeLabel(sage, { driver: 'codex' }, true)).toBe('GPT-6 Luna, Medium')
   })
 
   it('is a pin on its own, so the wire and the row both carry it', () => {
@@ -271,7 +271,7 @@ describe('fast mode', () => {
   it('stores Fast and represents Standard by removing that half of the pin', () => {
     expect(withSpeed(cursor, {}, 'fast')).toEqual({ speed: 'fast' })
     expect(activeSpeed(cursor, { speed: 'fast' })).toBe('fast')
-    expect(runtimeLabel(cursor, { speed: 'fast' }, true)).toBe('Cursor Grok 4.6 · Medium · Fast')
+    expect(runtimeLabel(cursor, { speed: 'fast' }, true)).toBe('Cursor Grok 4.6, Medium, Fast')
     expect(withSpeed(cursor, { speed: 'fast' }, 'standard')).toEqual({})
     expect(withSpeed(codex, {}, 'fast')).toEqual({ speed: 'fast' })
     expect(withEffort(cursor, { speed: 'fast' }, 'high')).toEqual({ effort: 'high', speed: 'fast' })

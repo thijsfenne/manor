@@ -282,7 +282,7 @@ function RoutineListRow({ routine, now, onOpen }: { routine: Routine; now: numbe
       {/* The schedule, never the status: a row that said "Ran 09:14" would
           repeat what the transcript beside it is already showing. */}
       <span className="w-full truncate pl-4 text-[13px] text-dim">
-        {routine.enabled ? describeSchedule(routine) : `${routineOffLabel(routine)} · ${describeSchedule(routine)}`}
+        {routine.enabled ? describeSchedule(routine) : `${routineOffLabel(routine)}, ${describeSchedule(routine)}`}
       </span>
     </button>
   )

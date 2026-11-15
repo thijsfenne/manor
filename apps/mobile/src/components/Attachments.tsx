@@ -78,7 +78,7 @@ function documentLabel(document: EventDocument | PendingDocument): string {
   const { status, pageCount, unreadablePages = [] } = document.extraction
   const pages = pageCount === undefined ? '' : `${pageCount} ${pageCount === 1 ? 'page' : 'pages'}`
   if (status === 'complete') return pages || 'Text read'
-  if (status === 'partial') return unreadablePages.length > 0 ? `${pages} · ${unreadablePages.length} unreadable` : 'Partly read'
+  if (status === 'partial') return unreadablePages.length > 0 ? `${pages}, ${unreadablePages.length} unreadable` : 'Partly read'
   return status === 'unknown' ? 'Coverage unknown' : 'No readable text'
 }
 

@@ -210,7 +210,7 @@ export function runtimeParts(
 /** The runtime parts as one string for a title or screen reader, with Fast when active. */
 export function runtimeLabel(agent: AgentConfig, override: ChatOverride, hostAuto: boolean): string {
   const { model, effort, speed } = runtimeParts(agent, override, hostAuto)
-  return [model, effort, speed].filter((part) => part !== undefined && part !== '').join(' · ')
+  return [model, effort, speed].filter((part) => part !== undefined && part !== '').join(', ')
 }
 
 /**

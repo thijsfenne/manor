@@ -52,8 +52,8 @@ describe('outbound draft card', () => {
   })
 
   const folded: [NonNullable<DraftRecord['closed']>, string][] = [
-    [{ outcome: 'discarded' }, 'Discarded · info@example.com'],
-    [{ outcome: 'submitted', delivery: 'delivered', body: 'Hello' }, 'Sent · info@example.com'],
+    [{ outcome: 'discarded' }, 'Discarded, info@example.com'],
+    [{ outcome: 'submitted', delivery: 'delivered', body: 'Hello' }, 'Sent, info@example.com'],
   ]
   for (const [closed, line] of folded) {
     it(`folds to "${line}" and reopens read-only`, () => {

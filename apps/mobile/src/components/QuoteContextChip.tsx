@@ -82,7 +82,6 @@ export function NoteQuoteContextChip({ quote }: { quote: NoteQuote }) {
       <View style={styles.content}>
         <HugeiconsIcon color={tint?.ink ?? colors.muted} icon={BookOpen01Icon} size={14} strokeWidth={1.8} />
         <Text numberOfLines={1} style={[styles.name, tint && { color: tint.ink }]}>{name}</Text>
-        <Text style={[styles.dot, tint && { color: tint.ink }]}>·</Text>
         <Text numberOfLines={1} style={[styles.text, tint && { color: tint.ink }]}>{quote.text}</Text>
       </View>
     </View>
@@ -94,7 +93,6 @@ const styles = StyleSheet.create({
   chip: { minWidth: 0, maxWidth: '100%', flexDirection: 'row', alignItems: 'center', borderRadius: radius.md, ...squircle, backgroundColor: colors.chip, paddingHorizontal: spacing.sm, paddingVertical: 6 },
   content: { minWidth: 0, flex: 1, flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
   name: { flexShrink: 0, maxWidth: 110, color: colors.text, fontFamily: fonts.sans, fontSize: 13, fontWeight: '500' },
-  dot: { color: colors.dim, fontFamily: fonts.sans, fontSize: 13 },
   text: { flexShrink: 1, color: colors.muted, fontFamily: fonts.sans, fontSize: 13 },
   block: { minWidth: 0, maxWidth: '100%', borderLeftWidth: 2, paddingLeft: spacing.sm },
   blockAuthor: { color: colors.text, fontFamily: fonts.sans, fontSize: 12, fontWeight: '500' },

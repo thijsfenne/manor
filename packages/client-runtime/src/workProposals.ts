@@ -86,15 +86,15 @@ export function workProposalMultipleBlock(row: Pick<WorkHandoffRow, 'leadAgentId
     : 'Add a session agent to run Multiple'
 }
 
-/** A Single runtime as the card names it, as in "Sonnet 5.5 · High". */
+/** A Single runtime as the card names it, as in "Sonnet 5.5, High". */
 export function workProposalRuntimeName(runtime: SingleRuntime): string {
   const effort = EFFORTS.find((option) => option.value === runtime.effort)?.label ?? runtime.effort
-  return `${modelLabel(runtime.driver, runtime.model)} · ${effort}`
+  return `${modelLabel(runtime.driver, runtime.model)}, ${effort}`
 }
 
 /**
  * What Options shows beside its name, muted: a Single card always names its model and
- * effort, as in "Options  Sonnet 5.5 · High", changed or not. Multiple is named only
+ * effort, as in "Options  Sonnet 5.5, High", changed or not. Multiple is named only
  * when the card did not open on it, and an edited prompt always. Worktree is not one:
  * its checkbox sits on the action row, in view.
  */

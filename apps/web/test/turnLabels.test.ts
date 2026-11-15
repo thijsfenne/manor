@@ -17,9 +17,9 @@ describe('edit tool names', () => {
   })
 
   it('names a saved task by what and when instead of the MCP call, never as scheduled', () => {
-    const save = { ...step('mcp__routines__routine_save'), subject: '“Tea” · 2026-09-28 10:00' }
-    expect(currentLabel({ ...save, status: 'running' })).toBe('Saving task “Tea” · 2026-09-28 10:00')
-    expect(settledLabel(save)).toBe('Saved task “Tea” · 2026-09-28 10:00')
+    const save = { ...step('mcp__routines__routine_save'), subject: '“Tea”, 2026-09-28 10:00' }
+    expect(currentLabel({ ...save, status: 'running' })).toBe('Saving task “Tea”, 2026-09-28 10:00')
+    expect(settledLabel(save)).toBe('Saved task “Tea”, 2026-09-28 10:00')
     expect(settledLabel(step('mcp__routines__routine_save'))).toBe('Saved task')
     // A paused task given a new moment without `enabled` stays paused, so the row cannot claim it is scheduled.
     const paused = { ...step('mcp__routines__routine_save'), subject: '2026-09-29 08:00' }

@@ -151,7 +151,7 @@ function NoteTile({ note, open, onOpenChange }: {
         {open ? (
           <span className="flex min-w-0 flex-1 flex-col gap-1.5 leading-[19px] break-words whitespace-pre-wrap">
             <span>{note.text}</span>
-            {note.advice === undefined ? null : <span className="text-muted"><span className="text-dim">Suggested · </span>{note.advice}</span>}
+            {note.advice === undefined ? null : <span className="text-muted"><span className="text-dim">Suggested: </span>{note.advice}</span>}
           </span>
         ) : <span className="min-w-0 flex-1 truncate">{note.title}</span>}
         {note.tag === '' ? null : <span className={`max-w-[45%] flex-none truncate text-[12px] text-dim ${lead}`}>{note.tag}</span>}

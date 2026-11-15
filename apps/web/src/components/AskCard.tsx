@@ -530,7 +530,7 @@ export function AskDock({
         more: 0,
         questions: changeAnswer.answer.questions.map((question) => {
           const given = changeAnswer.answer.answers[question.id]
-          return { ...question, header: `${changeAnswer.answer.title} · Manor chose ${given === undefined ? 'nothing' : userInputAnswerText(given)}` }
+          return { ...question, header: `${changeAnswer.answer.title}, Manor chose ${given === undefined ? 'nothing' : userInputAnswerText(given)}` }
         }),
         // Kept questions, and ones given Manor's own answer again, stay as they were;
         // when that is every one, nothing changes and nothing is sent.

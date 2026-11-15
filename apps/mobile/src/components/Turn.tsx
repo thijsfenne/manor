@@ -460,8 +460,7 @@ export function ConsultedAgents({
       >
         <Text style={styles.consultedText}>{action}</Text>
         <AgentStack agentIds={agentIds} agents={agents} size={18} />
-        <Text style={styles.consultedText}>{count} {count === 1 ? 'agent' : 'agents'}</Text>
-        {repliesFollow ? <Text style={styles.consultedText}>· replies follow</Text> : null}
+        <Text style={styles.consultedText}>{count} {count === 1 ? 'agent' : 'agents'}{repliesFollow ? ', replies follow' : ''}</Text>
       </Pressable>
       {anchor === null ? null : (
         <Modal animationType="fade" onRequestClose={() => setAnchor(null)} statusBarTranslucent transparent visible>
@@ -515,7 +514,7 @@ function FileWriteFootnote({ writes }: { writes: NonNullable<TurnRow['fileWrites
   const [open, setOpen] = useState(false)
   const groups = useMemo(() => fileWriteGroups(writes), [writes])
   const hasLines = groups.some((group) => group.lines.length > 0)
-  const label = groups.map((group) => group.label).join(' · ')
+  const label = groups.map((group) => group.label).join(', ')
   return (
     <View style={styles.footnote}>
       <Pressable
@@ -956,8 +955,8 @@ const TRIGGER_DUE = new Intl.DateTimeFormat('en-GB', { weekday: 'short', hour: '
 function RoutineTriggerRow({ trigger }: { trigger: RoutineTrigger }) {
   const [open, setOpen] = useState(false)
   const late = trigger.dueAt !== undefined && trigger.ts - trigger.dueAt > ROUTINE_LATE_AFTER_MS
-  const label = `Routine${trigger.name === undefined ? '' : ` · ${trigger.name}`} · ${TRIGGER_CLOCK.format(new Date(trigger.ts))}${
-    late && trigger.dueAt !== undefined ? ` · late, due ${TRIGGER_DUE.format(new Date(trigger.dueAt))}` : ''}`
+  const label = `Routine${trigger.name === undefined ? '' : `, ${trigger.name}`}, ${TRIGGER_CLOCK.format(new Date(trigger.ts))}${
+    late && trigger.dueAt !== undefined ? `, late, due ${TRIGGER_DUE.format(new Date(trigger.dueAt))}` : ''}`
   return (
     <Pressable accessibilityRole="button" accessibilityState={{ expanded: open }} onPress={() => setOpen((value) => !value)} style={styles.stepRow}>
       <HugeiconsIcon color={colors.dim} icon={Clock01Icon} size={14} strokeWidth={1.8} />

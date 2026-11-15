@@ -133,6 +133,17 @@ describe('the sessions overview rows', () => {
   })
 
   it('put a fold\'s count at the far right of its header', () => {
-    expect(html({ waiting: [], working: [], settled: [], ...noArchive })).toMatch(/<span class="min-w-0 flex-1 truncate[^"]*">Waiting on you<\/span><span class="flex-none[^"]*">0</)
+    expect(html({ waiting: [], working: [row({ id: 'live' })], settled: [], ...noArchive })).toMatch(/<span class="min-w-0 flex-1 truncate[^"]*">Waiting on you<\/span><span class="flex-none[^"]*">0</)
+  })
+
+  it('shows a project with no Session one line instead of folds, and every fold once it holds one', () => {
+    const empty = html({ waiting: [], working: [], settled: [], ...noArchive })
+    expect(empty).toContain('No Sessions yet. A proposal you accept in the thread starts one.')
+    expect(empty).not.toContain('>Waiting on you<')
+    expect(empty).not.toContain('>Working<')
+    expect(empty).not.toContain('>Settled<')
+    const busy = html({ waiting: [], working: [row({ id: 'live' })], settled: [], ...noArchive })
+    expect(busy).toContain('>Working<')
+    expect(busy).toContain('>Settled<')
   })
 })

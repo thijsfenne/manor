@@ -62,7 +62,8 @@ export function usePanelSelections(manor: Manor, rightPanel: ReturnType<typeof u
   const reviewTurn = useRef((_chatId: string, _turnId: string) => {})
   reviewTurn.current = (chatId, turnId) => {
     setDiffScope(chatId, { kind: 'turn', turnId })
-    rightPanel.showFor(chatId, 'diff')
+    // Like the Session panel's Changes row, a turn's Review takes that panel's room.
+    rightPanel.showFor(chatId, 'diff', 'agents')
   }
   const reviewers = useRef(new Map<string, (turnId: string) => void>())
   const reviewerFor = (chatId: string) => {

@@ -320,6 +320,15 @@ export function ChatPane({
   // Through a string, so the composer keeps its Stop while the running rows change per token.
   const runningKey = rows.flatMap((row) => row.kind === 'turn' && row.live?.state === 'running' ? [row.turnId] : []).join('\0')
   const runningTurnIds = runningKey === '' ? NO_IDS : runningKey.split('\0')
+  // The server steers the running turn with a message that names no one else, in the rooms
+  // its turn runner marks steerable (a group, a Session that is not a routine run). One
+  // running turn there means the composer can say whose it is.
+  const runningAgentId = runningTurnIds.length === 1
+    ? rows.flatMap((row) => row.kind === 'turn' && row.live?.state === 'running' ? [row.agentId] : [])[0]
+    : undefined
+  const steeredAgent = runningAgentId !== undefined && (chat.kind === 'group' || (chat.kind === 'project' && chat.routineId === null))
+    ? workspace.agents.find((agent) => agent.id === runningAgentId)
+    : undefined
   // A Session has no card of its own result, so its Ready row comes from the handoff.
   const sessionReady = sessionReadyRow(chat, workspace.workHandoffs, workspace.chats, workspace.projects, workspace.agents, workspace.checkoutStatus, sessionLive)
   // A project thread (2026-10-10) holds its sessions' questions; a session it started
@@ -523,7 +532,9 @@ export function ChatPane({
       showRecipients={!singleChat && composerShowsRecipients(chat.kind, thread.events, thread.pending.length)}
       {...(chat.kind === 'group' ? { memberIds: chat.memberIds } : {})}
       recipientsUnknown={runningTurnIds.length > 0 || thread.pending.length > 0}
-      placeholder={projectThread ? 'Reply…' : dmAgent === undefined ? 'Ask anything…' : `Message ${dmAgent.name}`}
+      {...(steeredAgent === undefined ? {} : { steeredAgent })}
+      {...(projectThread ? { placeholder: project === undefined || project.name === '' ? 'Reply…' : `Reply to ${project.name}…` }
+        : dmAgent === undefined ? {} : { placeholder: `Message ${dmAgent.name}` })}
       oneRow={dmAgent !== undefined}
       touchMode={phone}
       compact={sessionDensity}

@@ -160,7 +160,7 @@ function AgentCounts({ active, total, pinned }: { active: number; total: number;
       {/* The count a person came for is the one in white; the household size and the
           word after it are the scale it is read against. */}
       <span>
-        <span className="text-text">{active}</span>/{total} active
+        <span className="text-text">{active}</span> of {total} in this chat
       </span>
       {/* The only place a pin on a persona who has not spoken is ever announced. */}
       {pinned > 0 ? (

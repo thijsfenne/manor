@@ -2,7 +2,7 @@ import type { AgentConfig, SkillConfig, ThreadEvent } from '@manor/contracts'
 import { describe, expect, it } from 'vitest'
 
 import { imageRefSpans, snapRefDeletion } from '@manor/contracts'
-import { agentMentionSpans, activeImageRef, activeMention, applyImageRef, applyMention, matchAgents, matchImageRefs, matchesBrowserMention, matchesWorkMention, chatFallbackTargets, composerRecipients, composerShowsRecipients, draftRecipients, eligibleSkills, followUpTargets, replyFallbackTargets, roomAgents } from './mentions'
+import { addressDraft, agentMentionSpans, activeImageRef, activeMention, applyImageRef, applyMention, matchAgents, matchImageRefs, matchesBrowserMention, matchesWorkMention, chatFallbackTargets, composerRecipients, composerShowsRecipients, draftRecipients, eligibleSkills, followUpTargets, replyFallbackTargets, roomAgents } from './mentions'
 
 const agent = (id: string, name: string, isCos = false) => ({ id, name, isCos }) as AgentConfig
 const smith = agent('smith', 'Smith', true)
@@ -220,5 +220,21 @@ describe('image references', () => {
     expect(snapImageRefDeletion('see [Image #1] now', 'see [Image #2] now', 2, { start: 4, end: 14 })).toEqual({ text: 'see [Image #2] now', caret: 14 })
     // A collapsed caret is a backspace, which the diff reads on its own.
     expect(snapImageRefDeletion('see [Image #2] now', 'see [Image #2 now', 2, { start: 14, end: 14 })).toEqual({ text: 'see  now', caret: 4 })
+  })
+})
+
+describe('addressDraft', () => {
+  it('puts the pick first in place of the mentions that open the draft', () => {
+    expect(addressDraft('', roster, 'Ada')).toEqual({ text: '@Ada ', caret: 5 })
+    expect(addressDraft('kijk even mee', roster, 'Ada').text).toBe('@Ada kijk even mee')
+    expect(addressDraft('@Smith kijk even mee', roster, 'Ada').text).toBe('@Ada kijk even mee')
+    expect(addressDraft('@Smith @Bob kijk', roster, 'Ada').text).toBe('@Ada kijk')
+    expect(addressDraft('@Smith, @Bob please review', roster, 'Ada').text).toBe('@Ada please review')
+    expect(addressDraft('@Smith & @Bob, kijk', roster, 'Ada').text).toBe('@Ada kijk')
+  })
+
+  it('keeps mentions later in the text and handles that are not agents', () => {
+    expect(addressDraft('@Smith vraag @Bob ook', roster, 'Ada').text).toBe('@Ada vraag @Bob ook')
+    expect(addressDraft('@browser open de site', roster, 'Ada').text).toBe('@Ada @browser open de site')
   })
 })

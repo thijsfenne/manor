@@ -48,6 +48,19 @@ describe('runtime sections', () => {
     expect(html).toContain('Jeeves')
   })
 
+  it('names each seat\'s model in the roster and leaves reasoning to the row\'s settings', () => {
+    const html = renderToStaticMarkup(
+      <RuntimeRoster
+        agents={[agent('codex', 'gpt-5.6-sol')]}
+        overrides={{ jeeves: { auto: false } }}
+        onChange={() => {}}
+        nav={{ selectedId: null, direction: null, enter: () => {}, back: () => {}, reset: () => {} }}
+      />,
+    )
+    expect(html).toMatch(/text-muted">GPT-5\.6 Sol</)
+    expect(html).not.toContain('>High<')
+  })
+
   it('puts Auto above the provider choices and switches it', () => {
     const changed = vi.fn()
     let tree!: ReactTestRenderer

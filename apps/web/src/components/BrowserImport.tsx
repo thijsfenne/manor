@@ -29,7 +29,7 @@ const nameOf = (status: BrowserImportStatus, id: ImportBrowserId): string =>
 export const importProfileLabel = (status: BrowserImportStatus | null): string =>
   status?.enabled !== true
     ? 'Default'
-    : `${nameOf(status, status.browser)}${status.profileName === undefined ? '' : ` · ${status.profileName}`}`
+    : `${nameOf(status, status.browser)}${status.profileName === undefined ? '' : `, ${status.profileName}`}`
 
 /**
  * The opt-in copy of another browser's logins. The switch turns it on for the browser

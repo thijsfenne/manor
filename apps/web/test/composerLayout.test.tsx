@@ -78,7 +78,7 @@ describe('the composer layout', () => {
       />,
     )
 
-    expect(html).toContain('Context window 17% · 44k/258k')
+    expect(html).toContain('Context window 17%, 44k/258k')
     expect(html.indexOf('Context window 17%')).toBeLessThan(html.indexOf('Send (Enter)'))
     expect(html).not.toContain('Context per agent')
     expect(html).not.toContain('Session cost')
@@ -171,6 +171,7 @@ describe('the composer layout', () => {
 
     expect(html).toContain('Model and reasoning per agent, for this chat')
     expect(html.match(/-ml-1.5 flex/g)).toHaveLength(3)
+    expect(html).toContain('>Wren, Argus, Ellis<')
   })
 
   it('shows every Work face and a change mark instead of a count', () => {
@@ -191,6 +192,8 @@ describe('the composer layout', () => {
     expect(html).not.toContain('pinned')
     expect(html).toContain('changed from default')
     expect(html.match(/-ml-1.5 flex/g)).toHaveLength(6)
+    // Six names would push the composer's controls off the row; the faces carry it.
+    expect(html).not.toContain('Jeeves, Sage')
   })
 })
 
@@ -305,7 +308,10 @@ describe('a composer picking up a draft', () => {
 })
 
 describe('the recipient label', () => {
-  afterEach(clearDrafts)
+  afterEach(() => {
+    clearDrafts()
+    vi.unstubAllGlobals()
+  })
 
   it('stays off until the caller asks for it', () => {
     const html = render({})
@@ -326,6 +332,7 @@ describe('the recipient label', () => {
     expect(html).toContain('This message goes to')
     expect(html).toContain('Sage')
     expect(html).not.toContain('no one')
+    expect(html).toContain('Message Sage')
   })
 
   it('says no one when a group mention names only an outsider', () => {
@@ -361,6 +368,7 @@ describe('the recipient label', () => {
     expect(html).toContain('This message goes to')
     expect(html).toContain('…')
     expect(html).not.toContain('Sends to Sage')
+    expect(html).toContain('Ask anything…')
   })
 
   it('still names an explicit mention while a turn is in flight', () => {
@@ -380,6 +388,93 @@ describe('the recipient label', () => {
     expect(html).toContain('Smith')
     expect(html).toContain('Sends to Smith')
     expect(html).not.toContain('>…<')
+  })
+
+  it('names the one agent a message would steer instead of "…"', () => {
+    const html = renderToStaticMarkup(
+      <Composer
+        agents={ROSTER}
+        showRecipients
+        recipientsUnknown
+        steeredAgent={ROSTER[1]!}
+        fallbackTargets={[ROSTER[0]!]}
+        onSend={() => true}
+        canSend
+        blockedNote=""
+      />,
+    )
+    expect(html).toContain('Joins Smith&#x27;s running turn')
+    expect(html).not.toContain('>…<')
+    expect(html).not.toContain('Sage')
+  })
+
+  // The menu listens on the document while open, which this suite has none of.
+  const stubListeners = () => {
+    const target = { addEventListener: () => {}, removeEventListener: () => {}, activeElement: null }
+    vi.stubGlobal('document', target)
+    vi.stubGlobal('window', { ...target, setTimeout, clearTimeout })
+  }
+
+  it('opens a menu of the seated agents and puts the chosen one at the head of the draft', () => {
+    stubListeners()
+    writeDraft('pick', { text: 'kijk even mee', images: [], files: [] })
+    const sent: string[] = []
+    let tree!: ReactTestRenderer
+    act(() => {
+      tree = create(
+        <Composer
+          agents={ROSTER}
+          draftKey="pick"
+          showRecipients
+          memberIds={['sage', 'smith']}
+          fallbackTargets={[ROSTER[0]!]}
+          onSend={(text) => { sent.push(text); return true }}
+          canSend
+          blockedNote=""
+        />,
+      )
+    })
+    const trigger = tree.root.findByProps({ 'aria-haspopup': 'menu', title: 'Sends to Sage' })
+    act(() => trigger.props.onClick())
+    expect(tree.root.findAllByProps({ role: 'menuitem' })).toHaveLength(2)
+    act(() => tree.root.findAllByProps({ role: 'menuitem' })[1]!.props.onClick())
+    act(() => tree.root.findByProps({ title: 'Send (Enter)' }).props.onClick())
+    expect(sent).toEqual(['@Smith kijk even mee'])
+    act(() => tree.unmount())
+  })
+
+  it('leaves a draft that already mentions the chosen agent as it is', () => {
+    stubListeners()
+    writeDraft('again', { text: '@Sage kijk even mee', images: [], files: [] })
+    const sent: string[] = []
+    let tree!: ReactTestRenderer
+    act(() => {
+      tree = create(
+        <Composer agents={ROSTER} draftKey="again" showRecipients onSend={(text) => { sent.push(text); return true }} canSend blockedNote="" />,
+      )
+    })
+    act(() => tree.root.findByProps({ 'aria-haspopup': 'menu', title: 'Sends to Sage' }).props.onClick())
+    act(() => tree.root.findAllByProps({ role: 'menuitem' })[0]!.props.onClick())
+    act(() => tree.root.findByProps({ title: 'Send (Enter)' }).props.onClick())
+    expect(sent).toEqual(['@Sage kijk even mee'])
+    act(() => tree.unmount())
+  })
+
+  it('swaps the addressee a draft opens with for the chosen one', () => {
+    stubListeners()
+    writeDraft('swap', { text: '@Sage kijk even mee', images: [], files: [] })
+    const sent: string[] = []
+    let tree!: ReactTestRenderer
+    act(() => {
+      tree = create(
+        <Composer agents={ROSTER} draftKey="swap" showRecipients memberIds={['sage', 'smith']} onSend={(text) => { sent.push(text); return true }} canSend blockedNote="" />,
+      )
+    })
+    act(() => tree.root.findByProps({ 'aria-haspopup': 'menu', title: 'Sends to Sage' }).props.onClick())
+    act(() => tree.root.findAllByProps({ role: 'menuitem' })[1]!.props.onClick())
+    act(() => tree.root.findByProps({ title: 'Send (Enter)' }).props.onClick())
+    expect(sent).toEqual(['@Smith kijk even mee'])
+    act(() => tree.unmount())
   })
 })
 

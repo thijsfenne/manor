@@ -34,7 +34,7 @@ function Line({ icon, children }: { icon: Parameters<typeof Icon>[0]['icon']; ch
 }
 
 /**
- * Under a reply: "Updated its notes +1 line · View · Undo", or a memory-off agent's
+ * Under a reply: "Updated its notes +1 line, View, Undo", or a memory-off agent's
  * offer, "Add to instructions". Undo is the server's to refuse, when the notes changed
  * since or the agent is mid-turn; its answer shows beside the button and nothing is written.
  */

@@ -28,7 +28,7 @@ export function MemoryTraceSheet({ open, onClose, trace }: MemoryTraceSheetProps
                 <Text numberOfLines={1} style={styles.source}>{baseName(item.sourcePath)}</Text>
               </View>
             ))}
-            <Derivation>Inferred after the turn · {readsLabel(trace.reads)}</Derivation>
+            <Derivation>Inferred after the turn, {readsLabel(trace.reads)}</Derivation>
           </View>
         ) : (
           <View style={styles.list}>
@@ -43,13 +43,13 @@ export function MemoryTraceSheet({ open, onClose, trace }: MemoryTraceSheetProps
             <Text style={styles.paths}>
               {distinctReadPaths(trace.reads).map((path, index) => (
                 <Fragment key={path}>
-                  {index === 0 ? null : <Text style={styles.separator}> · </Text>}
+                  {index === 0 ? null : <Text style={styles.separator}>, </Text>}
                   <Text style={styles.path}>{baseName(path)}</Text>
                 </Fragment>
               ))}
             </Text>
             <Derivation>
-              {summary.status === 'none' ? 'Inferred after the turn · ' : ''}
+              {summary.status === 'none' ? 'Inferred after the turn, ' : ''}
               {readsLabel(trace.reads)}
             </Derivation>
           </View>

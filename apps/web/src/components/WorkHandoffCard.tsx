@@ -113,11 +113,12 @@ export function WorkHandoffCard({
     )
   }
   // A brief handed to its project thread (2026-10-10): one line that follows the session
-  // the thread started and opens the thread, where its questions and Confirm are.
+  // the thread started. Once the Session exists a press opens the project room with it on the
+  // right (what the overview's own row does); before that it opens the thread.
   const forwarded = row.forwarded
   if (forwarded !== undefined) {
     const threadChatId = forwarded.threadChatId
-    const openForwarded = threadChatId === null || onOpenThread === undefined ? undefined : () => onOpenThread(threadChatId)
+    const openForwarded = threadChatId === null || onOpenThread === undefined ? undefined : () => onOpenThread(row.workChatId ?? threadChatId)
     return (
       <button
         type="button"
@@ -268,7 +269,11 @@ export function WorkHandoffCard({
                     {singleMode
                       ? <ProviderMark driver={singleDriver} size={14} />
                       : <AgentStack agentIds={[row.leadAgentId, ...row.supportingAgentIds]} agents={identityAgents} footprint={18} size={14} />}
-                    {choices.length === 0 ? null : <span className="min-w-0 truncate">{choices.join(' · ')}</span>}
+                    {choices.length === 0 ? null : (
+                      <span className="flex min-w-0 items-center gap-2">
+                        {choices.map((choice) => <span key={choice} className="min-w-0 truncate">{choice}</span>)}
+                      </span>
+                    )}
                   </span>
                 </Button>
               ) : null}
@@ -458,7 +463,7 @@ function DoneLine({ id, title, summary, status, marked, onOpen }: { id: string; 
         : null}
       <span className="min-w-0 flex-1 truncate text-muted">
         <span className={tile ? 'text-text' : 'font-medium text-text'}>{title}</span>
-        {summary === '' ? null : <> · {summary}</>}
+        {summary === '' ? null : <>, {summary}</>}
       </span>
       <span className={`flex shrink-0 items-center ${tile ? 'gap-1.25 text-[12.5px]' : 'gap-1.5'} ${WORK_STATUS_TONE[status.tone]}`}>
         {/* A finished Session that waits on no Confirm still gets the check, in its muted tone. */}

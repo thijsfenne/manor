@@ -97,7 +97,7 @@ function SubagentFacts({ subagent: { step }, state, summary, starter, below }: P
           {starter === undefined ? '' : `${starter.name} at `}<span className="tabular-nums">{startedAt(step.startedAt)}</span>
         </Badge>
         <Badge {...(driver === undefined ? {} : { mark: <ProviderMark driver={driver} size={12} /> })}>
-          {driver === undefined ? NOT_REPORTED : runtime === undefined ? providerName(driver) : [runtime.model, runtime.effort].filter(Boolean).join(' · ')}
+          {driver === undefined ? NOT_REPORTED : runtime === undefined ? providerName(driver) : [runtime.model, runtime.effort].filter(Boolean).join(', ')}
         </Badge>
       </div>
       {role === undefined && why === undefined ? null : (

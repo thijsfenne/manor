@@ -297,7 +297,7 @@ export function NoteAiLayer({ view, version, ai }: NoteAiLayerProps) {
   } else {
     body = (
       <div className="flex items-center justify-between gap-2 p-0.5">
-        <span className="min-w-0 truncate pl-1.5 text-meta text-dim">{ai.model} · {changeCount(state.changes.length)}</span>
+        <span className="min-w-0 truncate pl-1.5 text-meta text-dim">{ai.model}, {changeCount(state.changes.length)}</span>
         <span className="flex flex-none items-center gap-1.5">
           <Button size="compact" disabled={state.phase === 'applying' || state.accepting} onClick={ai.reject}>Reject</Button>
           <Button size="compact" variant="primary" disabled={!ai.canAccept} onClick={ai.accept}>
@@ -371,7 +371,7 @@ export function NoteAiComposer({ ai }: { ai: NoteAi }) {
         ) : own && (state.phase === 'proposal' || state.phase === 'applying') ? (
           <>
             <span className="min-w-0 flex-1 truncate text-meta text-dim">
-              {changeCount(state.changes.length)}{state.phase === 'proposal' ? ` · “${state.instruction}”` : ''}
+              {changeCount(state.changes.length)}{state.phase === 'proposal' ? `, “${state.instruction}”` : ''}
             </span>
             <Button size="compact" className="rounded-full" disabled={state.phase === 'applying' || state.accepting} onClick={ai.reject}>Reject</Button>
             <Button size="compact" variant="primary" className="rounded-full" disabled={!ai.canAccept} onClick={ai.accept}>Accept all</Button>

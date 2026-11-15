@@ -455,5 +455,5 @@ function ArtifactCard({
 
 const selectionStatus = (selected: number, attached: number): string => {
   const tray = `${selected} / ${MAX_PAGE_CONTEXT_ATTACHMENTS} selected`
-  return attached > 0 ? `${tray} · ${attached} in chat` : tray
+  return attached > 0 ? `${tray}, ${attached} in chat` : tray
 }

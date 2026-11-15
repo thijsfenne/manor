@@ -35,7 +35,7 @@ const STATE_WORD: Record<SubagentState, string> = {
 
 /** What one child runs on, the way its row, its bar and the Agents list all say it. */
 export const subagentRuntimeLine = (child: Pick<SubagentSummary, 'driver' | 'model' | 'effort'>): string =>
-  `${modelLabel(child.driver, child.model)} · ${EFFORTS.find((option) => option.value === child.effort)?.label ?? child.effort}`
+  `${modelLabel(child.driver, child.model)}, ${EFFORTS.find((option) => option.value === child.effort)?.label ?? child.effort}`
 
 export const subagentStateWord = (state: SubagentState): string => STATE_WORD[state]
 

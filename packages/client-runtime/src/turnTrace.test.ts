@@ -507,7 +507,7 @@ describe('trace rows', () => {
     ])
     expect(rows.map((row) => row.kind === 'group' ? `${row.family}:${row.steps.length}` : row.key)).toEqual(['read:3', 'd', 'same:2', 'g', 'h'])
     const [reads, , polls] = rows
-    expect(reads?.kind === 'group' ? groupLabel(reads) : '').toBe('Read a.ts · b.ts')
+    expect(reads?.kind === 'group' ? groupLabel(reads) : '').toBe('Read a.ts, b.ts')
     expect(polls?.kind === 'group' ? groupLabel(polls) : '').toBe('Checked on a helper')
   })
 
