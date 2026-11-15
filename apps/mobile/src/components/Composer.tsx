@@ -116,7 +116,7 @@ type MentionRow =
   | { kind: 'image'; number: number; image: ImageAttachment }
   | { kind: 'command'; command: ChatCommandRow }
 
-interface ComposerProps {
+export interface ComposerProps {
   /** Read only when a draft opens with `/`, because it walks the transcript. Absent while a quote or reply rides along, which makes any text a message. */
   commandContext?: (() => ChatCommandContext) | undefined
   draft: string

@@ -42,7 +42,7 @@ import { Attachments, ImageViewer } from '@/components/Attachments'
 import { AuthGate } from '@/components/AuthGate'
 import { Blobatar } from '@/components/Blobatar'
 import { ChatHeader, CHAT_HEADER_HEIGHT } from '@/components/ChatHeader'
-import { Composer } from '@/components/Composer'
+import { Composer, type ComposerProps } from '@/components/Composer'
 import { DiffSheet } from '@/components/DiffSheet'
 import { EdgeScrim } from '@/components/EdgeScrim'
 import { EditsPill } from '@/components/EditsPill'
@@ -181,9 +181,6 @@ function useTranscriptRows(thread: ThreadShape, workspace: QuietWorkspace, chatI
 function ChatContent({ chatId }: { chatId: string | undefined }) {
   const hostAuto = useHostAuto()
   const { workspace, status, askProjectCheckout, askCheckoutStatus, openChat, leaveChat, sendMessage, stopTurn, stopBackground, stopSubagent, answerUserInput, answerSecretRequest, changeSessionAnswer, submitOutboundDraft, discardOutboundDraft, snoozeOutboundDraft, ignoreOutboundDraft, restoreOutboundDraft, readOutboundThread, setChatOverride, setChatSettled, rejectWorkHandoff, listRepoFiles, readRepoFile } = useWorkspace()
-  const [draft, setDraft] = useState(() => readDraft(chatId).text)
-  const [images, setImages] = useState<ImageAttachment[]>(() => readDraft(chatId).images)
-  const [textFiles, setTextFiles] = useState<StagedFile[]>(() => readDraft(chatId).files)
   const [replyTo, setReplyTo] = useState<MessageReply | undefined>(() => readDraft(chatId).replyTo)
   const [quote, setQuote] = useState<MessageQuote | undefined>(() => readDraft(chatId).quote)
   const [quoteSelection, setQuoteSelection] = useState<QuoteSelectionSource | null>(null)
@@ -223,24 +220,8 @@ function ChatContent({ chatId }: { chatId: string | undefined }) {
     return () => leaveChat(chatId)
   }, [chatId, leaveChat, openChat]))
 
-  /**
-   * A draft belongs to its conversation, not to this screen: walking back to the list
-   * unmounts the transcript, and what was typed has to be there on the way in again.
-   * Written through on every change rather than parked on the way out, because the way
-   * out is a route disappearing and not an event this screen gets to see.
-   */
-  const changeDraft = (text: string) => {
-    setDraft(text)
-    writeDraft(chatId, { text, images, files: textFiles, ...(replyTo === undefined ? {} : { replyTo }), ...(quote === undefined ? {} : { quote }) })
-  }
-  const changeImages = (next: ImageAttachment[]) => {
-    setImages(next)
-    writeDraft(chatId, { text: draft, images: next, files: textFiles, ...(replyTo === undefined ? {} : { replyTo }), ...(quote === undefined ? {} : { quote }) })
-  }
-  const changeTextFiles = (next: StagedFile[]) => {
-    setTextFiles(next)
-    writeDraft(chatId, { text: draft, images, files: next, ...(replyTo === undefined ? {} : { replyTo }), ...(quote === undefined ? {} : { quote }) })
-  }
+  // The reply and the quote are set from the transcript, so they live here. What is
+  // typed and staged lives in `ChatComposer`, and all of it shares one stored draft.
   const chooseReply = useCallback((reply: MessageReply) => {
     setReplyTo(reply)
     writeDraft(chatId, { ...readDraft(chatId), replyTo: reply })
@@ -511,14 +492,15 @@ function ChatContent({ chatId }: { chatId: string | undefined }) {
   )
   // Who an unmarked draft reaches, as the Mac says next to its plus. Only a thread
   // that has begun earns the label; a running or queued turn makes it unknowable.
-  const recipients = ((): AgentConfig[] | 'unknown' | undefined => {
+  // Read per draft by the composer, which holds the text.
+  const recipientsOf = ((): ((draft: string) => AgentConfig[]) | 'unknown' | undefined => {
     if (chat === null || singleChat || !composerShowsRecipients(chat.kind, thread.events, thread.pending.length)) return undefined
     if (replyTo === undefined && (activeTurn !== null || thread.pending.length > 0)) return 'unknown'
     const members = chat.kind === 'group' ? chat.memberIds : undefined
     // Parsed against the whole roster, then filtered to the room, as the server does:
     // an outsider's name in a group, or a chat persona's in a Session, is a mention
     // that reaches nobody, not no mention.
-    return draftRecipients(draft, workspace.agents, effectiveFallbackTargets, members, roomAgents(workspace.agents, chat))
+    return (draft) => draftRecipients(draft, workspace.agents, effectiveFallbackTargets, members, roomAgents(workspace.agents, chat))
   })()
 
   /**
@@ -646,17 +628,15 @@ function ChatContent({ chatId }: { chatId: string | undefined }) {
     return () => cancelAnimationFrame(frame)
   }, [measureWorkCards])
 
-  const submit = (text: string) => {
+  const submit = (text: string, images: ImageAttachment[], textFiles: StagedFile[]) => {
     const placed = placeQuotesAfterText({ text, ...(quote === undefined ? {} : { quote }) })
-    if (chatId === undefined || !sendMessage(chatId, placed.text, images, textFiles, replyTo, placed.quotes)) return
-    setDraft('')
-    setImages([])
-    setTextFiles([])
+    if (chatId === undefined || !sendMessage(chatId, placed.text, images, textFiles, replyTo, placed.quotes)) return false
     setReplyTo(undefined)
     setQuote(undefined)
     writeDraft(chatId, EMPTY_DRAFT)
     if (showJump) followSend.current = true
     setJumpForChat(null)
+    return true
   }
 
   const trackScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
@@ -984,18 +964,15 @@ function ChatContent({ chatId }: { chatId: string | undefined }) {
               onAnswer={(answers) => answerUserInput(subagentQuestion.childChatId, subagentQuestion.requestId, answers)}
             />
           ) : (
-            <Composer
+            <ChatComposer
+              chatId={chatId}
               {...(chat === null || replyTo !== undefined || quote !== undefined ? {} : { commandContext: () => chatCommandContext(chat, project, thread?.events ?? [], workspace.workHandoffs,
                 activeTurn !== null || sessionLive(chat.id).running || waiting || (thread?.pending.length ?? 0) > 0) })}
               busy={activeTurn !== null || waiting}
               disabled={status !== 'live'}
-              draft={draft}
               {...(effectiveFallbackTargets === undefined ? {} : { fallbackTargets: [...effectiveFallbackTargets] })}
               files={listing?.files ?? []}
               filesTruncated={listing?.truncated ?? false}
-              images={images}
-              textFiles={textFiles}
-              onChangeTextFiles={changeTextFiles}
               {...(chat?.kind === 'group' ? { memberIds: chat.memberIds } : { })}
               mentionable={mentionable}
               allowWorkDestination={!singleChat && chat?.kind === 'dm'}
@@ -1003,9 +980,7 @@ function ChatContent({ chatId }: { chatId: string | undefined }) {
               {...(contextMeter === undefined ? {} : { contextMeter })}
               {...(composerModel === undefined ? {} : { model: composerModel })}
               {...(chat !== null && isSoloRoom(chat) ? {} : { roster: workspace.agents })}
-              {...(recipients === undefined ? {} : { recipients })}
-              onChangeDraft={changeDraft}
-              onChangeImages={changeImages}
+              {...(recipientsOf === undefined ? {} : { recipientsOf })}
               onSend={submit}
               onStop={() => {
                 // A turn's Stop also ends the chat's background work on the server.
@@ -1120,6 +1095,62 @@ function ChatContent({ chatId }: { chatId: string | undefined }) {
     </AnswerChange.Provider>
     </SubagentLaunchesContext.Provider>
     </SubagentDirectory.Provider>
+  )
+}
+
+type ChatComposerProps = Omit<ComposerProps, 'draft' | 'onChangeDraft' | 'images' | 'onChangeImages' | 'textFiles' | 'onChangeTextFiles' | 'onSend' | 'recipients'> & {
+  chatId: string
+  /** Who a draft reaches if sent now. `'unknown'` and absent mean what they mean on `Composer`. */
+  recipientsOf?: ((draft: string) => AgentConfig[]) | 'unknown'
+  /** Says whether the message left: a refused send keeps what was typed and staged. */
+  onSend: (text: string, images: ImageAttachment[], files: StagedFile[]) => boolean
+}
+
+/**
+ * The composer of an open chat. It holds what is typed and staged, so a keystroke
+ * redraws the composer and not the screen around it.
+ *
+ * A draft belongs to its conversation, not to this screen: walking back to the list
+ * unmounts the transcript, and what was typed has to be there on the way in again.
+ * Written through on every change rather than parked on the way out, because the way
+ * out is a route disappearing and not an event this screen gets to see. An ask card
+ * that takes the composer's place is the same case.
+ */
+function ChatComposer({ chatId, recipientsOf, onSend, ...composer }: ChatComposerProps) {
+  const [draft, setDraft] = useState(() => readDraft(chatId).text)
+  const [images, setImages] = useState(() => readDraft(chatId).images)
+  const [textFiles, setTextFiles] = useState(() => readDraft(chatId).files)
+  const changeDraft = (text: string) => {
+    setDraft(text)
+    writeDraft(chatId, { ...readDraft(chatId), text })
+  }
+  const changeImages = (next: ImageAttachment[]) => {
+    setImages(next)
+    writeDraft(chatId, { ...readDraft(chatId), images: next })
+  }
+  const changeTextFiles = (next: StagedFile[]) => {
+    setTextFiles(next)
+    writeDraft(chatId, { ...readDraft(chatId), files: next })
+  }
+  const send = (text: string) => {
+    if (!onSend(text, images, textFiles)) return
+    setDraft('')
+    setImages([])
+    setTextFiles([])
+  }
+  const recipients = typeof recipientsOf === 'function' ? recipientsOf(draft) : recipientsOf
+  return (
+    <Composer
+      {...composer}
+      draft={draft}
+      images={images}
+      textFiles={textFiles}
+      onChangeDraft={changeDraft}
+      onChangeImages={changeImages}
+      onChangeTextFiles={changeTextFiles}
+      onSend={send}
+      {...(recipients === undefined ? {} : { recipients })}
+    />
   )
 }
 
