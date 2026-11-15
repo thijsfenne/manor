@@ -56,7 +56,7 @@ const agent = (id: string, driver: AgentConfig['driver'], model: string): AgentC
   }) as AgentConfig
 
 describe('compactContextTokens', () => {
-  it('uses Synara short counts', () => {
+  it('uses short counts', () => {
     expect(compactContextTokens(440)).toBe('440')
     expect(compactContextTokens(4_400)).toBe('4.4k')
     expect(compactContextTokens(44_000)).toBe('44k')

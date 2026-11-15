@@ -52,7 +52,7 @@ interface SessionSectionsProps {
 const plural = (count: number, noun: string) => `${count} ${noun}${count === 1 ? '' : 's'}`
 
 /**
- * The Session panel below its roster, laid out the way Synara's environment card is:
+ * The Session panel below its roster, laid out as an environment card:
  * titled sections with one row per fact. Environment is what the Session would land
  * and where (Changes, then a Branch line per folder), Repository where it pushes to,
  * Editor the folder in an app. Present only where the chat has a linked git folder;

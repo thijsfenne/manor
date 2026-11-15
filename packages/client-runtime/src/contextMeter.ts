@@ -50,7 +50,7 @@ export function latestSessionContextTokens(
   return latestSessionContext(events, agentId).used
 }
 
-/** Synara-style short token count: 44k, 258k, 1m. */
+/** Short token count: 44k, 258k, 1m. */
 export function compactContextTokens(value: number): string {
   if (!Number.isFinite(value) || value < 0) return '0'
   if (value < 1_000) return `${Math.round(value)}`

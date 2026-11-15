@@ -577,8 +577,8 @@ const snapshots = {
           after: 'function Hunk({ edit, labelled }: { edit: FileEdit; labelled: boolean }) {\n  const rows = useMemo(() => numberedDiff(collapseContext(editLines(edit)), edit.offset), [edit])\n' },
       ] },
       { id: 'df-brief', tool: 'Write', edits: [
-        { path: '/Users/sam/.manor/scratch/openbot-briefs/research/slices/desktop-workspace-and-persistent-agents/common-instructions.txt', created: true,
-          after: 'You are reading one slice of the open-source project "OpenBot", a local-first Electron desktop workspace for persistent AI agents.\n\nPurpose: a research report for a designer who builds a similar app.\n\nHard rules:\n- Read only. Do not install, build, run, or execute anything from the repo.\n- Every claim needs file:line evidence (path relative to the repo root, plus line number or range).\n' },
+        { path: '/Users/sam/.manor/scratch/example-briefs/research/slices/desktop-workspace-and-persistent-agents/common-instructions.txt', created: true,
+          after: 'You are reading one slice of the open-source project "Example", a local-first Electron desktop workspace for persistent AI agents.\n\nPurpose: a research report for a designer who builds a similar app.\n\nHard rules:\n- Read only. Do not install, build, run, or execute anything from the repo.\n- Every claim needs file:line evidence (path relative to the repo root, plus line number or range).\n' },
       ] },
       { id: 'df-old', tool: 'Bash', edits: [
         { path: '/tmp/manor-mobile-verify/Manor/apps/mobile/src/components/OldDiffRows.tsx', panelPath: 'apps/mobile/src/components/OldDiffRows.tsx', kind: 'delete',

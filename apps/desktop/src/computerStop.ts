@@ -20,8 +20,8 @@ interface Arm {
  * answers, and Escape is let go only after that answer or after the server itself
  * disarms it.
  *
- * A global shortcut needs no Input Monitoring grant, unlike the listen-only event
- * tap Synara uses. The cost is that Escape does not reach other apps while an agent
+ * A global shortcut needs no Input Monitoring grant, unlike a listen-only event
+ * tap. The cost is that Escape does not reach other apps while an agent
  * drives the Mac, which is the moment the key means stop.
  */
 export function registerComputerStopIpc(

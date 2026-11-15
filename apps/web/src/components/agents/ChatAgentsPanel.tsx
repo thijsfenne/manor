@@ -93,7 +93,7 @@ export function ChatAgentsPanel({
       className={`flex ${fill ? 'h-full' : 'max-h-full'} min-h-0 flex-col ${DOCK_PANEL_SHELL}`}
     >
       {/* The Session panel has no title bar: its rail door opens and closes it, and its
-          sections carry their own titles, the way Synara's environment card does. */}
+          sections carry their own titles. */}
       {session ? null : (
         <div className="flex flex-none items-center gap-2 py-2.5 pr-2.5 pl-3.5">
           <h2 className="m-0 text-[14px] font-medium text-text">Agents</h2>

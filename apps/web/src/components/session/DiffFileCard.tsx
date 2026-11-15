@@ -18,7 +18,7 @@ const AHEAD = '1600px 0px'
 
 const ADDED = 'bg-[color-mix(in_srgb,var(--color-ok)_14%,transparent)]'
 const REMOVED = 'bg-[color-mix(in_srgb,var(--color-danger)_14%,transparent)]'
-/** The edge mark of a changed line: solid for an addition, dashed for a removal, as Synara draws them. */
+/** The edge mark of a changed line: solid for an addition, dashed for a removal. */
 const ADDED_EDGE = 'bg-ok'
 const REMOVED_EDGE = 'bg-[repeating-linear-gradient(to_bottom,var(--color-danger)_0_3px,transparent_3px_5px)]'
 

@@ -13,7 +13,7 @@ describe('the Single Work context ring', () => {
     act(() => tree.unmount())
   })
 
-  it('opens the Synara readout and leaves session cost out', () => {
+  it('opens the readout and leaves session cost out', () => {
     act(() => {
       tree = create(<ContextRing controlSize="h-8 w-8" used={44_000} window={258_000} />)
     })

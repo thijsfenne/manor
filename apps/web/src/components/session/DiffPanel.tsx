@@ -190,7 +190,7 @@ export function DiffPanel({
         <div className={`pointer-events-none absolute inset-y-0 left-[3px] w-0.5 bg-primary transition-opacity duration-150 group-hover:opacity-40 group-focus-visible:opacity-60 ${resizing ? 'opacity-60' : 'opacity-0'}`} />
       </div>
 
-      {/* One bar the way Synara draws it: the source on the left, then the tools, the
+      {/* One bar: the source on the left, then the tools, the
           turn picker and the way out. The two pills are the two things the pane can
           show, the lit one being on screen. Whole Session has no menu because it is the
           only source Manor diffs; staged, branch and compare views were left out.
@@ -327,7 +327,7 @@ function ToolButton({ label, disabled = false, onClick, pressed, children }: { l
   )
 }
 
-/** View, whitespace and folding, in one menu the way Synara keeps them. */
+/** View, whitespace and folding, in one menu. */
 function OptionsButton({ items }: { items: ContextMenuItem[] }) {
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null)
   return (

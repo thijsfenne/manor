@@ -76,6 +76,7 @@ Personal additions. If `~/.claude/manor.md` exists on this machine, read it befo
 - Icons are HugeIcons, the free MIT set: import from `@hugeicons/core-free-icons`, render with `HugeiconsIcon` from `@hugeicons/react`. The package is pinned to the exact version, because a newer one redraws glyphs. Pro glyphs may not be committed. File type glyphs come from `@pierre/trees` through `components/fileMark.tsx`. Filled glyphs are only for active and selected states and come from `@manor/client-runtime/solid-icons`, a file generated from the line icons (`pnpm --filter @manor/client-runtime generate:solid-icons`). No emoji and no ad hoc inline SVG icons.
 - Colours come from the `@theme` tokens in `apps/web/src/styles.css` or the `--accent` variable of a persona. Persona colours are runtime data, not tokens. The exempt files are listed in `.claude/hooks/check-colors.sh`.
 - Files in this repository are in English.
+- Name no person and no other product, in code, comments, docs, test names, fixtures or commit messages. Say what the thing does, not whose idea it was or which app it resembles. The providers Manor wraps and the libraries it uses are named where the code needs them. `scripts/check-public.sh` and `scripts/check-outgoing.sh` enforce the names a maintainer lists.
 
 ## Working files
 

@@ -23,7 +23,7 @@ const ROWS: Record<ContextRowKey, { label: string; swatch: string }> = {
 
 /**
  * One session meter for Single Work. The dial is the old room ring; the card is
- * Synara's readout (percent, used/window, model window, compact when needed).
+ * a readout (percent, used/window, model window, compact when needed).
  */
 // Memoized because the composer re-renders on every streamed token, while the meter's
 // props only change when a live reading lands, at most once a second.

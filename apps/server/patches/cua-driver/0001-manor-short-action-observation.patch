@@ -9,7 +9,7 @@ index 5b2ce9ed5..cff87f9f9 100644
 -        snapshot.detect_async().await
 +        // Manor: new windows and focus changes from a click land within ~200ms,
 +        // so the post-action watch is bounded at 350ms instead of a full second
-+        // (after Synara's native revision 6). No-change actions paid the whole second.
++        // of waiting. No-change actions paid the whole second.
 +        tokio::task::spawn_blocking(move || {
 +            snapshot.detect_with(MANOR_ACTION_OBSERVATION, std::time::Duration::from_millis(25))
 +        })

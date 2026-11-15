@@ -238,7 +238,7 @@
   --color-lang-shell: #8f96a3;
   --color-lang-media: #f472b6;
 
-  /* Source code follows Synara's GitHub Dark grammar rather than the house chrome. */
+  /* Source code follows the GitHub Dark grammar rather than the house chrome. */
   --color-syntax-comment: #6a737d;
   --color-syntax-keyword: #f97583;
   --color-syntax-string: #9ecbff;
