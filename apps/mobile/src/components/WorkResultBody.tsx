@@ -5,6 +5,7 @@ import { HugeiconsIcon } from '@hugeicons/react-native'
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { Pressable, StyleSheet, TextInput, View, type ColorValue } from 'react-native'
 import Animated, { FadeIn } from 'react-native-reanimated'
+import { WORK_CHANGES_LIMIT, readWorkChanges, settleWorkChanges, subscribeWorkChanges, writeWorkChanges } from '@manor/client-runtime/work-changes'
 import { readWorkChangesOpen, setWorkChangesOpen, subscribeWorkProposals } from '@manor/client-runtime/work-proposals'
 import type { GoalChoice } from '@manor/contracts'
 import { WORK_RESULT_CONNECTION_LOST, evidenceThumbnailRatio, workBlockedReason, workCardStatus, workConfirmTitle, pickWorkChoice, workChoicePicked, workResultActionLabels, workResultChoiceList, workResultFiles, workResultLines, type WorkHandoffRow, type WorkResult, type WorkStatus } from '@manor/client-runtime/state'
@@ -216,7 +217,9 @@ export function WorkResultBody({ result, onShowCard, blocked = false, sessionSet
     if (field === null) changeFields.delete(handoffId)
     else changeFields.set(handoffId, field)
   }
-  const [feedback, setFeedback] = useState('')
+  // Kept outside the card: the list unmounts a row that scrolls away, and the text has to be there when it returns.
+  const readFeedback = () => readWorkChanges(handoffId)
+  const feedback = useSyncExternalStore(subscribeWorkChanges, readFeedback, readFeedback)
   const [busy, setBusy] = useState(false)
   const busyRef = useRef(false)
   const [error, setError] = useState<string | null>(null)
@@ -272,7 +275,7 @@ export function WorkResultBody({ result, onShowCard, blocked = false, sessionSet
   const files = workResultFiles(result)
   const pick = (choice: GoalChoice, option: string) => {
     setError(null)
-    setFeedback((current) => pickWorkChoice(current, choice, option))
+    writeWorkChanges(handoffId, pickWorkChoice(readWorkChanges(handoffId), choice, option))
     setWriting(true)
   }
 
@@ -346,9 +349,9 @@ export function WorkResultBody({ result, onShowCard, blocked = false, sessionSet
             }}
             accessibilityLabel="Requested changes"
             editable={!busy && connected}
-            maxLength={40_000}
+            maxLength={WORK_CHANGES_LIMIT}
             multiline
-            onChangeText={setFeedback}
+            onChangeText={(next) => writeWorkChanges(handoffId, next)}
             placeholder="What should change?"
             placeholderTextColor={colors.dim}
             selectionColor={colors.busy}
@@ -364,7 +367,7 @@ export function WorkResultBody({ result, onShowCard, blocked = false, sessionSet
               accessibilityRole="button"
               accessibilityState={{ disabled: busy || !connected || text === '' }}
               disabled={busy || !connected || text === ''}
-              onPress={() => void run(() => reviseWorkResult(result.handoffId, result.version, text), () => { setWriting(false); setFeedback('') })}
+              onPress={() => void run(() => reviseWorkResult(result.handoffId, result.version, text), () => settleWorkChanges(handoffId, text))}
               style={({ pressed }) => [styles.action, styles.primary, (busy || !connected || text === '') && styles.disabled, pressed && styles.pressed]}
             >
               <Text style={[styles.actionLabel, { color: colors.onPrimary }]}>{busy ? 'Sending…' : 'Send to Session'}</Text>

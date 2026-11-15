@@ -1,13 +1,13 @@
 import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import { AlertCircleIcon, CheckmarkCircle02Icon, Tick02Icon } from '@hugeicons/core-free-icons'
+import { readWorkChanges, subscribeWorkChanges, writeWorkChanges } from '@manor/client-runtime/work-changes'
 import { readWorkChangesOpen, setWorkChangesOpen, subscribeWorkProposals } from '@manor/client-runtime/work-proposals'
 import type { GoalChoice } from '@manor/contracts'
 import { WORK_RESULT_CONNECTION_LOST, evidenceThumbnailRatio, evidenceVisibleCount, workBlockedReason, workCardStatus, workConfirmTitle, pickWorkChoice, workChoicePicked, workResultActionLabels, workResultChoiceList, workResultFiles, workResultLines, type WorkHandoffRow, type WorkResult, type WorkStatus } from '../state'
 import { TEXT_SWAP, TEXT_SWAP_ABOVE, TEXT_SWAP_BELOW, TEXT_SWAP_REST } from '../motion'
 import { useRequest, type RequestEvents } from '../useRequest'
-import { subscribeDrafts } from '../composerDrafts'
-import { readWorkChanges, sendWorkChanges, writeWorkChanges } from '../workChanges'
+import { sendWorkChanges } from '../workChanges'
 import { Icon } from './Icon'
 import { MergeFixPanel } from './MergeFixPanel'
 import { Button } from './ui/Button'
@@ -319,7 +319,7 @@ export function WorkResultBody({
 
   const files = workResultFiles(result)
   const openDiff = files === undefined || sessionId === null || onOpenDiff === undefined ? undefined : () => onOpenDiff(sessionId)
-  const picked = useSyncExternalStore(subscribeDrafts, () => readWorkChanges(handoffId), () => readWorkChanges(handoffId))
+  const picked = useSyncExternalStore(subscribeWorkChanges, () => readWorkChanges(handoffId), () => readWorkChanges(handoffId))
   const pick = (choice: GoalChoice, option: string) => {
     setError(null)
     writeWorkChanges(handoffId, pickWorkChoice(readWorkChanges(handoffId), choice, option))

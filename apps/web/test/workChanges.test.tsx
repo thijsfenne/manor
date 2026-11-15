@@ -1,19 +1,15 @@
+import { WORK_CHANGES_LIMIT, clearWorkChanges, readWorkChanges, writeWorkChanges } from '@manor/client-runtime/work-changes'
 import { readWorkChangesOpen, setWorkChangesOpen } from '@manor/client-runtime/work-proposals'
-import type { Chat, WorkHandoff } from '@manor/contracts'
 import { act, create } from 'react-test-renderer'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { clearDrafts, readDraft, writeDraft } from '../src/composerDrafts'
 import { WorkChangesField } from '../src/components/WorkChangesField'
 import { WorkResultBody, type WorkResultActions } from '../src/components/WorkResultBody'
 import { Button } from '../src/components/ui/Button'
 import type { RequestEvents, RequestResponse } from '../src/useRequest'
-import { WORK_CHANGES_LIMIT, forgetClosedWorkChanges, readWorkChanges, sendWorkChanges, writeWorkChanges } from '../src/workChanges'
+import { sendWorkChanges } from '../src/workChanges'
 
 // The editor needs a DOM; these tests only read the field's buttons.
 vi.mock('../src/components/ComposerEditor', () => ({ ComposerEditor: () => null }))
-
-const handoff = (id: string, changes: Partial<WorkHandoff> = {}) => ({ id, state: 'active', workChatId: `session-${id}`, ...changes }) as WorkHandoff
-const session = (id: string, changes: Partial<Chat> = {}) => ({ id: `session-${id}`, settledAt: null, archivedAt: null, ...changes }) as Chat
 
 function socket() {
   const listeners = new Set<(response: RequestResponse) => void>()
@@ -22,18 +18,9 @@ function socket() {
   return { events, answer, listening: () => listeners.size }
 }
 
-/** Request changes feedback rides on the composer's drafts, one per Session result. */
+/** The store itself is tested in `packages/client-runtime/src/workChanges.test.ts`. */
 describe('Request changes drafts', () => {
-  beforeEach(clearDrafts)
-
-  it('keeps one draft per result, apart from the chat drafts', () => {
-    writeWorkChanges('a', '- Rename the field')
-    writeDraft('a', { text: 'a chat draft', images: [], files: [] })
-
-    expect(readWorkChanges('a')).toBe('- Rename the field')
-    expect(readWorkChanges('b')).toBe('')
-    expect(readDraft('a').text).toBe('a chat draft')
-  })
+  beforeEach(clearWorkChanges)
 
   // Nothing of the field that sent it is left by then: the user may have opened another chat.
   it('drops the draft when the server takes it, keeps it on a refusal, and stops listening either way', () => {
@@ -61,19 +48,6 @@ describe('Request changes drafts', () => {
     expect(readWorkChanges('a')).toBe('First and more')
     expect(sendWorkChanges(events, 'a', 'First and more', 'r2', () => false)).toBe(false)
     expect(listening()).toBe(0)
-  })
-
-  it('forgets the feedback of a confirmed, withdrawn or closed result and keeps the rest', () => {
-    for (const id of ['open', 'confirmed', 'withdrawn', 'settled', 'archived', 'gone']) writeWorkChanges(id, `about ${id}`)
-    writeDraft('chat', { text: 'unrelated', images: [], files: [] })
-
-    forgetClosedWorkChanges(
-      [handoff('open'), handoff('confirmed', { goalConfirmedAt: 1 }), handoff('withdrawn', { state: 'deleted' }), handoff('settled'), handoff('archived')],
-      [session('open'), session('confirmed'), session('withdrawn'), session('settled', { settledAt: 1 }), session('archived', { archivedAt: 1 })],
-    )
-
-    expect(['open', 'confirmed', 'withdrawn', 'settled', 'archived', 'gone'].filter((id) => readWorkChanges(id) !== '')).toEqual(['open'])
-    expect(readDraft('chat').text).toBe('unrelated')
   })
 
   it('will not send feedback past the wire limit and says by how much', () => {

@@ -42,6 +42,7 @@
     "./slack-draft-formatting": "./src/slackDraftFormatting.ts",
     "./outbound-draft-edits": "./src/outboundDraftEdits.ts",
     "./work-proposals": "./src/workProposals.ts",
+    "./work-changes": "./src/workChanges.ts",
     "./suggestions": "./src/suggestions.ts"
   },
   "scripts": {

@@ -20,6 +20,7 @@ import {
   type WorkspaceConnection,
 } from '@manor/client-runtime/connection'
 import { createFrameQueue, type FrameQueue } from '@manor/client-runtime/frame-queue'
+import { forgetClosedWorkChanges } from '@manor/client-runtime/work-changes'
 import {
   askMyMindObjects,
   activityOf,
@@ -484,6 +485,11 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     // the optimistic echo stops the green orb before the server snapshot returns.
     setChatSettled(openRun.id, true)
   }, [openRun, openRunBusy, setChatSettled])
+
+  // Request changes feedback is only kept for a result that can still change.
+  useEffect(() => {
+    if (status === 'live') forgetClosedWorkChanges(workspace.workHandoffs, workspace.chats)
+  }, [status, workspace.workHandoffs, workspace.chats])
 
   const signOut = useCallback(async () => {
     signingOutRef.current = true

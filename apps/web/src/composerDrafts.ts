@@ -31,13 +31,6 @@ export const NEW_CHAT_DRAFT_KEY = 'new-chat'
  * clean up later.
  */
 const drafts = new Map<string, ComposerDraft>()
-const draftListeners = new Set<() => void>()
-
-/** For a field that shows a draft live while another surface may write the same one. */
-export function subscribeDrafts(listener: () => void): () => void {
-  draftListeners.add(listener)
-  return () => { draftListeners.delete(listener) }
-}
 
 export function readDraft(key: string | undefined): ComposerDraft {
   if (key === undefined) return EMPTY_DRAFT
@@ -53,14 +46,6 @@ export function writeDraft(key: string | undefined, draft: ComposerDraft): void 
   if (key === undefined) return
   if (draft.text === '' && draft.images.length === 0 && draft.files.length === 0 && (draft.documents?.length ?? 0) === 0) drafts.delete(key)
   else drafts.set(key, draft)
-  for (const listener of draftListeners) listener()
-}
-
-/** Drops every draft whose key `stale` picks, such as those of results that can no longer change. */
-export function forgetDrafts(stale: (key: string) => boolean): void {
-  const keys = [...drafts.keys()].filter(stale)
-  for (const key of keys) drafts.delete(key)
-  if (keys.length > 0) for (const listener of draftListeners) listener()
 }
 
 /** Test seam. Nothing in the app forgets every draft at once. */

@@ -1,5 +1,5 @@
 import { useEffect, useMemo } from 'react'
-import { forgetClosedWorkChanges } from './workChanges'
+import { forgetClosedWorkChanges } from '@manor/client-runtime/work-changes'
 import { projectWorkHandoffs, rowsOf, type ThreadShape, type TurnRow } from './state'
 import type { useChatDialogs } from './useChatDialogs'
 import type { Manor } from './useWorkspace'

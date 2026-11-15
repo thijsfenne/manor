@@ -1,6 +1,5 @@
 import { useState, useSyncExternalStore } from 'react'
-import { subscribeDrafts } from '../composerDrafts'
-import { WORK_CHANGES_LIMIT, readWorkChanges, writeWorkChanges } from '../workChanges'
+import { WORK_CHANGES_LIMIT, readWorkChanges, subscribeWorkChanges, writeWorkChanges } from '@manor/client-runtime/work-changes'
 import { ComposerEditor } from './ComposerEditor'
 import { Button } from './ui/Button'
 
@@ -23,7 +22,7 @@ export function WorkChangesField({ handoffId, pending, connected, autoFocus, onC
   onSend: (text: string) => void
 }) {
   const read = () => readWorkChanges(handoffId)
-  const text = useSyncExternalStore(subscribeDrafts, read, read)
+  const text = useSyncExternalStore(subscribeWorkChanges, read, read)
   const [caret, setCaret] = useState(text.length)
   const editable = !pending && connected
   const over = text.trim().length - WORK_CHANGES_LIMIT

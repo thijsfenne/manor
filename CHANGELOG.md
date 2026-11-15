@@ -4,6 +4,7 @@ What changed for someone who uses Manor, newest first. A version is a tag on `ma
 
 ## Unreleased
 
+- On the phone, what you type under Request changes stays when its card scrolls out of view or you leave the chat. The field used to come back open and empty, and a picked Your call choice was lost with it.
 - On the phone, typing redraws only the composer. Every character used to redraw the whole chat screen, its header and its list with it.
 - On the phone, a reply that streams in redraws only its own text. The header, the composer, the menu and the list under the chat used to redraw with every piece of text, in a DM too, where the reply shows only once it is whole. Scrolling and typing stay smooth while an agent writes.
 - On the phone, the cards in a chat notice when the connection to your Mac drops or returns. A mail card that was already on screen kept its Send and Discard buttons live while offline.
