@@ -1,6 +1,7 @@
-import { useId, useRef, type KeyboardEvent, type ReactNode } from 'react'
+import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
 import { motion, useReducedMotion } from 'motion/react'
 import { INSTANT, SEGMENTED_SLIDE } from '../../motion'
+import { Tooltip } from './Tooltip'
 
 export interface SegmentOption<Value extends string> {
   value: Value
@@ -9,7 +10,12 @@ export interface SegmentOption<Value extends string> {
   panelId: string
   /** Keeps the segment in place but unselectable, so the control does not reflow when data is absent. */
   disabled?: boolean
+  /** What picking this segment means, shown in a tooltip on hover and keyboard focus. */
+  hint?: string
 }
+
+/** Long enough that a pointer crossing the control on its way elsewhere opens nothing. */
+const HINT_DELAY_MS = 400
 
 export interface SymbolSegmentOption<Value extends string> {
   value: Value
@@ -52,6 +58,19 @@ export function SegmentedControl<Value extends string>({
   const buttons = useRef<Array<HTMLButtonElement | null>>([])
   const reduceMotion = useReducedMotion()
   const selectedIndex = Math.max(0, options.findIndex((option) => option.value === value))
+  const hintId = useId()
+  const [hinted, setHinted] = useState<{ anchor: HTMLButtonElement; text: string } | null>(null)
+  const hintTimer = useRef<number | undefined>(undefined)
+  const hideHint = () => {
+    window.clearTimeout(hintTimer.current)
+    setHinted(null)
+  }
+  const showHint = (anchor: HTMLButtonElement, text: string | undefined, delay: number) => {
+    window.clearTimeout(hintTimer.current)
+    if (text === undefined) return setHinted(null)
+    hintTimer.current = window.setTimeout(() => setHinted({ anchor, text }), delay)
+  }
+  useEffect(() => () => window.clearTimeout(hintTimer.current), [])
 
   const moveFocus = (event: KeyboardEvent<HTMLButtonElement>) => {
     const enabled = (index: number) => !optionDisabled(options[index])
@@ -98,6 +117,7 @@ export function SegmentedControl<Value extends string>({
         const selected = option.value === value
         const tabOption = variant === 'labels' ? option as SegmentOption<Value> : undefined
         const symbolOption = variant === 'symbols' ? option as SymbolSegmentOption<Value> : undefined
+        const hint = tabOption?.hint
         return (
           <button
             key={option.value}
@@ -112,6 +132,7 @@ export function SegmentedControl<Value extends string>({
             aria-checked={variant === 'symbols' ? selected : undefined}
             aria-controls={tabOption?.panelId}
             aria-label={symbolOption?.label}
+            aria-describedby={hint !== undefined && hinted?.text === hint ? hintId : undefined}
             title={symbolOption?.title ?? symbolOption?.label}
             tabIndex={selected ? 0 : -1}
             className={`relative cursor-pointer border-0 bg-transparent outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:cursor-default disabled:opacity-50 ${
@@ -127,6 +148,16 @@ export function SegmentedControl<Value extends string>({
             }`}
             onClick={() => onChange(option.value)}
             onKeyDown={moveFocus}
+            onPointerEnter={hint === undefined ? undefined : (event) => showHint(event.currentTarget, hint, HINT_DELAY_MS)}
+            // A keyboard user's hint stays while focus does, wherever the pointer goes.
+            onPointerLeave={hint === undefined ? undefined : (event) => {
+              if (!event.currentTarget.matches(':focus-visible')) hideHint()
+            }}
+            // Arrow keys move focus and the pick together, so the hint follows the pick.
+            onFocus={hint === undefined ? undefined : (event) => {
+              if (event.currentTarget.matches(':focus-visible')) showHint(event.currentTarget, hint, 0)
+            }}
+            onBlur={hint === undefined ? undefined : hideHint}
           >
             {selected ? (
               <motion.span
@@ -142,6 +173,11 @@ export function SegmentedControl<Value extends string>({
           </button>
         )
       })}
+      {hinted === null ? null : (
+        <Tooltip anchor={hinted.anchor} id={hintId} onDismiss={hideHint}>
+          {hinted.text}
+        </Tooltip>
+      )}
     </div>
   )
 }

@@ -38,12 +38,6 @@ const STARTERS = ['Plan my week', 'Turn a client request into a brief']
 const nameList = (names: readonly string[]): string =>
   names.length < 2 ? (names[0] ?? '') : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`
 
-/** What Single and Multiple mean, said under the stage while the choice is being made. */
-const MODE_NOTE = {
-  single: 'One model works on this.',
-  house: 'Your agents share this thread. Address one with @.',
-} as const
-
 /**
  * The new-chat stage under its header: who or what the chat is about, the composer,
  * and from the send onwards the one message it was started with. On the whole stage,
@@ -397,7 +391,6 @@ export function DraftStage({
               draftHeading
             )}
             {docked ? null : stageComposer}
-            {draftMode === undefined ? null : <p className="mt-3 mb-0 text-center text-meta text-dim">{MODE_NOTE[draftMode]}</p>}
           </div>
           </>
         ) : (

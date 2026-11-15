@@ -115,8 +115,15 @@ export function NewChatModeControl({
   panelId?: string
 }) {
   const options: readonly SegmentOption<ChatMode>[] = [
-    { value: 'single', label: 'Single', tabId: `${idPrefix}-single`, panelId },
-    { value: 'house', label: 'Multiple', tabId: `${idPrefix}-house`, panelId, ...(multipleDisabled ? { disabled: true } : {}) },
+    { value: 'single', label: 'Single', hint: 'One model works on this.', tabId: `${idPrefix}-single`, panelId },
+    {
+      value: 'house',
+      label: 'Multiple',
+      hint: 'Your agents work on this together.',
+      tabId: `${idPrefix}-house`,
+      panelId,
+      ...(multipleDisabled ? { disabled: true } : {}),
+    },
   ]
   return <SegmentedControl label="Chat mode" options={options} value={mode} disabled={disabled} onChange={onChange} />
 }

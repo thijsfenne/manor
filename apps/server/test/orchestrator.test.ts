@@ -4758,6 +4758,24 @@ describe('Orchestrator, allowlisted specialist summons', () => {
     expect(notes.at(-1)).toMatchObject({ agentId: 'sage', turnId: notes[0]?.type === 'system_note' ? notes[0].turnId : '', trace: true })
   })
 
+  it('cancels the personas the user mentioned when the first of them is stopped', async () => {
+    const { driver, gates } = gated((input) => `${input.agent.name} answered`)
+    const { orchestrator, store, chatId, sent } = await harness(driver, { agents: cosRoster })
+
+    const running = orchestrator.submitUserMessage(chatId, '@Sage @Marlow go')
+    await until(() => gates.length === 1, "Sage's turn to start")
+    const turnId = sent.filter((message) => message.type === 'turn_state' && message.state === 'running').at(-1)
+    orchestrator.stop(turnId?.type === 'turn_state' ? turnId.turnId : '')
+    await running
+
+    expect(gates.map((gate) => gate.input.agent.id)).toEqual(['sage'])
+    const notes = (await store.loadEvents(chatId)).filter((event) => event.type === 'system_note')
+    expect(notes.map((note) => (note.type === 'system_note' ? note.text : ''))).toEqual([
+      "Sage's turn was stopped.",
+      'Marlow did not run because this turn was stopped.',
+    ])
+  })
+
   it('tells the summoner in its household block that this one mention works', async () => {
     const seen: TurnInput[] = []
     const { orchestrator, chatId } = await harness(

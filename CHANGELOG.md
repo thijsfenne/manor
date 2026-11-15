@@ -4,6 +4,9 @@ What changed for someone who uses Manor, newest first. A version is a tag on `ma
 
 ## Unreleased
 
+- One Stop halts the whole message. Every agent it addressed that has not started yet is cancelled too, the ones you mentioned by name included. Each used to need its own Stop.
+- The Single and Multiple switch on a new Session explains itself in a tooltip when you point at it. The line under the message field is gone.
+- The sidebar names its sections Project threads and Standalone sessions, on the Mac and on the phone. Adding a project thread opens New project thread, with one line on what it is.
 - An agent that had been quiet for weeks answers again. Claude Code deletes a saved conversation after 30 days, and from then on every message to that agent failed at once, without a word in a DM. When Claude Code or Grok no longer has the conversation, Manor now starts a fresh session from its own record of the chat and answers the same message.
 - The menus share one row: the same height and corners, an icon in front of each action, and a tick on the choice in use. That covers the Browser's menus and More panels, where a choice read Selected or Current, and the plus, model and branch menus under the message field, where the chosen row was filled.
 - The New session and Recent sessions menus beside the Browser take the arrow keys, Home and End, as the other menus do. They and the Browser menu now put focus on their first row the first time they open too, not only from the second time on.

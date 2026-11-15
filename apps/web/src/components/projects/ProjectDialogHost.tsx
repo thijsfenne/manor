@@ -8,7 +8,7 @@ import { draftOf, emptyDraft, normaliseProjectColor, ProjectDialog, type Project
 /**
  * Which project the dialog is about, and therefore what saving it means. `armDelete`
  * opens the edit form with its delete question already up, for a sidebar row's
- * Delete project… entry, so that menu shares the dialog's one confirmation.
+ * Delete project thread… entry, so that menu shares the dialog's one confirmation.
  */
 export type ProjectDialogState =
   | { mode: 'create' }

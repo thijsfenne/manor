@@ -4,7 +4,7 @@ import { chatOf } from './state'
 import type { Manor } from './useWorkspace'
 
 /**
- * A project thread (2026-10-10): + opens it, Hide project archives it. New project makes
+ * A project thread (2026-10-10): + opens it, Hide project thread archives it. New project thread makes
  * the project first and its thread as soon as the directory lists the project.
  */
 export function useProjectThreadCreation(

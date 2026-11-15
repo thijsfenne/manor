@@ -60,7 +60,7 @@ const textOf = (node: ReturnType<ReactTestRenderer['root']['find']>): string =>
   node.children.map((child) => (typeof child === 'string' ? child : textOf(child))).join('')
 
 describe('the project row menu', () => {
-  it('keeps Edit and Delete and offers Hide project', () => {
+  it('keeps Edit and Delete and offers Hide project thread', () => {
     const onEdit = vi.fn()
     const onDelete = vi.fn()
     const onRemove = vi.fn()
@@ -81,7 +81,7 @@ describe('the project row menu', () => {
     })
     act(() => tree.root.findByType('li').props.onContextMenu({ preventDefault: () => {}, clientX: 10, clientY: 10 }))
     const items = tree.root.findAllByProps({ role: 'menuitem' })
-    expect(items.map(textOf)).toEqual(['Edit project…', 'Hide project', 'Delete project…'])
+    expect(items.map(textOf)).toEqual(['Edit project thread…', 'Hide project thread', 'Delete project thread…'])
     act(() => items[0]!.props.onClick())
     expect(onEdit).toHaveBeenCalledWith('manor')
     act(() => tree.root.findByType('li').props.onContextMenu({ preventDefault: () => {}, clientX: 10, clientY: 10 }))

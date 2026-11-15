@@ -2279,12 +2279,10 @@ export class Orchestrator {
       }
 
       if (outcome.kind === 'stopped') {
-        // Stopping a turn stops the errand it belongs to. Turns the user themselves
-        // mentioned stay queued: they asked for those by name. A goal chain has no
-        // such exception, because it would otherwise run on toward the goal.
-        const cancelled = goalOwner === undefined ? queue.filter((queued) => queued.delegated) : [...queue]
+        // One Stop halts the whole message: every turn still queued behind the
+        // stopped one goes, the personas the user mentioned by name included.
+        const cancelled = queue.splice(0)
         if (cancelled.length > 0) {
-          for (const queued of cancelled) queue.splice(queue.indexOf(queued), 1)
           await traceNote(`${formatNames(cancelled.map((queued) => queued.agent.name))} did not run because this turn was stopped.`)
         }
         continue

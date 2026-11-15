@@ -130,11 +130,11 @@ function ProjectInbox() {
     }
 
     const result: InboxRow[] = []
-    // Projects first, in the projects' own order, then the Sessions no thread started.
+    // Project threads first, in the projects' own order, then the Sessions no thread started.
     if (threads.length > 0) {
-      result.push({ kind: 'section-header', key: 'projects-header', label: 'Projects', first: true })
+      result.push({ kind: 'section-header', key: 'projects-header', label: 'Project threads', first: true })
       result.push(...threads.map((row) => ({ kind: 'thread' as const, key: `thread:${row.chat.id}`, row })))
-      result.push({ kind: 'section-header', key: 'standalone-header', label: 'Sessions' })
+      result.push({ kind: 'section-header', key: 'standalone-header', label: 'Standalone sessions' })
     }
     result.push(...directory.unsettled.map((entry) => ({
       kind: 'active' as const,

@@ -38,7 +38,7 @@ const sameDraft = (one: ProjectEdit, other: ProjectEdit) =>
  * The Mac's Edit project on the phone (2026-10-12), opened from the thread's pill: name,
  * icon and colour, folders, memory scope and Delete, the same form saved as a whole with
  * the tick. Files has no header button on a thread any more, so it lives here, next to
- * the folders it lists. Hide project stays on the Mac: the phone cannot re-add a hidden
+ * the folders it lists. Hide project thread stays on the Mac: the phone cannot re-add a hidden
  * project, so the room would drop out of its list with no way back.
  */
 export function ProjectSettingsSheet({ project, open, onClose, onFiles, onDeleted, onDismiss }: {
@@ -136,7 +136,7 @@ export function ProjectSettingsSheet({ project, open, onClose, onFiles, onDelete
     [
       { text: 'Cancel', style: 'cancel' },
       {
-        text: 'Delete project',
+        text: 'Delete project thread',
         style: 'destructive',
         onPress: () => {
           setError(null)
@@ -320,7 +320,7 @@ export function ProjectSettingsSheet({ project, open, onClose, onFiles, onDelete
           style={({ pressed }) => [styles.delete, !live && styles.disabled, pressed && styles.pressed]}
         >
           <HugeiconsIcon color={colors.danger} icon={Delete02Icon} size={18} strokeWidth={1.8} />
-          <Text style={styles.deleteText}>Delete project</Text>
+          <Text style={styles.deleteText}>Delete project thread</Text>
         </Pressable>
       </ScrollView>
     </Sheet>

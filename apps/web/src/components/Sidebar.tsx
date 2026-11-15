@@ -304,7 +304,7 @@ function SidebarNav({
     />
     {/* The desktop list leaves out sessions a project thread started; the phone keeps one list with every session. */}
     <div className={`flex flex-none items-center gap-1 pl-2 ${mobile ? 'h-11 pt-2' : 'mt-3 h-8'}`}>
-      <h3 className="m-0 min-w-0 flex-1 truncate text-[12px] font-medium text-dim">Sessions</h3>
+      <h3 className="m-0 min-w-0 flex-1 truncate text-[12px] font-medium text-dim">{mobile ? 'Sessions' : 'Standalone sessions'}</h3>
       {mobile ? null : newSessionAction}
     </div>
     <div className="min-h-0 flex-1">

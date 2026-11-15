@@ -206,7 +206,11 @@ export function ProjectDialog({
   }
 
   return (
-    <Modal title={mode === 'create' ? 'New project' : 'Edit project'} onClose={onClose}>
+    <Modal
+      title={mode === 'create' ? 'New project thread' : 'Edit project thread'}
+      {...(mode === 'create' ? { subtitle: 'One ongoing chat for the project. It answers you, or starts Sessions and reports back.' } : {})}
+      onClose={onClose}
+    >
       <ProjectIdentityField
         name={draft.name}
         icon={draft.icon}
@@ -335,7 +339,7 @@ export function ProjectDialog({
         ) : (
           <div className="flex items-center gap-2 pt-0.5">
             {mode === 'edit' && onDelete !== undefined ? (
-              <DeleteButton label="Delete project" onArm={() => setArmed(true)} />
+              <DeleteButton label="Delete project thread" onArm={() => setArmed(true)} />
             ) : null}
             <div className="flex flex-1 justify-end gap-2">
               <Button onClick={onCancel}>Cancel</Button>
@@ -343,7 +347,7 @@ export function ProjectDialog({
                 {mode === 'create'
                   ? busy
                     ? 'Creating…'
-                    : 'Create project'
+                    : 'Create project thread'
                   : busy
                     ? 'Saving…'
                     : 'Save changes'}
