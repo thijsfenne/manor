@@ -1,6 +1,6 @@
 import { useLayoutEffect, useRef, useState, type ComponentProps, type RefObject } from 'react'
 import type { Chat } from '@manor/contracts'
-import { Clock01Icon, BookOpen01Icon, BubbleChatQuestionIcon, Files01Icon, Folder01Icon, Globe02Icon, MoreVerticalIcon, Settings01Icon, Tick02Icon } from '@hugeicons/core-free-icons'
+import { Clock01Icon, BookOpen01Icon, BubbleChatQuestionIcon, Files01Icon, Folder01Icon, Globe02Icon, MoreVerticalIcon, Settings01Icon } from '@hugeicons/core-free-icons'
 import {
   Clock01Icon as Clock01SolidIcon,
   BookOpen01Icon as BookOpen01SolidIcon,
@@ -15,7 +15,7 @@ import { MAX_RIGHT_PANELS, layoutFull, layoutHas, type PanelLayout, type RightPa
 import { AiBotHeadLookingIcon, AiBotHeadLookingSolidIcon, SessionListIcon, SessionListSolidIcon } from './customIcons'
 import { Icon } from './Icon'
 import { IconButton } from './ui/IconButton'
-import { Menu, useMenu } from './ui/Menu'
+import { Menu, MenuItem, useMenu } from './ui/Menu'
 
 export interface RailItem {
   id: RightPanelId
@@ -260,33 +260,17 @@ function MoreDoors({ items, layout, onSelect }: { items: RailItem[]; layout: Pan
           selected={menu.open} onClick={menu.toggle} />
         {items.some((item) => item.busy === true) ? <BusyDot className="absolute top-1 right-1" /> : null}
       </span>
-      <Menu menu={menu} label="More panels"
-        className="fixed z-40 overflow-y-auto rounded-xl border border-line surface-floating p-1.5 shadow-menu">
+      <Menu menu={menu} label="More panels">
         {items.map((item) => {
           const shown = layoutHas(layout, item.id)
           const blocked = !shown && full
           return (
-            <button
-              key={item.id}
-              type="button"
-              role="menuitemcheckbox"
-              aria-checked={shown}
-              aria-disabled={blocked || undefined}
-              title={blocked ? doorLabel(item, shown, blocked) : undefined}
-              className={`flex w-full items-center gap-2 rounded-md border-0 bg-transparent px-2 py-1.5 text-left text-label text-text ${
-                blocked ? 'cursor-default opacity-40' : 'cursor-pointer hover:bg-user-bg'
-              }`}
-              onClick={() => {
-                if (blocked) return
-                menu.close()
-                onSelect(item.id)
-              }}
-            >
-              <span className="flex-none text-muted"><Icon icon={item.icon} size={15} /></span>
-              <span className="min-w-0 flex-1 truncate">{item.label}</span>
-              {item.busy === true ? <BusyDot className="flex-none" /> : null}
-              {shown ? <Icon icon={Tick02Icon} size={13} className="flex-none" /> : null}
-            </button>
+            <MenuItem key={item.id} role="menuitemcheckbox" icon={item.icon} checked={shown}
+              blocked={blocked ? doorLabel(item, shown, blocked) : undefined}
+              trailing={item.busy === true ? <BusyDot className="flex-none" /> : undefined}
+              onClick={() => { menu.close(); onSelect(item.id) }}>
+              {item.label}
+            </MenuItem>
           )
         })}
       </Menu>

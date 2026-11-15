@@ -1,7 +1,7 @@
 import { forwardRef, type CSSProperties, type ReactNode } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { Menu, menuFocusIndex, useMenu } from '../src/components/ui/Menu'
+import { Menu, MenuItem, menuFocusIndex, useMenu } from '../src/components/ui/Menu'
 
 vi.mock('react-dom', async (original) => ({ ...await original<typeof import('react-dom')>(), createPortal: (child: unknown) => child }))
 // The sheet without its motion: motion refuses a ref that is not a real element, and the
@@ -77,6 +77,23 @@ describe('menu', () => {
     act(() => button('Open')!.props.onClick())
     expect(expanded()).toBe(false)
     expect(onClose).toHaveBeenCalledTimes(4)
+  })
+
+  it('marks the row in use with a tick, and a blocked row says why and cannot be taken', () => {
+    const onPick = vi.fn()
+    act(() => { tree = create(<>
+      <MenuItem role="menuitemradio" checked aria-label="On">On</MenuItem>
+      <MenuItem role="menuitemradio" checked={false} aria-label="Off">Off</MenuItem>
+      <MenuItem blocked="Close a panel first" aria-label="Full" onClick={onPick}>Full</MenuItem>
+    </>) })
+    expect(button('On')!.props['aria-checked']).toBe(true)
+    expect(button('On')!.findAllByType('svg')).toHaveLength(1)
+    expect(button('Off')!.props['aria-checked']).toBe(false)
+    expect(button('Off')!.findAllByType('svg')).toHaveLength(0)
+    expect(button('Full')!.props).toMatchObject({ role: 'menuitem', 'aria-disabled': true, title: 'Close a panel first' })
+    expect(button('Full')!.props.disabled).toBeUndefined()
+    expect(button('Full')!.props.onClick).toBeUndefined()
+    expect(onPick).not.toHaveBeenCalled()
   })
 
   it('hands focus to the first row on the first open, and moves it with the keys', () => {

@@ -1,7 +1,7 @@
 import { Bookmark01Icon } from '@hugeicons/core-free-icons'
 import type { BrowserBookmark } from '@manor/contracts'
 import { IconButton } from './ui/IconButton'
-import { Menu, useMenu } from './ui/Menu'
+import { Menu, MenuItem, useMenu } from './ui/Menu'
 
 export function BrowserBookmarksMenu({ bookmarks, loading, error, disabled, onRetry, onOpen }: {
   bookmarks: BrowserBookmark[] | null
@@ -33,12 +33,10 @@ export function BrowserBookmarksMenu({ bookmarks, loading, error, disabled, onRe
       ) : bookmarks.length === 0 ? (
         <p className="m-0 px-3 py-2 text-meta text-dim">No bookmarks yet. Save a page with the star beside the address.</p>
       ) : bookmarks.map((bookmark) => (
-        <button key={bookmark.url} type="button" role="menuitem"
-          className="flex w-full min-w-0 flex-col rounded-button-sm border-0 bg-transparent px-3 py-2 text-left hover:bg-user-bg"
-          onClick={() => { menu.close(); onOpen(bookmark.url) }}>
-          <span className="w-full truncate text-label text-text">{bookmark.title || bookmark.url}</span>
-          <span className="w-full truncate text-meta text-muted">{bookmark.url}</span>
-        </button>
+        <MenuItem key={bookmark.url} onClick={() => { menu.close(); onOpen(bookmark.url) }}>
+          <span className="block truncate">{bookmark.title || bookmark.url}</span>
+          <span className="block truncate text-meta text-muted">{bookmark.url}</span>
+        </MenuItem>
       ))}
     </Menu>
   </>

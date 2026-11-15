@@ -1,5 +1,7 @@
-import { useEffect, useRef, useState, type ReactNode, type RefObject } from 'react'
+import { useEffect, useRef, useState, type ComponentProps, type ReactNode, type RefObject } from 'react'
 import { createPortal } from 'react-dom'
+import { Tick02Icon } from '@hugeicons/core-free-icons'
+import { Icon } from '../Icon'
 import { Popover } from './Popover'
 import { useDismiss } from './useDismiss'
 import { usePopupPlacement, type PopupPlacement } from './usePopupPlacement'
@@ -70,20 +72,18 @@ export function useMenu({ maxHeight, minHeight, minWidth, disabled = false, onCl
 }
 
 /**
- * The sheet of a `useMenu`. Rows are plain buttons with a menu item role; the arrow
- * keys, Home and End move between the ones that can be pressed, wrapping at both ends.
- * `className` replaces the card where a menu has its own.
+ * The sheet of a `useMenu`. Rows are `MenuItem`s; the arrow keys, Home and End move
+ * between the ones that can be pressed, wrapping at both ends.
  */
-export function Menu({ menu, label, className = CARD, children }: {
+export function Menu({ menu, label, children }: {
   menu: MenuState
   label: string
-  className?: string
   children: ReactNode
 }) {
   const { popup, open, placement } = menu
   if (typeof document === 'undefined') return null
   return createPortal(
-    <Popover open={open} ref={popup} origin="top-right" className={className}
+    <Popover open={open} ref={popup} origin="top-right" className={CARD}
       style={placement ?? { visibility: 'hidden' }} role="menu" aria-label={label}>
       <div onKeyDown={(event) => {
         const rows = Array.from(popup.current?.querySelectorAll<HTMLButtonElement>(ROWS) ?? [])
@@ -95,4 +95,37 @@ export function Menu({ menu, label, className = CARD, children }: {
         {children}
       </div>
     </Popover>, document.body)
+}
+
+/**
+ * One row of a menu, the same in every menu: an icon where the row is an action, the
+ * label, then what sits at the far end (a shortcut, a detail, a chevron). Rows that
+ * list the user's own things, a session, a bookmark, a login, go without an icon
+ * unless the whole menu has them, so the labels of one menu always line up.
+ *
+ * `checked` makes the row a choice: it sets `aria-checked` and draws the tick, and the
+ * caller names the role (`menuitemradio` or `menuitemcheckbox`). `blocked` is a row
+ * that exists and cannot be taken now: it does nothing on a press and the arrow keys
+ * pass over it, but it is not `disabled`, so its reason still shows on hover. `disabled`
+ * is for a row with nothing to say.
+ */
+export function MenuItem({ icon, trailing, checked, blocked, role = 'menuitem', children, ...button }: Omit<ComponentProps<'button'>, 'type' | 'className' | 'aria-checked' | 'aria-disabled'> & {
+  icon?: ComponentProps<typeof Icon>['icon']
+  trailing?: ReactNode
+  checked?: boolean
+  blocked?: string
+}) {
+  const dead = blocked !== undefined
+  return (
+    <button {...button} type="button" role={role} aria-checked={checked} aria-disabled={dead || undefined} title={blocked ?? button.title}
+      onClick={dead ? undefined : button.onClick}
+      className={`flex w-full items-center gap-2 rounded-button-sm border-0 bg-transparent px-3 py-2 text-left text-label text-text disabled:cursor-default disabled:opacity-40 ${
+        dead ? 'cursor-default opacity-40' : 'cursor-pointer hover:bg-user-bg focus-visible:bg-user-bg'
+      }`}>
+      {icon === undefined ? null : <Icon icon={icon} size={15} className="flex-none text-muted" />}
+      <span className="min-w-0 flex-1 truncate">{children}</span>
+      {typeof trailing === 'string' ? <span className="flex-none text-meta text-muted">{trailing}</span> : trailing}
+      {checked === true ? <Icon icon={Tick02Icon} size={13} className="flex-none" /> : null}
+    </button>
+  )
 }

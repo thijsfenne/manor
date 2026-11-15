@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Cancel01Icon, Delete02Icon, Key01Icon } from '@hugeicons/core-free-icons'
+import { Cancel01Icon, Delete02Icon, Key01Icon, Settings01Icon, UserIcon } from '@hugeicons/core-free-icons'
 import type { BrowserPasswordOfferChoice, BrowserSavedPasswords as BrowserSavedPasswordList, BrowserTabPasswords, DesktopBrowserBridge } from '@manor/contracts'
 import { Icon } from './Icon'
 import { ConfirmStrip } from './Confirm'
 import { Button } from './ui/Button'
 import { IconButton } from './ui/IconButton'
-import { Menu, useMenu } from './ui/Menu'
+import { Menu, MenuItem, useMenu } from './ui/Menu'
 
 /**
  * The key beside the address. It exists only while the page's site has saved logins;
@@ -26,20 +26,12 @@ export function BrowserPasswordsMenu({ logins, disabled, onFill, onManage }: {
     <Menu menu={menu} label="Saved passwords">
       <p className="m-0 px-3 py-2 text-label font-medium text-text">Fill a saved password</p>
       {logins.map((login) => (
-        <button key={login.id} type="button" role="menuitem"
-          className="flex w-full min-w-0 rounded-button-sm border-0 bg-transparent px-3 py-2 text-left hover:bg-user-bg focus-visible:bg-user-bg"
-          onClick={() => { menu.close(); onFill(login.id) }}>
-          <span className={`w-full truncate text-label ${login.username === '' ? 'text-muted' : 'text-text'}`}>
-            {login.username === '' ? 'No username' : login.username}
-          </span>
-        </button>
+        <MenuItem key={login.id} icon={UserIcon} onClick={() => { menu.close(); onFill(login.id) }}>
+          {login.username === '' ? <span className="text-muted">No username</span> : login.username}
+        </MenuItem>
       ))}
       <div className="mx-2 my-1 h-px bg-line" />
-      <button type="button" role="menuitem"
-        className="flex w-full rounded-button-sm border-0 bg-transparent px-3 py-2 text-left text-label text-muted hover:bg-user-bg hover:text-text focus-visible:bg-user-bg"
-        onClick={() => { menu.close(false); onManage() }}>
-        Manage passwords
-      </button>
+      <MenuItem icon={Settings01Icon} onClick={() => { menu.close(false); onManage() }}>Manage passwords</MenuItem>
     </Menu>
   </>
 }

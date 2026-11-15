@@ -1,12 +1,21 @@
 import { useEffect, useRef, useState } from 'react'
-import { ArrowRight01Icon, CleanIcon, Settings01Icon, MinusSignIcon, MoreVerticalIcon, PlusSignIcon, RefreshIcon } from '@hugeicons/core-free-icons'
+import {
+  ArrowRight01Icon, BrowserIcon, BubbleChatIcon, CleanIcon, CodeIcon, ComputerIcon, CookieIcon, Eraser01Icon, Globe02Icon, LinkSquare02Icon,
+  MinusSignIcon, Moon02Icon, MoreVerticalIcon, PaintBoardIcon, PlusSignIcon, RefreshIcon, ReloadIcon, Search01Icon, SearchAddIcon,
+  Settings01Icon, Sun03Icon,
+} from '@hugeicons/core-free-icons'
 import type { BrowserPageSettings, DesktopBrowserBridge } from '@manor/contracts'
+import type { ComponentProps } from 'react'
 import type { CrossingTarget } from '../browserCrossing'
 import { Icon } from './Icon'
 import { IconButton } from './ui/IconButton'
-import { Menu, useMenu } from './ui/Menu'
+import { Menu, MenuItem, useMenu } from './ui/Menu'
 
-const ROW = 'flex w-full items-center justify-between rounded-button-sm border-0 bg-transparent px-3 py-2 text-left text-label text-text hover:bg-user-bg disabled:cursor-default disabled:opacity-40'
+const APPEARANCES = [
+  { value: 'system', label: 'System', icon: ComputerIcon },
+  { value: 'light', label: 'Light', icon: Sun03Icon },
+  { value: 'dark', label: 'Dark', icon: Moon02Icon },
+] as const
 
 /** One page-zoom step, 10% at a time between 25% and 500%; the menu and ⌘+ / ⌘− share it. */
 export function nextZoom(zoom: number, direction: 1 | -1): number {
@@ -56,10 +65,10 @@ export function BrowserMenu({ bridge, chatId, settings, disabled, pageDisabled, 
   const configure = (patch: Partial<BrowserPageSettings>) => {
     if (bridge.configure) perform(() => bridge.configure!(chatId, patch), true)
   }
-  const action = (label: string, call: (() => Promise<unknown>) | undefined, needsPage = true) => (
-    <button type="button" role="menuitem" className={ROW} disabled={disabled || busy || (needsPage && pageDisabled) || !call}
+  const action = (icon: ComponentProps<typeof MenuItem>['icon'], label: string, call: (() => Promise<unknown>) | undefined, needsPage = true) => (
+    <MenuItem icon={icon} disabled={disabled || busy || (needsPage && pageDisabled) || !call}
       title={!call ? 'Update the desktop app to use this option' : undefined}
-      onClick={() => { if (call) perform(call) }}>{label}</button>
+      onClick={() => { if (call) perform(call) }}>{label}</MenuItem>
   )
   const zoom = settings?.zoomFactor ?? 1
   return <>
@@ -68,48 +77,49 @@ export function BrowserMenu({ bridge, chatId, settings, disabled, pageDisabled, 
     <Menu menu={menu} label="Browser actions">
       {onOpenExternal === undefined && onSendToBrowser === undefined && openInChat === undefined ? null
         : <div className="mb-1 border-b border-line pb-1">
-        {onOpenExternal === undefined ? null : action('Open in default browser', async () => onOpenExternal())}
-        {onSendToBrowser === undefined ? null : action('Send to Browser', onSendToBrowser)}
+        {onOpenExternal === undefined ? null : action(LinkSquare02Icon, 'Open in default browser', async () => onOpenExternal())}
+        {onSendToBrowser === undefined ? null : action(Globe02Icon, 'Send to Browser', onSendToBrowser)}
         {openInChat === undefined ? null : <>
-        <button type="button" role="menuitem" aria-haspopup="menu" aria-expanded={chats} className={ROW}
+        <MenuItem icon={BubbleChatIcon} trailing={<Icon icon={ArrowRight01Icon} size={14} className="flex-none" />}
+          aria-haspopup="menu" aria-expanded={chats}
           disabled={disabled || pageDisabled || busy} onClick={() => setChats((value) => !value)}>
-          Open in chat <Icon icon={ArrowRight01Icon} size={14} />
-        </button>
+          Open in chat
+        </MenuItem>
         {!chats ? null : <div role="menu" aria-label="Recent chats" className="ml-3 border-l border-line pl-1">
           {openInChat.targets.length === 0
             ? <p className="m-0 px-3 py-2 text-meta text-muted">No recent chats yet.</p>
-            : openInChat.targets.map((target) => <button key={target.chatId} type="button" role="menuitem"
-              className={ROW} disabled={busy || disabled || pageDisabled}
+            : openInChat.targets.map((target) => <MenuItem key={target.chatId} disabled={busy || disabled || pageDisabled}
+              trailing={target.detail === undefined ? undefined
+                : <span className="ml-1 max-w-[45%] flex-none truncate text-meta text-muted">{target.detail}</span>}
               onClick={() => perform(() => openInChat.onOpen(target.chatId))}>
-              <span className="min-w-0 truncate">{target.title}</span>
-              {target.detail === undefined ? null
-                : <span className="ml-3 max-w-[45%] flex-none truncate text-meta text-muted">{target.detail}</span>}
-            </button>)}
+              {target.title}
+            </MenuItem>)}
         </div>}
         </>}
       </div>}
       {onFind === undefined ? null : (
-        <button type="button" role="menuitem" className={ROW} disabled={disabled || pageDisabled || busy}
+        <MenuItem icon={Search01Icon} trailing="⌘F" disabled={disabled || pageDisabled || busy}
           onClick={() => { close(false); onFind() }}>
-          Find on page <span className="text-meta text-muted">⌘F</span>
-        </button>
+          Find on page
+        </MenuItem>
       )}
-      {action('Hard reload', bridge.hardReload && (() => bridge.hardReload!(chatId)))}
-      {action('Open DevTools', bridge.openDevTools && (() => bridge.openDevTools!(chatId)))}
-      {action('Open separate preview window', bridge.openPreviewWindow && (() => bridge.openPreviewWindow!(chatId)))}
-      <button type="button" role="menuitem" aria-haspopup="menu" aria-expanded={appearance} className={ROW}
+      {action(ReloadIcon, 'Hard reload', bridge.hardReload && (() => bridge.hardReload!(chatId)))}
+      {action(CodeIcon, 'Open DevTools', bridge.openDevTools && (() => bridge.openDevTools!(chatId)))}
+      {action(BrowserIcon, 'Open separate preview window', bridge.openPreviewWindow && (() => bridge.openPreviewWindow!(chatId)))}
+      <MenuItem icon={PaintBoardIcon} trailing={<Icon icon={ArrowRight01Icon} size={14} className="flex-none" />}
+        aria-haspopup="menu" aria-expanded={appearance}
         disabled={disabled || pageDisabled || busy || !bridge.configure} onClick={() => setAppearance((value) => !value)}>
-        Appearance <Icon icon={ArrowRight01Icon} size={14} />
-      </button>
+        Appearance
+      </MenuItem>
       {!appearance ? null : <div role="menu" aria-label="Website appearance" className="ml-3 border-l border-line pl-1">
-        {(['system', 'light', 'dark'] as const).map((value) => <button key={value} type="button" role="menuitemradio"
-          aria-checked={(settings?.appearance ?? 'system') === value} className={ROW} disabled={busy || disabled || pageDisabled}
-          onClick={() => configure({ appearance: value })}>
-          {value === 'system' ? 'System' : value === 'light' ? 'Light' : 'Dark'}
-          {(settings?.appearance ?? 'system') === value ? <span className="text-meta text-muted">Selected</span> : null}
-        </button>)}
+        {APPEARANCES.map((option) => <MenuItem key={option.value} role="menuitemradio" icon={option.icon}
+          checked={(settings?.appearance ?? 'system') === option.value} disabled={busy || disabled || pageDisabled}
+          onClick={() => configure({ appearance: option.value })}>
+          {option.label}
+        </MenuItem>)}
       </div>}
       <div className="my-1 flex items-center gap-1 border-y border-line px-3 py-2 text-label text-text">
+        <Icon icon={SearchAddIcon} size={15} className="mr-1 flex-none text-muted" />
         <span className="flex-1">Zoom</span>
         <IconButton icon={MinusSignIcon} label="Zoom out" disabled={disabled || pageDisabled || busy || !bridge.configure || zoom <= 0.25}
           onClick={() => configure({ zoomFactor: nextZoom(zoom, -1) })} />
@@ -120,17 +130,16 @@ export function BrowserMenu({ bridge, chatId, settings, disabled, pageDisabled, 
           onClick={() => configure({ zoomFactor: 1 })} />
       </div>
       <p className="m-0 px-3 py-2 text-meta text-muted">Profile: {profile}</p>
-      {action('Clear cookies', bridge.clearCookies && (() => bridge.clearCookies!()), false)}
-      {action('Clear cache', bridge.clearCache && (() => bridge.clearCache!()), false)}
+      {action(CookieIcon, 'Clear cookies', bridge.clearCookies && (() => bridge.clearCookies!()), false)}
+      {action(Eraser01Icon, 'Clear cache', bridge.clearCache && (() => bridge.clearCache!()), false)}
       <div className="mt-1 border-t border-line pt-1">
-        <button type="button" role="menuitem" className={ROW} aria-expanded={settingsOpen}
+        <MenuItem icon={Settings01Icon} aria-expanded={settingsOpen}
           disabled={disabled || busy || settingsDisabled} onClick={() => { close(); onSettings() }}>
-          <span className="flex items-center gap-2"><Icon icon={Settings01Icon} />Browser settings</span>
-        </button>
-        <button type="button" role="menuitem" className={ROW}
-          disabled={disabled || busy || clearDisabled} onClick={() => { close(); onClearData() }}>
-          <span className="flex items-center gap-2"><Icon icon={CleanIcon} />Clear browser data</span>
-        </button>
+          Browser settings
+        </MenuItem>
+        <MenuItem icon={CleanIcon} disabled={disabled || busy || clearDisabled} onClick={() => { close(); onClearData() }}>
+          Clear browser data
+        </MenuItem>
       </div>
       {!bridge.configure ? <p className="m-0 px-3 py-2 text-meta text-muted">Update the desktop app for all browser options.</p> : null}
       {busy ? <p role="status" className="m-0 px-3 py-2 text-meta text-muted">Applying…</p> : null}

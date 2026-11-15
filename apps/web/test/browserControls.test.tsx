@@ -58,7 +58,7 @@ describe('browser menu', () => {
     const targets = [{ chatId: 'dm-iris', title: 'Iris' }, { chatId: 'work-1', title: 'Audit', detail: 'Manor' }]
     act(() => tree!.update(<BrowserMenu {...props} openInChat={{ targets, onOpen }} />))
     await click('Browser menu')
-    expect(tree!.root.findAllByProps({ role: 'menuitem' }).some((node) => node.props.children === 'Send to Browser')).toBe(false)
+    expect(button('Send to Browser')).toBeUndefined()
     await click('Open in chat'); await click('Audit')
     expect(onOpen).toHaveBeenCalledWith('work-1')
 

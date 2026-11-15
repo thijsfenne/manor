@@ -1,9 +1,8 @@
-import { Clock01Icon, PlusSignIcon } from '@hugeicons/core-free-icons'
+import type { ComponentProps } from 'react'
+import { BotIcon, Clock01Icon, PlusSignIcon, UserMultiple02Icon } from '@hugeicons/core-free-icons'
 import type { Chat, ChatMode } from '@manor/contracts'
 import { IconButton } from './ui/IconButton'
-import { Menu, useMenu } from './ui/Menu'
-
-const ROW = 'flex w-full items-center justify-between gap-3 rounded-button-sm border-0 bg-transparent px-3 py-2 text-left text-label text-text hover:bg-user-bg disabled:cursor-default disabled:opacity-40'
+import { Menu, MenuItem, useMenu } from './ui/Menu'
 
 /** Past this the list stops being recent and becomes an archive nobody asked for. */
 export const RECENT_BROWSER_SESSIONS = 8
@@ -17,20 +16,19 @@ export function recentBrowserSessions(chats: readonly Chat[], limit = RECENT_BRO
 }
 
 /** Single first: browsing is mostly quick questions, and Single is the default. */
-const MODES: { mode: ChatMode; label: string; detail: string }[] = [
-  { mode: 'single', label: 'Single', detail: 'One model' },
-  { mode: 'house', label: 'Multiple', detail: 'Every agent' },
-]
+const MODES = [
+  { mode: 'single', label: 'Single', detail: 'One model', icon: BotIcon },
+  { mode: 'house', label: 'Multiple', detail: 'Every agent', icon: UserMultiple02Icon },
+] satisfies { mode: ChatMode; label: string; detail: string; icon: ComponentProps<typeof MenuItem>['icon'] }[]
 
 const SIZE = { maxHeight: 420, minHeight: 120, minWidth: 240 }
 
 function ModeItems({ disabled, onNew, close }: { disabled: boolean; onNew(mode: ChatMode): void; close(): void }) {
   return <>{MODES.map((option) => (
-    <button key={option.mode} type="button" role="menuitem" className={ROW} disabled={disabled}
+    <MenuItem key={option.mode} icon={option.icon} trailing={option.detail} disabled={disabled}
       onClick={() => { close(); onNew(option.mode) }}>
       {option.label}
-      <span className="text-meta text-muted">{option.detail}</span>
-    </button>
+    </MenuItem>
   ))}</>
 }
 
@@ -57,11 +55,10 @@ export function BrowserSessionMenu({ sessions, currentId, disabled, onNew, onOpe
       disabled={sessions.length === 0} onClick={recent.toggle} />
     <Menu menu={recent} label="Recent sessions">
       {sessions.map((session) => (
-        <button key={session.id} type="button" role="menuitemradio" aria-checked={session.id === currentId} className={ROW}
+        <MenuItem key={session.id} role="menuitemradio" checked={session.id === currentId}
           onClick={() => { recent.close(); if (session.id !== currentId) onOpen(session.id) }}>
-          <span className="min-w-0 truncate">{session.title}</span>
-          {session.id === currentId ? <span className="flex-none text-meta text-muted">Current</span> : null}
-        </button>
+          {session.title}
+        </MenuItem>
       ))}
     </Menu>
   </div>
