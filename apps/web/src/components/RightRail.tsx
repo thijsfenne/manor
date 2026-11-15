@@ -1,5 +1,4 @@
 import { useLayoutEffect, useRef, useState, type ComponentProps, type RefObject } from 'react'
-import { createPortal } from 'react-dom'
 import type { Chat } from '@manor/contracts'
 import { Clock01Icon, BookOpen01Icon, BubbleChatQuestionIcon, Files01Icon, Folder01Icon, Globe02Icon, MoreVerticalIcon, Settings01Icon, Tick02Icon } from '@hugeicons/core-free-icons'
 import {
@@ -16,9 +15,7 @@ import { MAX_RIGHT_PANELS, layoutFull, layoutHas, type PanelLayout, type RightPa
 import { AiBotHeadLookingIcon, AiBotHeadLookingSolidIcon, SessionListIcon, SessionListSolidIcon } from './customIcons'
 import { Icon } from './Icon'
 import { IconButton } from './ui/IconButton'
-import { Popover } from './ui/Popover'
-import { useDismiss } from './ui/useDismiss'
-import { usePopupPlacement } from './ui/usePopupPlacement'
+import { Menu, useMenu } from './ui/Menu'
 
 export interface RailItem {
   id: RightPanelId
@@ -253,73 +250,46 @@ function useDoorRoom(nav: RefObject<HTMLElement>) {
 }
 
 function MoreDoors({ items, layout, onSelect }: { items: RailItem[]; layout: PanelLayout; onSelect: (id: RightPanelId) => void }) {
-  const trigger = useRef<HTMLButtonElement>(null)
-  const popup = useRef<HTMLDivElement>(null)
-  const [open, setOpen] = useState(false)
-  const close = (refocus = true) => {
-    setOpen(false)
-    if (refocus) trigger.current?.focus()
-  }
-  const placement = usePopupPlacement({ open, triggerRef: trigger, maxHeight: 420, minHeight: 120, minWidth: 220, align: 'end' })
-  useDismiss(open, () => close(false), { within: [trigger, popup], onEscape: close, layoutMoved: true })
+  const [menu, trigger] = useMenu({ maxHeight: 420, minHeight: 120, minWidth: 220 })
   const full = layoutFull(layout)
-  const rows = () => Array.from(popup.current?.querySelectorAll<HTMLButtonElement>('[role="menuitemcheckbox"]:not([aria-disabled="true"])') ?? [])
 
   return (
     <>
       <span className="relative block">
-        <IconButton ref={trigger} icon={MoreVerticalIcon} iconSize={17} label="More panels" aria-haspopup="menu" aria-expanded={open}
-          selected={open} onClick={() => setOpen((current) => !current)} />
+        <IconButton ref={trigger} icon={MoreVerticalIcon} iconSize={17} label="More panels" aria-haspopup="menu" aria-expanded={menu.open}
+          selected={menu.open} onClick={menu.toggle} />
         {items.some((item) => item.busy === true) ? <BusyDot className="absolute top-1 right-1" /> : null}
       </span>
-      {typeof document === 'undefined' ? null : createPortal(
-        // Open only once placed: a sheet still hidden while it measures cannot take the
-        // focus its first row is handed, and the arrow keys would have nowhere to go.
-        <Popover open={open && placement !== null} ref={popup} origin="top-right" role="menu" aria-label="More panels"
-          onReady={() => rows()[0]?.focus()}
-          className="fixed z-40 overflow-y-auto rounded-xl border border-line surface-floating p-1.5 shadow-menu"
-          style={placement ?? undefined}>
-          <div onKeyDown={(event) => {
-            if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return
-            const buttons = rows()
-            if (buttons.length === 0) return
-            const index = buttons.indexOf(document.activeElement as HTMLButtonElement)
-            const next = event.key === 'Home' ? 0 : event.key === 'End' ? buttons.length - 1
-              : (index + (event.key === 'ArrowDown' ? 1 : -1) + buttons.length) % buttons.length
-            event.preventDefault()
-            buttons[next]?.focus()
-          }}>
-            {items.map((item) => {
-              const shown = layoutHas(layout, item.id)
-              const blocked = !shown && full
-              return (
-                <button
-                  key={item.id}
-                  type="button"
-                  role="menuitemcheckbox"
-                  aria-checked={shown}
-                  aria-disabled={blocked || undefined}
-                  title={blocked ? doorLabel(item, shown, blocked) : undefined}
-                  className={`flex w-full items-center gap-2 rounded-md border-0 bg-transparent px-2 py-1.5 text-left text-label text-text ${
-                    blocked ? 'cursor-default opacity-40' : 'cursor-pointer hover:bg-user-bg'
-                  }`}
-                  onClick={() => {
-                    if (blocked) return
-                    close()
-                    onSelect(item.id)
-                  }}
-                >
-                  <span className="flex-none text-muted"><Icon icon={item.icon} size={15} /></span>
-                  <span className="min-w-0 flex-1 truncate">{item.label}</span>
-                  {item.busy === true ? <BusyDot className="flex-none" /> : null}
-                  {shown ? <Icon icon={Tick02Icon} size={13} className="flex-none" /> : null}
-                </button>
-              )
-            })}
-          </div>
-        </Popover>,
-        document.body,
-      )}
+      <Menu menu={menu} label="More panels"
+        className="fixed z-40 overflow-y-auto rounded-xl border border-line surface-floating p-1.5 shadow-menu">
+        {items.map((item) => {
+          const shown = layoutHas(layout, item.id)
+          const blocked = !shown && full
+          return (
+            <button
+              key={item.id}
+              type="button"
+              role="menuitemcheckbox"
+              aria-checked={shown}
+              aria-disabled={blocked || undefined}
+              title={blocked ? doorLabel(item, shown, blocked) : undefined}
+              className={`flex w-full items-center gap-2 rounded-md border-0 bg-transparent px-2 py-1.5 text-left text-label text-text ${
+                blocked ? 'cursor-default opacity-40' : 'cursor-pointer hover:bg-user-bg'
+              }`}
+              onClick={() => {
+                if (blocked) return
+                menu.close()
+                onSelect(item.id)
+              }}
+            >
+              <span className="flex-none text-muted"><Icon icon={item.icon} size={15} /></span>
+              <span className="min-w-0 flex-1 truncate">{item.label}</span>
+              {item.busy === true ? <BusyDot className="flex-none" /> : null}
+              {shown ? <Icon icon={Tick02Icon} size={13} className="flex-none" /> : null}
+            </button>
+          )
+        })}
+      </Menu>
     </>
   )
 }

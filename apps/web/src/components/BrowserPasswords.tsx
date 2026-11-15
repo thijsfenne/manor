@@ -1,14 +1,11 @@
-import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from 'react'
-import { createPortal } from 'react-dom'
+import { useCallback, useEffect, useState } from 'react'
 import { Cancel01Icon, Delete02Icon, Key01Icon } from '@hugeicons/core-free-icons'
 import type { BrowserPasswordOfferChoice, BrowserSavedPasswords as BrowserSavedPasswordList, BrowserTabPasswords, DesktopBrowserBridge } from '@manor/contracts'
 import { Icon } from './Icon'
 import { ConfirmStrip } from './Confirm'
 import { Button } from './ui/Button'
 import { IconButton } from './ui/IconButton'
-import { Popover } from './ui/Popover'
-import { useDismiss } from './ui/useDismiss'
-import { usePopupPlacement } from './ui/usePopupPlacement'
+import { Menu, useMenu } from './ui/Menu'
 
 /**
  * The key beside the address. It exists only while the page's site has saved logins;
@@ -20,44 +17,30 @@ export function BrowserPasswordsMenu({ logins, disabled, onFill, onManage }: {
   onFill(loginId: string): void
   onManage(): void
 }) {
-  const trigger = useRef<HTMLButtonElement>(null)
-  const popup = useRef<HTMLDivElement>(null)
-  const [open, setOpen] = useState(false)
-  const close = (refocus = true) => { setOpen(false); if (refocus) trigger.current?.focus() }
-  const placement = usePopupPlacement({ open, triggerRef: trigger, maxHeight: 320, minHeight: 120, minWidth: 240, align: 'end' })
-  useDismiss(open, () => close(false), { within: [trigger, popup], onEscape: close, layoutMoved: true })
-  useEffect(() => { if (disabled) setOpen(false) }, [disabled])
-  useEffect(() => {
-    if (open && placement) popup.current?.querySelector<HTMLButtonElement>('button')?.focus()
-  }, [open, placement])
+  const [menu, trigger] = useMenu({ maxHeight: 320, minHeight: 120, minWidth: 240, disabled })
 
   return <>
     <IconButton ref={trigger} icon={Key01Icon} iconSize={14} size={24} label="Saved passwords"
-      aria-haspopup="menu" aria-expanded={open} disabled={disabled}
-      onClick={() => setOpen((value) => !value)} />
-    {typeof document === 'undefined' ? null : createPortal(
-      <Popover open={open} ref={popup} origin="top-right"
-        className="fixed z-40 overflow-y-auto rounded-panel border border-line surface-floating p-1 shadow-menu"
-        style={placement ?? { visibility: 'hidden' }} role="menu" aria-label="Saved passwords">
-        <div onKeyDown={(event) => moveMenuFocus(event, popup.current)}>
-          <p className="m-0 px-3 py-2 text-label font-medium text-text">Fill a saved password</p>
-          {logins.map((login) => (
-            <button key={login.id} type="button" role="menuitem"
-              className="flex w-full min-w-0 rounded-button-sm border-0 bg-transparent px-3 py-2 text-left hover:bg-user-bg focus-visible:bg-user-bg"
-              onClick={() => { close(); onFill(login.id) }}>
-              <span className={`w-full truncate text-label ${login.username === '' ? 'text-muted' : 'text-text'}`}>
-                {login.username === '' ? 'No username' : login.username}
-              </span>
-            </button>
-          ))}
-          <div className="mx-2 my-1 h-px bg-line" />
-          <button type="button" role="menuitem"
-            className="flex w-full rounded-button-sm border-0 bg-transparent px-3 py-2 text-left text-label text-muted hover:bg-user-bg hover:text-text focus-visible:bg-user-bg"
-            onClick={() => { close(false); onManage() }}>
-            Manage passwords
-          </button>
-        </div>
-      </Popover>, document.body)}
+      aria-haspopup="menu" aria-expanded={menu.open} disabled={disabled}
+      onClick={menu.toggle} />
+    <Menu menu={menu} label="Saved passwords">
+      <p className="m-0 px-3 py-2 text-label font-medium text-text">Fill a saved password</p>
+      {logins.map((login) => (
+        <button key={login.id} type="button" role="menuitem"
+          className="flex w-full min-w-0 rounded-button-sm border-0 bg-transparent px-3 py-2 text-left hover:bg-user-bg focus-visible:bg-user-bg"
+          onClick={() => { menu.close(); onFill(login.id) }}>
+          <span className={`w-full truncate text-label ${login.username === '' ? 'text-muted' : 'text-text'}`}>
+            {login.username === '' ? 'No username' : login.username}
+          </span>
+        </button>
+      ))}
+      <div className="mx-2 my-1 h-px bg-line" />
+      <button type="button" role="menuitem"
+        className="flex w-full rounded-button-sm border-0 bg-transparent px-3 py-2 text-left text-label text-muted hover:bg-user-bg hover:text-text focus-visible:bg-user-bg"
+        onClick={() => { menu.close(false); onManage() }}>
+        Manage passwords
+      </button>
+    </Menu>
   </>
 }
 
@@ -193,17 +176,6 @@ function SavedRow({ title, detail, removeLabel, busy, onRemove }: {
       <IconButton icon={Delete02Icon} iconSize={14} size={24} disabled={busy} label={removeLabel} onClick={onRemove} />
     </li>
   )
-}
-
-function moveMenuFocus(event: KeyboardEvent<HTMLDivElement>, menu: HTMLDivElement | null): void {
-  if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return
-  const buttons = Array.from(menu?.querySelectorAll<HTMLButtonElement>('button:not(:disabled)') ?? [])
-  if (buttons.length === 0) return
-  const index = buttons.indexOf(document.activeElement as HTMLButtonElement)
-  const next = event.key === 'Home' ? 0 : event.key === 'End' ? buttons.length - 1
-    : (index + (event.key === 'ArrowDown' ? 1 : -1) + buttons.length) % buttons.length
-  event.preventDefault()
-  buttons[next]?.focus()
 }
 
 function hostOf(origin: string): string {

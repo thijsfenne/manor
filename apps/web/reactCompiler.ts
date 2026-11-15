@@ -60,6 +60,7 @@ export const REACT_COMPILED_FILES: readonly string[] = [
   'src/components/ui/IconButton.tsx',
   'src/components/ui/IconSwap.tsx',
   'src/components/ui/Popover.tsx',
+  'src/components/ui/Menu.tsx',
 ]
 
 /**
