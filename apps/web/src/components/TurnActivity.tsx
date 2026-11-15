@@ -405,8 +405,8 @@ function RoutineTriggerRow({ trigger }: { trigger: RoutineTrigger }) {
           title={open ? 'Hide the prompt' : 'Show the prompt'}
           onClick={() => setOpen((value) => !value)}
         >
-          Routine{trigger.name === undefined ? '' : ` · ${trigger.name}`} · {CLOCK.format(new Date(trigger.ts))}
-          {late && trigger.dueAt !== undefined ? ` · late, due ${LATE_DUE.format(new Date(trigger.dueAt))}` : ''}
+          Routine{trigger.name === undefined ? '' : `, ${trigger.name}`}, {CLOCK.format(new Date(trigger.ts))}
+          {late && trigger.dueAt !== undefined ? `, late, due ${LATE_DUE.format(new Date(trigger.dueAt))}` : ''}
         </button>
         {open ? (
           <p className="mt-1 mb-0 whitespace-pre-wrap text-[12px] leading-[1.55] text-muted [overflow-wrap:anywhere]">

@@ -57,6 +57,9 @@ export function RuntimeControls({ agents, overrides, disabled, startedAgentIds =
   return <RuntimeFacepile agents={agents} overrides={overrides} disabled={disabled} startedAgentIds={startedAgentIds} allowAuto={allowAuto} onChange={onChange} />
 }
 
+/** Beyond three names the chip would push the composer's other controls off the row. */
+const MAX_NAMED = 3
+
 function RuntimeFacepile({ agents, overrides, disabled, startedAgentIds = [], allowAuto = true, onChange }: RuntimeControlsProps) {
   const rootRef = useRef<HTMLDivElement>(null)
   const [open, setOpen] = useState(false)
@@ -95,6 +98,11 @@ function RuntimeFacepile({ agents, overrides, disabled, startedAgentIds = [], al
             </span>
           ))}
         </span>
+        {/* The names say who will hear you, as long as they fit. A bigger room, or a
+            composer row narrower than the names need (it is the size container), keeps
+            only the faces, every one of them; the roster names them a click away.
+            Truncate alone let the names run under the send button at 360px. */}
+        {agents.length <= MAX_NAMED ? <span className="min-w-0 max-w-[200px] truncate text-label @max-[440px]:hidden">{agents.map((agent) => agent.name).join(', ')}</span> : null}
         {changed ? (
           <span role="img" aria-label="changed from default" className="h-1.5 w-1.5 flex-none rounded-full bg-muted" />
         ) : null}

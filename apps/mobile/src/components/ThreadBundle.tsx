@@ -126,7 +126,7 @@ function NoteTile({ note, open, onOpenChange }: {
         {open && note.advice !== undefined ? (
           <View style={styles.noteBody}>
             <Text style={styles.bodyText}>{words}</Text>
-            <Text style={[styles.bodyText, styles.advice]}><Text style={styles.adviceLabel}>Suggested · </Text>{note.advice}</Text>
+            <Text style={[styles.bodyText, styles.advice]}><Text style={styles.adviceLabel}>Suggested: </Text>{note.advice}</Text>
           </View>
         ) : <Text numberOfLines={open ? undefined : 1} style={[styles.noteText, open && styles.noteTextOpen]}>{words}</Text>}
         {note.tag === '' ? null : <Text numberOfLines={1} style={[styles.tag, open && styles.lead]}>{note.tag}</Text>}

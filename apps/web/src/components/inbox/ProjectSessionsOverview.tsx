@@ -48,7 +48,8 @@ const GROUPS: { id: SessionOverviewSection; label: string; hint: string }[] = [
  * A project thread's sessions (decided 2026-10-10, grouped 2026-10-11): the right pane
  * beside the thread, or the header toggle's popover where the window is too narrow to
  * split. Three folds with a count, Settled folded by default, so the thread can be read
- * without opening every session. Each row settles or unsettles in place. Archived sits
+ * without opening every session. A project with no Session yet shows one quiet line
+ * instead of folds counting zero. Each row settles or unsettles in place. Archived sits
  * folded at the foot, only while it has rows: the sidebar's list leaves a thread's
  * sessions out, so this is where one archived by mistake comes back.
  */
@@ -61,10 +62,12 @@ export function ProjectSessionsOverview({ threadId, overview, agents, onOpen, on
   const gutter = compact ? 'px-1.5' : 'px-1'
   // Past its restore window a row is as good as gone, and the hourly sweep deletes it.
   const archived = overview.archived.filter((row) => row.chat?.archivedAt != null && !isArchiveExpired(row.chat.archivedAt, now, overview.archiveKeepMs))
+  const empty = overview.waiting.length + overview.working.length + overview.settled.length + archived.length === 0
 
   return (
     <div className={`flex min-h-0 min-w-0 flex-col overflow-y-auto ${gutter} ${compact ? 'max-h-[min(520px,70vh)] py-1.5' : 'h-full pt-2 pb-4'}`}>
-      {GROUPS.map(({ id, label, hint }) => {
+      {empty ? <p className="m-0 px-3 py-1.5 text-[13px] text-dim">No Sessions yet. A proposal you accept in the thread starts one.</p> : null}
+      {empty ? null : GROUPS.map(({ id, label, hint }) => {
         const rows = id === 'archived' ? archived : overview[id]
         if (id === 'archived' && rows.length === 0) return null
         const shown = id === 'settled' ? rows.slice(0, visibleSettled) : id === 'archived' ? rows.slice(0, visibleArchived) : rows

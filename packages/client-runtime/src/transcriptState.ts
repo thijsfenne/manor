@@ -593,7 +593,7 @@ export interface ThreadBundleRow {
   key: string
   /** In the order they arrived, each drawn as it would stand on its own. */
   items: Row[]
-  /** "2 Sessions done · 1 waiting on you · 3 lines in notes.md". */
+  /** "2 Sessions done, 1 waiting on you, 3 lines in notes.md". */
   summary: string
   /** The thread's advice on a question in this bundle, by its requestId (`threadQuestionAdvice`). */
   advice?: Readonly<Record<string, string>>
@@ -1059,7 +1059,7 @@ export function threadBundleSummary(items: readonly Row[]): string {
   if (answers > 0) parts.push(plural(answers, 'answer', 'answers'))
   if (questions > 0) parts.push(plural(questions, 'question', 'questions'))
   if (updates > 0) parts.push(plural(updates, 'update', 'updates'))
-  return parts.join(' · ')
+  return parts.join(', ')
 }
 
 /** The order a bundle's line names Sessions in: what finished first, then what still runs or waits. */
@@ -1157,7 +1157,7 @@ type NoteEntry = Extract<ThreadBundleEntry, { kind: 'note' }>
 function writeEntry(key: string, item: Row, write: ProjectFileWrite): NoteEntry {
   const current = write.action === 'add' || write.action === 'replace' || write.action === 'create'
   const text = (current ? write.line : projectFileWriteDetail(write)) ?? projectFileWriteLabel(write)
-  const tag = current ? write.file : `${write.action === 'remove' ? 'Removed' : 'Restored'} · ${write.file}`
+  const tag = current ? write.file : `${write.action === 'remove' ? 'Removed' : 'Restored'}, ${write.file}`
   return { kind: 'note', key, item, glyph: 'file', tone: 'busy', title: titleLine(text), text: withoutCheckbox(text.trim()), tag }
 }
 
@@ -1365,13 +1365,14 @@ export function threadSpacing(row: Row, previous: Row | undefined): 'group' | 'b
 }
 
 /** The one line a forwarded brief's card reads in its DM. */
-export function forwardedLine(row: Pick<WorkHandoffRow, 'projectName' | 'forwarded' | 'status'>): string {
+export function forwardedLine(row: Pick<WorkHandoffRow, 'projectName' | 'forwarded' | 'status' | 'session'>): string {
   const phase = row.forwarded?.phase
   const report = row.forwarded?.nothingToCommit === true
   if (phase === 'confirmed') return `${report ? 'Closed' : 'Confirmed'} in project thread ${row.projectName}`
   if (row.status === 'Settled' || row.status === 'Archived') return `Settled in project thread ${row.projectName}`
   if (phase === 'ready') return report ? `Ready in project thread ${row.projectName}` : `Ready, confirm in project thread ${row.projectName}`
-  if (phase === 'working') return `Running via project thread ${row.projectName}`
+  // The overview's own fold decides: a question, a result to confirm or a quiet Session is the user's move.
+  if (phase === 'working') return `${sessionGroup(row.session) === 'waiting' ? 'Waiting on you in' : 'Running via'} project thread ${row.projectName}`
   return `To project thread ${row.projectName}`
 }
 
@@ -1386,7 +1387,7 @@ export const workByline = (
   if (input.single) return input.model
   return input.starter === undefined || input.starter === input.lead
     ? `led by ${input.lead}`
-    : `led by ${input.lead} · ${input.starter} starts`
+    : `led by ${input.lead}, ${input.starter} starts`
 }
 
 /**
@@ -1798,7 +1799,7 @@ export function workResultStatus(result: WorkResult): WorkStatus | null {
     case 'queued': {
       const after = completion.merge.after
       if (after === undefined) return { tone: 'busy', text: 'Merging next' }
-      return { tone: 'busy', text: `${(completion.merge.ahead ?? 1) > 1 ? 'Waiting to merge' : 'Merging next'} · after ${after}` }
+      return { tone: 'busy', text: `${(completion.merge.ahead ?? 1) > 1 ? 'Waiting to merge' : 'Merging next'}, after ${after}` }
     }
     case 'fixing':
       return { tone: 'busy', text: FIXING[completion.merge.trouble ?? 'rebase'] }
@@ -1896,7 +1897,7 @@ const SESSION_CARD_STATUS: Partial<Record<SessionStatus, WorkStatus>> = {
 /**
  * A finished card is one line: its title, the first sentence of what came of it, and
  * the outcome. A commit or merge Git shows landed reads by what landed instead,
- * "Export · 3 files" beside Merged into main. Null while the card still has something to
+ * "Export, 3 files" beside Merged into main. Null while the card still has something to
  * show or decide, including a commit Git says did not land, which keeps the card and its
  * warning.
  */

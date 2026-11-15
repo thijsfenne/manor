@@ -188,7 +188,7 @@ export function RoutineDetail({
         <dd className="m-0 text-text">{routineNextRun(routine)}</dd>
         <dt className="text-dim">{routine.runAt === null ? 'Repeats' : 'Scheduled'}</dt>
         <dd className="m-0 text-text">
-          {describeSchedule(routine)} <span className="text-dim">· {routine.timezone}</span>
+          {describeSchedule(routine)}<span className="text-dim">, {routine.timezone}</span>
         </dd>
         <dt className="text-dim">Destination</dt>
         <dd className="m-0 truncate text-text">
@@ -219,7 +219,7 @@ export function RoutineDetail({
           >
             <p className="m-0 mb-1.5 text-[13px] text-dim">
               {runDate(latest.startedAt)}
-              {latest.state === 'failed' ? <span className="text-danger"> · Failed</span> : null}
+              {latest.state === 'failed' ? <span className="text-danger">, Failed</span> : null}
             </p>
             <RunResult run={latest} onOpenChat={onOpenChat} />
           </div>

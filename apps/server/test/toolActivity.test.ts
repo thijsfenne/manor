@@ -97,7 +97,7 @@ describe('provider tool subjects', () => {
 
   it('names what a scheduled task is and when, for every driver shape', () => {
     const input = { name: 'Tea', runAt: '2026-09-28T10:00', action: 'remind' }
-    const expected = { tool: 'mcp__routines__routine_save', subject: '“Tea” · 2026-09-28 10:00' }
+    const expected = { tool: 'mcp__routines__routine_save', subject: '“Tea”, 2026-09-28 10:00' }
     expect(describeTool('mcp__routines__routine_save', input)).toEqual(expected)
     expect(describeMcpTool('routines', 'routine_save', input)).toEqual(expected)
     expect(describeTool('mcp__routines__routine_save', { routineId: 'r1', enabled: false })).toEqual({ tool: 'mcp__routines__routine_save' })

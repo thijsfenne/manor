@@ -323,6 +323,7 @@ function SidebarNav({
       onSetSettled={onSetChatSettled}
       onSetArchived={onSetChatArchived}
       onHoldPeek={onHoldPeek}
+      projectWorkOpen={projectThreads.some((row) => row.running > 0 || row.waiting)}
       {...(subagentGroups === undefined ? {} : { subagentGroups })}
       {...(onOpenSubagent === undefined ? {} : { onOpenSubagent })}
     />

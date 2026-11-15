@@ -393,7 +393,7 @@ function RoutineRow({ rowRef, routine, agent, waiting, selected, now, reduceMoti
             status.tone === 'error' ? 'text-danger' : status.tone === 'active' ? 'text-text' : 'text-dim'
           }`}
         >
-          {once ? status.text : `${describeSchedule(routine)} · ${status.text}`}
+          {once ? status.text : `${describeSchedule(routine)}, ${status.text}`}
         </span>
       </span>
       <span className="relative flex flex-none">

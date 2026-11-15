@@ -5,6 +5,7 @@ export { parseMentions, mentionSpans }
 // Shared with the native client; the routing and completion readers live in the
 // client runtime, so the phone's composer and the Mac's answer the same rules.
 export {
+  addressDraft,
   chatFallbackTargets,
   composerShowsRecipients,
   draftRecipients,

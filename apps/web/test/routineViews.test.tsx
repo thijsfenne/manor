@@ -301,8 +301,8 @@ describe('routine management surfaces', () => {
     expect(at.every((index) => index >= 0)).toBe(true)
     expect(at).toEqual([...at].sort((a, b) => a - b))
     expect(html).toMatch(/aria-selected="true"[^>]*>(?:(?!<\/button>).)*Once/)
-    expect(html).toContain('Reminder · Today ')
-    expect(html).toMatch(/text-danger[^>]*>Check · Failed/)
+    expect(html).toContain('Reminder, Today ')
+    expect(html).toMatch(/text-danger[^>]*>Check, Failed/)
     expect(html).toMatch(/aria-expanded="false"[^>]*>(?:(?!<\/button>).)*>Earlier</)
     expect(html).not.toContain(routine.name)
     // The failure is first in Upcoming, so it is the task open beside the list.

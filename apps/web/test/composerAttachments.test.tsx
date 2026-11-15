@@ -166,7 +166,7 @@ describe('a PDF or Word document', () => {
     const html = renderToStaticMarkup(
       <UserBubble text="" agents={ROSTER} skills={[]} documents={[partial, { name: 'notes.docx', mime: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' }]} />,
     )
-    expect(html).toContain('4 pages · 2 unreadable')
+    expect(html).toContain('4 pages, 2 unreadable')
     expect(html).toContain('href="http://manor/media/c/e/d0/sig"')
     expect(html).toContain('Pages 2–3 gave no usable text')
     expect(html).toContain('Reading…')

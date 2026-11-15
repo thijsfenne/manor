@@ -16,7 +16,7 @@ const estimate = (over: Partial<ContextEstimate> = {}): ContextEstimate => ({
 describe('usageCopy', () => {
   it('reads a reported fill as a percentage', () => {
     const source = contextProvenance(estimate({ used: { source: 'measured', tokens: 44_000 } }))
-    expect(usageCopy(readContextMeter(44_000, 200_000), source.used)).toBe('22% · 44k/200k')
+    expect(usageCopy(readContextMeter(44_000, 200_000), source.used)).toBe('22%, 44k/200k')
   })
 
   it('names a provider that reports no fill', () => {

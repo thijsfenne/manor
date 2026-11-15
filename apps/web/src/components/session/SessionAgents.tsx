@@ -82,8 +82,8 @@ export function SessionAgents({ subagents, summary, onOpen, onStop }: {
           ))}
         </span>
         <span className="min-w-0 flex-1 truncate text-[13px] text-text">Agents</span>
-        <span className="flex flex-none items-center gap-1 text-meta tabular-nums text-dim">
-          {parts.flatMap((part, index) => index === 0 ? [part] : [<span key={`dot${index}`} aria-hidden="true">·</span>, part])}
+        <span className="flex flex-none items-center gap-2 text-meta tabular-nums text-dim">
+          {parts}
         </span>
         <span className="flex-none text-dim"><FoldChevron open={open} /></span>
       </button>

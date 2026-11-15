@@ -215,8 +215,8 @@ export const layoutFull = (layout: PanelLayout) => layoutCount(layout) >= MAX_RI
 
 /**
  * Adds a panel in the first free slot. At the cap nothing is replaced: the layout is
- * returned as it was. The diff is the exception: opened from a turn's Review or a
- * result card it is read beside the Session panel, never under it. Up to two panels open, it takes a column of its own on the chat's
+ * returned as it was. The diff is the exception: it is read beside the other panels, never
+ * under them (Changes and a turn's Review first close the Session panel to give it room). Up to two panels open, it takes a column of its own on the chat's
  * side and the others share the second column; with three, it shares the column
  * without the Session panel, and when that one is full its second panel moves under
  * Session to make room.
@@ -521,14 +521,16 @@ export function useRightPanel(
    * file link, a browser that has something to show. Added beside what is open, never
    * in place of it; at the cap the layout stays as it is.
    */
-  const showFor = useCallback((targetChatId: string, id: RightPanelId) => {
+  /** `instead` is a panel the opening one takes the place of, as in `toggledPanels`. */
+  const showFor = useCallback((targetChatId: string, id: RightPanelId, instead?: RightPanelId) => {
     if (compact) {
       setCompact(targetChatId, id, true)
       return
     }
     setByChat((map) => {
       const stored = storedFor(map, targetChatId)
-      return { ...map, [targetChatId]: stored.open ? storedValue(true, withPanel(stored.layout, id)) : storedValue(true, [[id]]) }
+      const room = instead === undefined ? stored.layout : withoutPanel(stored.layout, instead)
+      return { ...map, [targetChatId]: stored.open && room.length > 0 ? storedValue(true, withPanel(room, id)) : storedValue(true, [[id]]) }
     })
   }, [compact, setCompact])
 

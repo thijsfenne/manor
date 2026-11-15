@@ -244,7 +244,7 @@ const mergeFolders = (completion: WorkCompletion) => completion.repos.map((repo)
 
 /** The settled note once its outcome is known, or known to be missing. */
 const settledText = (title: string, outcome: string | null): string =>
-  outcome === null ? `Session “${title}” settled · outcome unavailable.` : `Session “${title}” settled: ${outcome}`
+  outcome === null ? `Session “${title}” settled, outcome unavailable.` : `Session “${title}” settled: ${outcome}`
 
 /** Owns every mutation of the Chat → Work relationship. */
 export class WorkModule {

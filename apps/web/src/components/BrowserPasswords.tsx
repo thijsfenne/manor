@@ -158,13 +158,13 @@ export function BrowserSavedPasswords({ bridge }: { bridge: DesktopBrowserBridge
         <ul className="m-0 mt-1 max-h-[240px] list-none overflow-y-auto p-0">
           {saved.logins.map((login) => (
             <SavedRow key={login.id} title={hostOf(login.origin)}
-              detail={`${login.username === '' ? 'No username' : login.username}${login.source === 'dia' ? ' · from Dia' : ''}`}
+              detail={`${login.username === '' ? 'No username' : login.username}${login.source === 'dia' ? ', from Dia' : ''}`}
               removeLabel={`Remove saved password for ${login.username === '' ? hostOf(login.origin) : `${login.username} on ${hostOf(login.origin)}`}`}
               busy={busy} onRemove={() => remove({ loginId: login.id })} />
           ))}
           {saved.neverSave.map((site) => (
             <SavedRow key={`never:${site.origin}`} title={hostOf(site.origin)}
-              detail={`Never saved${site.source === 'dia' ? ' · from Dia' : ''}`}
+              detail={`Never saved${site.source === 'dia' ? ', from Dia' : ''}`}
               removeLabel={`Offer to save passwords on ${hostOf(site.origin)} again`}
               busy={busy} onRemove={() => remove({ neverSaveOrigin: site.origin })} />
           ))}

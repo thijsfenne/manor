@@ -173,9 +173,9 @@ export function formatWhen(ts: number, timezone: string, now: number = Date.now(
 export function onceLine(routine: Routine, now: number = Date.now()): RoutineStatus {
   const kind = routine.action === 'remind' ? 'Reminder' : 'Check'
   const status = routineStatus(routine, now)
-  if (routine.endState !== null || status.tone === 'active') return { ...status, text: `${kind} · ${status.text}` }
+  if (routine.endState !== null || status.tone === 'active') return { ...status, text: `${kind}, ${status.text}` }
   const when = routine.runAt === null ? describeSchedule(routine) : formatWhen(routine.runAt, routine.timezone, now)
-  return { text: routine.enabled ? `${kind} · ${when}` : `${kind} · Off · ${when}`, tone: 'quiet' }
+  return { text: routine.enabled ? `${kind}, ${when}` : `${kind}, Off, ${when}`, tone: 'quiet' }
 }
 
 /** A shape check only, so a typo is answered here; the server's parser decides. */
@@ -189,7 +189,7 @@ export function looksLikeCron(cron: string): boolean {
  *
  * Only a schedule with a literal hour and minute has one: `every 6 hours` fires at
  * six different times and any single one of them would be a made-up answer. It is
- * what the row compares the actual run against, which is the whole of `ran 09:14 ·
+ * what the row compares the actual run against, which is the whole of `ran 09:14,
  * scheduled 07:00`.
  */
 export function slotClock(cron: string): string | null {
@@ -235,7 +235,7 @@ export function routineTimeline(routine: Routine, now: number = Date.now()): Rou
   const next = routineNextRun(routine, now)
   const nextText = next === 'Schedule unavailable' ? 'Next run unavailable' : `Next ${next}`
   const hasOutcome = isRunning(routine, now) || routine.lastRunAt !== null || routine.lastSkippedAt !== null
-  return { ...status, text: hasOutcome ? `${status.text} · ${nextText}` : nextText }
+  return { ...status, text: hasOutcome ? `${status.text}, ${nextText}` : nextText }
 }
 
 /** Whether two moments fall on the same day in the routine's zone. */
@@ -350,7 +350,7 @@ export function routineStatus(routine: Routine, now: number = Date.now()): Routi
   if (routine.lastRunAt !== null) {
     const ran = formatClock(routine.lastRunAt, routine.timezone)
     return {
-      text: slot === null || slot === ran ? `Ran ${ran}` : `Ran ${ran} · scheduled ${slot}`,
+      text: slot === null || slot === ran ? `Ran ${ran}` : `Ran ${ran}, scheduled ${slot}`,
       tone: 'quiet',
     }
   }

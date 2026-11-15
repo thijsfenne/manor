@@ -140,17 +140,17 @@ describe('project memory panel', () => {
     emit(response)
     const path = '/memory/manor/runtime.md'
     act(() => panel.update(<ProjectMemoryPanel {...props()} usedPaths={new Set([path])} />))
-    expect(panel.root.findByProps({ title: `${path} · Selected this turn` })).toBeDefined()
+    expect(panel.root.findByProps({ title: `${path}, Selected this turn` })).toBeDefined()
     expect(content()).toContain('This turn')
     expect(panel.root.findAllByType('button').flatMap((button) => button.props.title ?? [])
       .filter((title) => title.startsWith('/memory/'))).toEqual([
-      `${path} · Selected this turn`,
+      `${path}, Selected this turn`,
       '/memory/manor/new.md',
       '/memory/manor/old.md',
     ])
     expect(panel.root.findAllByProps({ role: 'separator' })).toHaveLength(1)
 
-    act(() => panel.root.findByProps({ title: `${path} · Selected this turn` }).props.onClick())
+    act(() => panel.root.findByProps({ title: `${path}, Selected this turn` }).props.onClick())
     expect(content()).toContain('This turn')
   })
 
@@ -219,7 +219,7 @@ describe('project memory panel', () => {
     expect(content()).toContain('Loading…')
     emit({ type: 'chat_summary', requestId, chatId: 'thread', summary: null })
     expect(content()).toContain('Not summarized yet')
-    expect(panel.root.findAllByType('button').some((button) => button.props.title === 'Conversation summary · read-only')).toBe(false)
+    expect(panel.root.findAllByType('button').some((button) => button.props.title === 'Conversation summary, read-only')).toBe(false)
 
     emit({
       type: 'chat_summary', requestId, chatId: 'thread', summary: {
@@ -229,7 +229,7 @@ describe('project memory panel', () => {
     const json = content()
     expect(json.indexOf('Conversation summary')).toBeLessThan(json.indexOf('Project folder'))
     expect(json).not.toContain('Corners are always round.')
-    act(() => panel.root.findByProps({ title: 'Conversation summary · read-only' }).props.onClick())
+    act(() => panel.root.findByProps({ title: 'Conversation summary, read-only' }).props.onClick())
     expect(content()).toContain('Corners are always round.')
     expect(content()).toContain('Covers')
     expect(content()).not.toContain('Runtime decisions')

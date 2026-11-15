@@ -297,7 +297,7 @@ function ImportDialog({
                 </div>
                 <p className="mt-0.5 mb-0 truncate text-meta text-muted">{candidate.description || 'No description'}</p>
                 <p className="mt-1 mb-0 text-meta text-dim">
-                  {sourceLabel(candidate.sources)} · {bundleLabel(candidate.fileCount, candidate.bundleBytes)}
+                  {sourceLabel(candidate.sources)}, {bundleLabel(candidate.fileCount, candidate.bundleBytes)}
                 </p>
               </div>
               <Button
@@ -348,7 +348,7 @@ export function SkillDialog({
       <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1 text-meta text-dim">
         <span className="font-mono">${skill.id}</span>
         <span>
-          {sourceLabel(skill.sources)} · {bundleLabel(skill.fileCount, skill.bundleBytes)} ·{' '}
+          {sourceLabel(skill.sources)}, {bundleLabel(skill.fileCount, skill.bundleBytes)},{' '}
           {holders.length === 0 ? 'attached to nobody' : `attached to ${holders.join(', ')}`}
         </span>
       </div>
@@ -385,7 +385,7 @@ const bundleLabel = (fileCount = 0, bytes = 0) => {
   const size = bytes < 1024 ? `${bytes} B` : bytes < 1024 * 1024
     ? `${Math.round(bytes / 1024)} KB`
     : `${(bytes / (1024 * 1024)).toFixed(1)} MB`
-  return `${fileCount} ${fileCount === 1 ? 'file' : 'files'} · ${size}`
+  return `${fileCount} ${fileCount === 1 ? 'file' : 'files'}, ${size}`
 }
 
 const compareByName = (left: { name: string }, right: { name: string }) =>

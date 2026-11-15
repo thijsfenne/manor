@@ -1115,7 +1115,7 @@ function RelayMarker({
  */
 function ConsultationExcerpt({ question, replyPending }: { question: string; replyPending: boolean }) {
   const [open, setOpen] = useState(false)
-  const follows = replyPending ? ' · reply follows' : ''
+  const follows = replyPending ? ', reply follows' : ''
   return (
     <button
       type="button"
@@ -1129,7 +1129,7 @@ function ConsultationExcerpt({ question, replyPending }: { question: string; rep
       ) : (
         <>
           <span className="min-w-0 truncate">“{question}”</span>
-          {replyPending ? <span className="ml-1 shrink-0">· reply follows</span> : null}
+          {replyPending ? <span className="shrink-0">, reply follows</span> : null}
         </>
       )}
     </button>
@@ -1469,8 +1469,7 @@ function ConsultedAgents({
       >
         <span>{action}</span>
         <AgentStack agentIds={agentIds} agents={agents} size={18} />
-        <span>{count} {count === 1 ? 'agent' : 'agents'}</span>
-        {repliesFollow ? <span>· replies follow</span> : null}
+        <span>{count} {count === 1 ? 'agent' : 'agents'}{repliesFollow ? ', replies follow' : ''}</span>
       </button>
       {!mounted || typeof document === 'undefined'
         ? null

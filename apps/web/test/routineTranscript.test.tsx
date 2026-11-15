@@ -116,7 +116,7 @@ describe('a routine turn in the transcript', () => {
       const fold = renderToStaticMarkup(<TurnActivity turn={turn} persona={smith} agents={[smith]} open />)
       // The first row of the fold, ahead of the work it started.
       const first = fold.slice(fold.indexOf('<li'), fold.indexOf('</li>'))
-      expect(first).toContain('Routine · Mail catch-up · ')
+      expect(first).toContain('Routine, Mail catch-up, ')
       expect(fold).not.toContain('Check mail.')
       expect(fold).toContain('aria-expanded="false"')
     })

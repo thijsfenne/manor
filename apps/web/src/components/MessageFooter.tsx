@@ -370,7 +370,7 @@ export function MemoryTraceCard({ trace }: { trace: MemoryTrace }) {
             </li>
           ))}
         </ul>
-        <Derivation>Inferred after the turn · {readsLabel(trace.reads)}</Derivation>
+        <Derivation>Inferred after the turn, {readsLabel(trace.reads)}</Derivation>
       </div>
     )
   }
@@ -394,7 +394,7 @@ export function MemoryTraceCard({ trace }: { trace: MemoryTrace }) {
       <p className="m-0 text-meta leading-5 text-muted">
         {paths.map((path, index) => (
           <Fragment key={path}>
-            {index === 0 ? null : <span className="text-dim"> · </span>}
+            {index === 0 ? null : <span className="text-dim">, </span>}
             <span className="font-mono" title={path}>
               {baseName(path)}
             </span>
@@ -402,7 +402,7 @@ export function MemoryTraceCard({ trace }: { trace: MemoryTrace }) {
         ))}
       </p>
       <Derivation>
-        {summary.status === 'none' ? 'Inferred after the turn · ' : ''}
+        {summary.status === 'none' ? 'Inferred after the turn, ' : ''}
         {readsLabel(trace.reads)}
       </Derivation>
     </div>

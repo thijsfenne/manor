@@ -72,7 +72,7 @@ function DraftList({ drafts, color, connected = true, actions }: OutboundDraftGr
   )
 }
 
-/** "5 drafts · 2 sent · 1 discarded · 2 open", only the parts that are not zero. */
+/** "5 drafts, 2 sent, 1 discarded, 2 open", only the parts that are not zero. */
 function tallyLine(drafts: readonly DraftRecord[]): string {
   const tally = tallyDrafts(drafts)
   const parts = [`${String(drafts.length)} drafts`]
@@ -84,5 +84,5 @@ function tallyLine(drafts: readonly DraftRecord[]): string {
   if (tally.snoozed > 0) parts.push(`${String(tally.snoozed)} later`)
   if (tally.ignored > 0) parts.push(`${String(tally.ignored)} ignored`)
   if (tally.open > 0) parts.push(`${String(tally.open)} open`)
-  return parts.join(' · ')
+  return parts.join(', ')
 }

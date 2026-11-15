@@ -2,8 +2,10 @@ import { memo, useEffect, useMemo, useRef, useState, type CSSProperties, type Re
 import { ArrowDown01Icon, AtIcon, Copy01Icon, File01Icon, MoreHorizontalIcon } from '@hugeicons/core-free-icons'
 import { splitPath, splitRows, type DiffViewFile, type DiffViewRow } from '../../diffView'
 import { FileMark } from '../fileMark'
+import { Markdown } from '../Markdown'
 import { Icon } from '../Icon'
 import { ContextMenu, type ContextMenuItem } from '../ui/ContextMenu'
+import { SegmentedControl, type SegmentOption } from '../ui/SegmentedControl'
 import { sourceLanguage } from '@manor/client-runtime/languages'
 import { highlightLines, type SyntaxSpan } from '../ui/sourceSyntax'
 
@@ -19,6 +21,16 @@ const REMOVED = 'bg-[color-mix(in_srgb,var(--color-danger)_14%,transparent)]'
 /** The edge mark of a changed line: solid for an addition, dashed for a removal, as Synara draws them. */
 const ADDED_EDGE = 'bg-ok'
 const REMOVED_EDGE = 'bg-[repeating-linear-gradient(to_bottom,var(--color-danger)_0_3px,transparent_3px_5px)]'
+
+/** Files read as prose: their change is shown as text first and as source second. */
+const isProse = (path: string) => /\.(md|markdown|txt)$/i.test(path)
+
+type ProseView = 'text' | 'source'
+
+const textViewOptions = (id: string): readonly SegmentOption<ProseView>[] => [
+  { value: 'text', label: 'Text', tabId: `${id}-text`, panelId: `${id}-body` },
+  { value: 'source', label: 'Source', tabId: `${id}-source`, panelId: `${id}-body` },
+]
 
 interface DiffFileCardProps {
   file: DiffViewFile
@@ -52,6 +64,9 @@ export const DiffFileCard = memo(function DiffFileCard({
     { label: 'Copy path', icon: Copy01Icon, onSelect: () => onCopyPath(file.path) },
   ]
   const headingId = `diff-file-${file.key.replace(/[^A-Za-z0-9_-]/g, '-')}`
+  // Per card and not remembered: a prose file opens as text every time.
+  const [proseView, setProseView] = useState<ProseView>('text')
+  const prose = isProse(file.path) && file.rows.length > 0
 
   return (
     <section
@@ -78,11 +93,17 @@ export const DiffFileCard = memo(function DiffFileCard({
           </span>
           {file.oldPath !== undefined ? <span className="flex-none text-meta text-dim">renamed</span>
             : file.status === 'deleted' ? <span className="flex-none text-meta text-dim">deleted</span> : null}
-          <span className="ml-auto flex flex-none items-center gap-1.5 pl-2 text-meta tabular-nums">
-            <span className="text-ok">+{file.added}</span>
-            <span className="text-danger">−{file.removed}</span>
-          </span>
+          {/* Line counts are review bookkeeping; a prose file read as text leaves them out. */}
+          {prose && proseView === 'text' ? null : (
+            <span className="ml-auto flex flex-none items-center gap-1.5 pl-2 text-meta tabular-nums">
+              <span className="text-ok">+{file.added}</span>
+              <span className="text-danger">−{file.removed}</span>
+            </span>
+          )}
         </button>
+        {prose ? (
+          <SegmentedControl label={`View of ${name}`} options={textViewOptions(headingId)} value={proseView} onChange={setProseView} />
+        ) : null}
         <button
           type="button"
           aria-label={`More for ${name}`}
@@ -108,13 +129,21 @@ export const DiffFileCard = memo(function DiffFileCard({
         </button>
         {menu === null ? null : <ContextMenu x={menu.x} y={menu.y} items={items} onClose={() => setMenu(null)} />}
       </div>
-      {collapsed ? null : <FileBody file={file} layout={layout} scrollRoot={scrollRoot} />}
+      {/* Keyed by view: Text has no lazy box, so Source mounts its own and watches it. */}
+      {collapsed ? null : <FileBody key={prose ? proseView : 'source'} file={file} layout={layout} scrollRoot={scrollRoot} text={prose && proseView === 'text'} bodyId={`${headingId}-body`} />}
     </section>
   )
 })
 
 /** The lines, or what stands in for them until they are near enough to draw. */
-function FileBody({ file, layout, scrollRoot }: { file: DiffViewFile; layout: DiffLayout; scrollRoot: RefObject<HTMLElement> }) {
+function FileBody({ file, layout, scrollRoot, text, bodyId }: {
+  file: DiffViewFile
+  layout: DiffLayout
+  scrollRoot: RefObject<HTMLElement>
+  /** A prose file read as text rather than as source. */
+  text: boolean
+  bodyId: string
+}) {
   const box = useRef<HTMLDivElement>(null)
   const near = useNear(box, scrollRoot)
   const syntax = useMemo(() => (near ? rowSyntax(file.path, file.rows) : null), [near, file.path, file.rows])
@@ -132,8 +161,17 @@ function FileBody({ file, layout, scrollRoot }: { file: DiffViewFile; layout: Di
       </p>
     )
   }
+  if (text) {
+    return (
+      <div id={bodyId} className="py-1.5">
+        <TextLines rows={file.rows} markdown={/\.(md|markdown)$/i.test(file.path)} />
+        {file.truncated ? <p className="m-0 px-3 pt-1.5 pb-1 text-label text-warn">Part of this file’s diff is left out.</p> : null}
+      </div>
+    )
+  }
   return (
     <div
+      id={bodyId}
       ref={box}
       className="py-1 font-mono text-meta leading-[18px]"
       // Drawn once, then skipped by the browser whenever it is out of view.
@@ -210,6 +248,70 @@ const NUMBER = 'select-none pr-3 pl-2 text-right text-dim diff-quiet'
 /** The 3px mark at a changed line's edge, and nothing on a line that did not change. */
 function Edge({ kind }: { kind: DiffViewRow['kind'] | undefined }) {
   return <span aria-hidden className={kind === 'added' ? ADDED_EDGE : kind === 'removed' ? REMOVED_EDGE : ''} />
+}
+
+/** What the reading view draws: a run of lines that changed alike, or the place lines were left out. */
+type TextBlock =
+  | { kind: LineRow['kind']; lines: string[] }
+  | { kind: 'gap'; count?: number }
+
+/** Consecutive lines of one kind become one block, so a list or a paragraph reaches Markdown whole. */
+function textBlocks(rows: readonly DiffViewRow[]) {
+  const blocks: TextBlock[] = []
+  for (const row of rows) {
+    const last = blocks[blocks.length - 1]
+    if (row.kind === 'gap') blocks.push(row.count === undefined ? { kind: 'gap' } : { kind: 'gap', count: row.count })
+    else if (last !== undefined && last.kind === row.kind && 'lines' in last) last.lines.push(row.text)
+    else blocks.push({ kind: row.kind, lines: [row.text] })
+  }
+  return blocks
+}
+
+/** A quiet break where the diff leaves lines out, spoken as the count of unchanged lines. */
+function TextGap({ count }: { count?: number }) {
+  return (
+    <div
+      role="separator"
+      aria-label={count === undefined ? 'Unchanged lines' : `${count} unchanged ${count === 1 ? 'line' : 'lines'}`}
+      className="select-none py-1 text-center text-label leading-none text-dim"
+    >
+      <span aria-hidden>…</span>
+    </div>
+  )
+}
+
+/**
+ * A prose change as reading text: the message's own font and size, wrapped, no numbers.
+ * A Markdown file reads as rendered Markdown, one block per run of lines that changed
+ * alike; a list cut in two by a change may come out as two lists. Other prose stays
+ * plain lines. Added blocks carry the soft success tint, removed ones are struck
+ * through and muted. A blank line is a paragraph break, so it takes a small space and
+ * no tint.
+ */
+function TextLines({ rows, markdown }: { rows: readonly DiffViewRow[]; markdown: boolean }) {
+  const blocks = useMemo(() => textBlocks(rows), [rows])
+  return (
+    <>
+      {blocks.map((block, index) => {
+        if (block.kind === 'gap') return <TextGap key={index} {...(block.count === undefined ? {} : { count: block.count })} />
+        const tone = block.kind === 'added' ? `${ADDED} text-text` : block.kind === 'removed' ? `${REMOVED} text-muted line-through [&_*]:text-muted` : 'text-text'
+        const type = 'text-[length:var(--msg-size,16px)] leading-[1.6]'
+        if (markdown) {
+          const text = block.lines.join('\n')
+          return text.trim() === '' ? <div key={index} aria-hidden className="h-2" /> : (
+            <div key={index} className={`px-3 py-0.5 ${type} ${tone}`}>
+              <Markdown text={text} variant="document" />
+            </div>
+          )
+        }
+        return block.lines.map((line, at) => line === '' ? (
+          <div key={`${index}-${at}`} aria-hidden className="h-2" />
+        ) : (
+          <p key={`${index}-${at}`} className={`m-0 px-3 py-0.5 ${type} whitespace-pre-wrap wrap-anywhere ${tone}`}>{line}</p>
+        ))
+      })}
+    </>
+  )
 }
 
 /** One column of numbers: the new line's, or the old one's for a line that is gone. */

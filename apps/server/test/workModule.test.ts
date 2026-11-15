@@ -952,13 +952,13 @@ describe('WorkModule lifecycle', () => {
     await h.module.accept(created.workChatId)
 
     await h.module.setSettled(created.workChatId, true)
-    await until(() => noteSent(h, 'Session “Ship handoffs” settled · outcome unavailable.'), 'the unavailable note')
+    await until(() => noteSent(h, 'Session “Ship handoffs” settled, outcome unavailable.'), 'the unavailable note')
 
     expect((await h.store.listWorkHandoffs())[0]).toMatchObject({ state: 'settled', result: null, version: 2 })
     expect(await h.store.loadEvents(h.source.id)).toContainEqual(expect.objectContaining({
       type: 'system_note',
       workHandoffPhase: 'settled',
-      text: 'Session “Ship handoffs” settled · outcome unavailable.',
+      text: 'Session “Ship handoffs” settled, outcome unavailable.',
     }))
   })
 })

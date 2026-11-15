@@ -139,7 +139,7 @@ describe('a turn’s changed files', () => {
     expect(tree[0]?.children[0]?.children[0]?.file?.panelPath).toBe('Manor/apps/web/src/components/Composer.tsx')
   })
 
-  it('counts the closed card’s groups by top folder, with root for a bare file', () => {
+  it('counts the closed card’s groups by top folder, with Top level for a bare file', () => {
     const files = changedFiles(
       [
         linkedEdit('apps/web/src/App.tsx', 'a\n', 'b\n'),
@@ -151,7 +151,7 @@ describe('a turn’s changed files', () => {
 
     expect(changedGroups(files)).toEqual([
       { name: 'apps', count: 2 },
-      { name: 'root', count: 1 },
+      { name: 'Top level', count: 1 },
     ])
   })
 })
@@ -179,6 +179,17 @@ describe('the changed-files card', () => {
     expect(html.indexOf('App.tsx')).toBeLessThan(html.indexOf('BRIEFING.md'))
     expect(html).toContain('Show all 4 files')
     expect(html).not.toContain('composerLayout.test.tsx')
+  })
+
+  it('names the top-level group only beside others, and prints no group header for a single one', () => {
+    expect(renderToStaticMarkup(<ChangedFiles files={files} onOpenFile={() => {}} />)).toContain('Top level')
+    expect(renderToStaticMarkup(<ChangedFiles files={files} onOpenFile={() => {}} />)).not.toContain('root')
+
+    const single = changedFiles([linkedEdit('BRIEFING.md', 'a\n', 'b\n')], listing)
+    const html = renderToStaticMarkup(<ChangedFiles files={single} onOpenFile={() => {}} />)
+    expect(html).toContain('1 changed file')
+    expect(html).not.toContain('Top level')
+    expect(html).not.toContain('>1 file<')
   })
 
   it('makes a placed file a way into the files panel and an unplaced one a plain name', () => {

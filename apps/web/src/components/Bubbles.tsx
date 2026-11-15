@@ -275,7 +275,7 @@ function documentStatus(document: EventDocument | PendingDocument): { label: str
   const label = status === 'complete'
     ? pages || 'Text read'
     : status === 'partial'
-      ? unreadablePages.length > 0 ? `${pages} · ${unreadablePages.length} unreadable` : 'Partly read'
+      ? unreadablePages.length > 0 ? `${pages}, ${unreadablePages.length} unreadable` : 'Partly read'
       : status === 'unknown' ? 'Coverage unknown' : 'No readable text'
   return { label, detail: detail ?? 'All text extracted locally. Images and layout were not viewed.' }
 }
@@ -298,9 +298,9 @@ function DocumentChip({ document }: { document: EventDocument | PendingDocument 
   )
   const chip = 'flex max-w-full items-center gap-1.5 rounded-chip border border-line bg-raised px-2 py-1 text-[12px] text-text'
   return src === undefined ? (
-    <span className={chip} title={`${document.name} · ${detail}`}>{content}</span>
+    <span className={chip} title={`${document.name}, ${detail}`}>{content}</span>
   ) : (
-    <a className={`${chip} no-underline hover:border-control`} href={src} target="_blank" rel="noreferrer" title={`Open ${document.name} · ${detail}`}>
+    <a className={`${chip} no-underline hover:border-control`} href={src} target="_blank" rel="noreferrer" title={`Open ${document.name}, ${detail}`}>
       {content}
     </a>
   )
@@ -320,7 +320,7 @@ const wordCount = (text: string) => {
 }
 
 /**
- * The long bubble, cut to ten lines with the rest behind a fade.
+ * The long bubble, cut to ten lines with the rest behind a fade and a toggle under it.
  *
  * `clamp` is only the word-count gate: it says the message is long enough to be worth
  * cutting, not that cutting it did anything. Whether ten lines actually hides anything
@@ -355,7 +355,7 @@ export function ClampedMessage({ clamp, lines, children }: {
   if (!clamp) return <>{children}</>
 
   return (
-    <div className="relative">
+    <div>
       <div
         ref={body}
         className="clamp"
@@ -370,15 +370,9 @@ export function ClampedMessage({ clamp, lines, children }: {
           type="button"
           aria-expanded={open}
           onClick={() => setOpen((current) => !current)}
-          // Sized in `lh` off the message rather than the label, so the target ends on
-          // the reading grid. It carries no fill of its own: the fade is the mask on
-          // the text above (see `.clamp`), and the last line it sits on has already
-          // gone to nothing, so there is nothing here to cover up.
-          className={
-            open
-              ? 'mt-1 flex w-full cursor-pointer justify-end border-0 bg-transparent p-0 text-right text-text hover:underline'
-              : 'absolute inset-x-0 bottom-0 flex h-[calc(1.6*1lh)] cursor-pointer items-end justify-end border-0 bg-transparent p-0 text-right text-text hover:underline'
-          }
+          // Below the text, open or closed, so it never covers the last line. The fade
+          // on the text above (see `.clamp`) still says the message is cut.
+          className="mt-1 flex w-full cursor-pointer justify-end border-0 bg-transparent p-0 text-right text-text hover:underline"
         >
           <span className="text-[13px] font-medium">{open ? 'Show less' : 'Show more'}</span>
         </button>
@@ -533,7 +527,7 @@ const LATE_DUE = new Intl.DateTimeFormat('en-GB', { weekday: 'short', hour: '2-d
  * Never a `UserBubble`: the prompt was written once, months ago, in the Routines
  * view, and rendering it on the right in the user's own colour puts words in their mouth
  * every morning and ruins the transcript as a record of who said what. So it reads
- * as an event — `Routine · Morning brief · 07:12` — and opens onto the prompt for
+ * as an event — `Routine, Morning brief, 07:12` — and opens onto the prompt for
  * the one moment anybody wants it, which is when the answer above makes no sense and
  * the question explains why. The turn beneath renders through the ordinary
  * `TurnHeader` path, because it is an ordinary turn.
@@ -556,8 +550,8 @@ export function RoutineLine({ name, ts, prompt, dueAt }: { name: string | undefi
             name is the one frozen into the event. Without one the line still stands
             for itself: this was not typed by hand. */}
         <span>
-          Routine{name === undefined ? '' : ` · ${name}`} · {CLOCK.format(new Date(ts))}
-          {late ? ` · late, due ${LATE_DUE.format(new Date(dueAt))}` : ''}
+          Routine{name === undefined ? '' : `, ${name}`}, {CLOCK.format(new Date(ts))}
+          {late ? `, late, due ${LATE_DUE.format(new Date(dueAt))}` : ''}
         </span>
       </button>
       {open ? (
@@ -637,7 +631,7 @@ export function FileWriteFootnote({ writes }: { writes: readonly ProjectFileWrit
         className="-mx-1.5 flex max-w-full min-w-0 cursor-pointer items-center gap-1.5 rounded-md border-0 bg-transparent px-1.5 py-0.5 text-left text-[12px] text-dim [font-family:inherit] hover:text-muted disabled:cursor-default disabled:hover:text-dim"
       >
         <Icon icon={Tick02Icon} size={12} className="flex-none" />
-        <span className="min-w-0 truncate">{groups.map((group) => group.label).join(' · ')}</span>
+        <span className="min-w-0 truncate">{groups.map((group) => group.label).join(', ')}</span>
         {hasLines ? <Icon icon={ArrowDown01Icon} size={12} className={`flex-none transition-transform duration-200 ${open ? 'rotate-180' : ''}`} /> : null}
       </button>
       <AnimatePresence initial={false}>
@@ -678,7 +672,7 @@ export function SystemLine({ kind, text, action }: { kind: 'error' | 'aborted' |
         {text}
         {action === undefined ? null : (
           <>
-            <span aria-hidden="true"> · </span>
+            {' '}
             <button type="button" onClick={action.onClick} className="cursor-pointer border-0 bg-transparent p-0 text-[12px] text-muted [font:inherit] hover:text-text">
               {action.label}
             </button>

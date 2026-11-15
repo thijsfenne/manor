@@ -22,8 +22,8 @@ function StateMark({ state }: { state: SubagentState }) {
 }
 
 /**
- * One helper as a card in the Agents sheet: the provider's mark, the brief, "Subagent ·
- * model · effort" under it and, at the right, a spinner while it works or a check once
+ * One helper as a card in the Agents sheet: the provider's mark, the brief, "Subagent,
+ * model, effort" under it and, at the right, a spinner while it works or a check once
  * it is done.
  */
 function SubagentCard({ step, state = subagentState(step), background = colors.surface, onPress }: {

@@ -136,7 +136,7 @@ describe('plugin registry layouts', () => {
     )
 
     expect(html.indexOf('Disconnect GitHub')).toBeLessThan(html.indexOf('Connect in one click'))
-    expect(html).toContain('Composio · Personal')
+    expect(html).toContain('Composio, Personal')
     expect(html).toContain('logos.composio.dev/api/github')
     expect(html).toContain('Add Work')
     expect(html).toContain('Finish in your browser')
@@ -262,7 +262,7 @@ describe('plugin registry layouts', () => {
     )
 
     expect(html).toContain('$alpha')
-    expect(html).toContain('Claude · 2 files · 7 KB · attached to Sage, Smith, Jeeves, Argus')
+    expect(html).toContain('Claude, 2 files, 7 KB, attached to Sage, Smith, Jeeves, Argus')
   })
 
   it('sorts known usage and recent timestamps descending, leaving unknown telemetry last', () => {

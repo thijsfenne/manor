@@ -108,7 +108,7 @@ describe('UsageView limits', () => {
 describe('UsageView cost', () => {
   it('leads with the raw token cost and says it is not a bill', () => {
     const html = render({ tab: 'cost', value: report })
-    expect(html).toContain('Raw token cost')
+    expect(html).toContain('API-rate equivalent')
     expect(html).toContain('$100.00')
     expect(html).toContain('What these tokens would cost at API rates. Not what you were billed.')
     expect(html).toContain('85.0% of cost, 1M tokens')
@@ -132,9 +132,9 @@ describe('UsageView cost', () => {
 
   it('says Unpriced in the headline when no response could be priced, and keeps $0.00 for a real zero', () => {
     const unpriced = render({ tab: 'cost', value: { ...report, rows: [report.rows[2]!] } })
-    expect(unpriced).toMatch(/Raw token cost<\/h2><p[^>]*><span class="text-dim">Unpriced<\/span><\/p>/)
+    expect(unpriced).toMatch(/API-rate equivalent<\/h2><p[^>]*><span class="text-dim">Unpriced<\/span><\/p>/)
     expect(unpriced).not.toContain('$0.00')
-    expect(render({ tab: 'cost', value: { ...report, rows: [] } })).toMatch(/Raw token cost<\/h2><p[^>]*>\$0\.00<\/p>/)
+    expect(render({ tab: 'cost', value: { ...report, rows: [] } })).toMatch(/API-rate equivalent<\/h2><p[^>]*>\$0\.00<\/p>/)
   })
 
   it('drops the old processed-volume sections', () => {

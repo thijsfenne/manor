@@ -164,7 +164,7 @@ describe('Artifacts', () => {
       />,
     )
 
-    expect(html).toContain('0 / 3 selected · 1 in chat')
+    expect(html).toContain('0 / 3 selected, 1 in chat')
     expect(html).toContain('A useful reference is already in chat')
   })
 })

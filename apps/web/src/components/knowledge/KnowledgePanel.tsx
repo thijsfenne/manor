@@ -952,7 +952,7 @@ function EmptyStage({ listed, docked, yieldsNarrow, canCreate, onCreate }: { lis
         <p className="mt-2 mb-5 text-[13px] leading-relaxed text-muted">Open a note from the sidebar, or capture something new in Inbox. Changes save automatically.</p>
         {listed ? <Button variant="primary" size="compact" disabled={!canCreate} onClick={onCreate}>New note</Button> : null}
         <p className="mt-5 mb-0 text-[12px] leading-[2] text-muted">
-          <Key>/</Key> to filter notes · <Key>⌘S</Key> to save now
+          <Key>/</Key> to filter notes, <Key>⌘S</Key> to save now
         </p>
       </div>
     </div>

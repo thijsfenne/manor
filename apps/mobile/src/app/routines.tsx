@@ -211,8 +211,8 @@ function when(ts: number, at: number): string {
 function routineLine(routine: Routine, at: number): string {
   if (routine.runAt === null) return routine.enabled ? routine.description || routine.cron : 'Off'
   const kind = routine.action === 'remind' ? 'Reminder' : 'Check'
-  if (routine.endState !== null) return `${kind} · ${ENDED[routine.endState]} · ${when(routine.endedAt ?? routine.runAt, at)}`
-  return routine.enabled ? `${kind} · ${when(routine.runAt, at)}` : `${kind} · Off · ${when(routine.runAt, at)}`
+  if (routine.endState !== null) return `${kind}, ${ENDED[routine.endState]}, ${when(routine.endedAt ?? routine.runAt, at)}`
+  return routine.enabled ? `${kind}, ${when(routine.runAt, at)}` : `${kind}, Off, ${when(routine.runAt, at)}`
 }
 
 const styles = StyleSheet.create({

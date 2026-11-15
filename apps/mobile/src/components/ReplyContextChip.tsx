@@ -22,7 +22,6 @@ export function ReplyContextChip({
     <View style={[styles.chip, tint && { backgroundColor: tint.chip }]}>
       <HugeiconsIcon color={tint?.ink ?? colors.muted} icon={ReplyIcon} size={14} strokeWidth={1.8} />
       <Text numberOfLines={1} style={[styles.name, tint && { color: tint.ink }]}>{name}</Text>
-      <Text style={[styles.dot, tint && { color: tint.ink }]}>·</Text>
       <Text numberOfLines={1} style={[styles.text, tint && { color: tint.ink }]}>{reply.text}</Text>
       {onRemove === undefined ? null : (
         <Pressable
@@ -53,7 +52,6 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
   },
   name: { flexShrink: 0, maxWidth: 110, color: colors.text, fontFamily: fonts.sans, fontSize: 13, fontWeight: '500' },
-  dot: { color: colors.dim, fontFamily: fonts.sans, fontSize: 13 },
   text: { flexShrink: 1, color: colors.muted, fontFamily: fonts.sans, fontSize: 13 },
   remove: { width: 18, height: 18, alignItems: 'center', justifyContent: 'center' },
 })

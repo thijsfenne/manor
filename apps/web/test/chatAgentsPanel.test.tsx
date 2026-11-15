@@ -70,7 +70,7 @@ describe('the chat agents panel', () => {
     expect(html).toContain('rounded-dock')
     expect(html).toContain('bg-surface')
     expect(html).toContain('px-1.5 py-1.5')
-    expect(html).toContain('2</span>/3 active')
+    expect(html).toContain('2</span> of 3 in this chat')
     expect(html.match(/>Active in this chat</g)).toHaveLength(2)
     // The dormant persona is dimmed, not dropped: identity and runtime both carry the muted class.
     expect(html.match(/opacity-40/g)).toHaveLength(2)

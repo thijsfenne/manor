@@ -117,7 +117,7 @@ export function OutboundDraftBubble({
         channel={draft.channel}
         expanded={expanded}
         {...(toggle === undefined ? {} : { onToggle: toggle })}
-        status={showHeaderStatus ? `${draftStatusLabel(draft)}${status === 'snoozed' && closed?.until !== undefined ? `, back ${untilLabel(closed.until)}` : ''} · ${draft.to}` : undefined}
+        status={showHeaderStatus ? `${draftStatusLabel(draft)}${status === 'snoozed' && closed?.until !== undefined ? `, back ${untilLabel(closed.until)}` : ''}, ${draft.to}` : undefined}
         tone={status === 'open' && draft.failure !== undefined ? 'text-danger' : 'text-muted'}
         action={restorable ? (
           <Button
@@ -374,7 +374,7 @@ function ThreadModal({
       ? 'Loading…'
       : result.status === 'error'
         ? 'Could not load the thread'
-        : `${String(result.messages.length)} ${result.messages.length === 1 ? 'message' : 'messages'} · read only`
+        : `${String(result.messages.length)} ${result.messages.length === 1 ? 'message' : 'messages'}, read only`
 
   return (
     <Modal title={draft.subject?.trim().length ? draft.subject : draft.to} subtitle={subtitle} width="wide" onClose={onClose}>

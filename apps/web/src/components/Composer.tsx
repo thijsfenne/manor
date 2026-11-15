@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ClipboardEvent, type ComponentProps, type KeyboardEvent as ReactKeyboardEvent, type MutableRefObject, type ReactNode } from 'react'
-import { Attachment01Icon, BotIcon, BoxIcon, ComputerIcon, File01Icon, Globe02Icon, Image01Icon, MessageMultiple01Icon, PlusSignIcon } from '@hugeicons/core-free-icons'
+import { ArrowUp01Icon, Attachment01Icon, BotIcon, BoxIcon, ComputerIcon, File01Icon, Globe02Icon, Image01Icon, MessageMultiple01Icon, PlusSignIcon } from '@hugeicons/core-free-icons'
 import { MAX_MESSAGE_ATTACHMENTS, MAX_MESSAGE_QUOTES, MAX_PAGE_CONTEXT_ATTACHMENTS, addsAgentMention, compactQuoteRefs, formatImageRef, imageRefSpans, quoteRefSpans, renumberImageRefs, snapRefDeletion } from '@manor/contracts'
 import { insertQuote } from '@manor/client-runtime/message-quotes'
 import type { AgentConfig, ChatCommandContext, ChatOverride, InlineQuote, MessageReply, PageContextAttachment, SkillConfig } from '@manor/contracts'
@@ -10,6 +10,7 @@ import {
   activeMention,
   activeSkill,
   applyImageRef,
+  addressDraft,
   applyMention,
   applySkill,
   draftRecipients,
@@ -182,6 +183,12 @@ interface ComposerProps {
    * not yet known. Explicit mentions stay visible; the label must not guess.
    */
   recipientsUnknown?: boolean
+  /**
+   * The one agent a message sent now would steer: exactly one turn runs in this chat and
+   * the draft addresses no one else. Names that agent where an unknown follow-up target
+   * would otherwise read "…". Absent keeps the "…".
+   */
+  steeredAgent?: AgentConfig
   /** Contextual copy. A DM names its recipient and deliberately omits the `@` hint. */
   placeholder?: string
   /**
@@ -298,7 +305,7 @@ interface ComposerProps {
 const CARD_REACH = '[&:not(:has([data-composer-above]:not(:empty)))]:[--composer-reach:12px]'
 const CARD_REACH_DENSE = '[&:not(:has([data-composer-above]:not(:empty)))]:[--composer-reach:8px]'
 
-export function Composer({ agents, commandContext, household, overrides = NO_OVERRIDES, files = NO_FILES, filesTruncated = false, skills = NO_SKILLS, fallbackTargets, allowAgentMentions = true, onAgentMention, allowWorkDestination = true, allowBrowserMentions = true, allowComputerMentions, allowAttachments = true, allowSkills = true, allSkillsAvailable = false, showRecipients = false, memberIds, recipientsUnknown = false, placeholder = 'Ask anything…', draftKey, onSend, pageContexts = NO_PAGE_CONTEXTS, onRemovePageContext, replyTo, onRemoveReply, canSend, blockedNote, autoFocus = false, controls, contextMeter, checkout, onStop, running = false, touchMode = false, compact = false, heights, oneRow = false, boxRef, travelFrom = null, focusMode = false, onEscapeIdle }: ComposerProps) {
+export function Composer({ agents, commandContext, household, overrides = NO_OVERRIDES, files = NO_FILES, filesTruncated = false, skills = NO_SKILLS, fallbackTargets, allowAgentMentions = true, onAgentMention, allowWorkDestination = true, allowBrowserMentions = true, allowComputerMentions, allowAttachments = true, allowSkills = true, allSkillsAvailable = false, showRecipients = false, memberIds, recipientsUnknown = false, steeredAgent, placeholder, draftKey, onSend, pageContexts = NO_PAGE_CONTEXTS, onRemovePageContext, replyTo, onRemoveReply, canSend, blockedNote, autoFocus = false, controls, contextMeter, checkout, onStop, running = false, touchMode = false, compact = false, heights, oneRow = false, boxRef, travelFrom = null, focusMode = false, onEscapeIdle }: ComposerProps) {
   const hostAuto = useHostAuto()
   const canMentionComputer = (allowComputerMentions ?? desktopComputer() !== undefined) && !touchMode
   const reduceMotion = useReducedMotion()
@@ -422,6 +429,8 @@ export function Composer({ agents, commandContext, household, overrides = NO_OVE
    */
   const [reading, setReading] = useState(0)
   const [plusOpen, setPlusOpen] = useState(false)
+  const [recipientMenuOpen, setRecipientMenuOpen] = useState(false)
+  const recipientMenuRef = useRef<HTMLDivElement>(null)
   /**
    * Something draggable is over the card. Counted rather than flagged, because
    * dragging across a child element fires a leave on the way in and the highlight
@@ -529,6 +538,18 @@ export function Composer({ agents, commandContext, household, overrides = NO_OVE
   // No `layoutMoved`: the composer is pinned to the footer, so a scrolling
   // transcript moves nothing this menu is anchored to.
   useDismiss(plusOpen, () => setPlusOpen(false), { within: [plusRef], escape: true })
+  const focusDraft = () => {
+    if (touchMode) areaRef.current?.focus()
+    else editorRef.current?.focusAt(caret)
+  }
+  // Escape hands focus back to the draft, so the next key types where it stood.
+  useDismiss(recipientMenuOpen, () => setRecipientMenuOpen(false), {
+    within: [recipientMenuRef],
+    onEscape: () => {
+      setRecipientMenuOpen(false)
+      focusDraft()
+    },
+  })
 
   /**
    * Switching chats parks this draft under the key it belonged to and picks up
@@ -816,6 +837,29 @@ export function Composer({ agents, commandContext, household, overrides = NO_OVE
     setPlusOpen(false)
   }
 
+  /** The room's seated personas in roster order, as the `@` menu lists them. */
+  const seatedAgents = matchAgents(mentionableAgents, '').filter((agent) => memberIds === undefined || memberIds.includes(agent.id))
+
+  /**
+   * The recipient menu's pick: the same `@Name ` the `@` menu writes, put at the head of
+   * the draft, so `draftRecipients` stays the one reader of who the message reaches.
+   */
+  const addressTo = (agent: AgentConfig) => {
+    setRecipientMenuOpen(false)
+    const named = parseMentions(value, parsedAgents)
+    if (named.length === 1 && named[0] === agent.id) {
+      focusDraft()
+      return
+    }
+    const next = addressDraft(value, parsedAgents, agent.name)
+    // The caret keeps its place in the words after the mention it replaced.
+    const at = value.trim() === '' ? next.caret : Math.max(next.caret, caret + next.text.length - value.length)
+    pendingSelection.current = { start: at, end: at }
+    setValue(next.text)
+    setCaret(at)
+    setDismissedAt(null)
+  }
+
   const canMentionAgents = allowAgentMentions && mentionableAgents.length > 0
   const mentionLabel = plusMentionLabel(canMentionAgents, files.length > 0, {
     browser: allowBrowserMentions,
@@ -920,36 +964,111 @@ export function Composer({ agents, commandContext, household, overrides = NO_OVE
    * unmarked draft while a turn is still running cannot know the follow-up
    * target yet, so it says so instead of naming yesterday's speaker.
    */
+  // While a turn runs and no one is mentioned, the draft joins the running turn: the one
+  // agent it steers is named, and with none or several known the label stays "…".
+  const shownRecipients = followUpUnknown ? (steeredAgent === undefined ? null : [steeredAgent]) : recipients
+  const recipientChips = shownRecipients === null ? (
+    <span>…</span>
+  ) : shownRecipients.length === 0 ? (
+    <span>no one</span>
+  ) : (
+    shownRecipients.map((agent) => (
+      <span
+        key={agent.id}
+        className="flex min-w-0 items-center gap-1 text-[color:var(--accent)]"
+        style={accentStyle(agent.color)}
+      >
+        <Avatar name={agent.name} color={agent.color} src={agent.avatar} shape={agent.avatarShape} tone={agent.avatarTone} size={16} />
+        <span className="max-w-[120px] truncate py-px font-medium">{agent.name}</span>
+      </span>
+    ))
+  )
+  const recipientTitle = shownRecipients === null
+    ? 'Who receives this depends on the turn still in progress.'
+    : shownRecipients.length === 0
+      ? 'No one receives this message. @mention an agent to summon one.'
+      : followUpUnknown
+        ? `Joins ${shownRecipients[0]?.name}'s running turn`
+        : `Sends to ${shownRecipients.map((agent) => agent.name).join(', ')}`
+  // Without its own placeholder, a composer that names one recipient asks for a message to that agent.
+  const shownPlaceholder = placeholder ?? (showRecipients && shownRecipients?.length === 1 ? `Message ${shownRecipients[0]!.name}` : 'Ask anything…')
+
+  /** Arrow keys walk the menu's rows with focus, which is what makes each one a real stop. */
+  const walkRecipients = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (event.key === 'Tab') {
+      setRecipientMenuOpen(false)
+      return
+    }
+    const rows = Array.from(event.currentTarget.querySelectorAll<HTMLElement>('[role="menuitem"]'))
+    const at = rows.findIndex((row) => row === document.activeElement)
+    const target = event.key === 'ArrowDown' ? rows[(at + 1) % rows.length]
+      : event.key === 'ArrowUp' ? rows[(at - 1 + rows.length) % rows.length]
+      : event.key === 'Home' ? rows[0]
+      : event.key === 'End' ? rows[rows.length - 1]
+      : undefined
+    if (target === undefined) return
+    event.preventDefault()
+    target.focus()
+  }
+
   const recipientLabel = showRecipients ? (
-    <div
-      className="flex min-w-0 flex-none items-center gap-1.5 text-[12px] text-dim"
-      title={
-        followUpUnknown
-          ? 'Who receives this depends on the turn still in progress.'
-          : recipients.length === 0
-            ? 'No one receives this message. @mention an agent to summon one.'
-            : `Sends to ${recipients.map((agent) => agent.name).join(', ')}`
-      }
-    >
-      <span aria-hidden="true">to</span>
-      <span className="sr-only">This message goes to</span>
-      {followUpUnknown ? (
-        <span>…</span>
-      ) : recipients.length === 0 ? (
-        <span>no one</span>
-      ) : (
-        recipients.map((agent) => (
-          <span
-            key={agent.id}
-            className="flex min-w-0 items-center gap-1 text-[color:var(--accent)]"
-            style={accentStyle(agent.color)}
-          >
-            <Avatar name={agent.name} color={agent.color} src={agent.avatar} shape={agent.avatarShape} tone={agent.avatarTone} size={16} />
-            <span className="max-w-[120px] truncate py-px font-medium">{agent.name}</span>
-          </span>
-        ))
-      )}
-    </div>
+    seatedAgents.length === 0 ? (
+      <div className="flex min-w-0 flex-none items-center gap-1.5 text-[12px] text-dim" title={recipientTitle}>
+        <span aria-hidden="true">to</span>
+        <span className="sr-only">This message goes to</span>
+        {recipientChips}
+      </div>
+    ) : (
+      <div ref={recipientMenuRef} className="relative flex min-w-0 flex-none">
+        <button
+          type="button"
+          className={`flex min-w-0 cursor-pointer items-center gap-1.5 rounded-full border-0 bg-transparent px-2 text-[12px] text-dim hover:bg-user-bg focus-visible:bg-user-bg ${touchMode ? 'h-11' : 'h-7'}`}
+          aria-haspopup="menu"
+          aria-expanded={recipientMenuOpen}
+          title={recipientTitle}
+          onClick={() => setRecipientMenuOpen((current) => !current)}
+          onKeyDown={(event) => {
+            if (recipientMenuOpen || (event.key !== 'ArrowDown' && event.key !== 'ArrowUp')) return
+            event.preventDefault()
+            setRecipientMenuOpen(true)
+          }}
+        >
+          <span aria-hidden="true">to</span>
+          <span className="sr-only">This message goes to</span>
+          {recipientChips}
+          <Icon icon={ArrowUp01Icon} size={12} />
+        </button>
+
+        <Popover
+          open={recipientMenuOpen}
+          onReady={() => {
+            const menu = recipientMenuRef.current
+            const start = menu?.querySelector<HTMLElement>('[data-current]') ?? menu?.querySelector<HTMLElement>('[role="menuitem"]')
+            start?.focus()
+          }}
+          className="absolute bottom-[calc(100%+8px)] left-0 z-[6] max-h-[min(640px,calc(100dvh-128px))] w-max min-w-[220px] max-w-[calc(100vw-24px)] overflow-y-auto rounded-xl border border-line surface-floating p-1.5"
+          role="menu"
+          aria-label="Send to"
+        >
+          <div role="none" onKeyDown={walkRecipients}>
+            {seatedAgents.map((agent) => (
+              <button
+                key={agent.id}
+                type="button"
+                role="menuitem"
+                className="flex w-full cursor-pointer items-center gap-2 rounded-md border-0 bg-transparent px-2 py-1.5 text-left text-label text-text outline-none hover:bg-user-bg focus-visible:bg-user-bg"
+                {...(shownRecipients?.some((recipient) => recipient.id === agent.id) === true ? { 'data-current': '' } : {})}
+                onClick={() => addressTo(agent)}
+              >
+                <Avatar name={agent.name} color={agent.color} src={agent.avatar} shape={agent.avatarShape} tone={agent.avatarTone} size={20} />
+                <span className="min-w-0 flex-1 truncate font-medium">{agent.name}</span>
+                {agent.role === '' ? null : <span className="min-w-0 flex-none truncate text-meta text-dim">{agent.role}</span>}
+              </button>
+            ))}
+          </div>
+        </Popover>
+      </div>
+    )
   ) : null
 
   const actions = (
@@ -1366,7 +1485,7 @@ export function Composer({ agents, commandContext, household, overrides = NO_OVE
                 <span
                   key={chip.key}
                   className="flex max-w-[220px] items-center gap-1.5 rounded-chip border border-line bg-user-bg py-1 pr-1 pl-2 text-[12px] text-text"
-                  title={`${chip.name} · ${describeBytes(chip.size)}`}
+                  title={`${chip.name}, ${describeBytes(chip.size)}`}
                 >
                   <FileMark path={chip.name} size={13} />
                   <span className="min-w-0 flex-1 truncate">{chip.name}</span>
@@ -1417,7 +1536,7 @@ export function Composer({ agents, commandContext, household, overrides = NO_OVE
             className="relative block min-h-[56px] max-h-[200px] w-full [field-sizing:content] resize-none overflow-y-auto border-0 bg-transparent px-2 py-1 text-[16px] leading-6 text-text placeholder:text-dim [font:inherit] whitespace-pre-wrap [overflow-wrap:break-word]"
             rows={1}
             value={value}
-            placeholder={placeholder}
+            placeholder={shownPlaceholder}
             onChange={(event) => {
               const snapped = snapRefDeletion(value, event.target.value, [...imageRefSpans(value, images.length), ...quoteRefSpans(value, quotes.length)], touchSelection.current)
               if (snapped !== null) {
@@ -1457,7 +1576,7 @@ export function Composer({ agents, commandContext, household, overrides = NO_OVE
             allowWork={allowWorkDestination}
             quotes={quotes}
             imageCount={allowAttachments ? images.length : 0}
-            placeholder={placeholder}
+            placeholder={shownPlaceholder}
             autoFocus={autoFocus}
             dense={dense}
             {...(cardRange === undefined ? {} : { fill: row || cardRange.rest > 0 ? 'line' : 'rest' })}

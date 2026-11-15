@@ -174,9 +174,9 @@ export function McpServerDialog({
       {saved !== undefined ? (
         <section className="rounded-xl border border-line bg-surface-2 px-3.5 py-3">
           <p className="m-0 text-[13px] font-medium text-text">
-            {saved.tools.length} {saved.tools.length === 1 ? 'tool' : 'tools'} · about{' '}
+            {saved.tools.length} {saved.tools.length === 1 ? 'tool' : 'tools'}, about{' '}
             {formatTokens(connectorCost(saved).listedTokens)} tokens per turn as listed names (none on Codex), up to{' '}
-            {formatTokens(connectorCost(saved).loadedTokens)} once every schema is loaded ·{' '}
+            {formatTokens(connectorCost(saved).loadedTokens)} once every schema is loaded,{' '}
             {holders.length === 0 ? 'attached to nobody' : `attached to ${holders.join(', ')}`}
           </p>
           {saved.tools.length === 0 ? null : (

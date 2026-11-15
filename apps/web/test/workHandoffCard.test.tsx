@@ -120,7 +120,7 @@ describe('Work handoff card verbs', () => {
     const markup = renderToStaticMarkup(<Transcript rows={[{
       ...card('Working'), firstExecutorName: 'Smith', supportingAgentIds: ['rune'], supportingAgentNames: ['Rune'],
     }]} agents={[sage, { ...sage, id: 'rune', name: 'Rune' }]} skills={[]} hasSnapshot onAcceptWork={() => undefined} />)
-    expect(markup).toContain('>led by Sage · Smith starts<')
+    expect(markup).toContain('>led by Sage, Smith starts<')
     expect(markup).not.toContain('>Rune<')
     expect(markup).toContain('color-mix(in srgb, #388B83 16%, transparent)')
     expect(markup).not.toContain('Starts:')
@@ -165,7 +165,7 @@ describe('Work handoff card verbs', () => {
     const markup = renderToStaticMarkup(<Transcript rows={[{
       ...card('Settled'), workChatId: 'work_1', acceptedAt: 1, result: 'Dr. Smith kept per-agent memory beside the shared layer. It reads well.\nA pause switch is still open.',
     }]} agents={[sage]} skills={[]} hasSnapshot onOpenAgentRelay={() => undefined} />)
-    expect(markup).toContain('>Keep DM browser tabs</span> · Dr. Smith kept per-agent memory beside the shared layer.<')
+    expect(markup).toContain('>Keep DM browser tabs</span>, Dr. Smith kept per-agent memory beside the shared layer.<')
     expect(markup).not.toContain('It reads well.')
     expect(markup).not.toContain('A pause switch is still open.')
     expect(markup).toContain('Settled')
@@ -233,7 +233,7 @@ describe('Work handoff card verbs', () => {
       },
     }]} agents={[sage]} skills={[]} hasSnapshot />)
     // A landed merge folds to what landed: the title, the file count, Merged into main.
-    expect(committed).toContain('> · 1 file<')
+    expect(committed).toContain('>, 1 file<')
     expect(committed).toContain('Merged into main')
     expect(committed).not.toContain('Export works.')
   })
@@ -265,7 +265,7 @@ describe('Work handoff card verbs', () => {
       ...card('Working'), workChatId: 'work_1', acceptedAt: 123, mode: 'single', singleDriver: 'codex', singleModel: 'gpt-6-luna', firstExecutorName: 'Smith',
     }]} agents={[sage]} skills={[]} hasSnapshot onAcceptWork={() => undefined} />)
 
-    expect(pending).toContain(`>${modelLabel(NEW_SINGLE_CHAT_DEFAULT.driver, NEW_SINGLE_CHAT_DEFAULT.model)} · High<`)
+    expect(pending).toContain(`>${modelLabel(NEW_SINGLE_CHAT_DEFAULT.driver, NEW_SINGLE_CHAT_DEFAULT.model)}, High<`)
     expect(pending).not.toContain('led by')
     expect(pending).not.toContain('Smith starts')
     expect(pending).not.toContain('data-agent-layout="cluster"')
@@ -390,7 +390,7 @@ describe('a Session card in its project thread', () => {
     const proposal = render({ ...card('Working'), task: 'Keep the tabs a DM opened.' })
     expect(proposal).toContain('>Accept<')
     expect(proposal).toContain('>Keep the tabs a DM opened.<')
-    expect(proposal).toContain('>Opus 5.5 · High<')
+    expect(proposal).toContain('>Opus 5.5, High<')
     expect(proposal).not.toContain('led by')
     expect(proposal).not.toContain('>Manor<')
     const accepted = { ...card('Working'), workChatId: 'work_1', acceptedAt: 2, worktreeBranch: 'manor/tabs' }
@@ -556,5 +556,25 @@ describe('a thread proposal nobody leads', () => {
     const { multiple, text } = openOptions({ ...card('Working'), handoffId: 'handoff_led', threadAuthored: true }, [{ ...sage, placement: 'session' }])
     expect(multiple.props.disabled).toBe(false)
     expect(text).not.toContain('session agent')
+  })
+})
+
+describe('a DM brief forwarded to its project thread', () => {
+  const forwarded = (workChatId: string | null): WorkHandoffRow => ({
+    ...card('Working'), workChatId, acceptedAt: 2, session: 'waiting', forwarded: { threadChatId: 'thread', phase: 'working' },
+  })
+  const press = (row: WorkHandoffRow) => {
+    const opened: string[] = []
+    let tree!: ReactTestRenderer
+    act(() => {
+      tree = create(<WorkHandoffCard row={row} agents={[]} identityAgents={[sage]} onReveal={() => undefined} onOpenThread={(chatId) => opened.push(chatId)} />)
+    })
+    act(() => { tree.root.find((node) => node.type === 'button').props.onClick() })
+    return opened
+  }
+
+  it('opens the Session on the right of the room once it exists, and the thread before that', () => {
+    expect(press(forwarded('session'))).toEqual(['session'])
+    expect(press(forwarded(null))).toEqual(['thread'])
   })
 })

@@ -181,6 +181,21 @@ export function applyMention(text: string, caret: number, start: number, handle:
   }
 }
 
+/**
+ * The composer's recipient menu: "@handle " takes the place of the agent mentions that
+ * open the draft, so a pick changes who hears it rather than adding a second recipient.
+ * Mentions later in the text stay where they are.
+ */
+export function addressDraft(text: string, agents: readonly AgentConfig[], handle: string) {
+  let end = 0
+  for (const span of agentMentionSpans(text, agents)) {
+    if (!/^[\s,&]*$/.test(text.slice(end, span.start))) break
+    end = span.start + 1 + span.handle.length
+  }
+  const inserted = `@${handle} `
+  return { text: inserted + text.slice(end).replace(/^[\s,&]+/, ''), caret: inserted.length }
+}
+
 /** Replaces a partial skill token with `$slug `. */
 export function applySkill(text: string, caret: number, start: number, skillId: string) {
   const inserted = `$${skillId} `

@@ -70,6 +70,8 @@ interface InboxViewProps {
   onSetArchived: (chatId: string, archived: boolean) => boolean
   /** Keeps a peeking sidebar on screen for as long as a settled row's card is up. */
   onHoldPeek: (claim: boolean) => void
+  /** A project thread has a Session running or waiting, which this list leaves out; its empty line then says so. */
+  projectWorkOpen?: boolean
   /** Delegated children by parent chat id, nested under the live rows that started them. */
   subagentGroups?: Record<string, SubagentGroup>
   /** Opens a parent with one child, or the whole list (null), in its Subagents panel. */
@@ -97,6 +99,7 @@ export function InboxView({
   onSetSettled,
   onSetArchived,
   onHoldPeek,
+  projectWorkOpen = false,
   subagentGroups,
   onOpenSubagent,
 }: InboxViewProps) {
@@ -196,7 +199,7 @@ export function InboxView({
       >
         {unsettled.length === 0 ? (
           <li className="m-0 px-3 py-2 text-[12px] text-dim">
-            {settled.length === 0 ? 'No sessions yet' : 'All settled'}
+            {settled.length === 0 ? 'No sessions yet' : projectWorkOpen ? 'Nothing else open' : 'All settled'}
           </li>
         ) : (
           unsettled.map((entry) => (

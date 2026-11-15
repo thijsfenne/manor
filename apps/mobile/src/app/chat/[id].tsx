@@ -439,7 +439,7 @@ function ChatContent({ chatId }: { chatId: string | undefined }) {
       more: 0,
       questions: changingAnswer.questions.map((question) => {
         const given = changingAnswer.answers[question.id]
-        return { ...question, header: `${changingAnswer.title} · Manor chose ${given === undefined ? 'nothing' : userInputAnswerText(given)}` }
+        return { ...question, header: `${changingAnswer.title}, Manor chose ${given === undefined ? 'nothing' : userInputAnswerText(given)}` }
       }),
     },
     [changing, changingAnswer],
@@ -731,7 +731,7 @@ function ChatContent({ chatId }: { chatId: string | undefined }) {
     : dmAgent !== undefined && sessionDmAgent === undefined
       ? { label: runtimeParts(dmAgent, dmOverride, hostAuto).model, onPress: () => setSheet('model') }
       : undefined
-  const subtitle = pairTitle === undefined ? (connection === null ? lead : `${lead} · ${connection}`) : (connection ?? 'Between agents')
+  const subtitle = pairTitle === undefined ? (connection === null ? lead : `${lead}, ${connection}`) : (connection ?? 'Between agents')
   const topInset = insets.top + CHAT_HEADER_HEIGHT + spacing.lg
 
   return (
@@ -1049,7 +1049,7 @@ function ChatContent({ chatId }: { chatId: string | undefined }) {
                 if (activeTurn !== null) stopTurn(activeTurn.turnId)
                 else if (waiting) stopBackground(chatId)
               }}
-              placeholder={status !== 'live' ? 'Manor is offline' : projectThread ? 'Reply…' : 'Ask anything…'}
+              placeholder={status !== 'live' ? 'Manor is offline' : projectThread ? (project === undefined || project.name === '' ? 'Reply…' : `Reply to ${project.name}…`) : 'Ask anything…'}
               {...(replyTo === undefined
                 ? {}
                 : {
@@ -1481,7 +1481,7 @@ function RelayMarker({
  */
 function ConsultationExcerpt({ question, replyPending }: { question: string; replyPending: boolean }) {
   const [open, setOpen] = useState(false)
-  const follows = replyPending ? ' · reply follows' : ''
+  const follows = replyPending ? ', reply follows' : ''
   return (
     <Pressable
       accessibilityLabel={`Question: ${question}${follows}`}
@@ -1559,7 +1559,7 @@ const LATE_DUE = new Intl.DateTimeFormat('en-GB', { weekday: 'short', hour: '2-d
 /** A one-time routine that fired after a sleeping Mac says it is late, and for when. */
 function routineLateNote(event: { ts: number; routineDueAt?: number }): string {
   return event.routineDueAt !== undefined && event.ts - event.routineDueAt > ROUTINE_LATE_AFTER_MS
-    ? ` · late, due ${LATE_DUE.format(new Date(event.routineDueAt))}`
+    ? `, late, due ${LATE_DUE.format(new Date(event.routineDueAt))}`
     : ''
 }
 

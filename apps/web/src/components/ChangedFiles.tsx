@@ -94,17 +94,19 @@ export function ChangedFiles({ files, onOpenFile, turnId }: ChangedFilesProps) {
         </div>
       ) : (
         <div className="mt-2 flex min-w-0 flex-col gap-1.5 px-1">
-          <p className="m-0 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-dim">
-            {groups.map((group, index) => (
-              <span key={group.name} className="flex items-center gap-1.5">
-                {index === 0 ? null : <span aria-hidden>·</span>}
-                <span className="font-mono text-muted">{group.name}</span>
-                <span>
-                  {group.count} {group.count === 1 ? 'file' : 'files'}
+          {/* One group is the card's own count again, so it prints no header. */}
+          {groups.length < 2 ? null : (
+            <p className="m-0 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-dim">
+              {groups.map((group, index) => (
+                <span key={group.name} className="flex items-center gap-1.5">
+                  <span className="font-mono text-muted">{group.name}</span>
+                  <span>
+                    {group.count} {group.count === 1 ? 'file' : 'files'}
+                  </span>
                 </span>
-              </span>
-            ))}
-          </p>
+              ))}
+            </p>
+          )}
           <div className="flex flex-wrap items-center gap-1.5">
             {chips.slice(0, CHIPS).map((file) => (
               <Name

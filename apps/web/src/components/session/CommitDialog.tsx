@@ -44,7 +44,7 @@ export function CommitDialog({ repo, initial, pending, error, connected, onClose
   })
 
   return (
-    <Modal title="Commit" subtitle={`${repo.label} · ${repo.branch ?? 'not on a branch'}`} onClose={onClose}>
+    <Modal title="Commit" subtitle={`${repo.label}, ${repo.branch ?? 'not on a branch'}`} onClose={onClose}>
       <label className="flex flex-col gap-1.5">
         <span className="text-label text-muted">Message</span>
         <textarea

@@ -149,7 +149,7 @@ export function describeTool(tool: string, input: unknown): ToolActivity {
   if (canonical === 'routines.routine_save') {
     const name = text(args['name'])
     const when = text(args['runAt']) ?? text(args['cron'])
-    const subject = [name === undefined ? undefined : `“${name}”`, when?.replace('T', ' ')].filter(Boolean).join(' · ')
+    const subject = [name === undefined ? undefined : `“${name}”`, when?.replace('T', ' ')].filter(Boolean).join(', ')
     return { tool: 'mcp__routines__routine_save', ...(subject === '' ? {} : { subject: subject }) }
   }
   if (/^browser\.browser_(navigate|snapshot|click|type|press|scroll|screenshot|tabs)$/.test(canonical)) {

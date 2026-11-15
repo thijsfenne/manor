@@ -236,7 +236,7 @@ function RuntimeSummary({ agent, override }: { agent: AgentConfig; override: Cha
   const parts = runtimeParts(agent, override, hostAuto)
   return (
     <View accessibilityLabel={runtimeLabel(agent, override, hostAuto)} accessible style={styles.runtimeSummary}>
-      <Text numberOfLines={1} style={styles.runtimeSummaryText}>{[parts.model, parts.effort].filter(Boolean).join(' · ')}</Text>
+      <Text numberOfLines={1} style={styles.runtimeSummaryText}>{[parts.model, parts.effort].filter(Boolean).join(', ')}</Text>
       {parts.speed === undefined ? null : (
         <HugeiconsIcon color={colors.muted} icon={FlashIcon} size={13} strokeWidth={1.8} />
       )}

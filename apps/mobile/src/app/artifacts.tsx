@@ -144,7 +144,7 @@ function ArtifactRow({ artifact }: { artifact: MyMindArtifact }) {
       <View style={styles.rowBody}>
         <View style={styles.rowHead}>
           <Text style={styles.kind}>{KIND_LABEL[artifact.kind]}</Text>
-          {artifact.spaces.length === 0 ? null : <Text numberOfLines={1} style={styles.spaces}>{artifact.spaces.join(' · ')}</Text>}
+          {artifact.spaces.length === 0 ? null : <Text numberOfLines={1} style={styles.spaces}>{artifact.spaces.join(', ')}</Text>}
         </View>
         <Text numberOfLines={2} style={styles.title}>{artifact.title}</Text>
         {body === '' ? null : <Text numberOfLines={3} style={styles.body}>{body}</Text>}

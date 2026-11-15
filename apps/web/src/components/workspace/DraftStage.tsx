@@ -15,6 +15,7 @@ import { AddFolderDialog } from '../projects/AddFolderDialog'
 import { ProjectPicker } from '../projects/ProjectPicker'
 import { useAddFolder } from '../../useAddFolder'
 import { chatRoster } from '../../chatRoster'
+import { insertIntoDraft } from '../../composerDrafts'
 import { roomAgents } from '../../mentions'
 import { effectiveDriver, isAutoOn, withAuto } from '../../runtimeChoices'
 import { emptyThread, isHomeRoom, projectsByRecentActivity, repoListingKey, roomOf, rowsOf } from '../../state'
@@ -29,6 +30,19 @@ import { useHostAuto } from '../../useHostAuto'
  * on every streamed delta makes every finished Markdown bubble render again.
  */
 const NO_AGENTS: AgentConfig[] = []
+
+/** The two first moves a chief of staff's empty DM offers. A chip fills the composer and never sends. */
+const STARTERS = ['Plan my week', 'Turn a client request into a brief']
+
+/** "Sage", "Sage and Smith", "Sage, Smith and Argus". */
+const nameList = (names: readonly string[]): string =>
+  names.length < 2 ? (names[0] ?? '') : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`
+
+/** What Single and Multiple mean, said under the stage while the choice is being made. */
+const MODE_NOTE = {
+  single: 'One model works on this.',
+  house: 'Your agents share this thread. Address one with @.',
+} as const
 
 /**
  * The new-chat stage under its header: who or what the chat is about, the composer,
@@ -143,6 +157,16 @@ export function DraftStage({
   )
 
   const draftKey = stageDraftKey(draft.target)
+  // The default agent, the one that receives messages with no mention, passes work only to
+  // who its own allowlist names, so that is who the line promises.
+  const passesTo = draftAgent?.isCos === true
+    ? workspace.agents.filter((agent) => draftAgent.mentionAllowlist?.includes(agent.id) === true).map((agent) => agent.name)
+    : []
+  const draftRole = draftAgent === undefined
+    ? ''
+    : draftAgent.isCos
+      ? `${draftAgent.role === '' ? 'Chief of staff' : draftAgent.role}${passesTo.length === 0 ? '' : `. Passes work to ${nameList(passesTo)}.`}`
+      : draftAgent.role
   // The stage's sources travel with the create, so the slot they were staged in is
   // spent. Left standing they would ride along into the next new chat as well. A create
   // the server then refuses puts them back, the same way the text goes back in the box.
@@ -353,11 +377,27 @@ export function DraftStage({
                 <h1 className="m-0 text-center font-display text-[24px] font-semibold tracking-[-0.02em] text-text">
                   Message {draftAgent.name}
                 </h1>
+                {draftRole === '' ? null : <p className="m-0 text-center text-meta text-dim">{draftRole}</p>}
+                {draftAgent.isCos ? (
+                  <div className="flex flex-wrap justify-center gap-2">
+                    {STARTERS.map((starter) => (
+                      <button
+                        key={starter}
+                        type="button"
+                        className="h-7 cursor-pointer rounded-full border border-line bg-transparent px-3 text-label text-muted [font-family:inherit] hover:bg-user-bg hover:text-text"
+                        onClick={() => insertIntoDraft(draftKey, starter)}
+                      >
+                        {starter}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
               </div>
             ) : (
               draftHeading
             )}
             {docked ? null : stageComposer}
+            {draftMode === undefined ? null : <p className="mt-3 mb-0 text-center text-meta text-dim">{MODE_NOTE[draftMode]}</p>}
           </div>
           </>
         ) : (

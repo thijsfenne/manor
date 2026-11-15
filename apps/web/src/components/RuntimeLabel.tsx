@@ -7,7 +7,8 @@ import { Icon } from './Icon'
  * one string, because every compact surface must render the parts the same way.
  *
  * The wrapper carries the width cap; the model truncates inside it so a long name
- * eats itself rather than pushing the level out of the row.
+ * eats itself rather than pushing the level out of the row. The agents roster leaves
+ * the level out and mutes the model, so the names lead its rows.
  */
 export function RuntimeLabel({
   model,
@@ -16,14 +17,14 @@ export function RuntimeLabel({
   className = '',
 }: {
   model: string
-  effort: string
+  effort?: string
   speed?: string
   className?: string
 }) {
   return (
     <span className={`flex min-w-0 items-baseline gap-1 ${className}`}>
-      <span className="truncate text-text">{model}</span>
-      <span className="flex-none text-muted">{effort}</span>
+      <span className={`truncate ${effort === undefined ? 'text-muted' : 'text-text'}`}>{model}</span>
+      {effort === undefined ? null : <span className="flex-none text-muted">{effort}</span>}
       {speed === undefined ? null : (
         <span className="flex flex-none self-center items-center text-muted" title="Fast mode">
           <Icon icon={FlashIcon} size={13} aria-hidden="true" />

@@ -385,7 +385,7 @@ function RootPage({ draft, agent, registry, notes, taskCount, pin, onPinPicked, 
     draft.isCos ? 'Chief of staff' : null,
     draft.placement === 'session' ? 'Sessions' : null,
     draft.memoryScope ? 'Memory on' : 'Memory off',
-  ].filter((part) => part !== null).join(' · ')
+  ].filter((part) => part !== null).join(', ')
 
   const remove = () => {
     setArmed(false)
@@ -497,7 +497,7 @@ function RoutinesPage({ name, routines }: { name: string; routines: Routine[] })
       {routines.map((routine) => (
         <div key={routine.id} className="flex flex-col gap-0.5 px-3 py-2.5">
           <span className="text-[14px] text-text">{routine.name}</span>
-          <span className="text-meta text-dim">{routine.enabled ? describeSchedule(routine) : `Off · ${describeSchedule(routine)}`}</span>
+          <span className="text-meta text-dim">{routine.enabled ? describeSchedule(routine) : `Off, ${describeSchedule(routine)}`}</span>
         </div>
       ))}
     </Group>

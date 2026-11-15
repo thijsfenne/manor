@@ -49,7 +49,7 @@ it('shows no picker for a single browser and nothing to switch on without one', 
 
 it('names the profile in use and hints only while there is something to copy', () => {
   expect(importProfileLabel(null)).toBe('Default')
-  expect(importProfileLabel(status(['edge'], { enabled: true, browser: 'edge', profileName: 'Profile 1' }))).toBe('Edge · Profile 1')
+  expect(importProfileLabel(status(['edge'], { enabled: true, browser: 'edge', profileName: 'Profile 1' }))).toBe('Edge, Profile 1')
 
   const onSetUp = vi.fn()
   let hint!: ReactTestRenderer

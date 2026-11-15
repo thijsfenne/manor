@@ -347,9 +347,9 @@ function BranchLine({ repo, named, waiting, running, connected, committing: comm
       <div className="flex min-h-8 min-w-0 flex-wrap items-center gap-x-2 gap-y-1 px-2 py-0.5 text-[13px]">
         <span className="flex max-w-full min-w-0 flex-none items-center gap-2">
           <Icon icon={GitBranchIcon} size={14} className="flex-none text-dim" />
-          <span className="min-w-0 truncate" title={state === null ? where : `${where} · ${state}`}>
+          <span className="min-w-0 truncate" title={state === null ? where : `${where}, ${state}`}>
             <span className="text-text">{where}</span>
-            {state === null ? null : <span className="text-dim"> · {state}</span>}
+            {state === null ? null : <span className="text-dim">, {state}</span>}
           </span>
         </span>
         <span className="ml-auto flex flex-none items-center gap-1.5 empty:hidden">
