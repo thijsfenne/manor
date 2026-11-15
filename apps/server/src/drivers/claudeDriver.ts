@@ -530,6 +530,9 @@ function toUsage(raw: unknown, costUsd: number | undefined): Usage | undefined {
 
 const FAILED_TURN_DETAIL_MAX = 300
 
+/** What Claude Code says when `--resume` names a transcript it no longer has. */
+const MISSING_CONVERSATION = /No conversation found with session ID/
+
 /** What a failed result line says when its `result` text is empty: the subtype and the first error. */
 const failedTurnMessage = (line: Record<string, unknown>): string => {
   const subtype = asString(line['subtype'])
@@ -570,7 +573,11 @@ export class StreamParser {
   ) {}
 
   sessionId: string | undefined
-  /** True once the CLI reported an initialised session; a resume that never inits failed. */
+  /**
+   * True once the CLI reported an initialised session; a resume that never inits failed.
+   * Grok answers a missing session with an init whose `session_id` is empty, so only an
+   * init that names its session counts.
+   */
   sawInit = false
   /**
    * The last result came from a run no user message started: a background task the
@@ -946,8 +953,11 @@ export class StreamParser {
           return [{ type: 'compaction', phase: 'end', ...(after === undefined ? {} : { contextTokens: after }) }]
         }
         if (subtype !== 'init') return []
-        this.sessionId = asString(parsed['session_id']) ?? this.sessionId
-        this.sawInit = true
+        const initSession = asString(parsed['session_id'])
+        if (initSession !== undefined && initSession.length > 0) {
+          this.sessionId = initSession
+          this.sawInit = true
+        }
         // MCP startup is eager CLI plumbing, not work the persona chose to do. A
         // failed attachment therefore stays out of the turn trace. The shared
         // connection inventory in the persona prompt makes a missing capability
@@ -1757,8 +1767,12 @@ export function createClaudeDriver(options: ClaudeDriverOptions): Driver {
             heldResult = queuedSteers.size > 0 || !answeredPrompt || background ? result : undefined
             if (heldResult === undefined) endWith(result)
             else if (background) holdForBackground()
-          } else if (safeEvent.type === 'error') endWith(safeEvent)
-          else deliver(safeEvent)
+          } else if (safeEvent.type === 'error') {
+            // A deleted transcript ends in a failed result line before any init.
+            const resumeFailed = input.sessionId !== undefined && !parser.sawInit
+              && MISSING_CONVERSATION.test(safeEvent.message)
+            endWith(resumeFailed ? { ...safeEvent, message: `${RESUME_FAILURE_PREFIX}${safeEvent.message}` } : safeEvent)
+          } else deliver(safeEvent)
         }
         // A notification shrinks what the turn waits on without starting a request.
         if (idleWaitingOnBackground) showWait()

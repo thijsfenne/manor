@@ -3333,6 +3333,21 @@ describe('Orchestrator', () => {
     expect(sent.filter((message) => message.type === 'turn_state').at(-1)).toMatchObject({ state: 'done' })
   })
 
+  it('keeps the session and does not retry fresh on an ordinary failure', async () => {
+    const seen: TurnInput[] = []
+    const { orchestrator, store, chatId } = await harness(
+      scripted(() => [{ type: 'error', message: 'the CLI reported a failed turn (error_during_execution)' }], seen),
+    )
+
+    await store.appendEvent(chatId, { type: 'agent_message', agentId: 'sage', turnId: 'turn_0', text: 'earlier' })
+    await store.setSession(chatId, 'sage', 'live-session', { driver: 'mock' })
+
+    await orchestrator.submitUserMessage(chatId, '@Sage hello?')
+
+    expect(seen).toHaveLength(1)
+    expect(await sessionIdIn(store, chatId, 'sage')).toBe('live-session')
+  })
+
   it('gives up with a system note when the fresh retry fails too', async () => {
     const seen: TurnInput[] = []
     const { orchestrator, store, chatId, sent } = await harness(

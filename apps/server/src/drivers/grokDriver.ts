@@ -357,6 +357,9 @@ export const GROK_RESUME_INIT_MS = 60_000
 /** How much redacted stderr a failed result line carries along. */
 const GROK_ERROR_TAIL_CHARS = 2_000
 
+/** What the grok CLI says when `--resume` names a session it has neither locally nor remotely. */
+const MISSING_SESSION = /No saved copy of session \S+ was found/
+
 /** Wait this long after a done-signal for Grok's official `result` line. */
 export const GROK_RESULT_GRACE_MS = 150
 
@@ -711,7 +714,10 @@ export function createGrokDriver(options: GrokDriverOptions): Driver {
             gotTerminal = true
             if (safeEvent.type === 'error') {
               sawError = true
-              heldError ??= safeEvent
+              // A missing session ends in a failed result line before any named init.
+              const resumeFailed = input.sessionId !== undefined && !parser.sawInit
+                && MISSING_SESSION.test(safeEvent.message)
+              heldError ??= resumeFailed ? { ...safeEvent, message: `${RESUME_FAILURE_PREFIX}${safeEvent.message}` } : safeEvent
               continue
             }
           }

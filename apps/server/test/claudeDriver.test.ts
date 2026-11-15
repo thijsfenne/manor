@@ -864,6 +864,50 @@ describe('createClaudeDriver', () => {
     expect(message).toBe(`${RESUME_FAILURE_PREFIX}No conversation found with session ID: dead-session`)
   })
 
+  it('flags a failed result line before init as a resume failure', async () => {
+    // Claude Code 2.1.325 answers `--resume` of a deleted transcript this way, then exits 1.
+    const missing = 'No conversation found with session ID: dead-session'
+    const { events } = await run({
+      agent: sage,
+      input: { sessionId: 'dead-session' },
+      stdoutLines: [JSON.stringify({
+        type: 'result', subtype: 'error_during_execution', is_error: true, num_turns: 0,
+        session_id: 'dead-session', total_cost_usd: 0, errors: [missing],
+      })],
+      stderr: `${missing}\n`,
+      exitCode: 1,
+    })
+    expect(events).toEqual([{
+      type: 'error',
+      message: `${RESUME_FAILURE_PREFIX}the CLI reported a failed turn (error_during_execution): ${missing}`,
+    }])
+  })
+
+  it('keeps an unrelated failed result line before init as an ordinary turn failure', async () => {
+    const { events } = await run({
+      agent: sage,
+      input: { sessionId: 'live-session' },
+      stdoutLines: [JSON.stringify({
+        type: 'result', subtype: 'error_during_execution', is_error: true, errors: ['invalid model'],
+      })],
+      exitCode: 1,
+    })
+    expect(events).toEqual([{ type: 'error', message: 'the CLI reported a failed turn (error_during_execution): invalid model' }])
+  })
+
+  it('keeps a failed result line after init as an ordinary turn failure', async () => {
+    const { events } = await run({
+      agent: sage,
+      input: { sessionId: 'live-session' },
+      stdoutLines: [
+        JSON.stringify({ type: 'system', subtype: 'init', session_id: 'live-session' }),
+        JSON.stringify({ type: 'result', subtype: 'error_during_execution', is_error: true, session_id: 'live-session' }),
+      ],
+      exitCode: 1,
+    })
+    expect(events.at(-1)).toEqual({ type: 'error', message: 'the CLI reported a failed turn (error_during_execution)' })
+  })
+
   it('keeps a post-init session error as an ordinary turn failure', async () => {
     const { events } = await run({
       agent: sage, input: { sessionId: 'live-session' },

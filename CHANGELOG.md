@@ -4,6 +4,7 @@ What changed for someone who uses Manor, newest first. A version is a tag on `ma
 
 ## Unreleased
 
+- An agent that had been quiet for weeks answers again. Claude Code deletes a saved conversation after 30 days, and from then on every message to that agent failed at once, without a word in a DM. When Claude Code or Grok no longer has the conversation, Manor now starts a fresh session from its own record of the chat and answers the same message.
 - The menus share one row: the same height and corners, an icon in front of each action, and a tick on the choice in use. That covers the Browser's menus and More panels, where a choice read Selected or Current, and the plus, model and branch menus under the message field, where the chosen row was filled.
 - The New session and Recent sessions menus beside the Browser take the arrow keys, Home and End, as the other menus do. They and the Browser menu now put focus on their first row the first time they open too, not only from the second time on.
 - While an agent works through its steps, only the turn that changed redraws. Every step used to redraw every message on screen, on the phone and on the Mac, a few times a second in a busy turn.

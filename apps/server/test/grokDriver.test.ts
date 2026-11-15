@@ -9,7 +9,7 @@ import type { AgentConfig, AttachedMcpServer, RuntimeEvent, TurnInput } from '@m
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { HOUSE_STYLE_HEADING, REPLY_LANGUAGE_LINE } from '../src/composer.js'
 import { singleAgentFor } from '../src/singleChat.js'
-import { RESUME_FAILURE_PREFIX } from '../src/drivers/resumeFailure.js'
+import { RESUME_FAILURE_PREFIX, isResumeFailure } from '../src/drivers/resumeFailure.js'
 import { TurnIdleGate } from '../src/drivers/turnTimers.js'
 import {
   buildGrokArgs,
@@ -844,6 +844,40 @@ describe('createGrokDriver', () => {
     })
 
     expect(events).toEqual([{ type: 'error', message: `${RESUME_FAILURE_PREFIX}session not found` }])
+  })
+
+  it('classifies a session missing remotely, announced by an unnamed init, as a failed resume', async () => {
+    // Shape from the grok CLI for `--resume` of an id it no longer has.
+    const missing = 'No saved copy of session missing was found remotely.'
+    const { events } = await run({
+      input: { sessionId: 'missing' },
+      stdoutLines: [
+        JSON.stringify({ type: 'system', subtype: 'init', session_id: '' }),
+        JSON.stringify({
+          type: 'result', subtype: 'error_during_execution', is_error: true, num_turns: 0,
+          session_id: '', errors: [missing],
+        }),
+      ],
+      stderr: `Error: ${missing}`,
+      exitCode: 1,
+    })
+    const error = events.at(-1)
+    expect(error?.type === 'error' && isResumeFailure(error.message)).toBe(true)
+    expect(error).toMatchObject({ message: expect.stringContaining(missing) })
+  })
+
+  it('keeps an unrelated failed result after an unnamed init as an ordinary turn failure', async () => {
+    const { events } = await run({
+      input: { sessionId: 'grok-session' },
+      stdoutLines: [
+        JSON.stringify({ type: 'system', subtype: 'init', session_id: '' }),
+        JSON.stringify({ type: 'result', subtype: 'error_during_execution', is_error: true, errors: ['invalid model'] }),
+      ],
+      exitCode: 1,
+    })
+    const error = events.at(-1)
+    expect(error).toMatchObject({ type: 'error', message: expect.stringContaining('invalid model') })
+    expect(error?.type === 'error' && isResumeFailure(error.message)).toBe(false)
   })
 
   it('keeps a post-init session error as an ordinary turn failure', async () => {
