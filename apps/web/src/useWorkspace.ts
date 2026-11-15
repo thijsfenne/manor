@@ -57,7 +57,6 @@ import {
   askMyMindObjects,
   askThread,
   askThreadInBackground,
-  askChildThread,
   askVaultWrite,
   activityOf,
   chatOf,
@@ -726,6 +725,17 @@ export function useWorkspace(url: string, auth?: WorkspaceAuth): Manor {
     return true
   }, [])
   const commands = useMemo(() => createWorkspaceCommands(send, setWorkspace), [send, setWorkspace])
+  // Built once per socket, so each is as stable as a `useCallback` over `send`.
+  const { stopTurn, stopBackground, stopSubagent, answerUserInput, answerSecretRequest, changeSessionAnswer, submitOutboundDraft, discardOutboundDraft, snoozeOutboundDraft, ignoreOutboundDraft, restoreOutboundDraft } = commands
+  const openSubagentThread = useCallback(
+    (childId: string, parentId: string) =>
+      void commands.openSubagentThread(childId, parentId, threadsRef.current[childId], socketRef.current?.holds(childId) === true),
+    [commands],
+  )
+  const readOutboundThread = useCallback(
+    (chatId: string, draftId: string) => commands.readOutboundThread(chatId, draftId, `outbound-thread-${crypto.randomUUID()}`),
+    [commands],
+  )
 
   useEffect(() => {
     const browserCursors = new BrowserCursorLifecycle(desktopBrowser, (chatId) => {
@@ -955,7 +965,7 @@ export function useWorkspace(url: string, auth?: WorkspaceAuth): Manor {
 
   const loadChat = useCallback(
     (chatId: string) => {
-      send({ type: 'open_chat', chatId })
+      send(openChatRequest(chatId, threadsRef.current[chatId], socketRef.current?.holds(chatId) === true))
       setWorkspace((current) => askThreadInBackground(current, chatId))
     },
     [send],
@@ -1046,21 +1056,6 @@ export function useWorkspace(url: string, auth?: WorkspaceAuth): Manor {
     [send, setWorkspace],
   )
 
-  const stopTurn = useCallback((turnId: string) => void send({ type: 'stop', turnId }), [send])
-  const stopBackground = useCallback((chatId: string) => void send({ type: 'stop_background', chatId }), [send])
-  const stopSubagent = useCallback(
-    (chatId: string, toolCallId: string) => send({ type: 'stop_subagent', chatId, toolCallId }),
-    [send],
-  )
-
-  const openSubagentThread = useCallback(
-    (childId: string, parentId: string) => {
-      setWorkspace((current) => askChildThread(current, childId, parentId))
-      send({ type: 'open_chat', chatId: childId })
-    },
-    [send, setWorkspace],
-  )
-
   const requestSubagentPolicy = useCallback(() => {
     send({ type: 'get_subagent_policy' })
   }, [send])
@@ -1108,63 +1103,8 @@ export function useWorkspace(url: string, auth?: WorkspaceAuth): Manor {
   const revealLog = useCallback((path: string) => send({ type: 'reveal_log', path }), [send])
   const revealFolder = useCallback((folder: 'memory' | 'knowledge') => send({ type: 'reveal_folder', folder }), [send])
 
-  const answerUserInput = useCallback(
-    (chatId: string, requestId: string, answers: UserInputAnswers) =>
-      send({ type: 'answer_user_input', chatId, requestId, answers }),
-    [send],
-  )
-
-  const answerSecretRequest = useCallback(
-    (chatId: string, requestId: string, value?: string) =>
-      send({ type: 'answer_secret_request', chatId, requestId, ...(value === undefined ? {} : { value }) }),
-    [send],
-  )
-
-  const changeSessionAnswer = useCallback(
-    (threadChatId: string, requestId: string, answers: UserInputAnswers) =>
-      send({ type: 'change_session_answer', chatId: threadChatId, requestId, answers }),
-    [send],
-  )
-
-  const submitOutboundDraft = useCallback(
-    (chatId: string, draftId: string, body: string, subject?: string, slackRichText?: SlackRichText, cc?: string) =>
-      send({ type: 'submit_outbound_draft', chatId, draftId, body, ...(subject === undefined ? {} : { subject }), ...(slackRichText === undefined ? {} : { slackRichText }), ...(cc === undefined ? {} : { cc }) }),
-    [send],
-  )
-
-  const discardOutboundDraft = useCallback(
-    (chatId: string, draftId: string) => send({ type: 'discard_outbound_draft', chatId, draftId }),
-    [send],
-  )
-
   const openConnectCard = useCallback(
     (chatId: string, connectId: string) => send({ type: 'open_connect_card', chatId, connectId }),
-    [send],
-  )
-
-  const snoozeOutboundDraft = useCallback(
-    (chatId: string, draftId: string, until: number) =>
-      send({ type: 'snooze_outbound_draft', chatId, draftId, until }),
-    [send],
-  )
-
-  const ignoreOutboundDraft = useCallback(
-    (chatId: string, draftId: string) => send({ type: 'ignore_outbound_draft', chatId, draftId }),
-    [send],
-  )
-
-  const restoreOutboundDraft = useCallback(
-    (chatId: string, draftId: string) => send({ type: 'restore_outbound_draft', chatId, draftId }),
-    [send],
-  )
-
-  const readOutboundThread = useCallback(
-    (chatId: string, draftId: string) => send({
-      type: 'outbound_thread_read',
-      chatId,
-      draftId,
-      requestId: `outbound-thread-${crypto.randomUUID()}`,
-    }),
     [send],
   )
 

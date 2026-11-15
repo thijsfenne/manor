@@ -10,9 +10,14 @@ import type {
   PageContextAttachment,
   ServerMessage,
   SingleRuntime,
+  SlackRichText,
+  ThreadEvent,
+  UserInputAnswers,
 } from '@manor/contracts'
 import { SINGLE_CHAT_VOICE } from '@manor/contracts'
+import { openChatRequest } from './connection'
 import {
+  askChildThread,
   askDirs,
   askMoreMyMindObjects,
   askRepoFile,
@@ -255,6 +260,36 @@ export function createWorkspaceCommands(send: Send, update: Update) {
     /** Sends the user's feedback on a result back to its Session; the version refuses a stale card. */
     reviseWorkGoal: (handoffId: string, version: number, text: string, requestId?: string) =>
       send({ type: 'revise_work_goal', handoffId, version, text, ...(requestId === undefined ? {} : { requestId }) }),
+    stopTurn: (turnId: string) => send({ type: 'stop', turnId }),
+    /** Stops the background work a chat waits on after its turns ended, and any pending wake. */
+    stopBackground: (chatId: string) => send({ type: 'stop_background', chatId }),
+    stopSubagent: (chatId: string, toolCallId: string) => send({ type: 'stop_subagent', chatId, toolCallId }),
+    /**
+     * Asks for a subagent's child thread. `thread` and `held` are the client's own copy
+     * and whether its socket still holds it: a held thread asks only for what follows.
+     */
+    openSubagentThread: (childId: string, parentId: string, thread: { events: readonly ThreadEvent[] } | undefined, held: boolean) => {
+      update((state) => askChildThread(state, childId, parentId))
+      return send(openChatRequest(childId, thread, held))
+    },
+    answerUserInput: (chatId: string, requestId: string, answers: UserInputAnswers) =>
+      send({ type: 'answer_user_input', chatId, requestId, answers }),
+    answerSecretRequest: (chatId: string, requestId: string, value?: string) =>
+      send({ type: 'answer_secret_request', chatId, requestId, ...(value === undefined ? {} : { value }) }),
+    /** Replaces an answer the project thread gave a Session from a preference. */
+    changeSessionAnswer: (threadChatId: string, requestId: string, answers: UserInputAnswers) =>
+      send({ type: 'change_session_answer', chatId: threadChatId, requestId, answers }),
+    submitOutboundDraft: (chatId: string, draftId: string, body: string, subject?: string, slackRichText?: SlackRichText, cc?: string) =>
+      send({ type: 'submit_outbound_draft', chatId, draftId, body, ...(subject === undefined ? {} : { subject }),
+        ...(slackRichText === undefined ? {} : { slackRichText }), ...(cc === undefined ? {} : { cc }) }),
+    discardOutboundDraft: (chatId: string, draftId: string) => send({ type: 'discard_outbound_draft', chatId, draftId }),
+    snoozeOutboundDraft: (chatId: string, draftId: string, until: number) =>
+      send({ type: 'snooze_outbound_draft', chatId, draftId, until }),
+    ignoreOutboundDraft: (chatId: string, draftId: string) => send({ type: 'ignore_outbound_draft', chatId, draftId }),
+    restoreOutboundDraft: (chatId: string, draftId: string) => send({ type: 'restore_outbound_draft', chatId, draftId }),
+    /** The caller names the request, because the two clients make ids their own way. */
+    readOutboundThread: (chatId: string, draftId: string, requestId: string) =>
+      send({ type: 'outbound_thread_read', chatId, draftId, requestId }),
     /**
      * The label moves before the send, and steps back at once when the send did not
      * leave. The caller tracks `requestId` so the ack or notice can settle it.

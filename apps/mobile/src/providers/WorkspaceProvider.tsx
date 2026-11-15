@@ -24,7 +24,6 @@ import { forgetClosedWorkChanges } from '@manor/client-runtime/work-changes'
 import {
   askMyMindObjects,
   activityOf,
-  askChildThread,
   chatOf,
   clearArtifactRequest,
   clearNotice,
@@ -238,6 +237,43 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const send = useCallback((message: ClientMessage) => connectionRef.current?.send(message) === true, [])
   // Built per call: the React Compiler refuses a ref-reading `send` handed to a function during render.
   const commands = useCallback(() => createWorkspaceCommands(send, setWorkspace), [send, setWorkspace])
+  // One wire shape for both clients; these only forward.
+  const stopTurn = useCallback((turnId: string) => void commands().stopTurn(turnId), [commands])
+  const stopBackground = useCallback((chatId: string) => void commands().stopBackground(chatId), [commands])
+  const stopSubagent = useCallback((chatId: string, toolCallId: string) => commands().stopSubagent(chatId, toolCallId), [commands])
+  const openSubagentThread = useCallback(
+    (childId: string, parentId: string) =>
+      commands().openSubagentThread(childId, parentId, store.get().threads[childId], connectionRef.current?.holds(childId) === true),
+    [commands, store],
+  )
+  const answerUserInput = useCallback(
+    (chatId: string, requestId: string, answers: UserInputAnswers) => commands().answerUserInput(chatId, requestId, answers),
+    [commands],
+  )
+  const answerSecretRequest = useCallback(
+    (chatId: string, requestId: string, value?: string) => commands().answerSecretRequest(chatId, requestId, value),
+    [commands],
+  )
+  const changeSessionAnswer = useCallback(
+    (threadChatId: string, requestId: string, answers: UserInputAnswers) => commands().changeSessionAnswer(threadChatId, requestId, answers),
+    [commands],
+  )
+  const submitOutboundDraft = useCallback(
+    (chatId: string, draftId: string, body: string, subject?: string, slackRichText?: SlackRichText, cc?: string) =>
+      commands().submitOutboundDraft(chatId, draftId, body, subject, slackRichText, cc),
+    [commands],
+  )
+  const discardOutboundDraft = useCallback((chatId: string, draftId: string) => commands().discardOutboundDraft(chatId, draftId), [commands])
+  const snoozeOutboundDraft = useCallback(
+    (chatId: string, draftId: string, until: number) => commands().snoozeOutboundDraft(chatId, draftId, until),
+    [commands],
+  )
+  const ignoreOutboundDraft = useCallback((chatId: string, draftId: string) => commands().ignoreOutboundDraft(chatId, draftId), [commands])
+  const restoreOutboundDraft = useCallback((chatId: string, draftId: string) => commands().restoreOutboundDraft(chatId, draftId), [commands])
+  const readOutboundThread = useCallback(
+    (chatId: string, draftId: string) => commands().readOutboundThread(chatId, draftId, requestId('outbound-thread')),
+    [commands],
+  )
 
   useEffect(() => {
     if (!auth.ready || (auth.enabled && !signedIn)) {
@@ -403,11 +439,6 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     setWorkspace((current) => leaveChatSelection(current, chatId))
   }, [setWorkspace])
 
-  const openSubagentThread = useCallback((childId: string, parentId: string) => {
-    setWorkspace((current) => askChildThread(current, childId, parentId))
-    return send(openChatRequest(childId, store.get().threads[childId], connectionRef.current?.holds(childId) === true))
-  }, [send, setWorkspace, store])
-
   const setChatSettled = useCallback(
     (chatId: string, settled: boolean) => commands().setChatSettled(chatId, settled),
     [commands],
@@ -547,74 +578,6 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     }))
     return sent
   }, [send, setWorkspace])
-
-  const stopTurn = useCallback((turnId: string) => {
-    send({ type: 'stop', turnId })
-  }, [send])
-
-  const stopBackground = useCallback((chatId: string) => {
-    send({ type: 'stop_background', chatId })
-  }, [send])
-
-  const stopSubagent = useCallback(
-    (chatId: string, toolCallId: string) => send({ type: 'stop_subagent', chatId, toolCallId }),
-    [send],
-  )
-
-  const answerSecretRequest = useCallback(
-    (chatId: string, requestId: string, value?: string) =>
-      send({ type: 'answer_secret_request', chatId, requestId, ...(value === undefined ? {} : { value }) }),
-    [send],
-  )
-
-  const answerUserInput = useCallback(
-    (chatId: string, requestId: string, answers: UserInputAnswers) =>
-      send({ type: 'answer_user_input', chatId, requestId, answers }),
-    [send],
-  )
-
-  const changeSessionAnswer = useCallback(
-    (threadChatId: string, requestId: string, answers: UserInputAnswers) =>
-      send({ type: 'change_session_answer', chatId: threadChatId, requestId, answers }),
-    [send],
-  )
-
-  const submitOutboundDraft = useCallback(
-    (chatId: string, draftId: string, body: string, subject?: string, slackRichText?: SlackRichText, cc?: string) =>
-      send({ type: 'submit_outbound_draft', chatId, draftId, body, ...(subject === undefined ? {} : { subject }), ...(slackRichText === undefined ? {} : { slackRichText }), ...(cc === undefined ? {} : { cc }) }),
-    [send],
-  )
-
-  const discardOutboundDraft = useCallback(
-    (chatId: string, draftId: string) => send({ type: 'discard_outbound_draft', chatId, draftId }),
-    [send],
-  )
-
-  const snoozeOutboundDraft = useCallback(
-    (chatId: string, draftId: string, until: number) =>
-      send({ type: 'snooze_outbound_draft', chatId, draftId, until }),
-    [send],
-  )
-
-  const ignoreOutboundDraft = useCallback(
-    (chatId: string, draftId: string) => send({ type: 'ignore_outbound_draft', chatId, draftId }),
-    [send],
-  )
-
-  const restoreOutboundDraft = useCallback(
-    (chatId: string, draftId: string) => send({ type: 'restore_outbound_draft', chatId, draftId }),
-    [send],
-  )
-
-  const readOutboundThread = useCallback(
-    (chatId: string, draftId: string) => send({
-      type: 'outbound_thread_read',
-      chatId,
-      draftId,
-      requestId: requestId('outbound-thread'),
-    }),
-    [send],
-  )
 
   const createChat = useCallback(
     (target: NewChatTarget, opening: Opening, overrides: Record<string, ChatOverride>, requestId: string) => {
