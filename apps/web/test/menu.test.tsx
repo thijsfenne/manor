@@ -84,12 +84,16 @@ describe('menu', () => {
     act(() => { tree = create(<>
       <MenuItem role="menuitemradio" checked aria-label="On">On</MenuItem>
       <MenuItem role="menuitemradio" checked={false} aria-label="Off">Off</MenuItem>
+      <MenuItem role="menuitemradio" checked={false} trailing="Default" aria-label="Chip">Chip</MenuItem>
       <MenuItem blocked="Close a panel first" aria-label="Full" onClick={onPick}>Full</MenuItem>
     </>) })
     expect(button('On')!.props['aria-checked']).toBe(true)
     expect(button('On')!.findAllByType('svg')).toHaveLength(1)
     expect(button('Off')!.props['aria-checked']).toBe(false)
     expect(button('Off')!.findAllByType('svg')).toHaveLength(0)
+    // The tick's place is held only where something trails the label.
+    expect(button('Off')!.findAllByProps({ 'aria-hidden': 'true' })).toHaveLength(0)
+    expect(button('Chip')!.findAllByProps({ 'aria-hidden': 'true' })).toHaveLength(1)
     expect(button('Full')!.props).toMatchObject({ role: 'menuitem', 'aria-disabled': true, title: 'Close a panel first' })
     expect(button('Full')!.props.disabled).toBeUndefined()
     expect(button('Full')!.props.onClick).toBeUndefined()

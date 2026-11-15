@@ -86,7 +86,8 @@ export function RuntimeRoster({
   panel = false,
 }: RuntimeRosterProps) {
   const hostAuto = useHostAuto()
-  const rowHover = panel ? `rounded-button-sm ${PANEL_ROW_HOVER}` : 'rounded-md hover:bg-user-bg'
+  // In the composer's menu a row takes the inset and corners of the menu rows under it.
+  const rowHover = panel ? `px-2 rounded-button-sm ${PANEL_ROW_HOVER}` : 'px-3 rounded-button-sm hover:bg-user-bg'
   // Falls back to the list on its own when the roster loses the selected persona.
   const selected = agents.find((agent) => agent.id === nav.selectedId) ?? null
   const activeIds = activeAgentIds === undefined ? null : new Set(activeAgentIds)
@@ -116,7 +117,7 @@ export function RuntimeRoster({
                   type="button"
                   key={agent.id}
                   disabled={disabled}
-                  className={`group flex w-full cursor-pointer items-center gap-2 border-0 bg-transparent px-2 py-1.5 text-left text-[15px] text-text ${rowHover} disabled:cursor-default disabled:opacity-45 disabled:hover:bg-transparent`}
+                  className={`group flex w-full cursor-pointer items-center gap-2 border-0 bg-transparent py-1.5 text-left text-[15px] text-text ${rowHover} disabled:cursor-default disabled:opacity-45 disabled:hover:bg-transparent`}
                   onClick={() => nav.enter(agent.id)}
                 >
                   {/* Who is in the chat is carried by the face and the name fading,
@@ -167,7 +168,7 @@ export function RuntimeRoster({
             {/* The way back, and the only thing that says whose settings these are. */}
             <button
               type="button"
-              className={`flex w-full cursor-pointer items-center gap-1.5 border-0 bg-transparent px-2 py-1.5 text-left text-[15px] text-text ${rowHover}`}
+              className={`flex w-full cursor-pointer items-center gap-1.5 border-0 bg-transparent py-1.5 text-left text-[15px] text-text ${rowHover}`}
               onClick={nav.back}
             >
               <Icon icon={ArrowLeft01Icon} size={13} />

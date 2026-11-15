@@ -126,7 +126,7 @@ describe('runtime sections', () => {
       tree = create(<RuntimeControls agents={house} overrides={{}} disabled={false} onChange={() => {}} />)
     })
     act(() => tree.root.find((node) => node.props.title === 'Model and reasoning per agent, for this chat').props.onClick())
-    expect(tree.root.find((node) => typeof node.props.className === 'string' && node.props.className.includes('w-[360px]')).props.className).toContain('px-1.5 py-1.5')
+    expect(tree.root.find((node) => typeof node.props.className === 'string' && node.props.className.includes('w-[360px]')).props.className).toContain('surface-floating p-1')
     act(() => tree.unmount())
   })
 

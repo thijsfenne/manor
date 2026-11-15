@@ -228,6 +228,7 @@ describe('a branch the menu may not offer', () => {
 
     expect(html).toContain('main')
     expect(html).toContain('already checked out in Manor')
-    expect(html).toContain('disabled=""')
+    expect(html).toContain('aria-disabled="true"')
+    expect(html).toContain('title="already checked out in Manor"')
   })
 })

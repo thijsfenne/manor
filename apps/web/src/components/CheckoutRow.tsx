@@ -6,6 +6,7 @@ import { INSTANT, SPRING_CHEVRON } from '../motion'
 import { Icon } from './Icon'
 import { MenuRow } from './RuntimeMenu'
 import { formInputClass } from './ui/FormField'
+import { MENU_SURFACE } from './ui/Menu'
 import { Popover } from './ui/Popover'
 import { useDismiss } from './ui/useDismiss'
 
@@ -231,21 +232,19 @@ export function CheckoutRow({ base, status, planned, disabled, lead, leadOnly = 
 
           <Popover
             open={open === 'mode' && modeMenu}
-            className="absolute bottom-[calc(100%+8px)] left-0 z-[6] w-[264px] rounded-xl border border-line surface-floating p-1.5"
+            className={`absolute bottom-[calc(100%+8px)] left-0 z-[6] w-[264px] ${MENU_SURFACE}`}
             role="menu"
           >
             <MenuRow
               label="Current checkout"
               selected={view.mode === 'current'}
               isDefault
-              size="md"
               onSelect={() => choose({ mode: 'current' })}
             />
             <MenuRow
               label={view.worktreeOption}
               selected={view.mode === 'worktree'}
               isDefault={false}
-              size="md"
               onSelect={() => choose({ mode: 'worktree' })}
             />
           </Popover>
@@ -281,7 +280,7 @@ export function CheckoutRow({ base, status, planned, disabled, lead, leadOnly = 
             <Popover
               open={open === 'branch'}
               origin="bottom-right"
-              className="absolute right-0 bottom-[calc(100%+8px)] z-[6] w-[288px] rounded-xl border border-line surface-floating p-1.5"
+              className={`absolute right-0 bottom-[calc(100%+8px)] z-[6] w-[288px] ${MENU_SURFACE}`}
               role={branchPopup}
               aria-label="Branch"
             >
@@ -325,7 +324,6 @@ export function CheckoutRow({ base, status, planned, disabled, lead, leadOnly = 
                           label={row.name}
                           selected={row.name === view.branch}
                           isDefault={false}
-                          size="md"
                           {...(next === 'blocked'
                             ? { unavailable: row.reason ?? 'git will not check it out here' }
                             : {})}

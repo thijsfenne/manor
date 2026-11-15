@@ -6,7 +6,9 @@ import { Popover } from './Popover'
 import { useDismiss } from './useDismiss'
 import { usePopupPlacement, type PopupPlacement } from './usePopupPlacement'
 
-const CARD = 'fixed z-40 overflow-y-auto rounded-panel border border-line surface-floating p-1 shadow-menu'
+/** The card every menu sits in. For a menu that places itself, the composer's among them. */
+export const MENU_SURFACE = 'rounded-panel border border-line surface-floating p-1'
+const CARD = `fixed z-40 overflow-y-auto ${MENU_SURFACE} shadow-menu`
 /** What the arrow keys walk and what takes focus on open: every row that can be pressed. */
 const ROWS = 'button:not(:disabled):not([aria-disabled="true"])'
 
@@ -103,11 +105,13 @@ export function Menu({ menu, label, children }: {
  * list the user's own things, a session, a bookmark, a login, go without an icon
  * unless the whole menu has them, so the labels of one menu always line up.
  *
- * `checked` makes the row a choice: it sets `aria-checked` and draws the tick, and the
- * caller names the role (`menuitemradio` or `menuitemcheckbox`). `blocked` is a row
+ * `checked` makes the row a choice: it sets `aria-checked` and draws the tick. A row
+ * that is not the choice and has something at its far end holds the tick's place, so
+ * what trails the labels lines up. The caller names the role (`menuitemradio` or `menuitemcheckbox`). `blocked` is a row
  * that exists and cannot be taken now: it does nothing on a press and the arrow keys
- * pass over it, but it is not `disabled`, so its reason still shows on hover. `disabled`
- * is for a row with nothing to say.
+ * pass over it, but it is not `disabled`, so its reason still shows on hover. It dims
+ * by colour, not opacity, so a reason the caller puts in the row stays readable.
+ * `disabled` is for a row with nothing to say.
  */
 export function MenuItem({ icon, trailing, checked, blocked, role = 'menuitem', children, ...button }: Omit<ComponentProps<'button'>, 'type' | 'className' | 'aria-checked' | 'aria-disabled'> & {
   icon?: ComponentProps<typeof Icon>['icon']
@@ -119,13 +123,14 @@ export function MenuItem({ icon, trailing, checked, blocked, role = 'menuitem', 
   return (
     <button {...button} type="button" role={role} aria-checked={checked} aria-disabled={dead || undefined} title={blocked ?? button.title}
       onClick={dead ? undefined : button.onClick}
-      className={`flex w-full items-center gap-2 rounded-button-sm border-0 bg-transparent px-3 py-2 text-left text-label text-text disabled:cursor-default disabled:opacity-40 ${
-        dead ? 'cursor-default opacity-40' : 'cursor-pointer hover:bg-user-bg focus-visible:bg-user-bg'
+      className={`flex w-full items-center gap-2 rounded-button-sm border-0 bg-transparent px-3 py-2 text-left text-label disabled:cursor-default disabled:opacity-40 ${
+        dead ? 'cursor-default text-dim' : 'cursor-pointer text-text hover:bg-user-bg focus-visible:bg-user-bg'
       }`}>
-      {icon === undefined ? null : <Icon icon={icon} size={15} className="flex-none text-muted" />}
+      {icon === undefined ? null : <Icon icon={icon} size={15} className={dead ? 'flex-none' : 'flex-none text-muted'} />}
       <span className="min-w-0 flex-1 truncate">{children}</span>
-      {typeof trailing === 'string' ? <span className="flex-none text-meta text-muted">{trailing}</span> : trailing}
+      {typeof trailing === 'string' ? <span className={dead ? 'flex-none text-meta' : 'flex-none text-meta text-muted'}>{trailing}</span> : trailing}
       {checked === true ? <Icon icon={Tick02Icon} size={13} className="flex-none" /> : null}
+      {checked === false && trailing != null ? <span className="w-[13px] flex-none" aria-hidden="true" /> : null}
     </button>
   )
 }

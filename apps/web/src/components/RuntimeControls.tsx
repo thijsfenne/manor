@@ -107,7 +107,7 @@ function RuntimeFacepile({ agents, overrides, disabled, startedAgentIds = [], al
         // 360 rather than 300: the name and the runtime are capped, so the job
         // title gets whatever is left, and at 300 that was four letters and an
         // ellipsis. Same width as the mention menu, the other list of personas.
-        className="absolute bottom-[calc(100%+8px)] left-0 z-[6] flex max-h-[min(640px,calc(100dvh-128px))] w-[360px] flex-col overflow-hidden rounded-xl border border-line surface-floating px-1.5 py-1.5"
+        className="absolute bottom-[calc(100%+8px)] left-0 z-[6] flex max-h-[min(640px,calc(100dvh-128px))] w-[360px] flex-col overflow-hidden rounded-panel border border-line surface-floating p-1"
         contentClassName="flex min-h-0 flex-1 flex-col"
         role="menu"
       >

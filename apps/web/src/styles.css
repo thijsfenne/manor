@@ -116,7 +116,7 @@
   --color-icon-fill: #191a1b;
   --color-tree-hover: #191a1b;
   --color-user-bg: #26262b;
-  /* The picked row or tile inside a floating menu. A glass card sits a few steps above
+  /* The picked tile inside a floating menu. A glass card sits a few steps above
      the canvas, so `user-bg` there reads as hover, not as a choice. This lifts the pick
      off the card by the same distance the sidebar's active row lifts off the sidebar;
      `user-bg` stays the hover. */

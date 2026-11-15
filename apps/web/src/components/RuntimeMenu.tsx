@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react'
 import { motion, useReducedMotion } from 'motion/react'
-import { ArrowDown01Icon, FlashIcon, RefreshIcon, Settings01Icon, Tick02Icon } from '@hugeicons/core-free-icons'
+import { ArrowDown01Icon, FlashIcon, RefreshIcon, Settings01Icon } from '@hugeicons/core-free-icons'
 import { FlashIcon as FlashSolidIcon } from '@manor/client-runtime/solid-icons'
 import type { AgentConfig, ChatOverride, DriverName } from '@manor/contracts'
 import {
@@ -25,6 +25,7 @@ import { MODELS, defaultModel, effortsFor } from '../runtimes'
 import { INSTANT, TEXT_SWAP } from '../motion'
 import { useAutoRulesConfig } from './settings/AutoRulesPage'
 import { IconButton } from './ui/IconButton'
+import { MENU_SURFACE, MenuItem } from './ui/Menu'
 import { Popover } from './ui/Popover'
 import { Switch } from './ui/Switch'
 import { SteppedSlider } from './ui/SteppedSlider'
@@ -147,7 +148,7 @@ export function RuntimeMenu({
                   ? 'w-[min(360px,calc(var(--side-width)-36px),calc(100vw-48px))]'
                   : SPLIT_PICKER_WIDTH
               }`
-            : 'absolute bottom-[calc(100%+8px)] left-0 z-[6] w-[236px] rounded-xl border border-line surface-floating p-1.5'
+            : `absolute bottom-[calc(100%+8px)] left-0 z-[6] w-[236px] ${MENU_SURFACE}`
         }
         role="menu"
       >
@@ -168,7 +169,7 @@ export function RuntimeMenu({
 }
 
 /** The split picker's card and its width, shared with the Model field of Agent settings. */
-export const SPLIT_PICKER_SHELL = 'overflow-hidden rounded-xl border border-line surface-floating'
+export const SPLIT_PICKER_SHELL = 'overflow-hidden rounded-panel border border-line surface-floating'
 export const SPLIT_PICKER_WIDTH = 'w-[360px] max-w-[calc(100vw-24px)]'
 
 /**
@@ -251,7 +252,7 @@ export function RuntimeSections({
     0,
     ...providerOptions.map((option) => modelRowsFor(agent, withDriver(agent, override, option.value)).length),
   )
-  const modelHeading = <p className="m-0 px-2 pt-1.5 pb-0.5 text-meta font-medium text-dim">Model</p>
+  const modelHeading = <p className="m-0 px-3 pt-1.5 pb-0.5 text-meta font-medium text-dim">Model</p>
 
   const scrollableSettings = tallestModelList === 0 ? null : (
     <div className="grid">
@@ -262,7 +263,6 @@ export function RuntimeSections({
             <MenuRow
               key={row.value}
               label={row.label}
-              size="lg"
               selected={row.value === model}
               // Under a pinned provider her own model belongs to the other CLI, so
               // nothing here is her default and the provider row above is the way back.
@@ -279,14 +279,14 @@ export function RuntimeSections({
       <div aria-hidden="true" className="invisible col-start-1 row-start-1">
         {modelHeading}
         {Array.from({ length: tallestModelList }, (_, index) => (
-          <MenuRow key={index} label={'\u00a0'} size="lg" selected={false} isDefault={marksDefault && index === 0} onSelect={() => {}} />
+          <MenuRow key={index} label={'\u00a0'} selected={false} isDefault={marksDefault && index === 0} onSelect={() => {}} />
         ))}
       </div>
     </div>
   )
 
   const reasoningControl = effortOptions.length > 0 ? (
-    <div className="shrink-0 border-t border-line px-2 pt-2 pb-1">
+    <div className="shrink-0 border-t border-line px-3 pt-2 pb-1">
       <div className="mb-0.5 grid grid-cols-[24px_minmax(0,1fr)_24px] items-center">
         {fastCapable ? (
           <IconButton
@@ -330,7 +330,7 @@ export function RuntimeSections({
         {autoControl}
         <div className="grid min-h-0 grid-cols-[52px_minmax(0,1fr)] grid-rows-[minmax(0,1fr)] overflow-hidden">
           <div className="border-r border-line p-1.5">{providerControl}</div>
-          <div className="h-full min-h-0 overflow-y-auto overscroll-contain p-1.5">
+          <div className="h-full min-h-0 overflow-y-auto overscroll-contain p-1">
             {scrollableSettings}
           </div>
         </div>
@@ -342,7 +342,7 @@ export function RuntimeSections({
   return (
     <div className="flex min-h-0 max-h-[min(600px,calc(100dvh-128px))] flex-1 flex-col">
       {autoControl}
-      <div className="shrink-0 px-1 pt-1 pb-0.5">
+      <div className="shrink-0 px-1.5 pt-1.5 pb-0.5">
         {providerControl}
       </div>
       {/* Deliberately no note about what a switch costs. It restarts her session here,
@@ -401,7 +401,7 @@ export function RuntimeAutoToggle({ checked, disabled, onChange, onConfigure }: 
   const configure = useAutoRulesConfig()
 
   return (
-    <div className="flex items-center justify-between gap-2.5 border-b border-line px-2 py-2 text-label text-text">
+    <div className="flex items-center justify-between gap-2.5 border-b border-line px-3 py-2 text-label text-text">
       <span>Auto mode</span>
       {/* Switch then gear: the house rule file stays reachable while Auto is off,
           and the composer strip uses the same order. */}
@@ -426,57 +426,46 @@ export function RuntimeAutoToggle({ checked, disabled, onChange, onConfigure }: 
 }
 
 /**
- * One choice in a runtime menu. Exported for the side chat's own menu, which offers a
- * model and an effort with no persona behind them, and for the checkout row's branch
- * list: same rows, same Default chip, so the menus cannot drift into looking like
- * different mechanisms.
+ * One choice in a runtime menu: the shared menu row with a Default chip. Exported for
+ * the checkout row's branch list, so the menus under the composer cannot drift into
+ * looking like different mechanisms.
  *
  * `unavailable` is for a row that exists and cannot be taken — a branch another
  * worktree has checked out. It carries the reason rather than only dimming, because a
  * greyed row with no explanation is a dead end. Leave it off wherever the honest move
  * is to not offer the row at all; only give it a reason a user can act on.
- *
- * `size` is `sm` everywhere a menu holds settings, and `md` under the composer, where
- * the checkout row reads at the size of the message being written. A prop rather than
- * a class, so the two sizes stay a choice this component knows about.
  */
 export function MenuRow({
   label,
   selected,
   isDefault,
   unavailable,
-  size = 'sm',
   onSelect,
 }: {
   label: string
   selected: boolean
   isDefault: boolean
   unavailable?: string
-  size?: 'sm' | 'md' | 'lg'
   onSelect: () => void
 }) {
   return (
-    <button
-      type="button"
+    <MenuItem
       role="menuitemradio"
-      aria-checked={selected}
-      disabled={unavailable !== undefined}
-      title={unavailable}
-      className={`flex w-full cursor-pointer items-center gap-2 rounded-md border-0 px-2 py-1.5 text-left text-text disabled:cursor-default disabled:text-dim disabled:hover:bg-transparent ${
-        selected ? 'bg-menu-selected' : 'bg-transparent hover:bg-user-bg'
-      } ${
-        size === 'md' ? 'text-label' : size === 'lg' ? 'text-[14px] leading-[1.125rem]' : 'text-label'
-      }`}
+      checked={selected}
+      blocked={unavailable}
+      trailing={unavailable === undefined && !isDefault ? undefined : (
+        <>
+          {unavailable === undefined ? null : (
+            <span className="max-w-[150px] flex-none truncate text-meta">{unavailable}</span>
+          )}
+          {isDefault ? (
+            <span className="flex-none rounded-chip border border-line px-1.5 py-px text-meta text-dim">Default</span>
+          ) : null}
+        </>
+      )}
       onClick={onSelect}
     >
-      <span className="min-w-0 flex-1 truncate">{label}</span>
-      {unavailable === undefined ? null : (
-        <span className="max-w-[150px] flex-none truncate text-meta text-dim">{unavailable}</span>
-      )}
-      {isDefault ? (
-        <span className="flex-none rounded-chip border border-line px-1.5 py-px text-meta text-dim">Default</span>
-      ) : null}
-      {selected ? <Icon icon={Tick02Icon} size={13} /> : <span className="w-[13px] flex-none" aria-hidden="true" />}
-    </button>
+      {label}
+    </MenuItem>
   )
 }

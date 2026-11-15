@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState, type ClipboardEvent, type ComponentProps, type KeyboardEvent as ReactKeyboardEvent, type MutableRefObject, type ReactNode } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type ClipboardEvent, type KeyboardEvent as ReactKeyboardEvent, type MutableRefObject, type ReactNode } from 'react'
 import { Attachment01Icon, BotIcon, BoxIcon, ComputerIcon, File01Icon, Globe02Icon, Image01Icon, MessageMultiple01Icon, PlusSignIcon } from '@hugeicons/core-free-icons'
 import { MAX_MESSAGE_ATTACHMENTS, MAX_MESSAGE_QUOTES, MAX_PAGE_CONTEXT_ATTACHMENTS, addsAgentMention, compactQuoteRefs, formatImageRef, imageRefSpans, quoteRefSpans, renumberImageRefs, snapRefDeletion } from '@manor/contracts'
 import { insertQuote } from '@manor/client-runtime/message-quotes'
@@ -46,6 +46,7 @@ import { PageContextChip } from './PageContextChip'
 import { ReplyContextChip } from './ReplyContextChip'
 import { RuntimeLabel } from './RuntimeLabel'
 import { IconSwap } from './ui/IconSwap'
+import { MENU_SURFACE, MenuItem } from './ui/Menu'
 import { Popover } from './ui/Popover'
 import { useDismiss } from './ui/useDismiss'
 import { ZoomableImage } from './ui/ZoomableImage'
@@ -850,33 +851,35 @@ export function Composer({ agents, commandContext, household, overrides = NO_OVE
 
       <Popover
         open={plusOpen}
-        className="absolute bottom-[calc(100%+8px)] left-0 z-[6] w-max min-w-[240px] max-w-[calc(100vw-24px)] rounded-xl border border-line surface-floating p-1.5"
+        className={`absolute bottom-[calc(100%+8px)] left-0 z-[6] w-max min-w-[240px] max-w-[calc(100vw-24px)] ${MENU_SURFACE}`}
         role="menu"
       >
         {allowAttachments ? (
-          <PlusRow
+          <MenuItem
             icon={Attachment01Icon}
-            label="Attach files"
-            hint={`up to ${MAX_MESSAGE_ATTACHMENTS}`}
-            onPick={() => {
+            trailing={`up to ${MAX_MESSAGE_ATTACHMENTS}`}
+            onClick={() => {
               setPlusOpen(false)
               fileRef.current?.click()
             }}
-          />
+          >
+            Attach files
+          </MenuItem>
         ) : null}
         {mentionLabel !== null ? (
-          <PlusRow
+          <MenuItem
             icon={canMentionAgents ? BotIcon : files.length > 0 ? File01Icon : allowBrowserMentions ? Globe02Icon : MessageMultiple01Icon}
-            label={mentionLabel}
-            hint="@"
-            onPick={() => typeTrigger('@')}
-          />
+            trailing="@"
+            onClick={() => typeTrigger('@')}
+          >
+            {mentionLabel}
+          </MenuItem>
         ) : null}
         {allowSkills && skills.length > 0 ? (
-          <PlusRow icon={BoxIcon} label="Run a skill" hint="$" onPick={() => typeTrigger('$')} />
+          <MenuItem icon={BoxIcon} trailing="$" onClick={() => typeTrigger('$')}>Run a skill</MenuItem>
         ) : null}
         {allowAttachments && images.length > 0 ? (
-          <PlusRow icon={Image01Icon} label="Refer to an image" hint="#" onPick={() => typeTrigger('#')} />
+          <MenuItem icon={Image01Icon} trailing="#" onClick={() => typeTrigger('#')}>Refer to an image</MenuItem>
         ) : null}
       </Popover>
 
@@ -1488,31 +1491,5 @@ export function Composer({ agents, commandContext, household, overrides = NO_OVE
       </div>
       {checkout}
     </Box>
-  )
-}
-
-interface PlusRowProps {
-  icon: ComponentProps<typeof Icon>['icon']
-  label: string
-  /** The keystroke this row stands in for, or what the row is bounded by. */
-  hint: string
-  onPick: () => void
-}
-
-/** One row of the plus menu. Shaped like the autocomplete rows it leads to. */
-function PlusRow({ icon, label, hint, onPick }: PlusRowProps) {
-  return (
-    <button
-      type="button"
-      role="menuitem"
-      className="flex w-full cursor-pointer items-center gap-2 rounded-md border-0 bg-transparent px-2 py-1.5 text-left text-label text-text hover:bg-user-bg"
-      onClick={onPick}
-    >
-      <span className="grid h-5 w-5 flex-none place-items-center">
-        <Icon icon={icon} size={14} className="text-muted" />
-      </span>
-      <span className="min-w-0 flex-1 truncate">{label}</span>
-      <span className="flex-none font-mono text-meta text-dim">{hint}</span>
-    </button>
   )
 }
