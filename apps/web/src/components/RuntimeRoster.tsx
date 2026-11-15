@@ -176,7 +176,9 @@ export function RuntimeRoster({
               <span className="min-w-0 flex-1 truncate py-px">{selected.name}</span>
               <span className="flex-none text-meta text-dim">All agents</span>
             </button>
-            <div className="mt-1 flex min-h-0 flex-1 flex-col overflow-hidden border-t border-line">
+            {/* The docked panel's own rows start 14px in, the menu rows below 4px further
+                at the same padding, so there they reach 4px out to keep one left edge. */}
+            <div className={`mt-1 flex min-h-0 flex-1 flex-col overflow-hidden border-t border-line ${panel ? '-mx-1' : ''}`}>
               <RuntimeSections
                 agent={selected}
                 override={overrides[selected.id] ?? {}}
