@@ -767,6 +767,47 @@ describe('durable transcript projection', () => {
     expect(second[0]).toBe(first[0])
     expect(second[1]).not.toBe(first[1])
   })
+
+  // One event makes a new array and a full rebuild. A list that compares rows by object
+  // then redraws only the row that event changed.
+  it('keeps the row objects a new event did not change, and renews the one it did', () => {
+    const said = (id: string, ts: number, text: string): ThreadEvent => ({ id, ts, type: 'user_message', text, mentions: [] })
+    const reply = (id: string, ts: number, turnId: string): ThreadEvent => ({ id, ts, type: 'agent_message', turnId, agentId: 'smith', messageId: id, text: `${id}.` })
+    const done = (id: string, ts: number, turnId: string): ThreadEvent => ({ id, ts, type: 'turn_result', turnId, agentId: 'smith' })
+    // Each case is its own thread: a rebuild is compared with the last one of its thread.
+    const thread = (): ThreadEvent[] => [
+      said('e1', 1, 'first'), reply('e2', 2, 'turn-1'), done('e3', 3, 'turn-1'),
+      said('e4', 4, 'second'), reply('e5', 5, 'turn-2'),
+    ]
+
+    // A tool step lands in the open turn: the three rows before it stay the objects they were.
+    const events = thread()
+    const first = rowsOf({ ...emptyThread, events })
+    expect(first.map((row) => row.kind)).toEqual(['event', 'turn', 'event', 'turn'])
+    const stepped = rowsOf({ ...emptyThread, events: [...events, { id: 'e6', ts: 6, type: 'tool_use', turnId: 'turn-2', agentId: 'smith', tool: 'Read' }] })
+    expect(stepped[0] === first[0] && stepped[1] === first[1] && stepped[2] === first[2]).toBe(true)
+    expect(stepped[3]).not.toBe(first[3])
+
+    // A steer sent before its turn wrote anything moves into that turn once it runs, also
+    // when its row was kept from an earlier pass.
+    const steered: ThreadEvent[] = [...thread().slice(0, 3), { id: 'e4', ts: 4, type: 'user_message', text: 'steer', mentions: [], steersTurnId: 'turn-9' }]
+    rowsOf({ ...emptyThread, events: steered }, 'project')
+    const later = rowsOf({
+      ...emptyThread,
+      events: [...steered, said('e5', 5, 'unrelated')],
+      liveTurns: [{ turnId: 'turn-9', agentId: 'smith', messages: [], state: 'running', startedAt: 6 }],
+    }, 'project')
+    expect(later.filter((row) => row.kind === 'event' && row.event.id === 'e4')).toEqual([])
+    expect(later.find((row) => row.kind === 'turn' && row.turnId === 'turn-9')).toMatchObject({ timeline: [{ kind: 'user', row: { event: { id: 'e4' } } }] })
+
+    // An earlier event rewritten in place renews its own row and nothing else.
+    const other = thread()
+    const before = rowsOf({ ...emptyThread, events: other })
+    const patched = rowsOf({ ...emptyThread, events: other.map((event) => event.id === 'e4' ? said('e4', 4, 'second, edited') : event) })
+    expect(patched[2]).not.toBe(before[2])
+    expect(patched[2]).toMatchObject({ kind: 'event', event: { text: 'second, edited' } })
+    expect(patched[0] === before[0] && patched[1] === before[1] && patched[3] === before[3]).toBe(true)
+  })
 })
 
 describe('the sidebar preview', () => {

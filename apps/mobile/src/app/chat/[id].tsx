@@ -22,7 +22,7 @@ import { chatFallbackTargets, composerRecipients, composerShowsRecipients, reply
 import { chatChangedFiles, resolveMarkdownRepoLink } from '@manor/client-runtime/changed-files'
 import { defaultSingleRuntime, effectiveDriver, isAutoPending, readSingleRuntime, runtimeLabel, runtimeParts, singleRuntimeVoice } from '@manor/client-runtime/runtime-choices'
 import type { ChangeableAnswer, OpenAsk, PendingDocument, QuietWorkspace, Row, SessionLink, ThreadShape, TurnConsultation, TurnRow, UnannouncedConsultation } from '@manor/client-runtime/state'
-import { activityOf, chatOf, dmMemoryMarks, isHomeRoom, isProjectThread, roomOf, sitsSettled, messageBrief, projectSessionOverview, sessionsDot, openAsk, sessionLiveOf, threadQuestionIn, openSubagentQuestion, subagentSummaryOf, changeableAnswers, personaOf, projectWorkHandoffs, repoListingKey, rowHasQuoteSource, rowsOf, feedIndexOf, NO_OPEN_THREAD_BUNDLES, openThreadBundleAt, setThreadBundleOpen, threadBundleOpen, threadBundleOpenItems, threadStretch, onlyConsulted, runtimeStartedAgentIds, sessionReadyRow, sessionThreadOf, stackedConsultationMarkers, projectThreadFeed, threadQuestionAdvice, threadOf, withSessionTitle, threadSpacing, unannouncedConsultations, workCardInView, workDecisionOpen, type ScreenSpan } from '@manor/client-runtime/state'
+import { activityOf, chatOf, dmMemoryMarks, isHomeRoom, isProjectThread, roomOf, sitsSettled, messageBrief, projectSessionOverview, sessionsDot, openAsk, sessionLiveOf, threadQuestionIn, openSubagentQuestion, subagentSummaryOf, changeableAnswers, personaOf, projectWorkHandoffs, repoListingKey, rowHasQuoteSource, rowsOf, createRowMemory, createValueMemory, feedIndexOf, NO_OPEN_THREAD_BUNDLES, openThreadBundleAt, setThreadBundleOpen, threadBundleOpen, threadBundleOpenItems, threadStretch, onlyConsulted, runtimeStartedAgentIds, sessionReadyRow, sessionThreadOf, stackedConsultationMarkers, projectThreadFeed, threadQuestionAdvice, threadOf, withSessionTitle, threadSpacing, unannouncedConsultations, workCardInView, workDecisionOpen, type ScreenSpan } from '@manor/client-runtime/state'
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router'
 import { KeyboardAwareLegendList, useKeyboardChatComposerInset, useKeyboardScrollToEnd } from '@legendapp/list/keyboard'
 import { historyStart, olderHistoryKey } from '@manor/client-runtime/history-window'
@@ -167,13 +167,16 @@ function useTranscriptRows(thread: ThreadShape, workspace: QuietWorkspace, chatI
   )
   // A project thread bundles what needs nothing from the user; the docks and the question card read the full rows.
   const feedRows = useMemo(() => projectThread ? projectThreadFeed(rows) : rows, [projectThread, rows])
+  // The cards and bundles above are built anew on every pass. A row that says what it said
+  // keeps the object it was, so the list redraws only the rows an event changed.
+  const [rowMemory] = useState(() => createRowMemory<Row>())
   // A DM turn that draws nothing gets no row: an empty one still takes a slot and its gap,
   // and inserting it as a turn starts pushes the working indicator down, then back.
   const visibleRows = useMemo(
-    () => feedRows.filter((row) => row.kind === 'event'
+    () => rowMemory.reuse(feedRows.filter((row) => row.kind === 'event'
       ? consultationMarkers.get(row.event.id)?.length !== 0
-      : !(chatKind === 'dm' && row.kind === 'turn' && (onlyConsulted(row) || dmTurnDrawsNothing(row)))),
-    [chatKind, consultationMarkers, feedRows],
+      : !(chatKind === 'dm' && row.kind === 'turn' && (onlyConsulted(row) || dmTurnDrawsNothing(row))))),
+    [chatKind, consultationMarkers, feedRows, rowMemory],
   )
   return { baseRows, rows, consultationMarkers, visibleRows }
 }
@@ -1247,6 +1250,38 @@ function LiveTranscript({
     return projectThread && state?.kind === 'consult' ? undefined : state
   }, [chatKind, projectThread, rows, runningChatIds])
   /**
+   * What a row draws from the rows around it and from the thread as a whole. Rows keep
+   * their objects across an event that did not change them, so the list would not redraw
+   * a row whose neighbour, date label, marker or consulted colleague changed. This is
+   * worked out per pass and kept while it says the same, and it rides in `rowContext`.
+   */
+  const [aroundMemory] = useState(() => createValueMemory<{
+    /** By row key, so an equal map means every row keeps its own values, wherever it moved. */
+    places: Map<string, { dateLabel: string | undefined; compactUser: boolean; relayOffset: number | undefined; threadOffset: number | undefined }>
+    waitingOnByTurn: Map<string, string>
+    consultationMarkers: ReturnType<typeof stackedConsultationMarkers>
+    unannounced: ReturnType<typeof unannouncedConsultations>
+    memoryMarks: ReturnType<typeof dmMemoryMarks> | undefined
+    stretch: string
+  }>())
+  const around = useMemo(() => aroundMemory.keep({
+    places: new Map(pageRows.map((item, index) => {
+      const dateLabel = dateLabels[index]
+      const previous = pageRows[index - 1]
+      return [item.key, {
+        dateLabel,
+        compactUser: dateLabel === undefined && isUserBubbleRow(item) && isUserBubbleRow(previous),
+        relayOffset: dateLabel === undefined ? relayOffset(item, previous) : undefined,
+        threadOffset: projectThread && dateLabel === undefined ? threadOffset(item, previous) : undefined,
+      }]
+    })),
+    waitingOnByTurn,
+    consultationMarkers,
+    unannounced,
+    memoryMarks,
+    stretch,
+  }), [aroundMemory, consultationMarkers, dateLabels, memoryMarks, pageRows, projectThread, stretch, unannounced, waitingOnByTurn])
+  /**
    * What a row draws besides its own data. The list redraws a mounted row only when its
    * item or this object changes, never because `renderItem` did, so a value a row reads
    * from the screen has to be named here to reach it: a thread reply that lands in an
@@ -1254,8 +1289,8 @@ function LiveTranscript({
    * on. Everything in it holds still through a streamed frame.
    */
   const rowContext = useMemo(
-    () => ({ openBundles, connected, links, draftActions, repoFiles, latestTurnKey, agents }),
-    [openBundles, connected, links, draftActions, repoFiles, latestTurnKey, agents],
+    () => ({ openBundles, connected, links, draftActions, repoFiles, latestTurnKey, agents, around, project, userBubbleTint }),
+    [openBundles, connected, links, draftActions, repoFiles, latestTurnKey, agents, around, project, userBubbleTint],
   )
 
   return (
@@ -1312,24 +1347,24 @@ function LiveTranscript({
           quoteAuthors={chat !== null && quoteNamesAuthor(chat, projectThread)}
           {...(projectThread && project !== undefined ? { threadProject: project } : {})}
           pinPlan={chatKind === 'project' && !projectThread}
-          compactUser={dateLabels[index] === undefined && isUserBubbleRow(item) && isUserBubbleRow(pageRows[index - 1])}
+          compactUser={around.places.get(item.key)?.compactUser === true}
           latest={item.key === latestTurnKey}
           links={links}
           draftActions={draftActions}
           repoFiles={repoFiles}
           row={item}
-          {...(item.kind === 'thread_bundle' ? { bundleOpen: threadBundleOpen(openBundles, stretch, item.key), bundleOpenItems: threadBundleOpenItems(openBundles, stretch, item), onBundleOpen } : {})}
-          dateLabel={dateLabels[index]}
-          waitingOnAgentId={item.kind === 'turn' ? waitingOnByTurn.get(item.turnId) : undefined}
-          consultationMarker={item.kind === 'event' ? consultationMarkers.get(item.event.id) : undefined}
-          unannounced={item.kind === 'event' && item.event.type === 'agent_relay' && item.event.phase === 'sent' ? unannounced.get(item.event.turnId) : undefined}
-          relayOffset={dateLabels[index] === undefined ? relayOffset(item, pageRows[index - 1]) : undefined}
-          {...(projectThread && dateLabels[index] === undefined ? { threadOffset: threadOffset(item, pageRows[index - 1]) } : {})}
+          {...(item.kind === 'thread_bundle' ? { bundleOpen: threadBundleOpen(openBundles, around.stretch, item.key), bundleOpenItems: threadBundleOpenItems(openBundles, around.stretch, item), onBundleOpen } : {})}
+          dateLabel={around.places.get(item.key)?.dateLabel}
+          waitingOnAgentId={item.kind === 'turn' ? around.waitingOnByTurn.get(item.turnId) : undefined}
+          consultationMarker={item.kind === 'event' ? around.consultationMarkers.get(item.event.id) : undefined}
+          unannounced={item.kind === 'event' && item.event.type === 'agent_relay' && item.event.phase === 'sent' ? around.unannounced.get(item.event.turnId) : undefined}
+          relayOffset={around.places.get(item.key)?.relayOffset}
+          {...(around.places.get(item.key)?.threadOffset === undefined ? {} : { threadOffset: around.places.get(item.key)?.threadOffset })}
           onOpenAgentRelay={onOpenAgentRelay}
           {...(project === undefined || project.name === '' ? {} : { forwardSource: project.name })}
           onRejectWork={onRejectWork}
           onReveal={onReveal}
-          {...(memoryMarks === undefined || item.kind !== 'turn' ? {} : { memoryChanges: memoryMarks.get(item.key) })}
+          {...(around.memoryMarks === undefined || item.kind !== 'turn' ? {} : { memoryChanges: around.memoryMarks.get(item.key) })}
           onOpenSubagent={onOpenSubagent}
           onOpenQuoteSource={onOpenQuoteSource}
           {...(chatKind === 'dm' || chatKind === 'group' ? { onReply } : {})}

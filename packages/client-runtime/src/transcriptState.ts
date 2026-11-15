@@ -40,6 +40,7 @@ import { isCompacting } from './compacting'
 import { completionFor, confirmRequestOf, confirmTasks, confirmTitle, confirmWork, planTasks, type ConfirmProgress, type TaskLine } from './confirmTasks'
 import { plainDraftText, plainPreview } from './plainPreview'
 import { clockOf } from './usage'
+import { reuseRows } from './rowReuse'
 
 export type { PlanStanding, TaskLine } from './confirmTasks'
 export { planRowKeys, planStanding, planTitle } from './confirmTasks'
@@ -2456,6 +2457,14 @@ const turnKey = (turnId: string, agentId: string, occurrence: number): string =>
 const durableRowsCache = new WeakMap<ThreadEvent[], Map<boolean, DurableRows>>()
 
 /**
+ * The rows last built for a thread, found by its first event, which every later array
+ * of that thread still starts with. A rebuild hands back the row objects of this list
+ * wherever a row did not change (`reuseRows`), so one new event redraws the rows it
+ * changed and not every mounted row.
+ */
+const lastDurableRows = new WeakMap<ThreadEvent, Map<boolean, { rows: Row[]; waiting: Row[] }>>()
+
+/**
  * A turn is mutable while it is assembled. Clone the linked timeline graph before a
  * live projection changes tool status or segment placement, without cloning payloads
  * such as images, edits and question definitions that are immutable contract data.
@@ -2998,7 +3007,19 @@ function durableRowsOf(events: ThreadEvent[], dmBeats: boolean): DurableRows {
   }
   for (const turn of groups) finishTurn(turn, dmBeats)
 
-  const derived = { rows, open: unfinished, occurrences, waiting, unattached }
+  // An appended event makes a new array, and every row above was built anew from it.
+  // Rows that say what they said before give way to the objects they were.
+  const first = events[0]
+  const before = first === undefined ? undefined : lastDurableRows.get(first)?.get(dmBeats)
+  const kept = reuseRows(before?.rows, rows)
+  const keptWaiting = reuseRows(before?.waiting, waiting)
+  if (first !== undefined) {
+    const lastByMode = lastDurableRows.get(first) ?? new Map<boolean, { rows: Row[]; waiting: Row[] }>()
+    lastByMode.set(dmBeats, { rows: kept, waiting: keptWaiting })
+    lastDurableRows.set(first, lastByMode)
+  }
+
+  const derived = { rows: kept, open: unfinished, occurrences, waiting: keptWaiting, unattached }
   const cachedByMode = durableRowsCache.get(events) ?? new Map<boolean, DurableRows>()
   cachedByMode.set(dmBeats, derived)
   durableRowsCache.set(events, cachedByMode)
@@ -3044,7 +3065,8 @@ export function rowsOf(state: ThreadShape, chatKind?: Chat['kind']): Row[] {
           answer: [],
           tail: [],
         }
-        if (early !== undefined) rows = rows.filter((row) => !early.includes(row as Extract<Row, { kind: 'event' }>))
+        // By key: a row that did not change keeps an earlier object than the one `unattached` holds.
+        if (early !== undefined) rows = rows.filter((row) => !early.some((steer) => steer.key === row.key))
         else if (rows === durable.rows) rows = [...rows]
         const later = rows.findIndex((row) => row.kind === 'turn' && (row.startedAt ?? Infinity) > live.startedAt)
         rows.splice(later === -1 ? rows.length : later, 0, turn)
