@@ -884,7 +884,7 @@ export function Composer({ agents, commandContext, household, overrides = NO_OVE
     <div ref={plusRef} className={`relative flex-none ${row ? '-order-1' : ''}`}>
       <button
         type="button"
-        className={`grid cursor-pointer place-items-center rounded-full border-0 bg-transparent text-muted hover:bg-user-bg hover:text-text ${controlSize}`}
+        className={`grid cursor-pointer place-items-center rounded-full border-0 bg-user-bg text-muted hover:bg-menu-selected hover:text-text ${controlSize}`}
         aria-haspopup="menu"
         aria-expanded={plusOpen}
         title="Attach and insert"
