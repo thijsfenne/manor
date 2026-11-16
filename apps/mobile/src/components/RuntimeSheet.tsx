@@ -1,5 +1,6 @@
 import { FlashIcon } from '@manor/client-runtime/solid-icons'
 import ArrowRight01Icon from '@hugeicons/core-free-icons/ArrowRight01Icon'
+import Files01Icon from '@hugeicons/core-free-icons/Files01Icon'
 import Tick02Icon from '@hugeicons/core-free-icons/Tick02Icon'
 import { HugeiconsIcon } from '@hugeicons/react-native'
 import {
@@ -53,6 +54,8 @@ interface RuntimeSheetProps {
   /** True while the socket is down: the values stay readable, the picks do not. */
   disabled?: boolean
   onChange: (agentId: string, override: ChatOverride) => void
+  /** A DM's file library. When set, the list ends with a Files row that opens it. */
+  onFiles?: () => void
 }
 
 /**
@@ -60,7 +63,7 @@ interface RuntimeSheetProps {
  * it. The same two views the Mac's roster panel has, in a sheet, so a pin means the
  * same thing on both: this chat only, the Agents section keeps her defaults.
  */
-export function RuntimeSheet({ open, onClose, agents, overrides, activeAgentIds, startedAgentIds = [], disabled = false, onChange }: RuntimeSheetProps) {
+export function RuntimeSheet({ open, onClose, agents, overrides, activeAgentIds, startedAgentIds = [], disabled = false, onChange, onFiles }: RuntimeSheetProps) {
   const hostAuto = useHostAuto()
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [direction, setDirection] = useState<'forward' | 'back'>('forward')
@@ -134,6 +137,20 @@ export function RuntimeSheet({ open, onClose, agents, overrides, activeAgentIds,
                 )
               })}
             </View>
+            {onFiles === undefined ? null : (
+              <View style={styles.group}>
+                <Pressable
+                  accessibilityLabel="Files"
+                  accessibilityRole="button"
+                  onPress={onFiles}
+                  style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
+                >
+                  <HugeiconsIcon color={colors.text} icon={Files01Icon} size={20} strokeWidth={1.7} />
+                  <Text numberOfLines={1} style={styles.menuLabel}>Files</Text>
+                  <HugeiconsIcon color={colors.dim} icon={ArrowRight01Icon} size={16} strokeWidth={1.7} />
+                </Pressable>
+              </View>
+            )}
           </ScrollView>
         </Animated.View>
       ) : (

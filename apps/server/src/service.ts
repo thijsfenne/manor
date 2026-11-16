@@ -1039,6 +1039,7 @@ export class ManorService {
         return
       case 'get_chat_summary':
       case 'get_agent_notes':
+      case 'get_dm_files':
       case 'undo_notes_update':
       case 'send_message':
       case 'stop':

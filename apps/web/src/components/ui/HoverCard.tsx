@@ -14,8 +14,11 @@ interface HoverCardProps {
   /** False once the row has let go: the card plays its exit and waits to be unmounted. */
   open: boolean
   width: number
-  /** The side the card opens on first; it still flips when that side has no room. */
-  side?: 'left' | 'right'
+  /**
+   * The side the card opens on first; it still flips when that side has no room. `top`
+   * sits over the row from its left edge, for a list too narrow to have a side.
+   */
+  side?: 'left' | 'right' | 'top'
   /** Names the card for screen readers, e.g. `${project.name} details`. */
   label: string
   onClose: () => void
@@ -59,6 +62,12 @@ export function HoverCard({
     const card = cardRef.current
     if (card === null) return
     const bounds = card.getBoundingClientRect()
+    if (side === 'top') {
+      const above = anchor.top - bounds.height - GAP
+      const x = Math.min(anchor.left, window.innerWidth - bounds.width - INSET)
+      setPosition({ x: Math.max(INSET, x), y: above >= INSET ? above : anchor.bottom + GAP })
+      return
+    }
     // Beside the row, on the preferred side while it fits. The sidebar is on the left,
     // so its cards default to the right; the sessions overview is on the right and asks for the left.
     const right = anchor.right + GAP
@@ -93,7 +102,9 @@ export function HoverCard({
         top: position?.y ?? -9999,
         visibility: position === null ? 'hidden' : 'visible',
         // It grows out of the edge that faces its row, whichever side it flipped to.
-        transformOrigin: position !== null && position.x < anchor.left ? 'right center' : 'left center',
+        transformOrigin: side === 'top'
+          ? (position !== null && position.y < anchor.top ? 'left bottom' : 'left top')
+          : position !== null && position.x < anchor.left ? 'right center' : 'left center',
       }}
       role="dialog"
       data-hover-card=""

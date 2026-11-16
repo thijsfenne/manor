@@ -563,7 +563,7 @@ export function StageChatPane({
 function StagePanel({ kit, chat, layout, availableWidth }: { kit: StageKit; chat: Chat; layout: PanelLayout; availableWidth: number }) {
   const { manor, rightPanel, panels, nav } = kit
   const { pageContextsByChat, addPageContext } = kit.pageContexts
-  const { noteRequest, clearNoteRequest } = kit.reveals
+  const { noteRequest, clearNoteRequest, reveal } = kit.reveals
   const { showFor, closeFor, moveFor, toggleFor } = rightPanel
   const { openFileFor, setDiffScope } = panels
   const { openWebsiteUrl } = kit
@@ -606,6 +606,7 @@ function StagePanel({ kit, chat, layout, availableWidth }: { kit: StageKit; chat
     onFloat={kit.floatingBrowser.float}
     {...(kit.browserBridge === undefined ? {} : { onSendToBrowser: kit.sendToBrowser, onOpenBrowser: nav.openBrowser })}
     onOpenChat={nav.openChat}
+    onRevealMessage={(eventId) => reveal(chat.id, { eventId })}
     onOpenRoutine={nav.openRoutineDetail}
     onOpenRoutines={nav.openRoutines}
     onDialogChange={kit.onDialogChange}

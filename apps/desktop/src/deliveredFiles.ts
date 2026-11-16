@@ -4,12 +4,18 @@ import path from 'node:path'
 import { app, dialog, ipcMain, shell, type BrowserWindow, type IpcMainInvokeEvent } from 'electron'
 import type { DesktopFileResult } from '@manor/contracts'
 
-/** Only a signed delivered-file link from a Manor server: `/media/<chat>/<event>/f0/<signature>`. */
+/**
+ * Only a signed link to a file a chat holds on a Manor server,
+ * `/media/<chat>/<event>/<slot>/<signature>`: a delivered file (`f0`), a picture (its
+ * index), a document (`d` and its index) or a text file (`t` and its index).
+ */
+const FILE_SLOT = /^(?:f0|[dt]?\d+)$/
+
 export function checkedFileUrl(value: unknown): URL {
   if (typeof value !== 'string') throw new Error('A delivered file needs its link.')
   const url = new URL(value)
   const parts = url.pathname.split('/')
-  if ((url.protocol !== 'http:' && url.protocol !== 'https:') || parts[1] !== 'media' || parts.length !== 6 || parts[4] !== 'f0') {
+  if ((url.protocol !== 'http:' && url.protocol !== 'https:') || parts[1] !== 'media' || parts.length !== 6 || !FILE_SLOT.test(parts[4] ?? '')) {
     throw new Error('That is not a Manor file link.')
   }
   return url
@@ -38,7 +44,7 @@ async function download(url: URL): Promise<Uint8Array | DesktopFileResult> {
 }
 
 /**
- * Open and Save for files a persona delivered. Open writes a copy under the app's
+ * Open and Save for files a chat holds: what a persona delivered and what its library lists. Open writes a copy under the app's
  * temp folder, one folder per link so two files with one name never collide, and
  * lets macOS pick the app; the stored original in Manor stays the source.
  */

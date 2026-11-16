@@ -1773,6 +1773,34 @@ export const DeliveredFileSchema = z.object({
 export type DeliveredFile = z.infer<typeof DeliveredFileSchema>
 export type DeliveredViewport = (typeof DELIVERED_VIEWPORTS)[number]
 
+/** What a file in a DM's library is shown as: Media is image and video, Files is the rest. */
+export const DM_FILE_KINDS = ['image', 'video', 'pdf', 'file'] as const
+export type DmFileKind = (typeof DM_FILE_KINDS)[number]
+
+/**
+ * One file of a DM, for the Files page of its Agent settings: something the user attached
+ * or the agent made (an image in a reply, a delivered file). Listed from the DM's own
+ * transcript, so it holds no bytes; `src` is the same signed link the transcript carries.
+ */
+export const DmFileSchema = z.object({
+  /** Stable inside the DM: the event that holds the file plus its slot there. */
+  id: z.string().min(1).max(400),
+  name: z.string().min(1).max(160),
+  mime: z.string().min(1).max(160),
+  kind: z.enum(DM_FILE_KINDS),
+  size: z.number().int().nonnegative(),
+  ts: z.number(),
+  /** The agent that made it. Absent on a file the user attached. */
+  agentId: z.string().optional(),
+  /** The transcript message Show in chat lands on. Absent when the file's turn said nothing. */
+  messageId: z.string().optional(),
+  /** Absent when the bytes are gone; the file then lists as unavailable. */
+  src: z.string().min(1).max(2_000).optional(),
+  /** A delivered HTML page, which `?view=1` on its link draws sandboxed. */
+  page: z.literal(true).optional(),
+})
+export type DmFile = z.infer<typeof DmFileSchema>
+
 /** One `deliver_file` call that succeeded. Grouped under its turn, shown under the answer. */
 export const FileDeliveryEventSchema = z.object({
   ...eventBase,
@@ -4229,6 +4257,8 @@ const ClientMessageWireSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('get_chat_summary'), chatId: z.string(), ...optionalRequestId }),
   /** An agent's standing notes as its turns receive them, for its Agent settings Notes page. */
   z.object({ type: z.literal('get_agent_notes'), agentId: z.string(), ...optionalRequestId }),
+  /** Every file of one DM, newest first, for the Files page of its Agent settings. */
+  z.object({ type: z.literal('get_dm_files'), chatId: z.string(), ...optionalRequestId }),
   /** Puts an agent's notes back as a turn found them, only while nothing changed them since. */
   z.object({ type: z.literal('undo_notes_update'), chatId: z.string(), turnId: z.string(), ...optionalRequestId }),
   z.object({
@@ -4974,6 +5004,8 @@ export const ServerMessageSchema = z.discriminatedUnion('type', [
       truncated: z.boolean(),
     }).optional(),
   }),
+  /** Reply to get_dm_files, to the socket that asked. Newest first. */
+  z.object({ type: z.literal('dm_files'), ...optionalRequestId, chatId: z.string(), files: z.array(DmFileSchema) }),
   z.object({
     type: z.literal('agent_notes'),
     ...optionalRequestId,

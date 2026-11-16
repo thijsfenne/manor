@@ -258,6 +258,36 @@ const evidence = EVIDENCE_NAMES.slice(0, evidenceCount).map((name, index) => {
   return { id: `evidence-${index + 1}`, name: `${name}.png`, width: bytes.readUInt32BE(16), height: bytes.readUInt32BE(20), src: `/media/evidence/${index + 1}/fixture`, bytes }
 })
 
+// What `get_dm_files` answers for Marlow's DM, newest first: the picture and the note his
+// transcript holds, then files only the library lists. Seven fall in this week, so Show
+// more appears, and the oldest has lost its bytes. Every other DM answers with no files.
+const dmFileBytes = new Map()
+function dmFile(index, { name, mime, daysAgo, body, agentId, messageId }) {
+  const bytes = body === undefined ? undefined : Buffer.from(body)
+  const src = `/media/dm-files/${index}/fixture`
+  if (bytes !== undefined) dmFileBytes.set(src, { bytes, type: mime.startsWith('text/') ? 'text/plain; charset=utf-8' : mime })
+  return {
+    id: `dm-file-${index}`, name, mime, ts: now - daysAgo * 86_400_000 - index * 60_000,
+    kind: mime.startsWith('image/') ? 'image' : mime === 'application/pdf' ? 'pdf' : 'file',
+    size: bytes?.byteLength ?? 48_210,
+    ...(agentId === undefined ? {} : { agentId }), ...(messageId === undefined ? {} : { messageId }), ...(bytes === undefined ? {} : { src }),
+  }
+}
+const appImage = (name) => readFileSync(new URL(`../../../apps/mobile/assets/images/${name}.png`, import.meta.url))
+const dmFiles = [
+  { name: 'icon.png', mime: 'image/png', daysAgo: 0, body: appImage('icon'), messageId: 'mc-image' },
+  { name: 'notities.md', mime: 'text/markdown', daysAgo: 0, body: '# Notities\n\nDatumlabels nakijken.\n', messageId: 'mc-reply' },
+  { name: 'splash-icon.png', mime: 'image/png', daysAgo: 1, body: appImage('splash-icon'), agentId: 'agent-marlow', messageId: 'mc-return' },
+  { name: 'release-note.md', mime: 'text/markdown', daysAgo: 2, agentId: 'agent-marlow',
+    body: '# Release note\n\nThe export names the file after the chat title.\n\n## Changed\n\n- Date labels follow the phone’s region.\n- A long title no longer pushes the menu off screen.\n\n## Known\n\nAn empty chat exports an empty file.\n' },
+  { name: 'planning.pdf', mime: 'application/pdf', daysAgo: 3, body: '%PDF-1.4\n%%EOF\n', agentId: 'agent-marlow' },
+  { name: 'icon-dark.png', mime: 'image/png', daysAgo: 4, body: appImage('icon-dark'), agentId: 'agent-marlow' },
+  { name: 'budget.csv', mime: 'text/csv', daysAgo: 5, body: 'post,amount\nfronts,2400\nworktop,1150\n' },
+  { name: 'favicon.png', mime: 'image/png', daysAgo: 10, body: appImage('favicon') },
+  { name: 'icon-tinted.png', mime: 'image/png', daysAgo: 12, body: appImage('icon-tinted'), agentId: 'agent-marlow' },
+  { name: 'contract.pdf', mime: 'application/pdf', daysAgo: 20 },
+].map((file, index) => dmFile(index + 1, file))
+
 // A Session briefed from Smith's DM, led by Wren, whose second result waits for Accept.
 const handoff = {
   id: 'handoff-export', sourceChatId: 'chat-dm-smith', sourceTurnId: 'turn-brief', workChatId: 'chat-session-export',
@@ -1188,6 +1218,12 @@ const http = createServer((request, response) => {
       .catch(() => response.writeHead(404).end())
     return
   }
+  const listed = dmFileBytes.get(icon.pathname)
+  if (listed !== undefined) {
+    response.writeHead(200, { 'content-type': listed.type, 'content-length': String(listed.bytes.byteLength) })
+    response.end(listed.bytes)
+    return
+  }
   const shot = evidence.find((item) => item.src === request.url)
   if (shot === undefined) {
     response.writeHead(404).end()
@@ -1220,6 +1256,10 @@ server.on('connection', (socket) => {
     }
     if (message.type === 'list_workflow_suggestions') {
       send(socket, plugins.suggestions)
+      return
+    }
+    if (message.type === 'get_dm_files') {
+      send(socket, { type: 'dm_files', chatId: message.chatId, files: message.chatId === 'chat-dm-marlow' ? dmFiles : [], requestId: message.requestId })
       return
     }
     if (message.type === 'list_dirs') {

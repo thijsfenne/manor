@@ -4,16 +4,13 @@ import SquareArrowUpRightIcon from '@hugeicons/core-free-icons/SquareArrowUpRigh
 import { HugeiconsIcon } from '@hugeicons/react-native'
 import type { DeliveredFile } from '@manor/contracts'
 import { describeBytes } from '@manor/client-runtime/attachments'
-import { Directory, File, Paths } from 'expo-file-system'
 import * as WebBrowser from 'expo-web-browser'
 import { useState } from 'react'
-import { Pressable, Share, StyleSheet, View } from 'react-native'
+import { Pressable, StyleSheet, View } from 'react-native'
 
 import { Text } from '@/components/Text'
+import { FILE_GONE, FILE_UNREACHABLE, fileFailure, saveToShareSheet } from '@/lib/fileSave'
 import { colors, fonts, radius, spacing, squircle } from '@/theme'
-
-const GONE = 'This file is no longer available in Manor.'
-const UNREACHABLE = 'Manor cannot be reached right now. Try again once the connection is back.'
 
 /**
  * Files a persona handed over, under the answer of the turn that made them. Open
@@ -43,18 +40,14 @@ function DeliveredFileRow({ file }: { file: DeliveredFile }) {
       if (action === 'open') {
         // A cheap probe first: the in-app browser would otherwise show a bare 404 page.
         const probe = await fetch(src, { method: 'HEAD' }).catch(() => undefined)
-        if (probe === undefined) return setError(UNREACHABLE)
-        if (!probe.ok) return setError(probe.status === 404 ? GONE : `Manor could not fetch the file (HTTP ${probe.status}).`)
+        if (probe === undefined) return setError(FILE_UNREACHABLE)
+        if (!probe.ok) return setError(probe.status === 404 ? FILE_GONE : `Manor could not fetch the file (HTTP ${probe.status}).`)
         await WebBrowser.openBrowserAsync(src)
         return
       }
-      const folder = new Directory(Paths.cache, 'manor-files', file.id)
-      folder.create({ intermediates: true, idempotent: true })
-      const saved = await File.downloadFileAsync(src, new File(folder, file.name), { idempotent: true })
-      await Share.share({ url: saved.uri })
+      await saveToShareSheet(src, file.id, file.name)
     } catch (failure: unknown) {
-      const message = failure instanceof Error ? failure.message : ''
-      setError(/\b404\b/.test(message) ? GONE : /\b\d{3}\b/.test(message) ? 'Manor could not fetch the file.' : UNREACHABLE)
+      setError(fileFailure(failure))
     } finally {
       setBusy(null)
     }

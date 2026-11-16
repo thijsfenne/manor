@@ -55,4 +55,5 @@ Each feature file starts with an H1 title and one paragraph describing the user-
 - [Secret requests](./secret-requests.md) covers an agent's `request_secret` card: command and browser targets, Use once, Decline, Stop and the posted shape Codex and Cursor use.
 - [Browser find and page zoom](./browser-find-zoom.md) covers the find bar and the address-field zoom magnifier through the same stub.
 - [Connectors marketplace](./connectors-marketplace.md) covers Plugins → Connectors: search, the Composio catalogue, connect with an alias, Failed, and disconnect with confirmation, against the mock Composio.
+- [DM files](./dm-files.md) covers the Files row of a DM's Agent settings: the library, its filter, the hover card and menu, the viewer and the empty state.
 - [Project threads](./project-threads.md) covers the Projects section, the thread's file writes, its sessions in the split, question routing, Confirm in the thread, DM briefs, the Context panel and removal.

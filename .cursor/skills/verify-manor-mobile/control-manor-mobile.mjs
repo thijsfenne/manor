@@ -23,7 +23,7 @@ import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { setTimeout as sleep } from 'node:timers/promises'
 import { randomUUID } from 'node:crypto'
-import { chatRunning, describeAge, envOf, groupMembers, parseElapsed, resolveOwner, staleReason, staleVerdict, stopGroup } from '../verify-manor/stale-run.mjs'
+import { chatRunning, cwdOf, describeAge, envOf, groupMembers, parseElapsed, resolveOwner, staleReason, staleVerdict, stopGroup } from '../verify-manor/stale-run.mjs'
 
 const SKILL_DIR = dirname(fileURLToPath(import.meta.url))
 const REPO_ROOT = resolve(SKILL_DIR, '../../..')
@@ -196,6 +196,13 @@ function runIdentity() {
 }
 
 const MARKER_VAR = 'MANOR_VERIFY_MOBILE'
+const OWNER_VAR = 'MANOR_VERIFY_MOBILE_CHAT'
+
+/**
+ * What every process of a run carries in its environment: the run, and the chat that owns
+ * it. They outlive the checkout, so a run whose worktree was removed can still be judged.
+ */
+const runMarks = ({ runId, chatId }) => ({ ...(runId ? { [MARKER_VAR]: runId } : {}), ...(runId && chatId ? { [OWNER_VAR]: chatId } : {}) })
 
 function psField(field, pid) {
   try {
@@ -225,14 +232,7 @@ function runVerdict(statePath, runId) {
 
 /** The verify-manor-mobile folder of the checkout a listener runs from, found through its working directory. */
 function ownerSkillDirOf(pid) {
-  let listing = ''
-  try {
-    listing = execFileSync('lsof', ['-a', '-d', 'cwd', '-Fn', '-p', String(pid)], { encoding: 'utf8' })
-  } catch (error) {
-    listing = String(error?.stdout ?? '')
-  }
-  const cwd = /^n(.*)$/m.exec(listing)?.[1]
-  for (let dir = cwd; dir && dir !== '/'; dir = dirname(dir)) {
+  for (let dir = cwdOf(pid); dir && dir !== '/'; dir = dirname(dir)) {
     for (const candidate of [dir, join(dir, '.cursor/skills/verify-manor-mobile')]) {
       if (existsSync(join(candidate, 'control-manor-mobile.mjs'))) return candidate
     }
@@ -243,11 +243,48 @@ function ownerSkillDirOf(pid) {
 /** Runs stopped for being stale during this launch, for its report. */
 const stoppedStale = []
 
+/** A process of this skill, of any checkout: the run marker, or the variables a run from before markers set. */
+const ofThisSkill = (env) => env.includes(`${MARKER_VAR}=`) || env.includes('MANOR_MOBILE_VERIFY_PORT=') || env.includes('EXPO_PUBLIC_MANOR_WS=ws://')
+
+/**
+ * Stops the run behind a listener whose checkout was removed under it. Its state file and
+ * its `cleanup` went with the checkout, so the processes themselves are all there is to go
+ * on. The listener's group is stopped only when every member carries this skill's own
+ * variables (a group that also holds anything else is left alone), never the caller's own
+ * group, and never while the chat the run names has a turn running. All of it is asked
+ * again before every signal. Answers the line for the report, or undefined when the
+ * listener is not such a run or may not be stopped.
+ */
+async function stopOrphan(port, what, pid) {
+  const cwd = cwdOf(pid)
+  const group = Number(psField('pgid', pid))
+  if (cwd === undefined || group === Number(psField('pgid', process.pid))) return undefined
+  const chatId = new RegExp(`${OWNER_VAR}=([0-9a-f-]{36})`).exec(envOf(pid))?.[1]
+  const judge = () => {
+    const members = groupMembers(group)
+    // Once the listener has exited the rest of its group still has to be this skill's alone.
+    const here = cwdOf(pid)
+    if (here !== undefined && (here !== cwd || !members.includes(pid))) return undefined
+    if (!members.every((member) => ofThisSkill(envOf(member)))) return undefined
+    // The run names its chat, not the data folder that chat lives in.
+    const ownerRunning = chatId ? chatRunning(chatId, undefined) : null
+    return staleVerdict({ ageMs: 0, idleMs: 0, ownerRunning, checkoutGone: !existsSync(cwd) })
+  }
+  const verdict = judge()
+  if (verdict === undefined) return undefined
+  const who = `${chatId ? `chat ${chatId.slice(0, 8)}, ` : ''}checkout ${cwd}, ${describeAge(parseElapsed(psField('etime', pid)))} old`
+  await stopGroup(group, ofThisSkill, () => judge() !== undefined)
+  for (let waited = 0; waited < 8_000 && portOwners(port).length > 0; waited += 250) await sleep(250)
+  if (portOwners(port).length > 0) return undefined
+  return `Stopped the stale verify run on ${what.toLowerCase()} port ${port} (${who}): ${staleReason(verdict)}. Its process group was stopped.`
+}
+
 /**
  * Why a port is held, and by whom, for the refusal. A leftover run holds the fixed ports
  * until somebody cleans it up: when it is stale (over a day old, or its owning chat has
  * no running turn) its own checkout's `cleanup` stops it, which signals only the groups
- * that run recorded and claimed. Anything else is refused with its owner named.
+ * that run recorded and claimed. A run whose checkout is gone is stale as well and has no
+ * cleanup left, so its own group is stopped. Anything else is refused with its owner named.
  * Returns undefined once the port is free.
  */
 async function holderOrFree(port, what) {
@@ -255,7 +292,14 @@ async function holderOrFree(port, what) {
   if (listeners.length === 0) return undefined
   const ownerDir = ownerSkillDirOf(listeners[0])
   const unknown = `${what} port ${port} is already in use (pid ${listeners.join(', ')}) by a process that is not a verify-manor-mobile run Manor can identify. Manor does not touch it. Free the port by hand and retry.`
-  if (ownerDir === undefined || ownerDir === SKILL_DIR) return unknown
+  if (ownerDir === undefined) {
+    const line = await stopOrphan(port, what, listeners[0])
+    if (line === undefined) return unknown
+    stoppedStale.push(line)
+    console.error(line)
+    return undefined
+  }
+  if (ownerDir === SKILL_DIR) return unknown
   let theirs
   try {
     theirs = JSON.parse(readFileSync(join(ownerDir, '.run/state.json'), 'utf8'))
@@ -283,8 +327,7 @@ async function holderOrFree(port, what) {
   } else {
     // A run from before markers: only the group the listener sits in, and only while a member
     // still carries this skill's own variables. Its saved pids are not trusted beyond that.
-    const ours = (env) => env.includes('MANOR_MOBILE_VERIFY_PORT=') || env.includes('EXPO_PUBLIC_MANOR_WS=ws://')
-    await stopGroup(group, ours, () => runVerdict(statePath, theirs.runId)?.verdict !== undefined)
+    await stopGroup(group, ofThisSkill, () => runVerdict(statePath, theirs.runId)?.verdict !== undefined)
     try {
       const latest = JSON.parse(readFileSync(statePath, 'utf8'))
       for (const [pid, claimed, extra] of [['fixturePid', 'claimedFixture', []], ['metroPid', 'claimedMetro', ['metroPort']]]) {
@@ -375,7 +418,7 @@ async function startFixture() {
   if (state.fixturePid && pidAlive(state.fixturePid)) return state.fixturePid
   await assertPortFree(FIXTURE_PORT, 'Fixture')
   mkdirSync(RUN_DIR, { recursive: true })
-  const { runId } = runIdentity()
+  const run = runIdentity()
   const logFd = openSync(join(RUN_DIR, 'fixture.log'), 'a')
   const child = spawn(findTsx(), [join(SKILL_DIR, 'fixture-server.mjs')], {
     cwd: SKILL_DIR,
@@ -383,7 +426,7 @@ async function startFixture() {
       ...process.env,
       MANOR_MOBILE_VERIFY_PORT: String(FIXTURE_PORT),
       MANOR_MOBILE_VERIFY_HOST: '127.0.0.1',
-      ...(runId ? { [MARKER_VAR]: runId } : {}),
+      ...runMarks(run),
     },
     detached: true,
     stdio: ['ignore', logFd, logFd],
@@ -425,7 +468,7 @@ async function startMetro() {
   if (state.metroPid && pidAlive(state.metroPid)) return state.metroPid
   await assertPortFree(METRO_PORT, 'Metro')
   mkdirSync(RUN_DIR, { recursive: true })
-  const { runId } = runIdentity()
+  const run = runIdentity()
   const logFd = openSync(METRO_LOG, 'a')
   const child = spawn(
     'pnpm',
@@ -434,7 +477,7 @@ async function startMetro() {
     ['--filter', '@manor/mobile', 'exec', 'expo', 'start', '--dev-client', '--host', 'lan', '--port', String(METRO_PORT), '--clear'],
     {
       cwd: REPO_ROOT,
-      env: { ...fixtureAppEnv(), ...(runId ? { [MARKER_VAR]: runId } : {}) },
+      env: { ...fixtureAppEnv(), ...runMarks(run) },
       detached: true,
       stdio: ['ignore', logFd, logFd],
     },

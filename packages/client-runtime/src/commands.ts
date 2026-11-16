@@ -233,6 +233,8 @@ export function createWorkspaceCommands(send: Send, update: Update) {
       ask({ type: 'load_more_mymind_objects', requestId }, (state) => askMoreMyMindObjects(state, requestId)),
     /** A routine's history, answered as `routine_runs`. */
     getRoutineRuns: (routineId: string) => send({ type: 'get_routine_runs', routineId }),
+    /** One DM's file library, answered as `dm_files` into `WorkspaceState.dmFiles`. */
+    getDmFiles: (chatId: string) => send({ type: 'get_dm_files', chatId }),
     /** Read means shown: send once a run's result is on screen. The dot goes at once. */
     markRoutineRunsRead: (routineId: string, runIds: readonly string[]) =>
       ask(

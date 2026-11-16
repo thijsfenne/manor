@@ -151,6 +151,8 @@ export interface WorkspaceActions {
   /** Asks for a project's file listing, through the chat's checkout when there is one. */
   listRepoFiles: (projectId: string, chatId?: string) => boolean
   readRepoFile: (projectId: string, path: string, chatId?: string) => boolean
+  /** Asks for one DM's file library; it lands in `workspace.dmFiles[chatId]`, newest first. */
+  getDmFiles: (chatId: string) => boolean
   listDirs: (path?: string) => boolean
   closeDirs: () => void
   /** Starts one routine and returns the id that correlates any refusal. */
@@ -629,6 +631,8 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     [send],
   )
 
+  const getDmFiles = useCallback((chatId: string) => commands().getDmFiles(chatId), [commands])
+
   const readRepoFile = useCallback(
     (projectId: string, path: string, chatId?: string) => commands().readRepoFile(projectId, path, chatId),
     [commands],
@@ -719,6 +723,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       deleteProject,
       setChatOverride,
       listRepoFiles,
+      getDmFiles,
       readRepoFile,
       listDirs,
       closeDirs,
@@ -730,7 +735,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       listArtifacts,
       loadMoreArtifacts,
     }),
-    [acceptWorkHandoff, answerSecretRequest, answerUserInput, changeSessionAnswer, askCheckoutStatus, askProjectCheckout, clearCreatedChat, clearCreatedProject, closeDirs, confirmWorkGoal, acceptWorkResult, reviseWorkResult, retryWorkResult, approveMergeFix, createChat, addFolder, removeFolder, deleteProject, discardOutboundDraft, ignoreOutboundDraft, listWorkflowSuggestions, listArtifacts, listDirs, listRepoFiles, listVault, loadMoreArtifacts, openChat, leaveChat, openSubagentThread, readOutboundThread, readRepoFile, readVaultFile, rejectWorkHandoff, restoreOutboundDraft, runRoutine, sendMessage, setChatOverride, setChatSettled, signOut, snoozeOutboundDraft, stopBackground, stopSubagent, stopTurn, submitOutboundDraft, updateProject],
+    [acceptWorkHandoff, answerSecretRequest, answerUserInput, changeSessionAnswer, askCheckoutStatus, askProjectCheckout, clearCreatedChat, clearCreatedProject, closeDirs, confirmWorkGoal, acceptWorkResult, reviseWorkResult, retryWorkResult, approveMergeFix, createChat, addFolder, removeFolder, deleteProject, discardOutboundDraft, ignoreOutboundDraft, listWorkflowSuggestions, listArtifacts, getDmFiles, listDirs, listRepoFiles, listVault, loadMoreArtifacts, openChat, leaveChat, openSubagentThread, readOutboundThread, readRepoFile, readVaultFile, rejectWorkHandoff, restoreOutboundDraft, runRoutine, sendMessage, setChatOverride, setChatSettled, signOut, snoozeOutboundDraft, stopBackground, stopSubagent, stopTurn, submitOutboundDraft, updateProject],
   )
 
   const data = useMemo<WorkspaceData>(

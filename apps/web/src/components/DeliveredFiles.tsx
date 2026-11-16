@@ -126,7 +126,7 @@ type Theme = 'light' | 'dark'
 interface PageSize { height: number; width: number; viewport: number }
 
 /** The theme the stage shows, which a manual choice can set apart from the OS. */
-function useStageTheme(): Theme {
+export function useStageTheme(): Theme {
   const read = (): Theme => document.documentElement.dataset.theme === 'light' ? 'light' : 'dark'
   const [theme, setTheme] = useState(read)
   useEffect(() => {
@@ -135,6 +135,15 @@ function useStageTheme(): Theme {
     return () => observer.disconnect()
   }, [])
   return theme
+}
+
+/** The window of the page inside a `?view=1` frame: the only sender whose messages count. */
+export function wrappedPage(frame: HTMLIFrameElement | null): Window | null {
+  try {
+    return frame?.contentWindow?.[0] ?? null
+  } catch {
+    return null
+  }
 }
 
 /** The page's own report from the server's size script; anything else it posts is ignored. */
@@ -256,13 +265,7 @@ function FittedFrame({ url, title, theme, pageWidth, framed }: {
 
   useEffect(() => {
     const receive = (event: MessageEvent) => {
-      let page: Window | undefined
-      try {
-        page = frameRef.current?.contentWindow?.[0]
-      } catch {
-        page = undefined
-      }
-      if (page === undefined || event.source !== page) return
+      if (event.source !== wrappedPage(frameRef.current)) return
       const next = readPageSize(event.data)
       if (next === undefined) return
       if (pageWidth === undefined && next.width > next.viewport + 1) setFixedWidth((current) => Math.max(current ?? 0, next.width))

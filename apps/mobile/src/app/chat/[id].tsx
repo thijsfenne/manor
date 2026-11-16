@@ -65,7 +65,7 @@ import { RelayedAgentMessage } from '@/components/RelayedAgentMessage'
 import { ProjectFileWriteCard } from '@/components/ProjectFileWriteCard'
 import { ThreadBundle } from '@/components/ThreadBundle'
 import { AnswerChange, OTHER_ANSWER } from '@/components/bundleTile'
-import { takeThreadReveal } from '@/lib/threadReveal'
+import { takeEventReveal, takeThreadReveal } from '@/lib/threadReveal'
 import { EMPTY_DRAFT, readDraft, writeDraft } from '@/lib/drafts'
 import { glassRise, glassSink } from '@/lib/glassMotion'
 import { useScreenCovered } from '@/lib/useScreenCovered'
@@ -586,6 +586,14 @@ function ChatContent({ chatId }: { chatId: string | undefined }) {
     if (rowKey !== null) requestAnimationFrame(() => revealRowRef.current(rowKey))
   }, [projectThread, chatId]))
 
+  // Show in chat from a DM's Files lands on the row holding that event; a row that is
+  // not loaded leaves the transcript where it is.
+  useFocusEffect(useCallback(() => {
+    if (chatId === undefined) return
+    const eventId = takeEventReveal(chatId)
+    if (eventId !== null) requestAnimationFrame(() => openQuoteSourceRef.current(eventId))
+  }, [chatId]))
+
   // The open Session cards the thread shows right now, which the bar leaves out. Null
   // until this chat has measured, so the bar never shows rows it will drop. Measured
   // against the part of the screen between the header and the bar or composer, both of
@@ -1016,6 +1024,10 @@ function ChatContent({ chatId }: { chatId: string | undefined }) {
         disabled={status !== 'live'}
         onChange={(agentId, override) => setChatOverride(chatId, agentId, override)}
         onClose={() => setSheet(null)}
+        {...(chat?.kind === 'dm' ? { onFiles: () => {
+          setSheet(null)
+          router.push({ pathname: '/files/[chatId]', params: { chatId } })
+        } } : {})}
         open={sheet === 'agents'}
         overrides={thread.overrides}
       />}

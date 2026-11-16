@@ -38,6 +38,7 @@
     "./message-quotes": "./src/messageQuotes.ts",
     "./composer-formatting": "./src/composerFormatting.ts",
     "./attachments": "./src/attachments.ts",
+    "./dm-files": "./src/dmFiles.ts",
     "./auth": "./src/auth.ts",
     "./slack-draft-formatting": "./src/slackDraftFormatting.ts",
     "./outbound-draft-edits": "./src/outboundDraftEdits.ts",

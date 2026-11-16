@@ -140,6 +140,27 @@ async function handle(body) {
     await page.waitForTimeout(200)
     return { clicked: flags.name ?? flags.placeholder }
   }
+  // Rests the pointer on the element, long enough for a hover card's open delay.
+  if (cmd === 'hover') {
+    await locatorFor(flags).hover()
+    await page.waitForTimeout(600)
+    return { hovered: flags.name ?? flags.placeholder }
+  }
+  // Hands files to the page's first file input, which on a chat stage is the composer's.
+  if (cmd === 'attach') {
+    const files = String(flags.file ?? '').split(',').filter(Boolean).map((file) => resolve(file))
+    if (files.length === 0) throw new Error('attach needs --file <path>[,<path>…]')
+    await page.locator('input[type="file"]').first().setInputFiles(files)
+    await page.waitForTimeout(400)
+    return { attached: files.length }
+  }
+  // The system colour scheme the page sees; Manor follows it until a theme is picked.
+  if (cmd === 'scheme') {
+    if (flags.value !== 'light' && flags.value !== 'dark') throw new Error('scheme takes --value light|dark')
+    await page.emulateMedia({ colorScheme: flags.value })
+    await page.waitForTimeout(300)
+    return { scheme: flags.value }
+  }
   if (cmd === 'fill') {
     await locatorFor(flags).fill(String(flags.value ?? ''))
     return { filled: flags.name ?? flags.placeholder }

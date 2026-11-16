@@ -8,6 +8,14 @@ import { PDF_MIME, type DeliveredFile, type EventDocument, type EventImage, type
 export const CHAT_MEDIA_PREFIX = '/media/'
 
 /**
+ * The unsigned path of one stored file: its chat, its event and its slot there. A slot is
+ * a picture's index, `d` plus a document's index, `t` plus a text file's, `f0` for a
+ * delivered file or `e` for a result's screenshot, so no two kinds share a link.
+ */
+export const mediaPath = (chatId: string, eventId: string, slot: string) =>
+  `${encodeURIComponent(chatId)}/${encodeURIComponent(eventId)}/${slot}`
+
+/**
  * Delivered files a browser shows itself rather than saving. Everything else, HTML
  * and SVG included, downloads; `?download=1` downloads these too.
  */
@@ -80,6 +88,7 @@ export function createChatMedia(options: {
   const sizes = new Map<string, { width: number; height: number } | null>()
 
   const sign = (path: string) => createHmac('sha256', key).update(path).digest('base64url').slice(0, 32)
+  const signed = (path: string) => `${CHAT_MEDIA_PREFIX}${path}/${sign(path)}`
 
   const sizeOf = (id: string, dataUrl: string) => {
     if (sizes.has(id)) return sizes.get(id) ?? undefined
@@ -91,26 +100,21 @@ export function createChatMedia(options: {
 
   const linkImage = (chatId: string, eventId: string, index: number, image: EventImage): EventImage => {
     if (image.dataUrl === undefined) return image
-    const path = `${encodeURIComponent(chatId)}/${encodeURIComponent(eventId)}/${index}`
+    const path = mediaPath(chatId, eventId, String(index))
     const size = sizeOf(path, image.dataUrl)
     return {
       name: image.name,
-      src: `${CHAT_MEDIA_PREFIX}${path}/${sign(path)}`,
+      src: signed(path),
       ...(size === undefined ? {} : size),
     }
   }
 
-  // `d` marks a document slot, so an image index and a document index never share a link.
-  const linkDocument = (chatId: string, eventId: string, index: number, document: EventDocument): EventDocument => {
-    const path = `${encodeURIComponent(chatId)}/${encodeURIComponent(eventId)}/d${index}`
-    return { ...document, src: `${CHAT_MEDIA_PREFIX}${path}/${sign(path)}` }
-  }
+  const linkDocument = (chatId: string, eventId: string, index: number, document: EventDocument): EventDocument =>
+    ({ ...document, src: signed(mediaPath(chatId, eventId, `d${index}`)) })
 
-  // `f` marks a delivered file. One per event, so its index is always 0.
-  const linkFile = (chatId: string, eventId: string, file: DeliveredFile): DeliveredFile => {
-    const path = `${encodeURIComponent(chatId)}/${encodeURIComponent(eventId)}/f0`
-    return { ...file, src: `${CHAT_MEDIA_PREFIX}${path}/${sign(path)}` }
-  }
+  // One delivered file per event, so its slot is always `f0`.
+  const linkFile = (chatId: string, eventId: string, file: DeliveredFile): DeliveredFile =>
+    ({ ...file, src: signed(mediaPath(chatId, eventId, 'f0')) })
 
   const linkEvent = (chatId: string, event: ThreadEvent): ThreadEvent => {
     if (event.type === 'file_delivery') return { ...event, file: linkFile(chatId, event.id, event.file) }
@@ -127,10 +131,8 @@ export function createChatMedia(options: {
   }
 
   // `e` marks a result's screenshot, stored as a document of the Session it came from.
-  const linkEvidence = (chatId: string, evidence: GoalEvidence): GoalEvidence => {
-    const path = `${encodeURIComponent(chatId)}/${encodeURIComponent(evidence.id)}/e`
-    return { ...evidence, src: `${CHAT_MEDIA_PREFIX}${path}/${sign(path)}` }
-  }
+  const linkEvidence = (chatId: string, evidence: GoalEvidence): GoalEvidence =>
+    ({ ...evidence, src: signed(mediaPath(chatId, evidence.id, 'e')) })
 
   const linkHandoff = (handoff: WorkHandoff): WorkHandoff => {
     const evidence = handoff.goalReport?.evidence
@@ -143,6 +145,10 @@ export function createChatMedia(options: {
     forClient(message) {
       if (message.type === 'snapshot') return { ...message, events: message.events.map((event) => linkEvent(message.chatId, event)) }
       if (message.type === 'event') return { ...message, event: linkEvent(message.chatId, message.event) }
+      // A DM's file list names each file by its unsigned path; see `listDmFiles`.
+      if (message.type === 'dm_files') {
+        return { ...message, files: message.files.map((file) => (file.src === undefined ? file : { ...file, src: signed(file.src) })) }
+      }
       if (message.type === 'directory' && message.workHandoffs.some((handoff) => handoff.goalReport?.evidence !== undefined)) {
         return { ...message, workHandoffs: message.workHandoffs.map(linkHandoff) }
       }
@@ -207,10 +213,15 @@ export function createChatMedia(options: {
       // chat's own frame, which draws the page on the chat background.
       const theme: ViewTheme = url.searchParams.get('theme') === 'light' ? 'light' : 'dark'
       const embedded = url.searchParams.get('embed') === '1'
-      const body = page ? htmlViewPage(file.name, bytes, theme, embedded) : bytes
-      response.writeHead(200, {
+      const whole = page ? htmlViewPage(file.name, bytes, theme, embedded) : bytes
+      // A video player asks for the part it plays or seeks to; anything else gets the whole file.
+      const range = page ? undefined : byteRange(request.headers.range, whole.byteLength)
+      const body = range === undefined ? whole : whole.subarray(range.start, range.end + 1)
+      response.writeHead(range === undefined ? 200 : 206, {
         'content-type': page ? 'text/html; charset=utf-8' : file.mime,
         'content-length': String(body.byteLength),
+        ...(page ? {} : { 'accept-ranges': 'bytes' }),
+        ...(range === undefined ? {} : { 'content-range': `bytes ${range.start}-${range.end}/${whole.byteLength}` }),
         'content-disposition': `${inline ? 'inline' : 'attachment'}; filename*=UTF-8''${encodeURIComponent(file.name)}`,
         'cache-control': 'private, max-age=31536000, immutable',
         'x-content-type-options': 'nosniff',
@@ -222,6 +233,23 @@ export function createChatMedia(options: {
       return
     }
     if (head) return missing()
+    if (indexPart.startsWith('t')) {
+      const file = event?.type === 'user_message' ? event.files?.[Number(indexPart.slice(1))] : undefined
+      if (file === undefined) return missing()
+      const body = Buffer.from(file.content)
+      response.writeHead(200, {
+        // Always plain text, whatever the file claims to be: it is read, never run.
+        'content-type': 'text/plain; charset=utf-8',
+        'content-length': String(body.byteLength),
+        'content-disposition': `${url.searchParams.get('download') === '1' ? 'attachment' : 'inline'}; filename*=UTF-8''${encodeURIComponent(file.name)}`,
+        'cache-control': 'private, max-age=31536000, immutable',
+        'x-content-type-options': 'nosniff',
+        'referrer-policy': 'no-referrer',
+        'content-security-policy': FILE_CSP,
+      })
+      response.end(body)
+      return
+    }
     if (indexPart.startsWith('d')) {
       const document = event?.type === 'user_message' ? event.documents?.[Number(indexPart.slice(1))] : undefined
       const bytes = document === undefined ? undefined : await options.loadDocument(chatId, document.id)
@@ -254,6 +282,15 @@ export function createChatMedia(options: {
     })
     response.end(bytes)
   }
+}
+
+/** One satisfiable `bytes=start-end` or `bytes=start-` range; undefined for anything else, which gets the whole file. */
+function byteRange(header: string | undefined, length: number): { start: number; end: number } | undefined {
+  const match = /^bytes=(\d+)-(\d*)$/.exec(header ?? '')
+  if (match === null) return undefined
+  const start = Number(match[1])
+  const end = match[2] === '' ? length - 1 : Math.min(Number(match[2]), length - 1)
+  return start <= end ? { start, end } : undefined
 }
 
 const escapeHtml = (text: string) => text.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -303,6 +340,18 @@ const SIZE_REPORTER =
   'addEventListener("transitionend",q,true);addEventListener("animationend",q,true);' +
   'window.addEventListener("load",s)})()'
 
+/**
+ * Hands Escape and the left and right arrows to the app around the page: a viewer over
+ * the page closes or steps on them, and a key pressed inside the sandboxed frame never
+ * reaches it otherwise. A key the page handled itself, and an arrow in a field, stay the page's;
+ * the report waits until every handler of the page has had the key.
+ */
+const KEY_REPORTER =
+  '(function(){if(window.top===window)return;addEventListener("keydown",function(e){var k=e.key,t=e.target;' +
+  'if(k!=="Escape"&&k!=="ArrowLeft"&&k!=="ArrowRight")return;' +
+  'if(k!=="Escape"&&t&&t.closest&&t.closest("input,textarea,select,[contenteditable]"))return;' +
+  'setTimeout(function(){if(!e.defaultPrevented)window.top.postMessage({type:"manor:key",key:k},"*")})})})()'
+
 let figtreeFace: string | undefined
 
 /** Figtree as an embedded `@font-face`, read once; empty when the package file is missing. */
@@ -325,11 +374,11 @@ function figtreeFontFace(): string {
 
 function themeStyle(theme: ViewTheme): string {
   const tokens = Object.entries(VIEW_THEMES[theme]).map(([name, value]) => `--manor-${name}:${value}`).join(';')
-  return `<style id="manor-theme">${figtreeFontFace()}:root{color-scheme:${theme};${tokens}}${BASE_CSS}</style><script>${SIZE_REPORTER}</script>`
+  return `<style id="manor-theme">${figtreeFontFace()}:root{color-scheme:${theme};${tokens}}${BASE_CSS}</style><script>${SIZE_REPORTER};${KEY_REPORTER}</script>`
 }
 
 /**
- * Puts Manor's theme variables, base styles and size reporter into a persona's HTML before
+ * Puts Manor's theme variables, base styles and its size and key reporters into a persona's HTML before
  * it becomes the wrapper's `srcdoc`. They go right after `<head>`, so the page's own rules
  * come later and win; a document without one gets the nearest equivalent.
  */

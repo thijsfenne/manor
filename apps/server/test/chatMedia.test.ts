@@ -182,6 +182,8 @@ describe('chat media', () => {
     // The size reporter stays quiet at the top level and re-posts when only the viewport changed.
     expect(inHead).toContain('window.top===window')
     expect(inHead).toContain('type:"manor:size",height:a,width:b,viewport:c')
+    // Escape and the side arrows pressed inside the page go to the app around it.
+    expect(inHead).toContain('if(!e.defaultPrevented)window.top.postMessage({type:"manor:key",key:k},"*")')
   })
 
   it('reads the pixel size of PNG, JPEG and WebP headers', () => {

@@ -5,9 +5,11 @@ import { checkedFileUrl, fetchFailure, safeFileName } from './deliveredFiles'
 vi.mock('electron', () => ({ app: {}, dialog: {}, ipcMain: {}, shell: {} }))
 
 describe('delivered files on the Mac', () => {
-  it('accepts only a signed delivered-file link', () => {
-    expect(checkedFileUrl('http://127.0.0.1:8787/media/chat/evt/f0/sig').pathname).toBe('/media/chat/evt/f0/sig')
-    for (const bad of ['file:///etc/passwd', 'http://127.0.0.1:8787/media/chat/evt/0/sig', 'http://127.0.0.1:8787/internal/deliver-file', 42]) {
+  it('accepts only a signed link to a file a chat holds', () => {
+    for (const slot of ['f0', '0', '3', 'd1', 't0']) {
+      expect(checkedFileUrl(`http://127.0.0.1:8787/media/chat/evt/${slot}/sig`).pathname).toBe(`/media/chat/evt/${slot}/sig`)
+    }
+    for (const bad of ['file:///etc/passwd', 'http://127.0.0.1:8787/media/chat/evt/e/sig', 'http://127.0.0.1:8787/media/chat/evt/f1/sig', 'http://127.0.0.1:8787/internal/deliver-file', 42]) {
       expect(() => checkedFileUrl(bad)).toThrow()
     }
   })

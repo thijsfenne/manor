@@ -110,7 +110,7 @@ cd .cursor/skills/verify-manor && npm install && npx playwright install chromium
 chmod +x control-manor.mjs
 ```
 
-Shared locator flags (for `click`, `fill`, `snapshot`, `screenshot`, `wheel`, `drag`):
+Shared locator flags (for `click`, `hover`, `fill`, `snapshot`, `screenshot`, `wheel`, `drag`):
 
 - `--role <aria role> --name <accessible name>`; add `--exact` for a whole-name match (default is substring, case-insensitive). `--exact` works only with `--role` plus `--name`.
 - `--role` alone takes the first element of that role. `--name` alone means a button with that name (substring, never exact).
@@ -135,6 +135,10 @@ Drive commands print one JSON line (`{"ok":true,…}`), `launch`, `doctor` and `
 | `fill <locator> --value <text>` | Replace field text; `fill --composer --value` for the message box |
 | `type --text <text>` | Type into whatever has focus |
 | `press --key <key>` | One key or chord in Playwright form: `Enter`, `Escape`, `Meta+k`, `Shift+Tab` |
+| `hover <locator>` | Rest the mouse on that element and wait 600ms, for a hover card or controls that show on hover |
+| `attach --file <abs path>[,<abs path>…]` | Put files on the page's first file input, which is the composer's attach field |
+| `scheme --value light\|dark` | The colour scheme the page sees; it stays until the next `scheme` or `launch` |
+| `clock --days-ago <n>` | Set the server's clock back `n` days, so what is sent next is stamped then; `0` puts it back. `launch --fresh` resets it |
 | `wheel <locator> [--dy -600]` | Real mouse wheel over that element; negative scrolls up |
 | `drag <locator> --dx <px> [--steps 20]` | Press, move by `dx` in steps, release: a panel's resize grip or a Browser tab |
 | `resize --width <px> [--height 800]` | Viewport size, for narrow-window layouts |
@@ -151,6 +155,10 @@ Environment, set on `launch` (a changed value restarts the server or browser on 
 
 Headless Chromium has no Electron preload, so the Browser shows no tabs. For the tab strip, launch with `MANOR_VERIFY_INIT_SCRIPT=$PWD/.cursor/skills/verify-manor/stubs/desktop-browser.js`; see `features/browser-tabs.md`.
 
+`clock` works through `stubs/server-clock.mjs`, which `launch` loads into the spike's server only. The page keeps the real time, so a message sent under `clock --days-ago 12` reads as twelve days old.
+
+`node .cursor/skills/verify-manor/stubs/dm-files-fixture.mjs /tmp/<folder>` writes sample pictures, PDFs, markdown, a data file, an HTML page and (with ffmpeg) a short video to attach or deliver; see `features/dm-files.md`.
+
 `session-daemon.mjs` is started by `launch` and holds one Playwright page. Do not start it by hand.
 
-Each Session's spike is registered in `~/.manor/spikes/<port>.json` with the chat it belongs to; another Session's spike is never reused or driven, even in the same checkout. A spike that blocks `launch` (every port taken, or the pinned `MANOR_VERIFY_PORT`) is looked at first: when it is stale (over a day old, or its owning chat has no running turn and left it alone for 15 minutes; never while that chat has a turn running) `launch` stops it through its own marker, prints `Stopped the stale spike on <port> …` on stderr and lists it as `stoppedStale` in its JSON. A spike that is not stale is refused with its owner named (chat, checkout, age). The rule is `stale-run.mjs`; `node --test .cursor/skills/verify-manor/stale-run.test.mjs` covers it. `MANOR_VERIFY_VAULT_DIR=/tmp/<fixture>` on `launch` gives the spike a fixture vault for Knowledge and search; see `features/search-chats.md` for that and a fixture RemCTL.
+Each Session's spike is registered in `~/.manor/spikes/<port>.json` with the chat it belongs to; another Session's spike is never reused or driven, even in the same checkout. A spike that blocks `launch` (every port taken, or the pinned `MANOR_VERIFY_PORT`) is looked at first: when it is stale (over a day old, its checkout no longer exists, or its owning chat has no running turn and left it alone for 15 minutes; never while that chat has a turn running) `launch` stops it through its own marker, prints `Stopped the stale spike on <port> …` on stderr and lists it as `stoppedStale` in its JSON. A spike that is not stale is refused with its owner named (chat, checkout, age). The rule is `stale-run.mjs`; `node --test .cursor/skills/verify-manor/stale-run.test.mjs` covers it. `MANOR_VERIFY_VAULT_DIR=/tmp/<fixture>` on `launch` gives the spike a fixture vault for Knowledge and search; see `features/search-chats.md` for that and a fixture RemCTL.

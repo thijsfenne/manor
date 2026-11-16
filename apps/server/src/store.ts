@@ -437,6 +437,8 @@ export interface Store {
   loadThread(chatId: string, since?: EventSync): Promise<{ events: readonly ThreadEvent[]; sync: EventSync; rewritten?: readonly string[] }>
   /** Original bytes of a PDF or Word attachment, deleted with the chat. */
   loadDocument(chatId: string, documentId: string): Promise<Uint8Array | undefined>
+  /** The ids of every original this chat still holds, read without their bytes. */
+  documentIds(chatId: string): Promise<ReadonlySet<string>>
   /**
    * `originals` are the bytes of the documents the event names, written in the same
    * transaction so a refused or discarded message never leaves one behind.

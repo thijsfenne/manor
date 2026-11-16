@@ -3,6 +3,7 @@ import { SINGLE_CHAT_VOICE, isModelOnlyMessage, placeQuotesAfterText, splitUserM
 import { NEW_CHAT_TITLE, type GenerateChatTitle } from './chatTitle.js'
 import { composeAgentNotesBundle, undoNotesUpdate } from './agentNotes.js'
 import type { AdvanceChatSummary } from './chatSummary.js'
+import { listDmFiles } from './dmFiles.js'
 import { agentNotesPath, type MemoryTarget } from './memoryTarget.js'
 import type { Orchestrator } from './orchestrator.js'
 import type { OutboundDraftPort } from './outboundDrafts.js'
@@ -13,13 +14,13 @@ import { patchTurnResult } from './turnResultPatch.js'
 type ChatMessage = Extract<
   ClientMessage,
   {
-    type: 'open_chat' | 'get_chat_summary' | 'get_agent_notes' | 'undo_notes_update' | 'send_message' | 'stop' | 'stop_background' | 'answer_user_input' | 'answer_secret_request' | 'submit_outbound_draft' | 'discard_outbound_draft' | 'snooze_outbound_draft' | 'ignore_outbound_draft' | 'restore_outbound_draft' | 'outbound_thread_read' | 'set_chat_override'
+    type: 'open_chat' | 'get_chat_summary' | 'get_agent_notes' | 'get_dm_files' | 'undo_notes_update' | 'send_message' | 'stop' | 'stop_background' | 'answer_user_input' | 'answer_secret_request' | 'submit_outbound_draft' | 'discard_outbound_draft' | 'snooze_outbound_draft' | 'ignore_outbound_draft' | 'restore_outbound_draft' | 'outbound_thread_read' | 'set_chat_override'
   }
 >
 
 type OpeningMessage = NonNullable<Extract<ClientMessage, { type: 'create_chat' }>['openingMessage']>
 
-type ChatStore = Pick<Store, 'getChat' | 'getProject' | 'loadEvents' | 'loadThread' | 'replaceEvent' | 'setChatTitle' | 'getChatSummary'>
+type ChatStore = Pick<Store, 'getChat' | 'getProject' | 'documentIds' | 'loadEvents' | 'loadThread' | 'replaceEvent' | 'setChatTitle' | 'getChatSummary'>
 
 type ChatRuntime = Pick<
   Orchestrator,
@@ -230,6 +231,22 @@ export class ChatModule {
           agentId: message.agentId,
           ...(message.requestId === undefined ? {} : { requestId: message.requestId }),
           ...(notes === undefined ? {} : { notes }),
+        })
+        return
+      }
+      case 'get_dm_files': {
+        const { store } = this.options
+        const chat = await store.getChat(message.chatId)
+        if (chat?.kind !== 'dm') {
+          reply({ type: 'notice', kind: 'error', text: chat === undefined ? 'Chat not found' : 'Only a DM has a file library.' })
+          return
+        }
+        const [events, documents] = await Promise.all([store.loadEvents(chat.id), store.documentIds(chat.id)])
+        reply({
+          type: 'dm_files',
+          chatId: chat.id,
+          ...(message.requestId === undefined ? {} : { requestId: message.requestId }),
+          files: listDmFiles(chat.id, events, documents),
         })
         return
       }

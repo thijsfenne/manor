@@ -35,7 +35,7 @@ import type {
   WorkHandoff,
   ContextFiles,
 } from '@manor/contracts'
-import { DEFAULT_PROJECT_COLOR, DEFAULT_PROJECT_ICON, HOME_PROJECT_ID, MAX_SESSION_DIFF_FILES, isModelOnlyMessage, splitUserMessage, withQuoteExcerpts, type SessionRepo } from '@manor/contracts'
+import { DEFAULT_PROJECT_COLOR, DEFAULT_PROJECT_ICON, HOME_PROJECT_ID, MAX_SESSION_DIFF_FILES, isModelOnlyMessage, splitUserMessage, withQuoteExcerpts, type DmFile, type SessionRepo } from '@manor/contracts'
 import { plainPreview } from './plainPreview'
 import { NO_REMINDERS_YET, reduceReminders, type RemindersState } from './reminders'
 import { IDLE, withActivity, type ChatActivity } from './activityState'
@@ -398,6 +398,8 @@ export interface WorkspaceState {
   repoFilePreviews: Record<string, RepoFilePreview>
   /** The answer to the latest save, keyed the same way as `repoFiles`. */
   repoFileWrites: Record<string, RepoFileWrite>
+  /** A DM's file library as last listed, keyed by chat. Asked for by its Files page. */
+  dmFiles: Record<string, readonly DmFile[]>
   /** Last `checkout_status` reply per chat, asked with the composer. */
   checkoutStatus: Record<string, Extract<ServerMessage, { type: 'checkout_status' }>>
   /**
@@ -643,6 +645,7 @@ export const emptyWorkspace: WorkspaceState = {
   activity: {},
   notice: null,
   dirs: NOT_BROWSING,
+  dmFiles: {},
   repoFiles: {},
   repoFilePreviews: {},
   repoFileWrites: {},
@@ -1248,6 +1251,8 @@ export function reduce(
         },
       }
     }
+    case 'dm_files':
+      return { ...state, dmFiles: { ...state.dmFiles, [msg.chatId]: msg.files } }
     case 'checkout_status': {
       const key = msg.chatId ?? msg.projectId
       if (key === undefined) return state

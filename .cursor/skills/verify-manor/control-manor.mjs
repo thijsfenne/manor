@@ -10,7 +10,7 @@
  */
 import { spawn, execFileSync } from 'node:child_process'
 import { createHash, randomUUID } from 'node:crypto'
-import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync, unlinkSync, realpathSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync, unlinkSync, realpathSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, join, resolve } from 'node:path'
 import { homedir } from 'node:os'
@@ -91,7 +91,7 @@ function staleNow(entry) {
   const now = Date.now()
   const ageMs = now - (entry.createdAt ?? entry.lastUsedAt ?? now)
   const ownerRunning = entry.chatId ? chatRunning(entry.chatId, dirname(OWNER.registryDir)) : null
-  const verdict = staleVerdict({ ageMs, idleMs: now - (entry.lastUsedAt ?? now), ownerRunning })
+  const verdict = staleVerdict({ ageMs, idleMs: now - (entry.lastUsedAt ?? now), ownerRunning, checkoutGone: !existsSync(entry.repoRoot) })
   return verdict === undefined ? undefined : { verdict, ageMs }
 }
 
@@ -257,6 +257,9 @@ function serverEnv(entry) {
     MANOR_PORT: String(entry.port),
     MANOR_WEB_DIST: join(runDir(entry.port), 'web-dist'),
     MANOR_VERIFY_SPIKE: entry.marker,
+    // `clock --days-ago` writes this file; the preloaded stub reads it, see `stubs/server-clock.mjs`.
+    MANOR_VERIFY_CLOCK: clockFile(entry.port),
+    NODE_OPTIONS: [process.env.NODE_OPTIONS, `--import=${join(SKILL_DIR, 'stubs/server-clock.mjs')}`].filter(Boolean).join(' '),
     // The server's own default is `auto`. The spike proves UI on a mock driver, so it
     // never asks unless a proof says otherwise.
     MANOR_EFFECT_MODE: process.env.MANOR_EFFECT_MODE ?? 'full-access',
@@ -266,6 +269,7 @@ function serverEnv(entry) {
 }
 
 const runDir = (port) => join(SKILL_DIR, '.run', String(port))
+const clockFile = (port) => join(runDir(port), 'clock')
 
 // What a running server was started from. Code is checked before every drive command;
 // settings (a launch-only `MANOR_EFFECT_MODE`, say) only decide a restart on launch.
@@ -388,6 +392,7 @@ async function cmdLaunch(flags) {
   mkdirSync(runDir(entry.port), { recursive: true })
   if (flags.fresh) {
     await stopSpike(entry)
+    rmSync(clockFile(entry.port), { force: true })
     entry = { ...entry, server: undefined, browser: undefined }
   }
   entry.lastUsedAt = Date.now()
@@ -482,6 +487,17 @@ async function cmdDoctor() {
   console.log(JSON.stringify({ ok: true, ...report }, null, 2))
 }
 
+// How far behind the spike server's clock runs, for events that must read as older.
+async function cmdClock() {
+  const entry = await liveEntry()
+  const days = Number(flags['days-ago'])
+  if (!Number.isFinite(days) || days < 0) fail('clock takes --days-ago <number>; 0 puts the clock back.')
+  writeFileSync(clockFile(entry.port), `${days}\n`)
+  // The server reads the file at most four times a second.
+  await sleep(400)
+  console.log(JSON.stringify({ ok: true, daysAgo: days }))
+}
+
 async function cmdCleanup() {
   const entry = ownEntry()
   if (entry) {
@@ -532,11 +548,15 @@ const commands = {
   resize: passthrough('resize'),
   wheel: passthrough('wheel'),
   drag: passthrough('drag'),
+  hover: passthrough('hover'),
+  attach: passthrough('attach'),
+  scheme: passthrough('scheme'),
+  clock: cmdClock,
   cleanup: cmdCleanup,
 }
 
 if (!command || !commands[command]) {
-  fail(`Unknown command ${command ?? '(none)'}. Use launch|doctor|home|open|snapshot|screenshot|click|fill|type|press|wheel|drag|resize|wait-settle|cleanup`)
+  fail(`Unknown command ${command ?? '(none)'}. Use launch|doctor|home|open|snapshot|screenshot|click|hover|fill|attach|type|press|wheel|drag|resize|scheme|clock|wait-settle|cleanup`)
 }
 
 await commands[command]()

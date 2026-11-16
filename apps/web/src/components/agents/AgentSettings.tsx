@@ -10,6 +10,7 @@ import {
   ConnectIcon,
   Delete02Icon,
   File01Icon,
+  Files01Icon,
   PencilEdit02Icon,
   UserGroupIcon,
 } from '@hugeicons/core-free-icons'
@@ -32,6 +33,7 @@ import { IconButton } from '../ui/IconButton'
 import { Pill } from '../ui/Pill'
 import { Switch } from '../ui/Switch'
 import { AgentFacePage } from './AgentFacePage'
+import { AgentFiles, type AgentFilesProps } from './AgentFiles'
 import { McpSection } from './McpSection'
 import { ModelField } from './NewAgentFields'
 import { SkillsSection } from './SkillsSection'
@@ -41,7 +43,7 @@ import { subscribeAgentPage, takeAgentPage } from '../../agentSettingsIntent'
 
 const ChatRoutines = lazy(() => import('../routines/ChatRoutines').then((module) => ({ default: module.ChatRoutines })))
 
-type Page = 'root' | 'face' | 'instructions' | 'memory' | 'skills' | 'connections' | 'subagents' | 'routines' | 'access'
+type Page = 'root' | 'face' | 'instructions' | 'memory' | 'files' | 'skills' | 'connections' | 'subagents' | 'routines' | 'access'
 
 /** The part of an agent a DM's pin stands in for. */
 const runtimeKey = (agent: Pick<AgentDraft, 'driver' | 'model' | 'effort' | 'speed'>) =>
@@ -51,6 +53,7 @@ const PAGE_TITLES: Record<Exclude<Page, 'root'>, string> = {
   face: 'Face',
   instructions: 'Instructions',
   memory: 'Memory',
+  files: 'Files',
   skills: 'Skills',
   connections: 'Connectors',
   subagents: 'Subagents',
@@ -76,8 +79,8 @@ export interface AgentSettingsProps {
   onLoadNotes: (agentId: string, requestId: string) => boolean
   /**
    * The agent's DM, where the editor sits beside it: its compacted conversation is the
-   * Memory page's Summary and its tasks are the Scheduled tasks page. Absent in Settings,
-   * where the agent has no DM.
+   * Memory page's Summary, its tasks are the Scheduled tasks page and what was attached
+   * to it or made in it is the Files page. Absent in Settings, where the agent has no DM.
    */
   dm?: {
     chatId: string
@@ -89,6 +92,7 @@ export interface AgentSettingsProps {
     pin: ChatOverride
     onClearPin: () => void
     onLoadSummary: (chatId: string, requestId: string) => boolean
+    files: Pick<AgentFilesProps, 'files' | 'revision' | 'user' | 'onLoad' | 'onShowInChat'>
     scheduled: Omit<ChatRoutinesProps, 'selectedId' | 'onSelect'>
   }
   /** Absent where the host has its own way out, as Settings does. */
@@ -166,6 +170,7 @@ export function AgentSettings(props: AgentSettingsProps) {
           registry={registry}
           notes={notes}
           taskCount={dm === undefined ? own.length : dm.scheduled.routines.length}
+          hasFiles={dm !== undefined}
           {...(dm === undefined || Object.keys(dm.pin).length === 0 ? {} : {
             pin: dm.pin,
             onPinPicked: (next: AgentDraft) => {
@@ -229,6 +234,11 @@ export function AgentSettings(props: AgentSettingsProps) {
         />
       )
       break
+    case 'files':
+      // An empty library says this itself.
+      footnote = (dm?.files.files?.length ?? 0) === 0 ? null : `What you attached and what ${name} made in this chat.`
+      body = dm === undefined ? null : <AgentFiles chatId={dm.chatId} name={name} status={status} agents={agents} {...dm.files} />
+      break
     case 'skills':
       footnote = `${name} loads a skill when the task asks for it.`
       body = <SkillsSection draft={draft} skills={skills} onChange={(skillIds) => edit({ skillIds })} />
@@ -259,8 +269,8 @@ export function AgentSettings(props: AgentSettingsProps) {
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       {header}
-      {/* Memory and a DM's tasks bring their own bar and scroll, edge to edge. */}
-      {page === 'memory' || (page === 'routines' && dm !== undefined)
+      {/* Memory, Files and a DM's tasks bring their own bar and scroll, edge to edge. */}
+      {page === 'memory' || page === 'files' || (page === 'routines' && dm !== undefined)
         ? <div className="flex min-h-0 flex-1 flex-col">{body}</div>
         : <div className="flex min-h-0 flex-1 flex-col gap-3.5 overflow-y-auto px-4 pt-[18px] pb-5 [&>*]:shrink-0">{body}</div>}
       {/* Saving is silent. The bar holds a page's own note, and a save that did not go through. */}
@@ -360,7 +370,7 @@ function SwitchRow({ label, hint, warn = false, checked, disabled = false, onCha
   )
 }
 
-function RootPage({ draft, agent, registry, notes, taskCount, pin, onPinPicked, edit, open, requestEvents, onDeleteAgent }: {
+function RootPage({ draft, agent, registry, notes, taskCount, hasFiles, pin, onPinPicked, edit, open, requestEvents, onDeleteAgent }: {
   draft: AgentDraft
   /** The DM's pin, when it carries one, and what to do with a model picked over it. */
   pin?: ChatOverride
@@ -369,6 +379,8 @@ function RootPage({ draft, agent, registry, notes, taskCount, pin, onPinPicked, 
   registry: McpServerConfig[]
   notes: AgentNotesLoad
   taskCount: number
+  /** Only a DM has files to list. */
+  hasFiles: boolean
   edit: ReturnType<typeof useAgentAutosave>['edit']
   open: (page: Page) => void
   requestEvents: RequestEvents
@@ -448,6 +460,7 @@ function RootPage({ draft, agent, registry, notes, taskCount, pin, onPinPicked, 
       <Group title="Knows">
         <Row icon={File01Icon} label="Instructions" value={`${lines} ${lines === 1 ? 'line' : 'lines'}`} onClick={() => open('instructions')} />
         <Row icon={Book02Icon} label="Memory" value={notesValue(draft.memoryScope, notes)} onClick={() => open('memory')} />
+        {hasFiles ? <Row icon={Files01Icon} label="Files" onClick={() => open('files')} /> : null}
         <Row icon={BoxIcon} label="Skills" value={`${draft.skillIds?.length ?? 0} on`} onClick={() => open('skills')} />
         <Row icon={ConnectIcon} label="Connectors" value={`${attachedServers(draft, registry).length} on`} onClick={() => open('connections')} />
       </Group>

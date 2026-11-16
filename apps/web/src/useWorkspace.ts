@@ -374,6 +374,8 @@ export interface Manor {
    * harmless and the panel refreshes by asking again.
    */
   getRoutineRuns: (routineId: string) => boolean
+  /** Asks for one DM's file library; the answer lands in `workspace.dmFiles`. */
+  getDmFiles: (chatId: string) => boolean
   /** Read means shown: marks runs whose result is on screen. The dot goes at once. */
   markRoutineRunsRead: (routineId: string, runIds: readonly string[]) => boolean
   markAllRoutineRunsRead: () => boolean
@@ -1605,6 +1607,7 @@ export function useWorkspace(url: string, auth?: WorkspaceAuth): Manor {
   // No `clearNotice`: this is a read, and wiping the last answer to a save because a
   // panel refreshed its history would throw away a refusal the form is still showing.
   const getRoutineRuns = useCallback((routineId: string) => commands.getRoutineRuns(routineId), [commands])
+  const getDmFiles = useCallback((chatId: string) => commands.getDmFiles(chatId), [commands])
   const markRoutineRunsRead = useCallback(
     (routineId: string, runIds: readonly string[]) => commands.markRoutineRunsRead(routineId, runIds),
     [commands],
@@ -1731,6 +1734,7 @@ export function useWorkspace(url: string, auth?: WorkspaceAuth): Manor {
     setRoutineEnabled,
     runRoutineNow,
     getRoutineRuns,
+    getDmFiles,
     markRoutineRunsRead,
     markAllRoutineRunsRead,
     listSkillCandidates,

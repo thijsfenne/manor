@@ -1,8 +1,9 @@
 /**
  * Which leftover verify run may be stopped to free a port, shared by verify-manor and
  * verify-manor-mobile (no dependencies, so both can import it). The maintainer's standing rule:
- * a run is stale when it is over a day old, or when the chat that owns it no longer has a
- * running turn. A run whose owner has a turn right now is never stale, and live Manor
+ * a run is stale when it is over a day old, when the chat that owns it no longer has a
+ * running turn, or when the checkout it was started from is gone (nobody can use it or run
+ * its cleanup any more). A run whose owner has a turn right now is never stale, and live Manor
  * (43179) is never a run at all. Only the caller decides what to signal; this file only
  * judges and describes.
  *
@@ -24,13 +25,29 @@ export const OWNER_IDLE_MS = 15 * 60 * 1000
 /**
  * `ageMs`: since the run started. `idleMs`: since anyone last used it. `ownerRunning`:
  * true or false for a known chat, null when the run has no chat (started by hand).
+ * `checkoutGone`: the folder the run was started from no longer exists.
  * Returns why the run is stale, or undefined when it must be left alone.
  */
-export function staleVerdict({ ageMs, idleMs, ownerRunning }) {
+export function staleVerdict({ ageMs, idleMs, ownerRunning, checkoutGone = false }) {
   if (ownerRunning === true) return undefined
+  if (checkoutGone) return 'checkout-gone'
   if (ageMs > STALE_AFTER_MS) return 'old'
   if (ownerRunning === false && idleMs > OWNER_IDLE_MS) return 'owner-gone'
   return undefined
+}
+
+/**
+ * The working directory of one process, or undefined when it is gone or hidden. lsof keeps
+ * naming a folder that was removed under the process, such as a cleaned up worktree.
+ */
+export function cwdOf(pid) {
+  let listing = ''
+  try {
+    listing = execFileSync('lsof', ['-a', '-d', 'cwd', '-Fn', '-p', String(pid)], { encoding: 'utf8' })
+  } catch (error) {
+    listing = String(error?.stdout ?? '')
+  }
+  return /^n(.*)$/m.exec(listing)?.[1]
 }
 
 /** Working directories of every process, from lsof's -Fn output. */
@@ -48,11 +65,14 @@ export function listCwds() {
 /**
  * Whether a chat has a turn running: a provider CLI runs in `<data>/scratch/<chatId>` (or
  * a persona folder inside it) for as long as its turn lasts. When the process list cannot
- * be read at all the answer is true, since an unknown owner is never fair game.
+ * be read at all the answer is true, since an unknown owner is never fair game. Pass
+ * `dataDir` undefined when only the chat is known: its id is unique, so its scratch
+ * folder is then looked for under any data folder.
  */
 export function chatRunning(chatId, dataDir, cwds = listCwds()) {
   if (cwds.length === 0) return true
-  const home = `${dataDir}/scratch/${chatId}`
+  const home = `${dataDir ?? ''}/scratch/${chatId}`
+  if (dataDir === undefined) return cwds.some((cwd) => cwd.endsWith(home) || cwd.includes(`${home}/`))
   return cwds.some((cwd) => cwd === home || cwd.startsWith(`${home}/`))
 }
 
@@ -79,7 +99,9 @@ export function parseElapsed(etime) {
 export const staleReason = (verdict, ageMs, chatId) =>
   verdict === 'old'
     ? `it is ${describeAge(ageMs)} old`
-    : `its owner${chatId ? ` (chat ${chatId.slice(0, 8)})` : ''} has no running turn`
+    : verdict === 'checkout-gone'
+      ? 'its checkout no longer exists'
+      : `its owner${chatId ? ` (chat ${chatId.slice(0, 8)})` : ''} has no running turn`
 
 /**
  * The Session this spike belongs to. A Manor turn's provider CLI runs in the chat's

@@ -75,6 +75,8 @@ export default function RootLayout() {
                 <Stack.Screen name="subagent/[callId]" options={{ gestureEnabled: true, headerShown: false }} />
                 {/* A project's Sessions, one step behind its thread; back lands on the thread. */}
                 <Stack.Screen name="sessions/[threadId]" options={{ gestureEnabled: true, headerShown: false }} />
+                {/* A DM's Files, one step behind the chat; back lands on the chat. */}
+                <Stack.Screen name="files/[chatId]" options={{ gestureEnabled: true, headerShown: false }} />
                 <Stack.Screen name="direct" options={{ headerShown: false }} />
                 <Stack.Screen name="routines" options={{ headerShown: false }} />
                 <Stack.Screen name="plugins" options={{ headerShown: false }} />

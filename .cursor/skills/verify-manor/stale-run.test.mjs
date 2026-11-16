@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict'
 import { spawn } from 'node:child_process'
-import { mkdirSync, mkdtempSync, realpathSync, rmSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { after, describe, it } from 'node:test'
-import { OWNER_IDLE_MS, STALE_AFTER_MS, chatRunning, describeAge, parseElapsed, staleVerdict } from './stale-run.mjs'
+import { OWNER_IDLE_MS, STALE_AFTER_MS, chatRunning, cwdOf, describeAge, parseElapsed, staleReason, staleVerdict } from './stale-run.mjs'
 
 const HOUR = 60 * 60 * 1000
 const MINUTE = 60 * 1000
@@ -27,6 +27,29 @@ describe('staleVerdict', () => {
   it('keeps a young run whose owner is between two turns, and a young run nobody can name', () => {
     assert.equal(staleVerdict({ ageMs: HOUR, idleMs: 5 * MINUTE, ownerRunning: false }), undefined)
     assert.equal(staleVerdict({ ageMs: HOUR, idleMs: 10 * HOUR, ownerRunning: null }), undefined)
+  })
+
+  it('calls a run whose checkout is gone stale at any age, unless its owner has a turn running', () => {
+    assert.equal(staleVerdict({ ageMs: 2 * MINUTE, idleMs: 0, ownerRunning: null, checkoutGone: true }), 'checkout-gone')
+    assert.equal(staleVerdict({ ageMs: 2 * MINUTE, idleMs: 0, ownerRunning: false, checkoutGone: true }), 'checkout-gone')
+    assert.equal(staleVerdict({ ageMs: 2 * MINUTE, idleMs: 0, ownerRunning: true, checkoutGone: true }), undefined)
+    assert.equal(staleReason('checkout-gone', 2 * MINUTE, null), 'its checkout no longer exists')
+  })
+})
+
+describe('cwdOf', () => {
+  it('still names the folder a process runs from after that folder was removed', async () => {
+    const checkout = realpathSync(mkdtempSync(join(tmpdir(), 'stale-run-checkout-')))
+    const child = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { cwd: checkout, stdio: 'ignore' })
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 300))
+      rmSync(checkout, { recursive: true })
+      assert.equal(cwdOf(child.pid), checkout)
+      assert.equal(existsSync(checkout), false)
+    } finally {
+      child.kill('SIGKILL')
+    }
+    assert.equal(cwdOf(0), undefined)
   })
 })
 
@@ -57,6 +80,18 @@ describe('chatRunning', () => {
     turn.kill('SIGKILL')
     await new Promise((resolve) => turn.once('exit', resolve))
     assert.equal(chatRunning(chat, data), false)
+  })
+
+  it('finds a chat under any data folder when only the chat is known', async () => {
+    const other = '77777777-2222-3333-4444-555555555555'
+    assert.equal(chatRunning(other, undefined), false)
+    const turn = await runIn(join(data, 'scratch', other))
+    assert.equal(chatRunning(other, undefined), true)
+    assert.equal(chatRunning(other, '/somewhere/else'), false)
+    assert.equal(chatRunning(other, undefined, [`/a/scratch/${other}-not`, `/a/scratch/x${other}`]), false)
+    turn.kill('SIGKILL')
+    await new Promise((resolve) => turn.once('exit', resolve))
+    assert.equal(chatRunning(other, undefined), false)
   })
 
   it('does not call the owner gone when the process list could not be read', () => {

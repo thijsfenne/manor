@@ -1082,6 +1082,7 @@ export function createSqliteStore(options: SqliteStoreOptions): Store & {
       return { events: thread, sync: events.sync(chatId), ...(rewritten === undefined ? {} : { rewritten }) }
     },
     loadDocument: (chatId, documentId) => events.loadDocument(chatId, documentId),
+    documentIds: (chatId) => events.documentIds(chatId),
     listUnresolvedOutboundSubmissions() {
       return events.unresolved()
     },
@@ -1534,7 +1535,7 @@ type SyncStore = { [K in keyof Store]: (...args: Parameters<Store[K]>) => Awaite
 const READS = new Set<keyof SyncStore>([
   'listPushTokens', 'listProjects', 'listChats', 'sideChatOf', 'getSideSession', 'getChat',
   'getProject', 'chatsForProject', 'listWorkHandoffs', 'workHandoffForSourceTurn',
-  'workHandoffForTarget', 'loadRoster', 'listMcpServers', 'listSkills', 'loadSkillBundle', 'loadEvents', 'loadThread', 'loadDocument',
+  'workHandoffForTarget', 'loadRoster', 'listMcpServers', 'listSkills', 'loadSkillBundle', 'loadEvents', 'loadThread', 'loadDocument', 'documentIds',
   'listUnresolvedOutboundSubmissions', 'getOutboundThreadDecision', 'getChatSummary', 'getSessions',
   'loadChatOverrides', 'loadChatWorktrees', 'usageRuns', 'searchMessages', 'listRoutines', 'listRuns', 'getSubagentPolicy',
   'getProfile', 'getHouseSettings', 'getProjectSetup',

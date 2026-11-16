@@ -1,5 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type ComponentPropsWithoutRef, type CSSProperties, type Dispatch, type RefObject, type SetStateAction } from 'react'
-import { isFolder, isOpenRoom, NOTE_AI_DEFAULTS, type Chat, type NoteQuote, type PageContextAttachment, type RepoFileApp } from '@manor/contracts'
+import { DEFAULT_USER_PROFILE, isFolder, isOpenRoom, NOTE_AI_DEFAULTS, type Chat, type NoteQuote, type PageContextAttachment, type RepoFileApp } from '@manor/contracts'
 import type { useWorkspace } from '../useWorkspace'
 import { chatRoster } from '../chatRoster'
 import { lastTurnSelectedMemoryPaths, messageTime } from '../messageMeta'
@@ -22,6 +22,7 @@ import type { WorkResultActions } from './WorkResultBody'
 import { BrowserPanel } from './BrowserPanel'
 import { SideChatPanel } from './SideChatPanel'
 import { AgentSettingsPanel } from './agents/AgentSettingsPanel'
+import { DEFAULT_PROFILE_PHOTO } from './AccountPopover'
 import { ProjectMemoryPanel } from './ProjectMemoryPanel'
 import { ChatAgentsPanel } from './agents/ChatAgentsPanel'
 import { DOCK_FLOAT, DOCK_FLOAT_TOP } from './ui/dockPanel'
@@ -67,6 +68,8 @@ interface ChatPanelRegionProps {
   onSendToBrowser?: (url: string) => Promise<void>
   onOpenBrowser?: () => void
   onOpenChat: (chatId: string) => void
+  /** Scrolls this chat's transcript to one message. */
+  onRevealMessage: (eventId: string) => void
   onOpenRoutine: (routineId: string) => void
   onOpenRoutines: () => void
   onDialogChange: (open: boolean) => void
@@ -87,7 +90,7 @@ interface ChatPanelRegionProps {
 export function ChatPanelRegion({
   chat: open, manor, layout, availableWidth, overlayResizable, floating: floatAlways = false, phone, focused, ownsBrowserView, instant, browserBridge,
   selectedFile, setSelectedFiles, selectedNote, setSelectedNotes, pageContextCount, onAddPageContext,
-  onQuoteNote, onAddNoteToSideChat, onClose, onMove, onFloat, onSendToBrowser, onOpenBrowser, onOpenChat, onOpenRoutine, onOpenRoutines,
+  onQuoteNote, onAddNoteToSideChat, onClose, onMove, onFloat, onSendToBrowser, onOpenBrowser, onOpenChat, onRevealMessage, onOpenRoutine, onOpenRoutines,
   onDialogChange, onEditGroup, diffScope, onDiffScope, onToggleDiff, onOpenFile, subagentPath, onOpenSubagent,
   noteRequest, onNoteRequestHandled,
 }: ChatPanelRegionProps) {
@@ -557,6 +560,17 @@ export function ChatPanelRegion({
           pin: thread.overrides[dmAgent.id] ?? {},
           onClearPin: () => manor.setChatOverride(dmAgent.id, {}, open.id),
           onLoadSummary: manor.getChatSummary,
+          files: {
+            files: workspace.dmFiles[open.id],
+            revision: thread.events.at(-1)?.id ?? '',
+            user: { name: workspace.profile?.name ?? DEFAULT_USER_PROFILE.name, photo: workspace.profile?.avatar ?? DEFAULT_PROFILE_PHOTO },
+            onLoad: manor.getDmFiles,
+            onShowInChat: (messageId) => {
+              onRevealMessage(messageId)
+              // On a phone the panel covers the transcript it would scroll.
+              if (phone) close()
+            },
+          },
           scheduled: {
             chatId: open.id,
             agentId: dmAgent.id,

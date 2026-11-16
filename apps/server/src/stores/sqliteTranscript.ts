@@ -177,6 +177,10 @@ export class SqliteTranscript {
     const row = this.db.prepare('SELECT bytes FROM documents WHERE chat_id = ? AND document_id = ?').get(chatId, documentId)
     return row?.bytes instanceof Uint8Array ? row.bytes : undefined
   }
+  documentIds(chatId: string): Set<string> {
+    const rows = this.db.prepare('SELECT document_id FROM documents WHERE chat_id = ?').all(chatId)
+    return new Set(rows.map((row) => String(row.document_id)))
+  }
   delete(chatId: string): void {
     this.cache.delete(chatId)
     this.db.prepare('DELETE FROM events WHERE chat_id = ?').run(chatId)
