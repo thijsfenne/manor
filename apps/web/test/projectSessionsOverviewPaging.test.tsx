@@ -87,7 +87,7 @@ describe('a project thread’s remembered sessions overview', () => {
       const archiveHeader = sections[3]!.findAllByType('button').find((button) => button.props['aria-expanded'] !== undefined)!
       // Folded by default, counting only rows still inside their restore window.
       expect(archiveHeader.props['aria-expanded']).toBe(false)
-      expect(archiveHeader.findAllByType('span').at(-1)!.props.children).toBe(2)
+      expect(archiveHeader.findAll((node) => node.type === 'span' && String(node.props.className).includes('tabular-nums'))[0]!.props.children).toBe(2)
       act(() => header('settled').props.onClick())
       expect(header('settled').props['aria-expanded']).toBe(true)
       act(() => archiveHeader.props.onClick())

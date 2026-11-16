@@ -100,7 +100,8 @@ describe('a proposal in the sessions overview', () => {
     )
     expect(html).toMatch(/Needs you<\/span><span[^>]*>1</)
     expect(html).toContain('aria-label="Show proposal Exportknop"')
-    expect(html).toContain('>Waiting<')
+    // The fold's header says it waits; the row itself does not repeat it.
+    expect(html).not.toContain('>Waiting<')
     expect(html).not.toContain('Settle Exportknop')
   })
 })
@@ -132,8 +133,10 @@ describe('the sessions overview rows', () => {
     expect(settled).not.toContain('aria-label="Settle done"')
   })
 
-  it('put a fold\'s count at the far right of its header', () => {
-    expect(html({ waiting: [], working: [row({ id: 'live' })], settled: [], ...noArchive })).toMatch(/<span class="min-w-0 flex-1 truncate[^"]*">Needs you<\/span><span class="flex-none[^"]*">0</)
+  it('lead a fold\'s header with its mark, follow the label with the count and end on the chevron', () => {
+    const header = html({ waiting: [], working: [row({ id: 'live' })], settled: [], ...noArchive })
+    expect(header).toMatch(/<svg[^>]*class="flex-none text-dim"[^>]*>.*?<\/svg><span class="min-w-0 truncate[^"]*">Needs you<\/span><span class="flex-1[^"]*">0<\/span><span class="grid place-items-center"/)
+    expect(header).toMatch(/<svg[^>]*class="flex-none text-busy"[^>]*>.*?<\/svg><span[^>]*>Working<\/span>/)
   })
 
   it('shows a project with no Session one line instead of folds, and every fold once it holds one', () => {

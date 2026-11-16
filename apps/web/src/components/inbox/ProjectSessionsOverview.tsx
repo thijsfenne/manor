@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { QUIET_PAGE_SIZE, readSessionOverviewUI, subscribeSessionOverviewUI, toggleSessionOverviewSection, updateSessionOverviewUI, type SessionOverviewSection } from '@manor/client-runtime/session-overview-ui'
 import { createPortal } from 'react-dom'
-import { CheckListIcon, CheckmarkCircle02Icon, Undo02Icon } from '@hugeicons/core-free-icons'
+import type { IconSvgElement } from '@hugeicons/react'
+import { AlertCircleIcon, Archive02Icon, CheckListIcon, CheckmarkCircle02Icon, CircleCheckIcon, Progress03Icon, Undo02Icon } from '@hugeicons/core-free-icons'
 import { DEFAULT_PROJECT_COLOR, DEFAULT_PROJECT_ICON, type AgentConfig, type Project } from '@manor/contracts'
 import { isArchiveExpired, type SessionOverview, type SessionOverviewRow } from '../../state'
 import { useMinuteClock } from '../../useMinuteClock'
@@ -37,11 +38,13 @@ interface ProjectSessionsOverviewProps {
   compact?: boolean
 }
 
-const GROUPS: { id: SessionOverviewSection; label: string; hint: string }[] = [
-  { id: 'waiting', label: 'Needs you', hint: 'Proposals, questions, reviews and results to confirm.' },
-  { id: 'working', label: 'Working', hint: 'Sessions with a turn running.' },
-  { id: 'settled', label: 'Settled', hint: 'Settled sessions.' },
-  { id: 'archived', label: 'Archived', hint: 'Archived sessions.' },
+// Each fold leads with its state's mark: only the two live states carry colour, and a fold
+// with no rows drops to dim like the quiet ones.
+const GROUPS: { id: SessionOverviewSection; label: string; hint: string; icon: IconSvgElement; tone: string }[] = [
+  { id: 'waiting', label: 'Needs you', hint: 'Proposals, questions, reviews and results to confirm.', icon: AlertCircleIcon, tone: 'text-warn' },
+  { id: 'working', label: 'Working', hint: 'Sessions with a turn running.', icon: Progress03Icon, tone: 'text-busy' },
+  { id: 'settled', label: 'Settled', hint: 'Settled sessions.', icon: CircleCheckIcon, tone: 'text-dim' },
+  { id: 'archived', label: 'Archived', hint: 'Archived sessions.', icon: Archive02Icon, tone: 'text-dim' },
 ]
 
 /**
@@ -67,7 +70,7 @@ export function ProjectSessionsOverview({ threadId, overview, agents, onOpen, on
   return (
     <div className={`flex min-h-0 min-w-0 flex-col overflow-y-auto ${gutter} ${compact ? 'max-h-[min(520px,70vh)] py-1.5' : 'h-full pt-2 pb-4'}`}>
       {empty ? <p className="m-0 px-3 py-1.5 text-[13px] text-dim">No Sessions yet. A proposal you accept in the thread starts one.</p> : null}
-      {empty ? null : GROUPS.map(({ id, label, hint }) => {
+      {empty ? null : GROUPS.map(({ id, label, hint, icon, tone }) => {
         const rows = id === 'archived' ? archived : overview[id]
         if (id === 'archived' && rows.length === 0) return null
         const shown = id === 'settled' ? rows.slice(0, visibleSettled) : id === 'archived' ? rows.slice(0, visibleArchived) : rows
@@ -75,26 +78,28 @@ export function ProjectSessionsOverview({ threadId, overview, agents, onOpen, on
           <section key={id} aria-label={label} className="flex flex-none flex-col pb-2">
             <button
               type="button"
-              className="flex h-8 w-full flex-none cursor-pointer items-center gap-1.5 rounded-lg border-0 bg-transparent px-2 text-left text-dim [font:inherit] hover:bg-surface-2 hover:text-text"
+              className="flex h-8 w-full flex-none cursor-pointer items-center gap-1.5 rounded-lg border-0 bg-surface-2/50 px-2 text-left text-dim [font:inherit] hover:bg-surface-2 hover:text-text"
               aria-expanded={open[id]}
               onClick={() => updateSessionOverviewUI(threadId, (current) => toggleSessionOverviewSection(current, id))}
             >
-              <FoldChevron open={open[id]} />
+              <Icon icon={icon} size={14} className={`flex-none ${rows.length === 0 ? 'text-dim' : tone}`} />
               {/* Sized on the spans: `[font:inherit]` on the button outranks a text-size utility there. */}
-              <span className="min-w-0 flex-1 truncate text-[12px] font-medium">{label}</span>
-              <span className="flex-none text-[12px] tabular-nums">{rows.length}</span>
+              <span className="min-w-0 truncate text-[12px] font-medium">{label}</span>
+              <span className="flex-1 text-[12px] text-dim tabular-nums">{rows.length}</span>
+              <FoldChevron open={open[id]} />
             </button>
             <Fold open={open[id]}>
               {rows.length === 0 ? (
-                <p className="m-0 px-3 pt-0.5 pb-1 text-[13px] text-dim">{hint}</p>
+                <p className="m-0 px-3 pt-1.5 pb-1 text-[13px] text-dim">{hint}</p>
               ) : (
-                <ul className="m-0 flex list-none flex-col gap-0.5 p-0">
+                <ul className="m-0 flex list-none flex-col gap-0.5 p-0 pt-1.5">
                   {shown.map((row) => {
                     if (row.chat === null) return <ProposalRow key={row.key} row={row} now={now} onReveal={onRevealProposal} />
                     // The sidebar's own rows: live ones with Archive and Settle, settled ones
                     // as a quiet line whose card opens to the left, away from the right pane's edge.
+                    // The fold's header already says running or waiting, so the row keeps only unread and age.
                     const entry = {
-                      chat: row.chat, selected: false, unread: row.unread, running: row.running, waiting: row.waiting,
+                      chat: row.chat, selected: false, unread: row.unread, running: false, waiting: false,
                       projectName: project?.name ?? '', projectIcon: project?.icon ?? DEFAULT_PROJECT_ICON, projectColor: project?.color ?? DEFAULT_PROJECT_COLOR,
                     }
                     const shared = {
@@ -140,7 +145,7 @@ function ProposalRow({ row, now, onReveal }: { row: SessionOverviewRow; now: num
         <div className="flex min-w-0 items-center gap-1.5">
           <span className="min-w-0 flex-1 truncate text-[14px] text-text">{row.title}</span>
           <span className="flex h-5 flex-none items-center">
-            <Standing waiting={row.waiting} unread={false} running={false} lastMessageAt={row.at} now={now} />
+            <Standing waiting={false} unread={false} running={false} lastMessageAt={row.at} now={now} />
           </span>
         </div>
         {row.line === '' ? null : <span className="min-w-0 truncate text-[13px] text-dim">{row.line}</span>}

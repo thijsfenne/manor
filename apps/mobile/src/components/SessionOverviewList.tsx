@@ -1,21 +1,24 @@
+import AlertCircleIcon from '@hugeicons/core-free-icons/AlertCircleIcon'
 import ArrowDown01Icon from '@hugeicons/core-free-icons/ArrowDown01Icon'
-import { HugeiconsIcon } from '@hugeicons/react-native'
+import CircleCheckIcon from '@hugeicons/core-free-icons/CircleCheckIcon'
+import Progress03Icon from '@hugeicons/core-free-icons/Progress03Icon'
+import { HugeiconsIcon, type IconSvgElement } from '@hugeicons/react-native'
 import type { AgentConfig } from '@manor/contracts'
 import type { SessionOverview, SessionOverviewGroup, SessionOverviewRow } from '@manor/client-runtime/state'
 import { useEffect, useSyncExternalStore } from 'react'
 import { QUIET_PAGE_SIZE, readSessionOverviewUI, subscribeSessionOverviewUI, updateSessionOverviewUI } from '@manor/client-runtime/session-overview-ui'
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native'
+import { Pressable, ScrollView, StyleSheet, View, type ColorValue } from 'react-native'
 
 import { DisclosureChevron } from '@/components/DisclosureChevron'
 import { SessionMark } from '@/components/SessionMark'
 import { Text } from '@/components/Text'
 import { colors, fonts, radius, spacing, squircle } from '@/theme'
 
-/** Project thread states use the same English labels as the Mac. */
-const GROUPS: { id: SessionOverviewGroup; label: string; hint: string }[] = [
-  { id: 'waiting', label: 'Needs you', hint: 'Proposals, questions, reviews and results to confirm.' },
-  { id: 'working', label: 'Working', hint: 'Sessions with a turn running.' },
-  { id: 'settled', label: 'Settled', hint: 'Settled sessions.' },
+/** Project thread states use the same English labels and marks as the Mac; a fold with no rows drops to dim. */
+const GROUPS: { id: SessionOverviewGroup; label: string; hint: string; icon: IconSvgElement; tone: ColorValue }[] = [
+  { id: 'waiting', label: 'Needs you', hint: 'Proposals, questions, reviews and results to confirm.', icon: AlertCircleIcon, tone: colors.warning },
+  { id: 'working', label: 'Working', hint: 'Sessions with a turn running.', icon: Progress03Icon, tone: colors.busy },
+  { id: 'settled', label: 'Settled', hint: 'Settled sessions.', icon: CircleCheckIcon, tone: colors.dim },
 ]
 
 /**
@@ -60,20 +63,28 @@ export function SessionOverviewList({ threadId, overview, agents, onOpen, onReve
 
   return (
     <ScrollView contentContainerStyle={styles.content}>
-      {GROUPS.map(({ id, label, hint }) => (
+      {GROUPS.map(({ id, label, hint, icon, tone }) => (
         <View key={id} style={styles.group}>
           <Pressable
             accessibilityRole="button"
             accessibilityState={{ expanded: unfolded[id] }}
             hitSlop={6}
             onPress={() => updateSessionOverviewUI(threadId, (current) => ({ ...current, open: { ...current.open, [id]: !current.open[id] } }))}
-            style={({ pressed }) => [styles.foldHeader, pressed && styles.pressed]}
+            style={styles.foldHeader}
           >
-            <DisclosureChevron open={unfolded[id]}>
-              <HugeiconsIcon color={colors.dim} icon={ArrowDown01Icon} size={16} strokeWidth={1.7} />
-            </DisclosureChevron>
-            <Text style={styles.foldLabel}>{label}</Text>
-            <Text style={styles.foldCount}>{overview[id].length}</Text>
+            {/* The Mac's resting fill is surface-2 at half strength; a dynamic colour cannot be
+                mixed at use time, so the full fill sits behind at half opacity and goes whole on press. */}
+            {({ pressed }) => (
+              <>
+                <View style={[styles.foldFill, pressed && styles.foldFillPressed]} />
+                <HugeiconsIcon color={overview[id].length === 0 ? colors.dim : tone} icon={icon} size={16} strokeWidth={1.7} />
+                <Text numberOfLines={1} style={styles.foldLabel}>{label}</Text>
+                <Text style={styles.foldCount}>{overview[id].length}</Text>
+                <DisclosureChevron open={unfolded[id]}>
+                  <HugeiconsIcon color={colors.dim} icon={ArrowDown01Icon} size={16} strokeWidth={1.7} />
+                </DisclosureChevron>
+              </>
+            )}
           </Pressable>
           {!unfolded[id] ? null
             : overview[id].length === 0 ? <Text style={styles.empty}>{hint}</Text>
@@ -104,7 +115,9 @@ const styles = StyleSheet.create({
   line: { flex: 1, color: colors.dim, fontFamily: fonts.sans, fontSize: 13, lineHeight: 18 },
   group: { gap: spacing.sm },
   empty: { color: colors.dim, fontFamily: fonts.sans, fontSize: 14, paddingBottom: spacing.sm },
-  foldHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, minHeight: 44 },
-  foldLabel: { flex: 1, color: colors.dim, fontFamily: fonts.sans, fontSize: 13, fontWeight: '500' },
-  foldCount: { color: colors.dim, fontFamily: fonts.sans, fontSize: 13 },
+  foldHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, minHeight: 44, paddingHorizontal: spacing.md },
+  foldFill: { ...StyleSheet.absoluteFill, borderRadius: radius.md, ...squircle, backgroundColor: colors.surface2, opacity: 0.5 },
+  foldFillPressed: { opacity: 1 },
+  foldLabel: { flexShrink: 1, color: colors.dim, fontFamily: fonts.sans, fontSize: 13, fontWeight: '500' },
+  foldCount: { flex: 1, color: colors.dim, fontFamily: fonts.sans, fontSize: 12, fontVariant: ['tabular-nums'] },
 })
