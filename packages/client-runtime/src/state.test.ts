@@ -18,6 +18,8 @@ import {
   knownAgentIds,
   rowHasQuoteSource,
   stackedConsultationMarkers,
+  relayExchanges,
+  relayMarkerAction,
   unannouncedConsultations,
   onlyConsulted,
   snoozeUntilTomorrow,
@@ -380,7 +382,11 @@ describe('durable transcript projection', () => {
     ]
 
     const rows = rowsOf({ ...emptyThread, events })
-    expect([...stackedConsultationMarkers(rows)]).toEqual([
+    // Desk and Mercer answered inside the same exchange, so each folds into one line.
+    expect([...relayExchanges(rows).keys()]).toEqual(['sent-desk', 'from-desk', 'sent-mercer', 'from-mercer'])
+    expect([...stackedConsultationMarkers(rows)]).toEqual([])
+    const withoutExchanges = new Map()
+    expect([...stackedConsultationMarkers(rows, withoutExchanges)]).toEqual([
       ['sent-desk', [
         { agentId: 'desk', pairChatId: 'pair_desk' },
         { agentId: 'mercer', pairChatId: 'pair_mercer' },
@@ -394,6 +400,78 @@ describe('durable transcript projection', () => {
       ]],
       ['from-mercer', []],
     ])
+  })
+
+  it('merges one agent\'s messages both ways in an exchange into one counted line', () => {
+    const relay = (id: string, ts: number, peerAgentId: string, relayId: string, phase: 'sent' | 'received' | 'failed'): ThreadEvent => ({
+      id, ts, type: 'agent_relay', agentId: 'marlow', peerAgentId, pairChatId: `pair_${peerAgentId}`, turnId: 'turn_1', relayId, phase,
+    })
+    const events: ThreadEvent[] = [
+      { id: 'ask', ts: 1, type: 'agent_message', agentId: 'marlow', turnId: 'turn_1', text: 'Asking Post and Sage.' },
+      { id: 'ask-result', ts: 2, type: 'turn_result', agentId: 'marlow', turnId: 'turn_1' },
+      relay('to-post', 3, 'post', 'relay_post', 'sent'),
+      relay('to-post-again', 4, 'post', 'relay_post', 'sent'),
+      relay('to-sage', 5, 'sage', 'relay_sage', 'sent'),
+      relay('to-post-2', 6, 'post', 'relay_post_2', 'sent'),
+      relay('from-post', 7, 'post', 'relay_post', 'received'),
+      relay('from-post-2', 8, 'post', 'relay_post_2', 'received'),
+      relay('from-sage', 9, 'sage', 'relay_sage', 'failed'),
+      { id: 'reply', ts: 10, type: 'agent_message', agentId: 'marlow', turnId: 'turn_2', text: 'Post answered.' },
+      { id: 'reply-result', ts: 11, type: 'turn_result', agentId: 'marlow', turnId: 'turn_2' },
+      relay('to-post-3', 12, 'post', 'relay_post_3', 'sent'),
+    ]
+
+    const rows = rowsOf({ ...emptyThread, events }, 'dm')
+    const exchanges = relayExchanges(rows)
+    // Two asks and two replies with Post count four; the duplicate durable send counts once.
+    expect(exchanges.get('to-post')).toEqual({ agentId: 'post', pairChatId: 'pair_post', count: 4, relayIds: ['relay_post', 'relay_post_2'] })
+    expect(['to-post-again', 'to-post-2', 'from-post', 'from-post-2'].map((id) => exchanges.get(id))).toEqual([null, null, null, null])
+    // Sage's reply failed and the later send is still one-way: both keep their own markers.
+    expect(exchanges.has('to-sage')).toBe(false)
+    expect(exchanges.has('from-sage')).toBe(false)
+    expect(exchanges.has('to-post-3')).toBe(false)
+    expect(exchanges.size).toBe(5)
+    expect(relayMarkerAction('sent', exchanges.get('to-post') ?? undefined)).toBe('4 messages with')
+    expect(relayMarkerAction('sent', { count: 1 })).toBe('1 message with')
+    expect(relayMarkerAction('sent')).toBe('Messaged')
+  })
+
+  it('never stacks replies across a visible exchange line', () => {
+    const relay = (id: string, ts: number, peerAgentId: string, phase: 'sent' | 'received'): ThreadEvent => ({
+      id, ts, type: 'agent_relay', agentId: 'marlow', peerAgentId, pairChatId: `pair_${peerAgentId}`, turnId: 'turn_1', relayId: `relay_${peerAgentId}`, phase,
+    })
+    const rows = rowsOf({ ...emptyThread, events: [
+      relay('from-sage', 1, 'sage', 'received'),
+      relay('to-smith', 2, 'smith', 'sent'),
+      relay('from-smith', 3, 'smith', 'received'),
+      relay('from-iris', 4, 'iris', 'received'),
+    ] }, 'dm')
+    expect(relayExchanges(rows).get('to-smith')?.count).toBe(2)
+    // Sage above the Smith line and Iris below it each keep their own marker, in place.
+    expect([...stackedConsultationMarkers(rows)]).toEqual([])
+  })
+
+  it('keeps an exchange whole across a silent asking turn and splits it at a visible row', () => {
+    const events: ThreadEvent[] = [
+      { id: 'tool', ts: 1, type: 'tool_use', turnId: 'turn_silent', agentId: 'marlow', tool: 'message_agent' },
+      {
+        id: 'sent', ts: 2, type: 'agent_relay', agentId: 'marlow', peerAgentId: 'post',
+        pairChatId: 'pair_post', turnId: 'turn_silent', relayId: 'relay_1', phase: 'sent',
+      },
+      { id: 'result', ts: 3, type: 'turn_result', agentId: 'marlow', turnId: 'turn_silent' },
+      {
+        id: 'received', ts: 4, type: 'agent_relay', agentId: 'marlow', peerAgentId: 'post',
+        pairChatId: 'pair_post', turnId: 'turn_silent', relayId: 'relay_1', phase: 'received',
+      },
+    ]
+    expect(relayExchanges(rowsOf({ ...emptyThread, events }, 'dm')).get('sent')?.count).toBe(2)
+
+    const split: ThreadEvent[] = [
+      events[1]!,
+      { id: 'user', ts: 3, type: 'user_message', text: 'Any news?', mentions: [] },
+      events[3]!,
+    ]
+    expect(relayExchanges(rowsOf({ ...emptyThread, events: split }, 'dm')).size).toBe(0)
   })
 
   it('keeps relay markers and agent-authored pair messages as distinct durable rows', () => {

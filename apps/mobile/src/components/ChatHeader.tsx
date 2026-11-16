@@ -1,4 +1,5 @@
 import ArrowLeft01Icon from '@hugeicons/core-free-icons/ArrowLeft01Icon'
+import ArrowLeftRightIcon from '@hugeicons/core-free-icons/ArrowLeftRightIcon'
 import AtomicPowerIcon from '@hugeicons/core-free-icons/AtomicPowerIcon'
 import CheckListIcon from '@hugeicons/core-free-icons/CheckListIcon'
 import { projectIcon } from '@manor/client-runtime/project-icons'
@@ -10,6 +11,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { AgentStack } from '@/components/AgentStack'
 import { AiBotHeadLookingIcon } from '@/components/customIcons'
+import { Blobatar } from '@/components/Blobatar'
 import { EdgeScrim } from '@/components/EdgeScrim'
 import { GlassIconButton } from '@/components/GlassIconButton'
 import { GlassPressable } from '@/components/GlassPressable'
@@ -40,6 +42,8 @@ interface ChatHeaderProps {
   /** Who has a seat in the chat, most recent first. Empty until someone has spoken. */
   agentIds: readonly string[]
   agents: AgentConfig[]
+  /** A view-only pair thread's two speakers, each face beside its own name in the title. */
+  pair?: readonly AgentConfig[]
   onBack: () => void
   /** Absent in a view-only pair thread, where the faces identify speakers but expose no controls. */
   onAgents?: () => void
@@ -70,7 +74,7 @@ function sessionsLabel(dot: SessionsDot | null): string {
   return base
 }
 
-export function ChatHeader({ title, subtitle, project, projectThread = false, role, driver, agentIds: participants, agents, onBack, onAgents, onSubagents, subagentsRunning = 0, onSessions, sessionsDot = null, onProject }: ChatHeaderProps) {
+export function ChatHeader({ title, subtitle, project, projectThread = false, role, driver, agentIds: participants, agents, pair, onBack, onAgents, onSubagents, subagentsRunning = 0, onSessions, sessionsDot = null, onProject }: ChatHeaderProps) {
   // Only personas who still exist get a face; a room of deleted ones shows the bot mark.
   const agentIds = knownAgentIds(agents, participants)
   const threadMark = projectThread && project !== undefined ? project : undefined
@@ -129,7 +133,13 @@ export function ChatHeader({ title, subtitle, project, projectThread = false, ro
 
         <View pointerEvents="none" style={styles.titles}>
           <View style={styles.identity}>
-            <Text numberOfLines={1} style={styles.title}>{title}</Text>
+            {pair === undefined ? <Text numberOfLines={1} style={styles.title}>{title}</Text> : pair.map((member, index) => (
+              <View key={member.id} style={styles.pairMember}>
+                {index === 0 ? null : <HugeiconsIcon color={colors.dim} icon={ArrowLeftRightIcon} size={16} strokeWidth={1.8} />}
+                <Blobatar color={member.color} name={member.name} shape={member.avatarShape} tone={member.avatarTone} size={22} src={member.avatar} />
+                <Text numberOfLines={1} style={styles.title}>{member.name}</Text>
+              </View>
+            ))}
             {project === undefined ? null : <ProjectBadge name={project.name} icon={project.icon} color={project.color} noProject={isHomeRoom(project.id)} />}
             {role === undefined ? null : <RoleBadge label={role} />}
           </View>
@@ -140,7 +150,7 @@ export function ChatHeader({ title, subtitle, project, projectThread = false, ro
         </View>
 
         <GlassGroup spacing={8} style={styles.cluster}>
-          {onAgents === undefined && agentIds.length === 0 ? null : onAgents === undefined ? (
+          {pair !== undefined || (onAgents === undefined && agentIds.length === 0) ? null : onAgents === undefined ? (
             <View style={styles.pairFaces}>
               <AgentStack agentIds={agentIds} agents={agents} size={30} />
             </View>
@@ -187,6 +197,7 @@ const styles = StyleSheet.create({
   },
   titles: { flex: 1, minWidth: 0, gap: 3 },
   identity: { minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  pairMember: { flexShrink: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   title: { flexShrink: 1, color: colors.text, fontFamily: fonts.sans, fontSize: 17, fontWeight: '500', letterSpacing: -0.2 },
   under: { minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 5 },
   subtitle: { flexShrink: 1, color: colors.muted, fontFamily: fonts.sans, fontSize: 13 },

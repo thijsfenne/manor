@@ -69,7 +69,7 @@ describe('agent relay transcript surfaces', () => {
     expect(html).not.toContain('disabled=""')
   })
 
-  it('stacks consecutive outgoing and incoming markers from one DM turn into facepiles', () => {
+  it('merges each agent\'s exchange into one counted line and still stacks one-way sends', () => {
     const events: ThreadEvent[] = [
       {
         id: 'answer', ts: 1, type: 'agent_message', agentId: 'marlow', turnId: 'turn_1', text: '',
@@ -103,12 +103,26 @@ describe('agent relay transcript surfaces', () => {
       />,
     )
 
-    expect(html).toContain('aria-label="Messaged Sage, Smith"')
-    expect(html).toContain('aria-label="Message from Sage, Smith"')
-    expect(html).toContain('2 agents')
+    expect(html.match(/>2 messages with</g)).toHaveLength(2)
+    expect(html).toContain('2 messages with Sage')
+    expect(html).toContain('2 messages with Smith')
+    expect(html).not.toContain('>Messaged<')
+    expect(html).not.toContain('>Message from<')
     expect(html).not.toContain('self-end')
-    expect(html.match(/>Messaged</g)).toHaveLength(1)
-    expect(html.match(/>Message from</g)).toHaveLength(1)
+
+    const oneWay = renderToStaticMarkup(
+      <Transcript
+        rows={rowsOf(thread(events.filter((event) => event.type !== 'agent_relay' || event.phase === 'sent')), 'dm')}
+        agents={agents}
+        skills={[]}
+        hasSnapshot
+        bubbleReplies
+        onOpenAgentRelay={() => undefined}
+      />,
+    )
+    expect(oneWay).toContain('aria-label="Messaged Sage, Smith"')
+    expect(oneWay).toContain('2 agents')
+    expect(oneWay.match(/>Messaged</g)).toHaveLength(1)
     expect(html).not.toContain('finished without a reply')
     const turn = rowsOf(thread(events), 'dm').find((row) => row.kind === 'turn')
     expect(turn?.kind === 'turn' && finishedSilent(turn)).toBe(false)

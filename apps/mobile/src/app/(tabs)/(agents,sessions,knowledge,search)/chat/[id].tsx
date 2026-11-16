@@ -22,8 +22,8 @@ import { chatSubagents, chatWaitsOnBackground, dmWorking, runningSubagents } fro
 import { chatFallbackTargets, composerRecipients, composerShowsRecipients, replyFallbackTargets, roomAgents } from '@manor/client-runtime/mentions'
 import { chatChangedFiles, resolveMarkdownRepoLink } from '@manor/client-runtime/changed-files'
 import { defaultSingleRuntime, effectiveDriver, isAutoPending, readSingleRuntime, runtimeLabel, runtimeParts, singleRuntimeVoice } from '@manor/client-runtime/runtime-choices'
-import type { ChangeableAnswer, OpenAsk, PendingDocument, QuietWorkspace, Row, SessionLink, ThreadShape, TurnConsultation, TurnRow, UnannouncedConsultation } from '@manor/client-runtime/state'
-import { activityOf, chatOf, dmMemoryMarks, isHomeRoom, isProjectThread, roomOf, sitsSettled, messageBrief, projectSessionOverview, sessionsDot, openAsk, sessionLiveOf, threadQuestionIn, openSubagentQuestion, subagentSummaryOf, changeableAnswers, personaOf, projectWorkHandoffs, repoListingKey, rowHasQuoteSource, rowsOf, createRowMemory, createValueMemory, feedIndexOf, NO_OPEN_THREAD_BUNDLES, openThreadBundleAt, setThreadBundleOpen, threadBundleOpen, threadBundleOpenItems, threadStretch, onlyConsulted, runtimeStartedAgentIds, sessionReadyRow, sessionThreadOf, stackedConsultationMarkers, projectThreadFeed, threadQuestionAdvice, threadOf, withSessionTitle, threadSpacing, unannouncedConsultations, workCardInView, workDecisionOpen, type ScreenSpan } from '@manor/client-runtime/state'
+import type { ChangeableAnswer, OpenAsk, PendingDocument, QuietWorkspace, RelayExchange, Row, SessionLink, ThreadShape, TurnConsultation, TurnRow, UnannouncedConsultation } from '@manor/client-runtime/state'
+import { activityOf, chatOf, dmMemoryMarks, isHomeRoom, isProjectThread, roomOf, sitsSettled, messageBrief, projectSessionOverview, sessionsDot, openAsk, sessionLiveOf, threadQuestionIn, openSubagentQuestion, subagentSummaryOf, changeableAnswers, personaOf, projectWorkHandoffs, repoListingKey, rowHasQuoteSource, rowsOf, createRowMemory, createValueMemory, feedIndexOf, NO_OPEN_THREAD_BUNDLES, openThreadBundleAt, setThreadBundleOpen, threadBundleOpen, threadBundleOpenItems, threadStretch, onlyConsulted, runtimeStartedAgentIds, sessionReadyRow, sessionThreadOf, stackedConsultationMarkers, relayExchanges, relayMarkerAction, projectThreadFeed, threadQuestionAdvice, threadOf, withSessionTitle, threadSpacing, unannouncedConsultations, workCardInView, workDecisionOpen, type ScreenSpan } from '@manor/client-runtime/state'
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router'
 import { KeyboardAwareLegendList, useKeyboardChatComposerInset, useKeyboardScrollToEnd } from '@legendapp/list/keyboard'
 import { historyStart, olderHistoryKey } from '@manor/client-runtime/history-window'
@@ -147,6 +147,7 @@ function dateLabelsFor(rows: readonly Row[], enabled: boolean): (string | undefi
 }
 
 const NO_CHANGEABLE: ReadonlyMap<string, ChangeableAnswer> = new Map()
+const NO_EXCHANGES: ReadonlyMap<string, RelayExchange | null> = new Map()
 
 type SessionLive = ReturnType<typeof sessionLiveOf>
 
@@ -162,9 +163,13 @@ function useTranscriptRows(thread: ThreadShape, workspace: QuietWorkspace, chatI
     () => projectWorkHandoffs(baseRows, workspace.workHandoffs, workspace.chats, workspace.projects, workspace.agents, workspace.checkoutStatus, sessionLive, chatId),
     [baseRows, workspace.workHandoffs, workspace.chats, workspace.projects, workspace.agents, workspace.checkoutStatus, sessionLive, chatId],
   )
-  const consultationMarkers = useMemo(
-    () => chatKind === 'dm' ? stackedConsultationMarkers(rows) : new Map(),
+  const exchanges = useMemo(
+    () => chatKind === 'dm' ? relayExchanges(rows) : NO_EXCHANGES,
     [chatKind, rows],
+  )
+  const consultationMarkers = useMemo(
+    () => chatKind === 'dm' ? stackedConsultationMarkers(rows, exchanges) : new Map(),
+    [chatKind, exchanges, rows],
   )
   // A project thread bundles what needs nothing from the user; the docks and the question card read the full rows.
   const feedRows = useMemo(() => projectThread ? projectThreadFeed(rows) : rows, [projectThread, rows])
@@ -175,11 +180,11 @@ function useTranscriptRows(thread: ThreadShape, workspace: QuietWorkspace, chatI
   // and inserting it as a turn starts pushes the working indicator down, then back.
   const visibleRows = useMemo(
     () => rowMemory.reuse(feedRows.filter((row) => row.kind === 'event'
-      ? consultationMarkers.get(row.event.id)?.length !== 0
+      ? consultationMarkers.get(row.event.id)?.length !== 0 && exchanges.get(row.event.id) !== null
       : !(chatKind === 'dm' && row.kind === 'turn' && (onlyConsulted(row) || dmTurnDrawsNothing(row))))),
-    [chatKind, consultationMarkers, feedRows, rowMemory],
+    [chatKind, consultationMarkers, exchanges, feedRows, rowMemory],
   )
-  return { baseRows, rows, consultationMarkers, visibleRows }
+  return { baseRows, rows, consultationMarkers, exchanges, visibleRows }
 }
 
 function ChatContent({ chatId }: { chatId: string | undefined }) {
@@ -722,7 +727,7 @@ function ChatContent({ chatId }: { chatId: string | undefined }) {
     ? chat.memberIds.map((id) => personaOf(workspace.agents, id).name).join(', ')
     : undefined
   const pairTitle = chat?.kind === 'pair'
-    ? chat.memberIds.map((id) => personaOf(workspace.agents, id).name).join(' ⇄ ')
+    ? chat.memberIds.map((id) => personaOf(workspace.agents, id).name).join(' and ')
     : undefined
   const lead =
     dmAgent !== undefined
@@ -783,6 +788,7 @@ function ChatContent({ chatId }: { chatId: string | undefined }) {
       <ChatHeader
         agentIds={chat?.kind === 'pair' ? chat.memberIds : chat?.agentIds ?? []}
         agents={workspace.agents}
+        {...(chat?.kind === 'pair' ? { pair: chat.memberIds.flatMap((id) => workspace.agents.filter((agent) => agent.id === id)) } : {})}
         {...(dmAgent !== undefined && !isAutoPending(dmAgent, dmOverride, hostAuto) ? { driver: effectiveDriver(dmAgent, dmOverride) } : {})}
         {...(sessionRuntime !== undefined && !isAutoPending(sessionRuntime, singleOverride, hostAuto) ? { driver: effectiveDriver(sessionRuntime, singleOverride) } : {})}
         {...(isPair || singleChat || chat?.kind === 'side' ? {} : { onAgents: () => setSheet('agents') })}
@@ -1231,7 +1237,7 @@ function LiveTranscript({
   const singleChat = chat?.mode === 'single'
   const project = roomOf(workspace, chat?.projectId)
   const agents = workspace.agents
-  const { rows, consultationMarkers, visibleRows } = useTranscriptRows(thread, workspace, chatId, projectThread, sessionLive)
+  const { rows, consultationMarkers, exchanges, visibleRows } = useTranscriptRows(thread, workspace, chatId, projectThread, sessionLive)
   // In a DM, memory writes are reached through a reply's long-press actions only.
   const memoryMarks = useMemo(() => chatKind === 'dm' ? dmMemoryMarks(rows) : undefined, [chatKind, rows])
   const unannounced = useMemo(() => unannouncedConsultations(rows), [rows])
@@ -1283,6 +1289,7 @@ function LiveTranscript({
     places: Map<string, { dateLabel: string | undefined; compactUser: boolean; relayOffset: number | undefined; threadOffset: number | undefined }>
     waitingOnByTurn: Map<string, string>
     consultationMarkers: ReturnType<typeof stackedConsultationMarkers>
+    exchanges: ReturnType<typeof relayExchanges>
     unannounced: ReturnType<typeof unannouncedConsultations>
     memoryMarks: ReturnType<typeof dmMemoryMarks> | undefined
     stretch: string
@@ -1300,10 +1307,11 @@ function LiveTranscript({
     })),
     waitingOnByTurn,
     consultationMarkers,
+    exchanges,
     unannounced,
     memoryMarks,
     stretch,
-  }), [aroundMemory, consultationMarkers, dateLabels, memoryMarks, pageRows, projectThread, stretch, unannounced, waitingOnByTurn])
+  }), [aroundMemory, consultationMarkers, dateLabels, exchanges, memoryMarks, pageRows, projectThread, stretch, unannounced, waitingOnByTurn])
   /**
    * What a row draws besides its own data. The list redraws a mounted row only when its
    * item or this object changes, never because `renderItem` did, so a value a row reads
@@ -1380,6 +1388,7 @@ function LiveTranscript({
           dateLabel={around.places.get(item.key)?.dateLabel}
           waitingOnAgentId={item.kind === 'turn' ? around.waitingOnByTurn.get(item.turnId) : undefined}
           consultationMarker={item.kind === 'event' ? around.consultationMarkers.get(item.event.id) : undefined}
+          exchange={item.kind === 'event' ? around.exchanges.get(item.event.id) ?? undefined : undefined}
           unannounced={item.kind === 'event' && item.event.type === 'agent_relay' && item.event.phase === 'sent' ? around.unannounced.get(item.event.turnId) : undefined}
           relayOffset={around.places.get(item.key)?.relayOffset}
           {...(around.places.get(item.key)?.threadOffset === undefined ? {} : { threadOffset: around.places.get(item.key)?.threadOffset })}
@@ -1434,6 +1443,8 @@ interface TranscriptRowProps {
   dateLabel?: string
   waitingOnAgentId?: string
   consultationMarker?: readonly TurnConsultation[]
+  /** Set when this relay marker stands for the agent's whole exchange: "N messages with". */
+  exchange?: RelayExchange | undefined
   /** Set when the asking turn said nothing, so the marker states the question. */
   unannounced?: readonly UnannouncedConsultation[] | undefined
   relayOffset?: number | undefined
@@ -1481,6 +1492,7 @@ const TranscriptRow = memo(function TranscriptRowBody(props: TranscriptRowProps)
     dateLabel,
     waitingOnAgentId,
     consultationMarker,
+    exchange,
     unannounced,
     relayOffset,
     threadOffset,
@@ -1600,7 +1612,7 @@ const TranscriptRow = memo(function TranscriptRowBody(props: TranscriptRowProps)
   if (row.kind === 'event') {
     if (row.event.type === 'user_message') return renderUserEvent(row)
     if (row.event.type === 'agent_relay') {
-      if (consultationMarker !== undefined) {
+      if (consultationMarker !== undefined && exchange === undefined) {
         return (
           <ConsultedAgents
             action={row.event.phase === 'received' ? 'Message from' : 'Messaged'}
@@ -1611,7 +1623,7 @@ const TranscriptRow = memo(function TranscriptRowBody(props: TranscriptRowProps)
           />
         )
       }
-      return <RelayMarker agents={agents} event={row.event} onOpen={onOpenAgentRelay} {...(unannounced === undefined ? {} : { unannounced })} />
+      return <RelayMarker agents={agents} event={row.event} onOpen={onOpenAgentRelay} {...(exchange === undefined ? {} : { exchange })} {...(unannounced === undefined ? {} : { unannounced })} />
     }
     if (row.event.projectFileWrite !== undefined) return <ProjectFileWriteCard write={row.event.projectFileWrite} projectName={threadProject?.name} />
     return <NoteLine event={row.event} />
@@ -1688,18 +1700,20 @@ function SessionChip({ link, onOpen }: { link: SessionLink; onOpen: (chatId: str
 
 function RelayMarker({
   event,
+  exchange,
   agents,
   onOpen,
   unannounced,
 }: {
   event: Extract<Extract<Row, { kind: 'event' }>['event'], { type: 'agent_relay' }>
+  exchange?: RelayExchange
   agents: AgentConfig[]
   onOpen: (chatId: string) => void
   unannounced?: readonly UnannouncedConsultation[]
 }) {
   const peer = personaOf(agents, event.peerAgentId)
-  const action = event.phase === 'sent' ? 'Messaged' : event.phase === 'received' ? 'Message from' : 'Message failed from'
-  const consultation = unannounced?.find((entry) => entry.relayId === event.relayId)
+  const action = relayMarkerAction(event.phase, exchange)
+  const consultation = unannounced?.find((entry) => exchange === undefined ? entry.relayId === event.relayId : exchange.relayIds.includes(entry.relayId))
   return (
     <View style={styles.relayColumn}>
       <Pressable
@@ -1709,7 +1723,7 @@ function RelayMarker({
         style={({ pressed }) => [styles.relayMarker, pressed && styles.pressed]}
       >
         <Text style={styles.relayMarkerText}>{action}</Text>
-        <Blobatar color={peer.color} name={peer.name} shape={peer.avatarShape} tone={peer.avatarTone} size={16} src={peer.avatar} />
+        <Blobatar color={peer.color} name={peer.name} shape={peer.avatarShape} tone={peer.avatarTone} size={13} src={peer.avatar} />
         <Text style={styles.relayMarkerText}>{peer.name}</Text>
       </Pressable>
       {consultation === undefined ? null : <ConsultationExcerpt question={consultation.question} replyPending={consultation.replyPending} />}
@@ -1829,8 +1843,8 @@ const styles = StyleSheet.create({
   transcriptItem: { gap: spacing.xl },
   compactUserItem: { marginTop: 6 - spacing.xl },
   dateSeparator: { color: colors.dim, fontFamily: fonts.sans, fontSize: 12, textAlign: 'center' },
-  relayMarker: { alignSelf: 'center', flexDirection: 'row', alignItems: 'center', gap: 6, borderRadius: radius.sm, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs },
-  relayMarkerText: { color: colors.dim, fontFamily: fonts.sans, fontSize: 13 },
+  relayMarker: { alignSelf: 'center', flexDirection: 'row', alignItems: 'center', gap: 4, borderRadius: radius.sm, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs },
+  relayMarkerText: { color: colors.dim, fontFamily: fonts.sans, fontSize: 12, lineHeight: 16 },
   relayColumn: { alignItems: 'center' },
   relayExcerpt: { maxWidth: '100%', flexDirection: 'row', paddingHorizontal: spacing.sm, paddingBottom: spacing.xs },
   relayExcerptText: { color: colors.dim, fontFamily: fonts.sans, fontSize: 12, lineHeight: 16 },

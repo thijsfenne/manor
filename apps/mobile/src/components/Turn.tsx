@@ -459,7 +459,7 @@ export function ConsultedAgents({
         style={({ pressed }) => [styles.consultedTrigger, pressed && styles.pressed]}
       >
         <Text style={styles.consultedText}>{action}</Text>
-        <AgentStack agentIds={agentIds} agents={agents} size={18} />
+        <AgentStack agentIds={agentIds} agents={agents} size={14} />
         <Text style={styles.consultedText}>{count} {count === 1 ? 'agent' : 'agents'}{repliesFollow ? ', replies follow' : ''}</Text>
       </Pressable>
       {anchor === null ? null : (
@@ -1193,8 +1193,8 @@ const styles = StyleSheet.create({
   // Room above the plan card, so it does not sit on the line of work above it.
   plan: { marginTop: spacing.sm },
   header: { minHeight: 32, flexDirection: 'row', alignItems: 'center', gap: 6 },
-  consultedTrigger: { alignSelf: 'center', minHeight: 30, flexDirection: 'row', alignItems: 'center', gap: 6, borderRadius: radius.sm, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs },
-  consultedText: { color: colors.dim, fontFamily: fonts.sans, fontSize: 13 },
+  consultedTrigger: { alignSelf: 'center', minHeight: 30, flexDirection: 'row', alignItems: 'center', gap: 4, borderRadius: radius.sm, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs },
+  consultedText: { color: colors.dim, fontFamily: fonts.sans, fontSize: 12, lineHeight: 16 },
   consultedMenu: { position: 'absolute', width: 220, overflow: 'hidden', borderRadius: radius.lg, ...squircle, backgroundColor: colors.raised },
   consultedRow: { minHeight: 52, flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingHorizontal: spacing.lg },
   consultedName: { flex: 1, color: colors.text, fontFamily: fonts.sans, fontSize: 16 },

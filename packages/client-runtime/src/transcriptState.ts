@@ -695,21 +695,78 @@ export function unannouncedConsultations(rows: readonly Row[]): ReadonlyMap<stri
   return byTurn
 }
 
+/** One agent's messages both ways within one exchange, drawn as a single "N messages with" line. */
+export interface RelayExchange extends TurnConsultation {
+  /** Distinct messages: each sent and each received relay counts once. */
+  count: number
+  relayIds: readonly string[]
+}
+
+/** The words before a relay marker's face: "Messaged", "Message from", or an exchange's "3 messages with". */
+export function relayMarkerAction(phase: RelayEvent['phase'], exchange?: Pick<RelayExchange, 'count'>): string {
+  if (exchange !== undefined) return `${exchange.count} ${exchange.count === 1 ? 'message' : 'messages'} with`
+  return phase === 'sent' ? 'Messaged' : phase === 'received' ? 'Message from' : 'Message failed from'
+}
+
+/**
+ * Merges each agent's sent and received markers within one exchange into one line. An
+ * exchange is a run of relay markers with nothing visible between them; a silent
+ * asking turn draws nothing in a DM, so it does not break the run. An agent with only
+ * sends, only replies or a failure in the run keeps its own markers. The line sits on
+ * the agent's first marker, keyed by event id; its other markers map to null.
+ */
+export function relayExchanges(rows: readonly Row[]): ReadonlyMap<string, RelayExchange | null> {
+  const exchanges = new Map<string, RelayExchange | null>()
+  let run: RelayEvent[] = []
+  const flush = () => {
+    const byPeer = new Map<string, RelayEvent[]>()
+    for (const event of run) {
+      if (event.phase === 'failed') continue
+      const key = `${event.agentId}\0${event.peerAgentId}`
+      byPeer.set(key, [...(byPeer.get(key) ?? []), event])
+    }
+    for (const events of byPeer.values()) {
+      const [first] = events
+      if (first === undefined || !events.some((event) => event.phase === 'sent') || !events.some((event) => event.phase === 'received')) continue
+      const messages = new Set(events.map((event) => `${event.relayId}\0${event.phase}`))
+      exchanges.set(first.id, {
+        agentId: first.peerAgentId,
+        pairChatId: first.pairChatId,
+        count: messages.size,
+        relayIds: [...new Set(events.map((event) => event.relayId))],
+      })
+      for (const event of events.slice(1)) exchanges.set(event.id, null)
+    }
+    run = []
+  }
+  for (const row of rows) {
+    if (row.kind === 'event' && row.event.type === 'agent_relay') run.push(row.event)
+    else if (!(row.kind === 'turn' && onlyConsulted(row))) flush()
+  }
+  flush()
+  return exchanges
+}
+
 /**
  * Marks the first row of a stacked group with the facepile and every later row
  * with an empty group, so clients can collapse several durable markers into one.
  * Outgoing markers stack by the sending turn; incoming ones stack only while they
  * sit next to each other, so a later reply cannot jump up past a message in between.
- * Single consultations keep their original marker and therefore do not appear here.
+ * Single consultations keep their original marker and therefore do not appear here,
+ * and neither do markers merged into an exchange line (`relayExchanges`).
  */
 export function stackedConsultationMarkers(
-  rows: readonly Row[],
+  allRows: readonly Row[],
+  exchanges: ReadonlyMap<string, RelayExchange | null> = relayExchanges(allRows),
 ): ReadonlyMap<string, readonly TurnConsultation[]> {
-  const byTurn = consultationsByTurn(rows)
+  // Hidden exchange markers drop out; a visible exchange line stays a row, so replies around it never stack across it.
+  const rows = exchanges.size === 0 ? allRows : allRows.filter((row) => row.kind !== 'event' || exchanges.get(row.event.id) !== null)
+  const merged = (event: RelayEvent) => exchanges.has(event.id)
+  const byTurn = consultationsByTurn(rows.filter((row) => row.kind !== 'event' || !exchanges.has(row.event.id)))
   const seen = new Set<string>()
   const markers = new Map<string, readonly TurnConsultation[]>()
   for (const row of rows) {
-    if (row.kind !== 'event' || row.event.type !== 'agent_relay' || row.event.phase !== 'sent') continue
+    if (row.kind !== 'event' || row.event.type !== 'agent_relay' || row.event.phase !== 'sent' || merged(row.event)) continue
     const event = row.event
     const consultations = byTurn.get(event.turnId)
     if (consultations === undefined || consultations.length < 2) continue
@@ -729,7 +786,7 @@ export function stackedConsultationMarkers(
     received = []
   }
   for (const row of rows) {
-    if (row.kind === 'event' && row.event.type === 'agent_relay' && row.event.phase === 'received') {
+    if (row.kind === 'event' && row.event.type === 'agent_relay' && row.event.phase === 'received' && !merged(row.event)) {
       const event = row.event
       receivedIds.push(event.id)
       if (!received.some((consultation) => consultation.agentId === event.peerAgentId)) {

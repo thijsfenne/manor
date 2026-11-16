@@ -86,10 +86,11 @@ export function TurnStatus({ turn, open, onToggle, standalone = false, runningLa
   return (
     <span
       {...(running && standalone ? {} : { 'data-chrome': '' })}
-      className={`mt-[3px] flex min-w-0 flex-1 items-center text-[13px] leading-none font-normal text-muted${standalone ? '' : ' ml-2'}${quiet ? ` ${QUIET_CHROME}` : ''}`}>
+      // Only the button takes clicks: the empty rest of this full-width row may lie over a relay line.
+      className={`pointer-events-none mt-[3px] flex min-w-0 flex-1 items-center text-[13px] leading-none font-normal text-muted${standalone ? '' : ' ml-2'}${quiet ? ` ${QUIET_CHROME}` : ''}`}>
       <button
         type="button"
-        className="group flex min-w-0 cursor-pointer items-center gap-2 rounded-md py-1 text-left hover:text-text disabled:cursor-default disabled:hover:text-muted"
+        className="pointer-events-auto group flex min-w-0 cursor-pointer items-center gap-2 rounded-md py-1 text-left hover:text-text disabled:cursor-default disabled:hover:text-muted"
         title={!running && turn.reportedModel !== undefined ? `This turn ran on ${turn.reportedModel}` : undefined}
         aria-expanded={foldable ? open : undefined}
         disabled={!foldable}

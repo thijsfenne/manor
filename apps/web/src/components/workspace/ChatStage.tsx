@@ -157,7 +157,7 @@ export function ChatStage({
         return agent === undefined ? [] : [agent]
       })
     : []
-  const pairTitle = pairAgents.map((agent) => agent.name).join(' ⇄ ')
+  const pairTitle = pairAgents.map((agent) => agent.name).join(' and ')
   const headerAgent = draftAgent ?? dmAgent
 
   const paneSlot = (side: 'left' | 'right'): TopBarSlot | null =>

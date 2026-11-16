@@ -2,13 +2,14 @@ import {
   Clock01Icon,
   Archive02Icon,
   ArrowLeft01Icon,
+  ArrowLeftRightIcon,
   CheckListIcon,
   DashboardSpeed02Icon,
   Note01Icon,
   PuzzleIcon,
   SidebarLeftIcon,
 } from '@hugeicons/core-free-icons'
-import type { ReactNode } from 'react'
+import { Fragment, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import type { AgentConfig, Project } from '@manor/contracts'
 import type { ConnectionStatus } from '../useWorkspace'
@@ -20,7 +21,6 @@ import { IconButton } from './ui/IconButton'
 import { ProjectBadge } from './ProjectBadge'
 import { RoleBadge } from './ui/RoleBadge'
 import { ZoomableImage } from './ui/ZoomableImage'
-import { AgentStack } from './inbox/AgentStack'
 import { useTopBarSlot } from './TopBar'
 
 interface WorkspaceHeaderProps {
@@ -242,19 +242,16 @@ function Crumb({
   return (
     <>
       {pairPersonas !== undefined && pairPersonas.length > 0 ? (
-        <>
-          {compact ? (
-            <AgentStack agentIds={pairPersonas.map((member) => member.id)} agents={[...pairPersonas]} size={face} />
-          ) : (
-            <AgentStack
-              agentIds={pairPersonas.map((member) => member.id)}
-              agents={[...pairPersonas]}
-              size={28}
-              footprint={46}
-            />
-          )}
-          <span className={`min-w-10 truncate text-[14px] font-semibold tracking-[-0.01em] ${titleTone}`}>{title}</span>
-        </>
+        // Each speaker's face sits beside their own name: A ⇄ B, no facepile.
+        <span className="flex min-w-10 items-center gap-1.5">
+          {pairPersonas.map((member, index) => (
+            <Fragment key={member.id}>
+              {index === 0 ? null : <Icon icon={ArrowLeftRightIcon} size={compact ? 14 : 16} className="mx-0.5 flex-none text-dim" />}
+              <Avatar name={member.name} color={member.color} src={member.avatar} shape={member.avatarShape} tone={member.avatarTone} size={compact ? face : 28} />
+              <span className={`min-w-0 truncate text-[14px] font-semibold tracking-[-0.01em] ${titleTone}`}>{member.name}</span>
+            </Fragment>
+          ))}
+        </span>
       ) : persona !== undefined ? (
         onEditPersona !== undefined ? (
           <button

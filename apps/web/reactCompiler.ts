@@ -85,7 +85,7 @@ export const PURE_MODULES: Readonly<Record<string, { file: string; functions: re
       'goalReportEventId', 'isHomeRoom', 'isProjectThread', 'liveWritten', 'roomOf',
       'messageBrief', 'onlyConsulted', 'openAsk', 'openThreadBundleAt', 'openThreadQuestion',
       'openWorkDecisions', 'participantIds', 'personaOf', 'projectThreadFeed',
-      'projectWorkHandoffs', 'railPins', 'repoListingKey', 'rowHasQuoteSource', 'rowsOf',
+      'projectWorkHandoffs', 'railPins', 'relayExchanges', 'relayMarkerAction', 'repoListingKey', 'rowHasQuoteSource', 'rowsOf',
       'runtimeStartedAgentIds', 'sessionLiveOf', 'sessionReadyRow', 'sessionThreadOf',
       'setThreadBundleOpen', 'sitsSettled', 'stackedConsultationMarkers', 'streamedMessages',
       'threadBundleOpen', 'threadBundleOpenItems', 'threadOf', 'threadQuestionAdvice',

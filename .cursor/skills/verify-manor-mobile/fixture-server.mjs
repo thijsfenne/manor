@@ -243,6 +243,16 @@ const directory = {
       minutesAgo: 600,
       memberIds: ['agent-wren'],
     }),
+    // The standing pair behind the answered consultation in Marlow's DM; view-only.
+    chat({
+      id: 'pair-marlow-agent-sage',
+      projectId: null,
+      kind: 'pair',
+      title: 'Marlow and Sage',
+      preview: 'Ja, ze zijn klaar.',
+      minutesAgo: 1.5,
+      memberIds: ['agent-marlow', 'agent-sage'],
+    }),
   ],
   workHandoffs: [],
   awaitingInput: { 'chat-thread-session': ['request-thread-1'], 'chat-secret-token': ['request-secret-1'] },
@@ -690,12 +700,15 @@ const snapshots = {
     { id: 'p4', ts: now - 3.5 * 60_000 + 2, type: 'turn_result', turnId: 'turn-p3', agentId: 'agent-marlow' },
     ...chatter('m', 'agent-marlow', 3, 3),
     // A consultation that also wrote memory: the mark is in the reply's long-press sheet, never a row.
+    // Its send and reply merge into one "2 messages with Sage" line that opens the pair.
     ...consultation('mc', 2, 'agent-sage', 'Vraag Sage of de datumlabels klaar zijn.', 'Ik vraag het Sage; haar antwoord volgt.',
       { memory: '- Date labels go past Sage first.', agentId: 'agent-marlow' }),
     { id: 'mc-received', ts: now - 1.5 * 60_000, type: 'agent_relay', agentId: 'agent-marlow', peerAgentId: 'agent-sage', pairChatId: 'pair-marlow-agent-sage',
       turnId: 'turn-mc', relayId: 'relay-mc', phase: 'received', preview: 'Ja, ze zijn klaar.' },
     { id: 'mc-return', ts: now - 1.5 * 60_000 + 1, type: 'agent_message', agentId: 'agent-marlow', turnId: 'turn-mc-return', messageId: 'mc-m2', text: 'Sage zegt dat de datumlabels klaar zijn.' },
     { id: 'mc-return-result', ts: now - 1.5 * 60_000 + 2, type: 'turn_result', agentId: 'agent-marlow', turnId: 'turn-mc-return' },
+    // A send still waiting on its reply keeps its own "Messaged" line.
+    ...consultation('ms', 1.3, 'agent-smith', 'Vraag Smith naar de review.', 'Ik vraag het Smith; zijn antwoord volgt.', { agentId: 'agent-marlow' }),
     // Bubble chips: a reply row plus a file, and a picture with text. The picture sits above the bubble.
     { id: 'mc-reply', ts: now - 60_000, type: 'user_message', mentions: [], text: 'Dit moeten wij dus ook hebben?',
       replyTo: { turnId: 'turn-mc-return', agentId: 'agent-marlow', text: 'Sage zegt dat de datumlabels klaar zijn.' },
@@ -808,6 +821,11 @@ const snapshots = {
     { id: 'wa-return', ts: now - 597 * 60_000 + 1, type: 'agent_message', agentId: 'agent-wren', turnId: 'turn-wa-return', messageId: 'wa-m2', text: 'Sage zegt dat hij klopt, op de datumlabels na.' },
     { id: 'wa-return-result', ts: now - 597 * 60_000 + 2, type: 'turn_result', agentId: 'agent-wren', turnId: 'turn-wa-return' },
     ...consultation('wb', 596, 'agent-smith', 'Welke spacing krijgen de consultatieregels in het transcript?'),
+  ],
+  'pair-marlow-agent-sage': [
+    { id: 'pm-ask', ts: now - 2 * 60_000 + 3, type: 'agent_message', agentId: 'agent-marlow', turnId: 'turn-mc', messageId: 'pm-m1', text: 'Vraag Sage of de datumlabels klaar zijn.' },
+    { id: 'pm-answer', ts: now - 1.5 * 60_000 - 1, type: 'agent_message', agentId: 'agent-sage', turnId: 'turn-pm-sage', messageId: 'pm-m2', text: 'Ja, ze zijn klaar.' },
+    { id: 'pm-result', ts: now - 1.5 * 60_000, type: 'turn_result', agentId: 'agent-sage', turnId: 'turn-pm-sage' },
   ],
 }
 

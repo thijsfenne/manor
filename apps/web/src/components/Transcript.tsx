@@ -23,9 +23,12 @@ import {
   threadBundleOpenItems,
   threadStretch,
   stackedConsultationMarkers,
+  relayExchanges,
+  relayMarkerAction,
   dmMemoryMarks,
   unannouncedConsultations,
   workCardInView,
+  type RelayExchange,
   type Row,
   type SessionLink,
   type ThreadState,
@@ -72,6 +75,7 @@ import { useAgentMentions } from './mentionMarkdown'
 import { useStableCallback } from '../useStableCallback'
 
 const NO_CONSULTATION_MARKERS: ReadonlyMap<string, readonly TurnConsultation[]> = new Map()
+const NO_EXCHANGES: ReadonlyMap<string, RelayExchange | null> = new Map()
 const NO_CHANGED_FILES: ReturnType<typeof turnChangedFiles> = []
 
 /** Which consultation each turn still waits on: the peer of its last relay sent and not yet answered. */
@@ -370,10 +374,11 @@ export function Transcript({
   const waitingOnByTurn = waitingOnByTurnOf(rows)
   // In a DM, memory writes are reached through the notepad on a reply bubble only.
   const memoryMarks = bubbleReplies ? dmMemoryMarks(rows) : undefined
-  const consultationMarkers = bubbleReplies && onOpenAgentRelay !== undefined ? stackedConsultationMarkers(rows) : NO_CONSULTATION_MARKERS
+  const exchanges = bubbleReplies && onOpenAgentRelay !== undefined ? relayExchanges(rows) : NO_EXCHANGES
+  const consultationMarkers = bubbleReplies && onOpenAgentRelay !== undefined ? stackedConsultationMarkers(rows, exchanges) : NO_CONSULTATION_MARKERS
   const unannounced = unannouncedConsultations(rows)
   const visibleRows = rows.filter((row) => row.kind === 'event'
-    ? consultationMarkers.get(row.event.id)?.length !== 0
+    ? consultationMarkers.get(row.event.id)?.length !== 0 && exchanges.get(row.event.id) !== null
     : !(bubbleReplies && row.kind === 'turn' && onlyConsulted(row)))
   // The project thread's open bundles; the user's next message folds them all again.
   const [openBundles, setOpenBundles] = useState(NO_OPEN_THREAD_BUNDLES)
@@ -707,7 +712,16 @@ export function Transcript({
     const unannouncedHere = row.kind === 'event' && row.event.type === 'agent_relay' && row.event.phase === 'sent'
       ? unannounced.get(row.event.turnId)
       : undefined
-    return row.kind === 'event' && row.event.type === 'agent_relay' && consultationMarker !== undefined && onOpenAgentRelay !== undefined ? (
+    const exchange = row.kind === 'event' ? exchanges.get(row.event.id) : undefined
+    return row.kind === 'event' && row.event.type === 'agent_relay' && exchange != null ? (
+      <RelayMarker
+        event={row.event}
+        exchange={exchange}
+        agents={agents}
+        onOpen={onOpenAgentRelay}
+        {...(unannouncedHere === undefined ? {} : { unannounced: unannouncedHere })}
+      />
+    ) : row.kind === 'event' && row.event.type === 'agent_relay' && consultationMarker !== undefined && onOpenAgentRelay !== undefined ? (
       <ConsultedAgents
         action={row.event.phase === 'received' ? 'Message from' : 'Messaged'}
         consultations={consultationMarker}
@@ -1073,34 +1087,35 @@ function SessionChip({ link, onOpen }: { link: SessionLink; onOpen?: (chatId: st
 
 function RelayMarker({
   event,
+  exchange,
   agents,
   onOpen,
   unannounced,
 }: {
   event: Extract<Extract<Row, { kind: 'event' }>['event'], { type: 'agent_relay' }>
+  /** Set when this marker stands for the agent's whole exchange: "N messages with". */
+  exchange?: RelayExchange
   agents: AgentConfig[]
   onOpen?: (chatId: string, checkout?: CheckoutRequest) => Promise<void> | void
   /** Set when the asking turn said nothing, so this marker states the question. */
   unannounced?: readonly UnannouncedConsultation[]
 }) {
   const peer = personaOf(agents, event.peerAgentId)
-  const consultation = unannounced?.find((entry) => entry.relayId === event.relayId)
-  const label = event.phase === 'sent'
-    ? `Messaged ${peer.name}`
-    : event.phase === 'received'
-      ? `Message from ${peer.name}`
-      : `Message from ${peer.name} failed`
+  const consultation = unannounced?.find((entry) => exchange === undefined ? entry.relayId === event.relayId : exchange.relayIds.includes(entry.relayId))
+  const action = relayMarkerAction(event.phase, exchange)
+  const label = event.phase === 'failed' && exchange === undefined ? `Message from ${peer.name} failed` : `${action} ${peer.name}`
   return (
     <div className="flex flex-col items-center">
       <button
         type="button"
         disabled={onOpen === undefined}
         onClick={() => onOpen?.(event.pairChatId)}
-        title={event.preview}
-        className="flex cursor-pointer items-center gap-1.5 rounded-md border-0 bg-transparent px-2 py-1 text-[12px] text-dim [font:inherit] hover:bg-surface-2 hover:text-muted disabled:cursor-default disabled:hover:bg-transparent"
+        title={exchange === undefined ? event.preview : undefined}
+        // `font-family`, not `font`: the shorthand would reset the 12px size to the column's.
+        className="flex cursor-pointer items-center gap-1 rounded-md border-0 bg-transparent px-2 py-1 text-[12px] leading-[16px] text-dim [font-family:inherit] hover:bg-surface-2 hover:text-muted disabled:cursor-default disabled:hover:bg-transparent"
       >
-        <span>{event.phase === 'sent' ? 'Messaged' : event.phase === 'received' ? 'Message from' : 'Message failed from'}</span>
-        <Avatar name={peer.name} color={peer.color} src={peer.avatar} shape={peer.avatarShape} tone={peer.avatarTone} size={15} />
+        <span>{action}</span>
+        <Avatar name={peer.name} color={peer.color} src={peer.avatar} shape={peer.avatarShape} tone={peer.avatarTone} size={13} />
         <span>{peer.name}</span>
       </button>
       <span className="sr-only">{label}</span>
@@ -1122,7 +1137,7 @@ function ConsultationExcerpt({ question, replyPending }: { question: string; rep
       aria-expanded={open}
       aria-label={`Question: ${question}${follows}`}
       onClick={() => setOpen((value) => !value)}
-      className="flex max-w-[min(100%,520px)] cursor-pointer rounded-md border-0 bg-transparent px-2 pb-1 text-[12px] leading-[16px] text-dim [font:inherit] hover:text-muted"
+      className="flex max-w-[min(100%,520px)] cursor-pointer rounded-md border-0 bg-transparent px-2 pb-1 text-[12px] leading-[16px] text-dim [font-family:inherit] hover:text-muted"
     >
       {open ? (
         <span className="text-center">“{question}”{follows}</span>
@@ -1267,9 +1282,10 @@ const TurnRow = memo(function TurnRow({
   const header = bubbleReplies ? (
     // A finished DM turn has no face: the face lives only in the working indicator at
     // the foot of the chat. Its Worked for line waits for hover, hung in the gap under
-    // the bubbles, and opens the trace above them. Nothing while it runs.
+    // the bubbles, and opens the trace above them. Nothing while it runs. Clicks pass
+    // through it to a relay line pulled up beneath; the status button takes its own.
     running || !hasStatus(traced) ? null : (
-      <div className={`flex min-h-6 items-center${open ? '' : ` ${HUNG_BELOW}`}`}>{status}</div>
+      <div className={`pointer-events-none flex min-h-6 items-center${open ? '' : ` ${HUNG_BELOW}`}`}>{status}</div>
     )
   ) : showSpeaker && threadProject === undefined ? (
     <TurnHeader
@@ -1464,11 +1480,11 @@ function ConsultedAgents({
         aria-expanded={open}
         aria-haspopup="menu"
         aria-label={`${action} ${names.join(', ')}${repliesFollow ? ', replies follow' : ''}`}
-        className="flex cursor-pointer items-center gap-1.5 rounded-md border-0 bg-transparent px-2 py-1 text-[12px] text-dim [font:inherit] hover:bg-surface-2 hover:text-muted"
+        className="flex cursor-pointer items-center gap-1 rounded-md border-0 bg-transparent px-2 py-1 text-[12px] leading-[16px] text-dim [font-family:inherit] hover:bg-surface-2 hover:text-muted"
         onClick={toggle}
       >
         <span>{action}</span>
-        <AgentStack agentIds={agentIds} agents={agents} size={18} />
+        <AgentStack agentIds={agentIds} agents={agents} size={14} />
         <span>{count} {count === 1 ? 'agent' : 'agents'}{repliesFollow ? ', replies follow' : ''}</span>
       </button>
       {!mounted || typeof document === 'undefined'

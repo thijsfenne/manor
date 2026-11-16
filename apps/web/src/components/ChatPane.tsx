@@ -400,7 +400,7 @@ export function ChatPane({
         return agent === undefined ? [] : [agent]
       })
     : []
-  const pairTitle = pairAgents.map((agent) => agent.name).join(' ⇄ ')
+  const pairTitle = pairAgents.map((agent) => agent.name).join(' and ')
   // Through a string, so the list keeps its identity while the live turn grows token
   // by token and the runtime pickers that take it are left alone.
   const started = runtimeStartedAgentIds(thread)
