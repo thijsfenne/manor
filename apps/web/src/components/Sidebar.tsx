@@ -11,7 +11,7 @@ import type { AgentConfig, Project } from '@manor/contracts'
 import type { SidebarPanel } from '../navDestination'
 import type { ChatListRow, Inbox, Notice, ProjectThreadRow, SubagentGroup } from '../state'
 import type { SidebarMotion } from '../useSidebar'
-import { ChatListView } from './chats/ChatListView'
+import { ChatListView, type AgentPins } from './chats/ChatListView'
 import { AddAgentIcon } from './customIcons'
 import { ContextMenu } from './ui/ContextMenu'
 import { InboxView } from './inbox/InboxView'
@@ -86,6 +86,8 @@ interface SidebarProps {
   notice: Notice | null
   /** Opens the persona form for one of the household, from her row in Agents. */
   onEditAgent: (agentId: string) => void
+  /** Flips one of a persona's two pins from her row's menu. */
+  onSetAgentPins: (agentId: string, pins: AgentPins) => void
   /** Opens an empty persona form: a new agent needs no conversation to exist. */
   onNewAgent: () => void
   /** Opens the list of personas that work in Sessions, which the Agents list leaves out. */
@@ -179,6 +181,7 @@ function SidebarNav({
   draftAgentId,
   notice,
   onEditAgent,
+  onSetAgentPins,
   onNewAgent,
   onManageAgents,
   onStartChat,
@@ -344,6 +347,7 @@ function SidebarNav({
       onEditAgent={onEditAgent}
       onEditGroup={onEditGroup}
       onDeleteChat={onDeleteChat}
+      onSetPins={onSetAgentPins}
       {...(subagentGroups === undefined ? {} : { subagentGroups })}
       {...(onOpenSubagent === undefined ? {} : { onOpenSubagent })}
     />

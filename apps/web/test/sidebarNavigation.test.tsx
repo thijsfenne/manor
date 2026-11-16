@@ -41,6 +41,7 @@ const render = (
       draftAgentId={null}
       notice={null}
       onEditAgent={() => {}}
+      onSetAgentPins={() => {}}
       onNewAgent={() => {}}
       onManageAgents={() => {}}
       onStartChat={() => {}}

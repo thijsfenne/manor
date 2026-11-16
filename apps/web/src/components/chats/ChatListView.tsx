@@ -1,12 +1,13 @@
 import { Fragment, useState, type MouseEvent, type PointerEvent } from 'react'
+import { Delete02Icon, LayoutLeftIcon, PinIcon, PinOffIcon, Settings01Icon, UserMultiple02Icon } from '@hugeicons/core-free-icons'
 import type { AgentConfig } from '@manor/contracts'
-import { chatListPins, personaOf, type ChatListRow, type SubagentGroup } from '../../state'
+import { CHAT_LIST_PIN_LIMIT, chatListPins, personaOf, type ChatListRow, type SubagentGroup } from '../../state'
 import { useMinuteClock } from '../../useMinuteClock'
 import { Avatar } from '../Avatar'
 import { ConfirmStrip } from '../Confirm'
 import { AgentStack } from '../inbox/AgentStack'
 import { Standing } from '../inbox/Standing'
-import { ContextMenu } from '../ui/ContextMenu'
+import { ContextMenu, type ContextMenuItem } from '../ui/ContextMenu'
 import { RoleBadge } from '../ui/RoleBadge'
 import { SelectionMarker, SIDEBAR_ROW_MARKER } from '../ui/SelectionMarker'
 import { useSplitDragGrab } from '../SplitDrag'
@@ -44,10 +45,36 @@ interface ChatListViewProps {
   onEditAgent: (agentId: string) => void
   onEditGroup: (chatId: string) => void
   onDeleteChat: (chatId: string) => void
+  /** Flips one of a persona's two pins, through the same save as her settings. */
+  onSetPins: (agentId: string, pins: AgentPins) => void
   /** Delegated children by parent chat id, nested under the conversation that started them. */
   subagentGroups?: Record<string, SubagentGroup>
   /** Opens a parent with one child, or the whole list (null), in its Subagents panel. */
   onOpenSubagent?: (parentChatId: string, toolCallId: string | null) => void
+}
+
+export type AgentPins = { pinned: boolean } | { railPinned: boolean }
+
+/**
+ * The two pin toggles a persona's right-click menu leads with, read off the roster
+ * the way her settings read them. A full top is refused, never made room for: the
+ * user picks who leaves.
+ */
+export function pinMenuItems(agent: AgentConfig, agents: readonly AgentConfig[], onSetPins: (agentId: string, pins: AgentPins) => void): ContextMenuItem[] {
+  const pinned = agent.pinned === true
+  const railPinned = agent.railPinned === true
+  // Counted over the others, so unpinning and pinning again is always allowed.
+  const topFull = !pinned && agents.filter((each) => each.id !== agent.id && each.pinned === true).length >= CHAT_LIST_PIN_LIMIT
+  return [
+    {
+      label: pinned ? 'Unpin' : 'Pin to top',
+      icon: pinned ? PinOffIcon : PinIcon,
+      disabled: topFull,
+      ...(topFull ? { hint: `Already ${CHAT_LIST_PIN_LIMIT} pinned there; unpin one first.` } : {}),
+      onSelect: () => onSetPins(agent.id, { pinned: !pinned }),
+    },
+    { label: railPinned ? 'Remove from rail' : 'Add to rail', icon: LayoutLeftIcon, onSelect: () => onSetPins(agent.id, { railPinned: !railPinned }) },
+  ]
 }
 
 /** A list row's text starts after the face column; its children line up under that text, clear of the face. */
@@ -74,6 +101,7 @@ export function ChatListView({
   onEditAgent,
   onEditGroup,
   onDeleteChat,
+  onSetPins,
   subagentGroups,
   onOpenSubagent,
 }: ChatListViewProps) {
@@ -129,6 +157,7 @@ export function ChatListView({
       armed={armed}
       onArm={onArm}
       onOpen={() => (row.chat !== null ? onOpenChat(row.chat.id) : onOpenDm(agent.id))}
+      pinItems={pinMenuItems(agent, agents, onSetPins)}
       onEditAgent={() => onEditAgent(agent.id)}
       onDeleteChat={onDeleteChat}
     />
@@ -175,6 +204,7 @@ export function ChatListView({
                   onEditAgent={onEditAgent}
                   onEditGroup={onEditGroup}
                   onDeleteChat={onDeleteChat}
+                  onSetPins={onSetPins}
                 />
                 {row.chat !== null && subagentGroups?.[row.chat.id] !== undefined ? (
                   <li className="m-0 list-none">{childrenOf(row, CHILD_INDENT)}</li>
@@ -213,6 +243,7 @@ function HeadCard({
   armed,
   onArm,
   onOpen,
+  pinItems,
   onEditAgent,
   onDeleteChat,
 }: {
@@ -226,6 +257,7 @@ function HeadCard({
   armed: string | null
   onArm: (key: string | null) => void
   onOpen: () => void
+  pinItems: ContextMenuItem[]
   onEditAgent: () => void
   onDeleteChat: (chatId: string) => void
 }) {
@@ -287,9 +319,10 @@ function HeadCard({
           x={menu.x}
           y={menu.y}
           items={[
-            { label: 'Agent settings', onSelect: onEditAgent },
+            ...pinItems,
+            { label: 'Agent settings', icon: Settings01Icon, onSelect: onEditAgent },
             // Nothing to delete before her first message, the same as any other DM.
-            ...(chat === null ? [] : [{ label: 'Delete chat', tone: 'danger' as const, onSelect: () => onArm(row.key) }]),
+            ...(chat === null ? [] : [{ label: 'Delete chat', icon: Delete02Icon, tone: 'danger' as const, separatorBefore: true, onSelect: () => onArm(row.key) }]),
           ]}
           onClose={() => setMenu(null)}
         />
@@ -313,6 +346,7 @@ interface ChatRowProps {
   onEditAgent: (agentId: string) => void
   onEditGroup: (chatId: string) => void
   onDeleteChat: (chatId: string) => void
+  onSetPins: (agentId: string, pins: AgentPins) => void
 }
 
 /**
@@ -335,6 +369,7 @@ function ChatRow({
   onEditAgent,
   onEditGroup,
   onDeleteChat,
+  onSetPins,
 }: ChatRowProps) {
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null)
   const { chat } = row
@@ -364,10 +399,11 @@ function ChatRow({
   // Beside the name: what she is in the house, or that this row is a room rather than
   // a person. Her own words only, never the driver she runs on: that is a runtime
   // fact, and this list is about who is being talked to.
+  const agent = agentId === null ? undefined : agents.find((candidate) => candidate.id === agentId)
   const badge =
     persona === null
       ? row.kind === 'pair' ? 'View only' : 'Group'
-      : agents.find((candidate) => candidate.id === row.agentId)?.role || null
+      : agent?.role || null
 
   return (
     <li
@@ -430,11 +466,12 @@ function ChatRow({
           x={menu.x}
           y={menu.y}
           items={[
-            ...(agentId === null ? [] : [{ label: 'Agent settings', onSelect: () => onEditAgent(agentId) }]),
+            ...(agent === undefined ? [] : pinMenuItems(agent, agents, onSetPins)),
+            ...(agentId === null ? [] : [{ label: 'Agent settings', icon: Settings01Icon, onSelect: () => onEditAgent(agentId) }]),
             ...(chat !== null && row.kind === 'group'
-              ? [{ label: 'Edit members…', onSelect: () => onEditGroup(chat.id) }]
+              ? [{ label: 'Edit members…', icon: UserMultiple02Icon, onSelect: () => onEditGroup(chat.id) }]
               : []),
-            ...(chat === null ? [] : [{ label: 'Delete chat', tone: 'danger' as const, onSelect: () => onArm(row.key) }]),
+            ...(chat === null ? [] : [{ label: 'Delete chat', icon: Delete02Icon, tone: 'danger' as const, separatorBefore: true, onSelect: () => onArm(row.key) }]),
           ]}
           onClose={() => setMenu(null)}
         />

@@ -23,6 +23,8 @@ import { RepoFileLinkProvider } from './components/RepoFileLink'
 import { SplitDragContext, SplitDragLayer } from './components/SplitDrag'
 import { NAV_RAIL_WIDTH } from './components/NavRail'
 import { Sidebar } from './components/Sidebar'
+import type { AgentPins } from './components/chats/ChatListView'
+import { cleanDraft, draftOf } from './persona'
 import { FRAME_GUTTER, TOP_BAR_HEIGHT, TopBar, TopBarSlotContext, type TopBarSlot } from './components/TopBar'
 import { ProviderUpdateToast, useProviderUpdates } from './components/ProviderUpdates'
 import { SessionGitToast, useSessionGitToast } from './components/session/SessionGitToast'
@@ -478,6 +480,11 @@ function Workspace({
       showRightPanelFor(dm.id, 'agent')
     })()
   }
+  /** A row menu's pin toggle: the stored agent saved again with one pin flipped, as her settings save it. */
+  const setAgentPins = (agentId: string, pins: AgentPins) => {
+    const agent = workspace.agents.find((candidate) => candidate.id === agentId)
+    if (agent !== undefined) manor.saveAgent(cleanDraft({ ...draftOf(agent), ...pins }), crypto.randomUUID())
+  }
   const [managingAgents, setManagingAgents] = useState(false)
   const manageAgents = () => setManagingAgents(true)
   const closeManagingAgents = () => setManagingAgents(false)
@@ -792,6 +799,7 @@ function Workspace({
           dialogOpen ? null : workspace.notice
         }
         onEditAgent={editAgent}
+        onSetAgentPins={setAgentPins}
         onNewAgent={newAgent}
         onManageAgents={manageAgents}
         onStartChat={startChat}

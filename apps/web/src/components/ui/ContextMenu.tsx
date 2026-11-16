@@ -16,6 +16,8 @@ export interface ContextMenuItem {
   /** A choice that holds: shown with a tick while on, and read out as checked. */
   checked?: boolean
   disabled?: boolean
+  /** A tooltip, such as why a disabled item cannot be chosen. */
+  hint?: string
   /** Draws a hairline above the item, to set a group apart. */
   separatorBefore?: boolean
   onSelect: () => void
@@ -83,6 +85,7 @@ export function ContextMenu({ x, y, items, onClose }: ContextMenuProps) {
           role={item.checked === undefined ? 'menuitem' : 'menuitemcheckbox'}
           aria-checked={item.checked}
           disabled={item.disabled}
+          title={item.hint}
           onClick={() => {
             item.onSelect()
             onClose()

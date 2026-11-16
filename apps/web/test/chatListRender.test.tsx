@@ -56,6 +56,7 @@ const render = (
       onEditAgent={() => {}}
       onEditGroup={() => {}}
       onDeleteChat={() => {}}
+      onSetPins={() => {}}
     />,
   )
 }
