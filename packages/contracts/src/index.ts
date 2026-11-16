@@ -1453,6 +1453,10 @@ export const ToolUseEventSchema = z.object({
   // Concrete files or paths the action touched. Kept separate from the shell
   // command so the UI never has to reverse engineer provider syntax.
   targets: z.array(z.string()).max(100).optional(),
+  // Signed links to the raster pictures among `targets`, one per picture, that the
+  // trace shows as thumbnails. The server adds them on the way to a client and never
+  // stores them; a picture the user attached to their own message gets none.
+  images: z.array(z.object({ target: z.string(), src: z.string() })).max(100).optional(),
   // Provider command when there was one. Secondary technical detail, never the
   // primary activity label and capped before it enters the canonical transcript.
   command: z.string().max(2_000).optional(),

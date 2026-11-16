@@ -34,13 +34,14 @@ import {
 } from '../turnLabels'
 import {
   activeCall, activityBlocks, backgroundWaitLabel, groupLabel, isCompacting, isSettledCompactNote, isWaiting, shownSegments,
-  stepDetail, stepLabel, subagentStepState, traceRows, type StepDetail, type TraceRow,
+  stepDetail, stepImages, stepLabel, subagentStepState, thumbnailStrip, traceRows, type StepDetail, type StepImage, type TraceRow,
 } from '../turnTrace'
 import { AgentBubble } from './Bubbles'
 import { AskAnswers } from './AskCard'
 import type { DraftActions } from './OutboundDraftBubble'
 import { OutboundDraftGroup } from './OutboundDraftGroup'
 import { EditGroup } from './EditGroup'
+import { ZoomableImage } from './ui/ZoomableImage'
 import { Icon } from './Icon'
 import { SubagentRows } from './SubagentRows'
 import { useSubagentDirectory } from '../subagentContext'
@@ -244,40 +245,43 @@ function WorkRun({ steps, edits, breaks, activeTool }: { steps: TurnStep[]; edit
 
   return (
     <li data-chrome="" className="min-w-0 text-[14px] text-dim">
-      <button
-        type="button"
-        className="group/run relative flex w-full min-w-0 cursor-pointer items-start gap-2 border-0 bg-transparent p-0 text-left text-dim [font:inherit] [overflow-wrap:anywhere] hover:text-muted"
-        aria-expanded={open}
-        onClick={() => setOpen((value) => !value)}
-      >
-        {/* The compact line is one changing status, words only, like the sidebar's
-            Working / Done swap. Keying a live call by its id also moves between two
-            reads whose labels happen to match. */}
-        <AnimatePresence mode="popLayout" initial={false}>
-          <motion.span
-            key={faceKey}
-            className="flex min-w-0"
-            initial={reduce ? false : TEXT_SWAP_BELOW}
-            animate={TEXT_SWAP_REST}
-            exit={reduce ? { opacity: 0 } : TEXT_SWAP_ABOVE}
-            transition={reduce ? INSTANT : TEXT_SWAP}
-          >
-            <span
-              className={`min-w-0 truncate ${current === undefined ? '' : 'shimmer-text'}`}
-              {...(current === undefined ? {} : { 'data-text': label })}
-            >
-              {label}
-            </span>
-          </motion.span>
-        </AnimatePresence>
-        <span
-          className={`mt-[5px] shrink-0 text-dim opacity-0 transition-[opacity,transform,color] duration-200 ease-overshoot group-hover/run:opacity-100 group-focus-visible/run:opacity-100 ${
-            open ? 'rotate-180 opacity-100' : ''
-          }`}
+      <div className="flex min-w-0 items-start">
+        <button
+          type="button"
+          className="group/run relative flex min-w-0 flex-1 cursor-pointer items-start gap-2 border-0 bg-transparent p-0 text-left text-dim [font:inherit] [overflow-wrap:anywhere] hover:text-muted"
+          aria-expanded={open}
+          onClick={() => setOpen((value) => !value)}
         >
-          <Icon icon={ChevronDownIcon} size={12} />
-        </span>
-      </button>
+          {/* The compact line is one changing status, words only, like the sidebar's
+              Working / Done swap. Keying a live call by its id also moves between two
+              reads whose labels happen to match. */}
+          <AnimatePresence mode="popLayout" initial={false}>
+            <motion.span
+              key={faceKey}
+              className="flex min-w-0"
+              initial={reduce ? false : TEXT_SWAP_BELOW}
+              animate={TEXT_SWAP_REST}
+              exit={reduce ? { opacity: 0 } : TEXT_SWAP_ABOVE}
+              transition={reduce ? INSTANT : TEXT_SWAP}
+            >
+              <span
+                className={`min-w-0 truncate ${current === undefined ? '' : 'shimmer-text'}`}
+                {...(current === undefined ? {} : { 'data-text': label })}
+              >
+                {label}
+              </span>
+            </motion.span>
+          </AnimatePresence>
+          <span
+            className={`mt-[5px] shrink-0 text-dim opacity-0 transition-[opacity,transform,color] duration-200 ease-overshoot group-hover/run:opacity-100 group-focus-visible/run:opacity-100 ${
+              open ? 'rotate-180 opacity-100' : ''
+            }`}
+          >
+            <Icon icon={ChevronDownIcon} size={12} />
+          </span>
+        </button>
+        <Thumbnails images={stepImages(steps)} />
+      </div>
       {open ? (
         <ActivityScroll revision={`${String(steps.length)}:${String(edits.length)}`} followEnd={current !== undefined}>
           {edits.length === 0 ? null : (
@@ -435,19 +439,22 @@ function GroupRow({ group, current }: { group: Extract<TraceRow, { kind: 'group'
   const label = live === undefined ? groupLabel(group) : currentLabel(live)
   return (
     <li className="min-w-0 text-[14px]">
-      <button
-        type="button"
-        className={`group/row flex w-full min-w-0 cursor-pointer items-start gap-2 border-0 bg-transparent p-0 text-left [font:inherit] hover:text-muted ${live === undefined ? 'text-dim' : 'text-muted'}`}
-        aria-expanded={open}
-        onClick={() => setOpen((value) => !value)}
-      >
-        <span className={`mt-[4px] shrink-0 ${live === undefined ? 'text-dim' : 'text-[var(--accent-fg)]'}`}>
-          <Icon icon={toolIcon(group.steps[0]!.tool)} size={14} />
-        </span>
-        <span className="min-w-0 truncate">{label}</span>
-        {group.family === 'same' ? <span className="shrink-0 text-dim">×{group.steps.length}</span> : null}
-        <RowChevron open={open} />
-      </button>
+      <div className="flex min-w-0 items-start">
+        <button
+          type="button"
+          className={`group/row flex min-w-0 flex-1 cursor-pointer items-start gap-2 border-0 bg-transparent p-0 text-left [font:inherit] hover:text-muted ${live === undefined ? 'text-dim' : 'text-muted'}`}
+          aria-expanded={open}
+          onClick={() => setOpen((value) => !value)}
+        >
+          <span className={`mt-[4px] shrink-0 ${live === undefined ? 'text-dim' : 'text-[var(--accent-fg)]'}`}>
+            <Icon icon={toolIcon(group.steps[0]!.tool)} size={14} />
+          </span>
+          <span className="min-w-0 truncate">{label}</span>
+          {group.family === 'same' ? <span className="shrink-0 text-dim">×{group.steps.length}</span> : null}
+          <RowChevron open={open} />
+        </button>
+        <Thumbnails images={stepImages(group.steps)} />
+      </div>
       {open ? (
         <ol className="mt-1 ml-[22px] flex list-none flex-col gap-1 p-0">
           {group.steps.map((step) => <ToolRow key={step.key} step={step} active={step.key === current?.key} />)}
@@ -486,6 +493,7 @@ function ToolRow({ step, active }: { step: ToolStep; active: boolean }) {
   const statusIcon = step.status === 'error' ? CancelCircleIcon : toolIcon(step.tool)
   const label = stepLabel(step, active)
   const detail = stepDetail(step)
+  const images = stepImages([step])
   const face = (
     <>
       <span className={`mt-[4px] shrink-0 ${current ? 'text-[var(--accent-fg)]' : 'text-dim'}`}>
@@ -497,20 +505,74 @@ function ToolRow({ step, active }: { step: ToolStep; active: boolean }) {
   return (
     <li className={`min-w-0 text-[14px] ${current ? 'text-muted' : 'text-dim'}`}>
       {detail === undefined ? (
-        <div className="flex min-w-0 items-start gap-2">{face}</div>
+        <div className="flex min-w-0 items-start gap-2">{face}<Thumbnails images={images} /></div>
       ) : (
-        <button
-          type="button"
-          className="group/row flex w-full min-w-0 cursor-pointer items-start gap-2 border-0 bg-transparent p-0 text-left text-inherit [font:inherit] hover:text-muted"
-          aria-expanded={open}
-          onClick={() => setOpen((value) => !value)}
-        >
-          {face}
-          <RowChevron open={open} />
-        </button>
+        <div className="flex min-w-0 items-start">
+          <button
+            type="button"
+            className="group/row flex min-w-0 flex-1 cursor-pointer items-start gap-2 border-0 bg-transparent p-0 text-left text-inherit [font:inherit] hover:text-muted"
+            aria-expanded={open}
+            onClick={() => setOpen((value) => !value)}
+          >
+            {face}
+            <RowChevron open={open} />
+          </button>
+          <Thumbnails images={images} />
+        </div>
       )}
       {open && detail !== undefined ? <StepDetailBlock detail={detail} /> : null}
     </li>
+  )
+}
+
+/**
+ * The pictures a line read or wrote, at its far right: two, then a count of the rest.
+ * Each box has its size before the picture arrives and sits inside the line height, so
+ * nothing moves when it loads; one that fails to load goes and leaves the count. Each
+ * opens the line's pictures in the viewer, the count at the first one it stands for.
+ * The strip sits beside the line's own button, never in it, so both stay pressable.
+ */
+function Thumbnails({ images }: { images: readonly StepImage[] }) {
+  const [failed, setFailed] = useState<ReadonlySet<string>>(() => new Set())
+  const usable = images.filter((image) => !failed.has(image.src))
+  const { shown, more } = thumbnailStrip(usable)
+  if (shown.length === 0) return null
+  const gallery = usable.map((image) => ({ src: image.src, alt: image.name }))
+  return (
+    <span className="flex h-0 shrink-0 items-center gap-1 self-center pl-2">
+      {shown.map((image, index) => (
+        <ZoomableImage
+          key={image.key}
+          src={image.src}
+          alt={image.name}
+          frame="flex-none rounded-xs"
+          gallery={{ images: gallery, index }}
+          thumbnail={
+            <img
+              src={image.src}
+              alt={image.name}
+              width={24}
+              height={16}
+              loading="lazy"
+              decoding="async"
+              draggable={false}
+              onError={() => setFailed((current) => new Set(current).add(image.src))}
+              className="block h-4 w-6 rounded-xs bg-surface-2 object-cover"
+            />
+          }
+        />
+      ))}
+      {more === 0 ? null : (
+        <ZoomableImage
+          src={usable[shown.length]!.src}
+          alt={usable[shown.length]!.name}
+          label={`Show ${String(more)} more ${more === 1 ? 'picture' : 'pictures'}`}
+          frame="flex-none rounded-xs text-[12px] text-dim tabular-nums hover:text-muted"
+          gallery={{ images: gallery, index: shown.length }}
+          thumbnail={<span>+{more}</span>}
+        />
+      )}
+    </span>
   )
 }
 

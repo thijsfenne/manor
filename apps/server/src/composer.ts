@@ -24,6 +24,7 @@ import { connectionCatalogEntry } from './mcp/capabilityCatalog.js'
 import { agentNotesPath, type MemoryTarget } from './memoryTarget.js'
 import { CODE_REVIEWER_ID, REVIEW_PASSED_TOOL } from './goalReview.js'
 import { PREFERENCE_ANSWER_GUARD } from './interactionBroker.js'
+import { materialisedImageStem } from './scratch.js'
 
 /** How the human is labelled in every catch-up block. */
 export const USER_LABEL = 'User'
@@ -372,12 +373,6 @@ export function attachmentPathsBlock(imagePaths: readonly string[], labels: Read
   }
   return [heading, ...imagePaths.map(line), 'Read them before answering.'].join('\n')
 }
-
-/**
- * The file name `materialiseImages` gives a message's picture on disk, without its
- * extension. One definition, because the prompt finds each path's `Image #n` by it.
- */
-export const materialisedImageStem = (eventId: string, index: number): string => `${eventId}-${index}`
 
 /**
  * `Image #n` for every path that is one of the user's pictures, numbered within its own

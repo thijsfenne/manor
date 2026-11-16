@@ -1,4 +1,7 @@
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { createServer, type Server } from 'node:http'
+import { tmpdir } from 'node:os'
+import path from 'node:path'
 import type { AddressInfo } from 'node:net'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { ServerMessage, ThreadEvent } from '@manor/contracts'
@@ -22,18 +25,19 @@ const events: ThreadEvent[] = [
   { id: 'evt_000002', ts: 2, type: 'agent_message', agentId: 'smith', turnId: 't1', text: 'seen' },
 ]
 
-let server: Server | undefined
-afterEach(() => new Promise<void>((resolve) => (server === undefined ? resolve() : server.close(() => resolve()))))
+const servers: Server[] = []
+afterEach(() => Promise.all(servers.splice(0).map((server) => new Promise<void>((resolve) => server.close(() => resolve())))))
 
 const serve = async (media: ReturnType<typeof createChatMedia>) => {
-  server = createServer((request, response) => {
+  const server = createServer((request, response) => {
     if (!media.handle(request, response)) {
       response.writeHead(418)
       response.end()
     }
   })
-  await new Promise<void>((resolve) => server!.listen(0, '127.0.0.1', resolve))
-  return `http://127.0.0.1:${(server!.address() as AddressInfo).port}`
+  servers.push(server)
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
+  return `http://127.0.0.1:${(server.address() as AddressInfo).port}`
 }
 
 describe('chat media', () => {
@@ -167,6 +171,67 @@ describe('chat media', () => {
     expect(gone.status).toBe(404)
     expect(await gone.text()).toContain('no longer available')
     expect((await fetch(`${origin}${src(stored[0]!)}`, { method: 'HEAD' })).status).toBe(404)
+  })
+
+  it('links the pictures a tool call read, but never one the user attached to their own message', async () => {
+    const root = mkdtempSync(path.join(tmpdir(), 'manor-tool-images-'))
+    const attachments = path.join(root, 'attachments')
+    mkdirSync(attachments)
+    const own = path.join(attachments, 'evt_000001-0.png')
+    // The agent's own picture lands in the same folder; it belongs to no user message.
+    const agents = path.join(attachments, 'evt_000002-0.png')
+    const shot = path.join(root, 'shot.png')
+    const notPicture = path.join(root, 'fake.png')
+    for (const file of [own, agents, shot]) writeFileSync(file, png(8, 8))
+    writeFileSync(notPicture, 'not a picture')
+    const read = (id: string, targets: string[]): ThreadEvent =>
+      ({ id, ts: 3, type: 'tool_use', agentId: 'smith', turnId: 't1', tool: 'Read', targets })
+    const transcript = [
+      ...events,
+      read('evt_000003', [own]),
+      read('evt_000004', [agents, shot, path.join(root, 'notes.md'), 'relative.png', notPicture, path.join(root, 'gone.png')]),
+    ]
+    const media = createChatMedia({ loadEvents: async () => transcript, loadDocument: async () => undefined })
+    const snapshot = media.forClient({ type: 'snapshot', chatId: 'chat 1', events: transcript, usage: {} } as ServerMessage)
+    if (snapshot.type !== 'snapshot') throw new Error('not a snapshot')
+    const images = (index: number) => {
+      const event = snapshot.events[index]
+      return event?.type === 'tool_use' ? event.images : undefined
+    }
+    expect(images(2)).toBeUndefined()
+    expect(images(3)?.map((image) => image.target)).toEqual([agents, shot, notPicture, path.join(root, 'gone.png')])
+
+    // A message sent after the snapshot counts the same as one inside it.
+    const later: ThreadEvent = { id: 'evt_000005', ts: 4, type: 'user_message', text: 'and this', mentions: [], images: [{ name: 'b.png', dataUrl: picture }] }
+    media.forClient({ type: 'event', chatId: 'chat 1', event: later })
+    const live = media.forClient({ type: 'event', chatId: 'chat 1', event: read('evt_000006', [path.join(attachments, 'evt_000005-0.png')]) })
+    expect(live.type === 'event' && live.event.type === 'tool_use' ? live.event.images : 'missing').toBeUndefined()
+
+    const origin = await serve(media)
+    const status = async (src: string | undefined) => (await fetch(`${origin}${src ?? ''}`)).status
+    const served = await fetch(`${origin}${images(3)![1]!.src}`)
+    expect(served.status).toBe(200)
+    expect(served.headers.get('content-type')).toBe('image/png')
+    expect(await status(images(3)![0]!.src)).toBe(200)
+    expect(await status(images(3)![2]!.src)).toBe(404)
+    expect(await status(images(3)![3]!.src)).toBe(404)
+
+    // Until a whole thread went out, nothing in an `attachments` folder gets a link; the end
+    // of a thread (`after`) cannot start what the server knows.
+    const cold = createChatMedia({ loadEvents: async () => transcript, loadDocument: async () => undefined })
+    const coldTargets = (message: ServerMessage) =>
+      message.type === 'event' && message.event.type === 'tool_use' ? message.event.images?.map((image) => image.target) : 'missing'
+    cold.forClient({ type: 'snapshot', chatId: 'chat 1', events: transcript.slice(2), after: 'evt_000002', usage: {} } as ServerMessage)
+    expect(coldTargets(cold.forClient({ type: 'event', chatId: 'chat 1', event: transcript[2]! }))).toBeUndefined()
+    expect(coldTargets(cold.forClient({ type: 'event', chatId: 'chat 1', event: transcript[3]! }))).toEqual([shot, notPicture, path.join(root, 'gone.png')])
+
+    // Serving judges from the stored thread, not from what went out: a snapshot that lacked
+    // the user's message linked their picture, and the link still finds nothing.
+    const misled = createChatMedia({ loadEvents: async () => transcript, loadDocument: async () => undefined })
+    const partial = misled.forClient({ type: 'snapshot', chatId: 'chat 1', events: transcript.slice(1), usage: {} } as ServerMessage)
+    const leaked = partial.type === 'snapshot' && partial.events[1]?.type === 'tool_use' ? partial.events[1].images?.[0]?.src : undefined
+    expect(leaked).toBeDefined()
+    expect((await fetch(`${await serve(misled)}${leaked}`)).status).toBe(404)
   })
 
   it('puts the theme prelude after the head, or the nearest tag that exists', () => {

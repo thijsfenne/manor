@@ -676,3 +676,35 @@ export function stepDetail(step: ToolStep): StepDetail | undefined {
 /** The settled or live line for one step row, with a failure named in words, not colour. */
 export const stepLabel = (step: ToolStep, active: boolean): string =>
   active && step.status !== 'error' ? currentLabel(step) : `${settledLabel(step)}${step.status === 'error' ? ', failed' : ''}`
+
+/** One picture a step read or wrote, keyed by its path so a file read twice shows once. */
+export interface StepImage {
+  key: string
+  src: string
+  /** The file name, which the viewer shows as the picture's name. */
+  name: string
+}
+
+/** How many thumbnails a line shows before the rest become a count. */
+export const THUMBNAILS_SHOWN = 2
+
+/**
+ * The pictures a run of steps read or wrote, once each, in order. Only a finished call
+ * counts: a running one may not have written its picture yet, and a failed one read none. The server links no picture the user attached to their own
+ * message: they already see it in their bubble.
+ */
+export function stepImages(steps: readonly TurnStep[]): StepImage[] {
+  const seen = new Map<string, StepImage>()
+  for (const step of steps) {
+    if (!isToolStep(step) || step.status !== 'done') continue
+    for (const image of step.images ?? []) {
+      if (!seen.has(image.target)) seen.set(image.target, { key: image.target, src: image.src, name: image.target.slice(image.target.lastIndexOf('/') + 1) })
+    }
+  }
+  return [...seen.values()]
+}
+
+/** The thumbnails a line draws and how many more it counts as "+N". */
+export function thumbnailStrip<Image>(images: readonly Image[]): { shown: Image[]; more: number } {
+  return { shown: images.slice(0, THUMBNAILS_SHOWN), more: Math.max(images.length - THUMBNAILS_SHOWN, 0) }
+}

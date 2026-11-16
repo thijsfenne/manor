@@ -1301,6 +1301,40 @@ export function createMockDriver(options: MockDriverOptions = {}): Driver {
           queue.close()
           return
         }
+        // "mock read images: <path>,<path> | <path> | attached" reads pictures the way a Session
+        // checks its screenshots: each `|` part is one run after its own sentence, a run starts
+        // with a command, and `attached` stands for this turn's own pictures on disk.
+        const pictures = /\bmock read images:\s*(.+)/i.exec(lastUserLine(input))?.[1]
+        if (pictures !== undefined) {
+          const at = `${input.threadId}-${Date.now()}`
+          const runs = pictures.split('|').map((part) => part.split(',').map((name) => name.trim()).filter(Boolean)
+            .flatMap((name) => name === 'attached' ? [...input.imagePaths ?? []] : [name]))
+          for (const [run, paths] of runs.entries()) {
+            if (stopped) return
+            queue.push({ type: 'message', messageId: `${messageId}-run${run}`, text: `Run ${run + 1}: checking the screenshots.` })
+            const steps: Extract<RuntimeEvent, { type: 'tool_use' }>[] = [
+              { type: 'tool_use', toolCallId: `img-${at}-${run}-cmd`, ...describeCommand('node shoot.mjs', undefined, 'Capture the screenshots') },
+              ...paths.map((target, index): Extract<RuntimeEvent, { type: 'tool_use' }> =>
+                ({ type: 'tool_use', toolCallId: `img-${at}-${run}-${index}`, tool: 'Read', detail: target, targets: [target] })),
+            ]
+            for (const use of steps) {
+              queue.push(use)
+              await sleep(delay)
+              queue.push({ type: 'tool_result', toolCallId: use.toolCallId!, outcome: 'success' })
+            }
+          }
+          const answer = 'Checked the screenshots.'
+          queue.push({ type: 'message', messageId, text: answer })
+          queue.push({
+            type: 'result',
+            text: answer,
+            usage: { inputTokens: 120, outputTokens: 8, costUsd: 0.0012 },
+            ...(agent.model === undefined ? {} : { reportedModel: agent.model }),
+            sessionId: sessionIdFor(input),
+          })
+          queue.close()
+          return
+        }
         // "monitor at turn end" starts a monitor and answers, the way a Grok turn does
         // with work its provider cannot keep, so the spike shows the stopped-work note.
         if (/\bmonitor at turn end\b/i.test(lastUserLine(input))) {

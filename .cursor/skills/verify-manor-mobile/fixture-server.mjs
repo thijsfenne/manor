@@ -82,6 +82,15 @@ const directory = {
   type: 'directory',
   projects,
   chats: [
+    // A Single Session whose reads show picture thumbnails, and one picture the user attached.
+    // First in the list, so it is on the Sessions tab without scrolling.
+    { ...chat({
+      id: 'chat-trace-images',
+      projectId: 'project-manor',
+      title: 'Schermafbeeldingen',
+      preview: 'De schermen kloppen.',
+      minutesAgo: 0,
+    }), mode: 'single' },
     { ...chat({
       id: 'chat-inline-steer', projectId: 'project-manor',
       title: 'Bijsturen in de stream', preview: 'One turn with an inline addition.', minutesAgo: 0,
@@ -297,6 +306,11 @@ const dmFiles = [
   { name: 'icon-tinted.png', mime: 'image/png', daysAgo: 12, body: appImage('icon-tinted'), agentId: 'agent-marlow' },
   { name: 'contract.pdf', mime: 'application/pdf', daysAgo: 20 },
 ].map((file, index) => dmFile(index + 1, file))
+
+// Pictures the `Schermafbeeldingen` reads link to, as the Mac links what a tool call read.
+// Picture 0 is the user's own attachment: its bubble shows it, and its read gets no link.
+const TRACE_PICTURES = ['icon-tinted', 'icon', 'splash-icon', 'favicon', 'icon-dark', 'icon-tinted']
+const tracePictures = new Map(TRACE_PICTURES.map((name, index) => [`/media/trace/${index}/fixture`, appImage(name)]))
 
 // A Session briefed from Smith's DM, led by Wren, whose second result waits for Accept.
 const handoff = {
@@ -638,6 +652,39 @@ const snapshots = {
       ]),
       { id: 'df1', ts, type: 'agent_message', turnId, agentId, messageId: 'df-m1', text: 'Vier bestanden aangepast.' },
       { id: 'df2', ts: ts + 1, type: 'turn_result', turnId, agentId },
+    ]
+  })(),
+  // Three runs of reads: one picture, four pictures (two thumbnails and +2), then a turn
+  // that reads the picture the user attached, which carries no link, beside one that does.
+  'chat-trace-images': (() => {
+    const agentId = '__single__'
+    const dir = '/tmp/manor-mobile-verify/Manor/.cursor/skills/verify-manor/evidence/trace'
+    const picture = (index) => ({ target: `${dir}/shot-${index}.png`, src: `/media/trace/${index}/fixture` })
+    const step = (id, ts, turnId, use) => [
+      { id: `${id}-u`, ts, type: 'tool_use', turnId, agentId, toolCallId: id, ...use },
+      { id: `${id}-r`, ts: ts + 1, type: 'tool_result', turnId, agentId, toolCallId: id, outcome: 'success' },
+    ]
+    const shoot = (id, ts, turnId) => step(id, ts, turnId, { tool: 'Bash', command: 'node shoot.mjs', detail: 'Capture the screenshots' })
+    const read = (id, ts, turnId, image, target = image.target) =>
+      step(id, ts, turnId, { tool: 'Read', detail: target, targets: [target], ...(image.src === undefined ? {} : { images: [image] }) })
+    const ts = now - 2 * 60_000
+    const attached = '/tmp/manor-mobile-verify/scratch/chat-trace-images/attachments/ti-u2-0.png'
+    return [
+      { id: 'ti-u1', ts: ts - 60_000, type: 'user_message', text: 'Controleer de schermen.', mentions: [] },
+      { id: 'ti-n1', ts: ts - 59_000, type: 'agent_message', turnId: 'turn-ti1', agentId, messageId: 'ti-m1', text: 'Eerst het werkscherm.' },
+      ...shoot('ti-c1', ts - 58_000, 'turn-ti1'),
+      ...read('ti-r1', ts - 57_000, 'turn-ti1', picture(1)),
+      { id: 'ti-n2', ts: ts - 56_000, type: 'agent_message', turnId: 'turn-ti1', agentId, messageId: 'ti-m2', text: 'Dan de vier afgeronde schermen.' },
+      ...shoot('ti-c2', ts - 55_000, 'turn-ti1'),
+      ...[2, 3, 4, 5].flatMap((index) => read(`ti-r${index}`, ts - 54_000 + index * 2, 'turn-ti1', picture(index))),
+      { id: 'ti-n3', ts: ts - 50_000, type: 'agent_message', turnId: 'turn-ti1', agentId, messageId: 'ti-m3', text: 'De schermen kloppen.' },
+      { id: 'ti-e1', ts: ts - 49_999, type: 'turn_result', turnId: 'turn-ti1', agentId },
+      { id: 'ti-u2', ts: ts - 40_000, type: 'user_message', text: 'Zo ziet [Image #1] er nu uit.', mentions: [], images: [{ name: 'scherm.png', src: '/media/trace/0/fixture', width: 1024, height: 1024 }] },
+      ...shoot('ti-c3', ts - 39_000, 'turn-ti2'),
+      ...read('ti-r6', ts - 38_000, 'turn-ti2', {}, attached),
+      ...read('ti-r7', ts - 37_000, 'turn-ti2', picture(1)),
+      { id: 'ti-n4', ts: ts - 36_000, type: 'agent_message', turnId: 'turn-ti2', agentId, messageId: 'ti-m4', text: 'Jouw scherm en het werkscherm komen overeen.' },
+      { id: 'ti-e2', ts: ts - 35_999, type: 'turn_result', turnId: 'turn-ti2', agentId },
     ]
   })(),
   // Three mail cards in three turns: an open draft with a Cc line, Sent with the
@@ -1234,6 +1281,12 @@ const http = createServer((request, response) => {
         response.end(bytes)
       })
       .catch(() => response.writeHead(404).end())
+    return
+  }
+  const traced = tracePictures.get(icon.pathname)
+  if (traced !== undefined) {
+    response.writeHead(200, { 'content-type': 'image/png', 'content-length': String(traced.byteLength) })
+    response.end(traced)
     return
   }
   const listed = dmFileBytes.get(icon.pathname)

@@ -111,7 +111,7 @@ export const PURE_MODULES: Readonly<Record<string, { file: string; functions: re
       'chatWaitsOnBackground', 'dmWorking',
       'dmWorkingLabel', 'groupLabel', 'hasFold', 'hasStatus', 'isCompactNote',
       'isCompacting', 'isPaused', 'isSettledCompactNote', 'isSubagentStep', 'isWaiting',
-      'shownSegments', 'stepDetail', 'stepLabel', 'traceRows', 'turnSummary',
+      'shownSegments', 'stepDetail', 'stepImages', 'stepLabel', 'thumbnailStrip', 'traceRows', 'turnSummary',
     ],
   },
   turnLabels: {

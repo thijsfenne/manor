@@ -5,6 +5,8 @@ import { currentActivity, settledLabel, workSummary } from './turnLabels'
 import { rowsOf, type ToolStep } from './transcriptState'
 import {
   activeCall,
+  stepImages,
+  thumbnailStrip,
   groupLabel,
   stepDetail,
   traceRows,
@@ -524,5 +526,26 @@ describe('trace rows', () => {
       .toEqual({ command: 'pnpm build', error: 'exit 1' })
     expect(stepDetail(tool('b', 'Read', { targets: ['/repo/src/a.ts'] }))).toEqual({ targets: ['/repo/src/a.ts'] })
     expect(stepDetail(tool('c', 'mcp__manor__goal_reached'))).toBeUndefined()
+  })
+})
+
+describe('trace thumbnails', () => {
+  const read = (key: string, targets: string[], status: ToolStep['status'] = 'done'): ToolStep =>
+    ({ kind: 'tool', key, tool: 'Read', targets, images: targets.map((target) => ({ target, src: `/media/${key}/${target}` })), status, startedAt: 1 })
+
+  it('shows each picture once, none from an unfinished or failed call, and counts past the first two', () => {
+    const images = stepImages([
+      read('a', ['/x/1.png']),
+      read('b', ['/x/1.png', '/x/2.png']),
+      read('c', ['/x/3.png'], 'error'),
+      read('r', ['/x/6.png'], 'running'),
+      read('d', ['/x/4.png', '/x/5.png']),
+    ])
+    expect(images.map((image) => image.key)).toEqual(['/x/1.png', '/x/2.png', '/x/4.png', '/x/5.png'])
+    expect(images[0]).toEqual({ key: '/x/1.png', src: '/media/a//x/1.png', name: '1.png' })
+    const strip = thumbnailStrip(images)
+    expect(strip.shown.map((image) => image.key)).toEqual(['/x/1.png', '/x/2.png'])
+    expect(strip.more).toBe(2)
+    expect(thumbnailStrip(images.slice(0, 1))).toEqual({ shown: images.slice(0, 1), more: 0 })
   })
 })

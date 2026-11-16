@@ -58,6 +58,8 @@ export interface ToolStep {
   detail?: string
   subject?: string
   targets?: string[]
+  /** Signed links to the pictures among `targets`, which the trace shows as thumbnails. */
+  images?: { target: string; src: string }[]
   command?: string
   edits?: FileEdit[]
   /** The subagent call this step ran inside. Such steps stay out of the turn's own trace. */
@@ -2777,6 +2779,7 @@ function durableRowsOf(events: ThreadEvent[], dmBeats: boolean): DurableRows {
           ...(event.detail === undefined ? {} : { detail: event.detail }),
           ...(event.subject === undefined ? {} : { subject: event.subject }),
           ...(event.targets === undefined ? {} : { targets: event.targets }),
+          ...(event.images === undefined ? {} : { images: event.images }),
           ...(event.command === undefined ? {} : { command: event.command }),
           ...(event.edits === undefined ? {} : { edits: event.edits }),
           ...(event.parentToolCallId === undefined ? {} : { parentToolCallId: event.parentToolCallId }),

@@ -41,15 +41,16 @@ import {
   isShellTool,
   workSummary,
 } from '@manor/client-runtime/turn-labels'
-import { activeCall, activityBlocks, type ActivityBlock, groupLabel, hasFold, hasStatus, isCompactNote, isCompacting, isPaused, isSettledCompactNote, shownSegments, statusShimmers, stepDetail, stepLabel, subagentStepState, traceRows, turnSummary, type TraceRow } from '@manor/client-runtime/turn-trace'
+import { activeCall, activityBlocks, type ActivityBlock, groupLabel, hasFold, hasStatus, isCompactNote, isCompacting, isPaused, isSettledCompactNote, shownSegments, statusShimmers, stepDetail, stepImages, stepLabel, subagentStepState, thumbnailStrip, traceRows, turnSummary, type StepImage, type TraceRow } from '@manor/client-runtime/turn-trace'
 import { endFace, turnFace } from '@manor/client-runtime/face-activity'
 import * as Clipboard from 'expo-clipboard'
+import { Image } from 'expo-image'
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Modal, Pressable, StyleSheet, View, useWindowDimensions, type AccessibilityState, type ColorValue } from 'react-native'
 import { Gesture, GestureDetector } from 'react-native-gesture-handler'
 import Animated, { Easing, FadeIn, ReduceMotion, runOnJS, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated'
 
-import { Attachments } from '@/components/Attachments'
+import { Attachments, ImageViewer } from '@/components/Attachments'
 import { AgentStack } from '@/components/AgentStack'
 import { DiffSheet } from '@/components/DiffSheet'
 import { Blobatar } from '@/components/Blobatar'
@@ -69,6 +70,7 @@ import { Text } from '@/components/Text'
 import type { QuoteSelectionSource } from '@/components/QuoteSelectionSheet'
 import { colors, fonts, radius, spacing, squircle } from '@/theme'
 import { useWindowInsets } from '@/lib/windowInsets'
+import { serverMediaUri } from '@/lib/config'
 
 /**
  * One persona's turn, read the way the Mac reads it: her face and name, the stable
@@ -841,6 +843,8 @@ function Segment({
 const TRACE_VISIBLE = 12
 /** Half the trace's row gap, so neighbouring rows tile the column without overlapping hit areas. */
 const ROW_HIT_SLOP = { top: 4, bottom: 4 } as const
+/** A 24×16 thumbnail is a small target, so a tap a little above or below it still lands. */
+const THUMBNAIL_SLOP = { top: 8, bottom: 8, left: 2, right: 2 } as const
 
 /** One compact activity bundle between two narration messages. */
 function WorkRun({ steps, edits, breaks, activeTool, accent }: { steps: TurnStep[]; edits: FileEdit[]; breaks: ReadonlySet<string>; activeTool?: ToolStep; accent: string }) {
@@ -853,19 +857,25 @@ function WorkRun({ steps, edits, breaks, activeTool, accent }: { steps: TurnStep
   const hidden = showAll ? 0 : Math.max(trace.length - TRACE_VISIBLE, 0)
   const shown = hidden > 0 ? trace.slice(-TRACE_VISIBLE) : trace
   const currentIsInRows = current !== undefined && steps.some((step) => step.key === current.key)
+  const images = stepImages(steps)
+  // The strip takes width from the label, which must not wrap into a taller line for it.
+  const lines = images.length === 0 ? 2 : 1
 
   return (
     <View>
-      <Pressable accessibilityRole="button" accessibilityState={{ expanded: open }} onPress={() => setOpen((value) => !value)} style={styles.stepRow}>
-        {current === undefined ? (
-          <Text numberOfLines={2} style={styles.stepText}>{label}</Text>
-        ) : (
-          <ShimmerText numberOfLines={2} style={styles.stepText} text={label} />
-        )}
-        <View style={[styles.chevron, styles.bundleChevron, open && styles.chevronOpen]}>
-          <HugeiconsIcon color={colors.dim} icon={ArrowDown01Icon} size={12} strokeWidth={1.8} />
-        </View>
-      </Pressable>
+      <View style={styles.line}>
+        <Pressable accessibilityRole="button" accessibilityState={{ expanded: open }} onPress={() => setOpen((value) => !value)} style={[styles.stepRow, styles.lineMain]}>
+          {current === undefined ? (
+            <Text numberOfLines={lines} style={styles.stepText}>{label}</Text>
+          ) : (
+            <ShimmerText numberOfLines={lines} style={styles.stepText} text={label} />
+          )}
+          <View style={[styles.chevron, styles.bundleChevron, open && styles.chevronOpen]}>
+            <HugeiconsIcon color={colors.dim} icon={ArrowDown01Icon} size={12} strokeWidth={1.8} />
+          </View>
+        </Pressable>
+        <Thumbnails images={images} />
+      </View>
       {open ? (
         <View style={styles.traceList}>
           {edits.length === 0 ? null : <EditRows edits={edits} />}
@@ -899,15 +909,18 @@ function GroupRow({ group, current, accent }: { group: Extract<TraceRow, { kind:
   const icon = group.family === 'read' ? ViewIcon : group.family === 'search' ? Search01Icon : toolIcon(group.steps[0]!.tool)
   return (
     <View style={styles.traceItem}>
-      <Pressable accessibilityRole="button" accessibilityState={{ expanded: open }} hitSlop={ROW_HIT_SLOP} onPress={() => setOpen((value) => !value)} style={styles.stepRow}>
-        <StepIcon color={live ? accent : colors.dim} icon={icon} />
-        {live ? (
-          <ShimmerText numberOfLines={1} style={styles.stepText} text={currentLabel(current)} />
-        ) : (
-          <Text numberOfLines={1} style={styles.stepText}>{groupLabel(group)}</Text>
-        )}
-        {group.family === 'same' ? <Text style={styles.stepCount}>×{group.steps.length}</Text> : null}
-      </Pressable>
+      <View style={styles.line}>
+        <Pressable accessibilityRole="button" accessibilityState={{ expanded: open }} hitSlop={ROW_HIT_SLOP} onPress={() => setOpen((value) => !value)} style={[styles.stepRow, styles.lineMain]}>
+          <StepIcon color={live ? accent : colors.dim} icon={icon} />
+          {live ? (
+            <ShimmerText numberOfLines={1} style={styles.stepText} text={currentLabel(current)} />
+          ) : (
+            <Text numberOfLines={1} style={styles.stepText}>{groupLabel(group)}</Text>
+          )}
+          {group.family === 'same' ? <Text style={styles.stepCount}>×{group.steps.length}</Text> : null}
+        </Pressable>
+        <Thumbnails images={stepImages(group.steps)} />
+      </View>
       {open ? (
         <View style={styles.groupMembers}>
           {group.steps.map((step) => (
@@ -1001,12 +1014,16 @@ function ToolRow({ step, active, accent }: { step: ToolStep; active: boolean; ac
       {current ? <ShimmerText numberOfLines={1} style={styles.stepText} text={label} /> : <Text numberOfLines={1} style={styles.stepText}>{label}</Text>}
     </>
   )
-  if (detail === undefined) return <View style={styles.stepRow}>{row}</View>
+  const thumbnails = <Thumbnails images={stepImages([step])} />
+  if (detail === undefined) return <View style={styles.line}><View style={[styles.stepRow, styles.lineMain]}>{row}</View>{thumbnails}</View>
   return (
     <View style={styles.traceItem}>
-      <Pressable accessibilityRole="button" accessibilityState={{ expanded: open }} hitSlop={ROW_HIT_SLOP} onPress={() => setOpen((value) => !value)} style={styles.stepRow}>
-        {row}
-      </Pressable>
+      <View style={styles.line}>
+        <Pressable accessibilityRole="button" accessibilityState={{ expanded: open }} hitSlop={ROW_HIT_SLOP} onPress={() => setOpen((value) => !value)} style={[styles.stepRow, styles.lineMain]}>
+          {row}
+        </Pressable>
+        {thumbnails}
+      </View>
       {open ? (
         <View style={styles.stepDetail}>
           {detail.error === undefined ? null : <Text selectable style={styles.detailText}>{detail.error}</Text>}
@@ -1016,6 +1033,60 @@ function ToolRow({ step, active, accent }: { step: ToolStep; active: boolean; ac
           {(detail.command ?? detail.query) === undefined ? null : <Text selectable style={styles.detailCommand}>{detail.command ?? detail.query}</Text>}
         </View>
       ) : null}
+    </View>
+  )
+}
+
+/**
+ * The pictures a line read or wrote, at its far right: two, then a count of the rest.
+ * The strip is exactly one line tall and each box is sized before its picture arrives,
+ * so the row never grows or moves; one that fails to load goes and leaves the count.
+ * A tap opens the line's pictures in the viewer, the count at the first one it stands for.
+ */
+function Thumbnails({ images }: { images: readonly StepImage[] }) {
+  const [failed, setFailed] = useState<ReadonlySet<string>>(() => new Set())
+  const [open, setOpen] = useState<number | null>(null)
+  const usable = images.flatMap((image) => {
+    const uri = serverMediaUri(image.src)
+    return failed.has(image.src) || uri === undefined ? [] : [{ ...image, uri }]
+  })
+  const { shown, more } = thumbnailStrip(usable)
+  if (shown.length === 0) return null
+  return (
+    <View style={styles.thumbnails}>
+      {shown.map((image, index) => (
+        <Pressable
+          key={image.key}
+          accessibilityLabel={`Open ${image.name}`}
+          accessibilityRole="imagebutton"
+          hitSlop={THUMBNAIL_SLOP}
+          onPress={() => setOpen(index)}
+        >
+          <Image
+            accessibilityIgnoresInvertColors
+            contentFit="cover"
+            // Decodes at the box size, not the screenshot's, so a fold of pictures stays light.
+            enforceEarlyResizing
+            onError={() => setFailed((current) => new Set(current).add(image.src))}
+            recyclingKey={image.src}
+            source={{ uri: image.uri }}
+            style={styles.thumbnail}
+          />
+        </Pressable>
+      ))}
+      {more === 0 ? null : (
+        <Pressable
+          accessibilityLabel={`Show ${String(more)} more ${more === 1 ? 'picture' : 'pictures'}`}
+          accessibilityRole="button"
+          hitSlop={THUMBNAIL_SLOP}
+          onPress={() => setOpen(shown.length)}
+        >
+          <Text style={styles.thumbnailMore}>+{more}</Text>
+        </Pressable>
+      )}
+      {open === null ? null : (
+        <ImageViewer images={usable.map((image) => ({ name: image.name, src: image.uri }))} initialIndex={open} onClose={() => setOpen(null)} />
+      )}
     </View>
   )
 }
@@ -1220,7 +1291,14 @@ const styles = StyleSheet.create({
   stepRow: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm, paddingTop: 1 },
   // Drops the 14pt glyph onto the middle of the 18pt line beside it.
   stepIcon: { marginTop: 2 },
+  // A trace line whose pictures sit beside its button, never inside it, so each stays its own target.
+  line: { flexDirection: 'row', alignItems: 'flex-start' },
+  lineMain: { flex: 1, minWidth: 0 },
   stepText: { flexShrink: 1, color: colors.dim, fontFamily: fonts.sans, fontSize: 14, lineHeight: 18 },
+  // As tall as one line of `stepText`, so a row with pictures keeps its height.
+  thumbnails: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, height: 18, flexShrink: 0, marginTop: 1, paddingLeft: spacing.sm },
+  thumbnail: { width: 24, height: 16, borderRadius: radius.xs, backgroundColor: colors.surface2 },
+  thumbnailMore: { color: colors.dim, fontFamily: fonts.sans, fontSize: 12, lineHeight: 16, fontVariant: ['tabular-nums'] },
   thought: { fontSize: 12, fontStyle: 'italic', lineHeight: 17 },
   trigger: { fontSize: 12, lineHeight: 17 },
   triggerCopy: { flexShrink: 1, gap: spacing.xs },

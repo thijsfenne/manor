@@ -1,5 +1,8 @@
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto'
 import { existsSync, readFileSync } from 'node:fs'
+import { readFile, stat } from 'node:fs/promises'
+import path from 'node:path'
+import { materialisedImageStem } from './scratch.js'
 import { serverFile } from './serverRoot.js'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { createRequire } from 'node:module'
@@ -10,7 +13,8 @@ export const CHAT_MEDIA_PREFIX = '/media/'
 /**
  * The unsigned path of one stored file: its chat, its event and its slot there. A slot is
  * a picture's index, `d` plus a document's index, `t` plus a text file's, `f0` for a
- * delivered file or `e` for a result's screenshot, so no two kinds share a link.
+ * delivered file, `e` for a result's screenshot or `i` plus a tool call's target index
+ * for a picture that call read or wrote, so no two kinds share a link.
  */
 export const mediaPath = (chatId: string, eventId: string, slot: string) =>
   `${encodeURIComponent(chatId)}/${encodeURIComponent(eventId)}/${slot}`
@@ -61,6 +65,41 @@ const HTML_VIEW_CSP = [
   'sandbox allow-scripts',
 ].join('; ')
 
+/** A tool target the trace may show as a thumbnail; the bytes still have to say PNG, JPEG or WebP. */
+const RASTER_PATH = /\.(png|jpe?g|webp)$/i
+/** A screenshot is far below this; anything larger is not worth reading for a thumbnail. */
+const MAX_TOOL_IMAGE_BYTES = 25 * 1024 * 1024
+
+/**
+ * The stems of the pictures users attached in one chat. `materialiseImages` writes each
+ * to the thread's `attachments` folder under that stem, which is the path the agent reads.
+ */
+function userImageStems(events: readonly ThreadEvent[]): Set<string> {
+  const stems = new Set<string>()
+  for (const event of events) addUserImages(stems, event)
+  return stems
+}
+
+function addUserImages(stems: Set<string>, event: ThreadEvent) {
+  if (event.type !== 'user_message') return
+  for (const index of (event.images ?? []).keys()) stems.add(materialisedImageStem(event.id, index))
+}
+
+/**
+ * Whether a tool target is a picture the user attached to a message in this chat: a file
+ * in an `attachments` folder whose name is the stem of one of that chat's user pictures.
+ * The user sees it in their own bubble, so the trace shows no thumbnail for it. Without
+ * the chat's stems (`undefined`), every file in an `attachments` folder counts as one.
+ */
+export function isUserAttachment(target: string, stems: ReadonlySet<string> | undefined): boolean {
+  if (path.basename(path.dirname(target)) !== 'attachments') return false
+  if (stems === undefined) return true
+  const name = path.basename(target)
+  return stems.has(name.slice(0, name.lastIndexOf('.')))
+}
+
+const isToolImage = (target: string) => path.isAbsolute(target) && RASTER_PATH.test(target)
+
 const DATA_URL = /^data:(image\/(?:png|jpeg|webp|svg\+xml));base64,([A-Za-z0-9+/=]+)$/
 /** Enough for any header Manor's own resizers write; a miss falls back to the whole picture. */
 const HEADER_CHARS = 256 * 1024
@@ -86,6 +125,10 @@ export function createChatMedia(options: {
 }): ChatMedia {
   const key = options.key ?? randomBytes(32)
   const sizes = new Map<string, { width: number; height: number } | null>()
+  // Per chat, the stems of its user pictures, known once a whole thread went out and kept
+  // current by every user message after it. A chat without an entry links no picture from
+  // an `attachments` folder; serving checks again from the transcript.
+  const userImages = new Map<string, Set<string>>()
 
   const sign = (path: string) => createHmac('sha256', key).update(path).digest('base64url').slice(0, 32)
   const signed = (path: string) => `${CHAT_MEDIA_PREFIX}${path}/${sign(path)}`
@@ -116,8 +159,24 @@ export function createChatMedia(options: {
   const linkFile = (chatId: string, eventId: string, file: DeliveredFile): DeliveredFile =>
     ({ ...file, src: signed(mediaPath(chatId, eventId, 'f0')) })
 
+  // A snapshot with `after` holds only the end of a chat, so it can add to the stems but
+  // never start them.
+  const noteUserImages = (chatId: string, events: readonly ThreadEvent[], whole: boolean) => {
+    const stems = userImages.get(chatId)
+    if (whole) userImages.set(chatId, userImageStems(events))
+    else if (stems !== undefined) for (const event of events) addUserImages(stems, event)
+  }
+
+  const linkToolImages = (chatId: string, event: Extract<ThreadEvent, { type: 'tool_use' }>): ThreadEvent => {
+    const stems = userImages.get(chatId)
+    const images = (event.targets ?? []).flatMap((target, index) =>
+      isToolImage(target) && !isUserAttachment(target, stems) ? [{ target, src: signed(mediaPath(chatId, event.id, `i${index}`)) }] : [])
+    return images.length === 0 ? event : { ...event, images }
+  }
+
   const linkEvent = (chatId: string, event: ThreadEvent): ThreadEvent => {
     if (event.type === 'file_delivery') return { ...event, file: linkFile(chatId, event.id, event.file) }
+    if (event.type === 'tool_use') return linkToolImages(chatId, event)
     if (event.type !== 'user_message' && event.type !== 'agent_message') return event
     const documents = event.type === 'user_message' && event.documents !== undefined
       ? event.documents.map((document, index) => linkDocument(chatId, event.id, index, document))
@@ -143,8 +202,14 @@ export function createChatMedia(options: {
 
   return {
     forClient(message) {
-      if (message.type === 'snapshot') return { ...message, events: message.events.map((event) => linkEvent(message.chatId, event)) }
-      if (message.type === 'event') return { ...message, event: linkEvent(message.chatId, message.event) }
+      if (message.type === 'snapshot') {
+        noteUserImages(message.chatId, [...message.events, ...(message.replaced ?? [])], message.after === undefined)
+        return { ...message, events: message.events.map((event) => linkEvent(message.chatId, event)) }
+      }
+      if (message.type === 'event') {
+        noteUserImages(message.chatId, [message.event], false)
+        return { ...message, event: linkEvent(message.chatId, message.event) }
+      }
       // A DM's file list names each file by its unsigned path; see `listDmFiles`.
       if (message.type === 'dm_files') {
         return { ...message, files: message.files.map((file) => (file.src === undefined ? file : { ...file, src: signed(file.src) })) }
@@ -196,7 +261,28 @@ export function createChatMedia(options: {
       response.end(bytes)
       return
     }
-    const event = (await options.loadEvents(chatId)).find((candidate) => candidate.id === eventId)
+    const events = await options.loadEvents(chatId)
+    const event = events.find((candidate) => candidate.id === eventId)
+    if (indexPart.startsWith('i')) {
+      // Only a picture this tool call named, still on disk and still a picture, and never the user's own.
+      const target = event?.type === 'tool_use' ? event.targets?.[Number(indexPart.slice(1))] : undefined
+      if (target === undefined || !isToolImage(target) || isUserAttachment(target, userImageStems(events))) return missing()
+      const info = await stat(target).catch(() => undefined)
+      if (info?.isFile() !== true || info.size > MAX_TOOL_IMAGE_BYTES) return missing()
+      const bytes = await readFile(target).catch(() => undefined)
+      const mime = bytes === undefined ? undefined : rasterMime(bytes)
+      if (bytes === undefined || mime === undefined) return missing()
+      response.writeHead(200, {
+        'content-type': mime,
+        'content-length': String(bytes.byteLength),
+        // The file can change on disk after the turn, so it is not cached for good.
+        'cache-control': 'private, max-age=3600',
+        'x-content-type-options': 'nosniff',
+        'referrer-policy': 'no-referrer',
+      })
+      response.end(head ? undefined : bytes)
+      return
+    }
     if (indexPart === 'f0') {
       const file = event?.type === 'file_delivery' ? event.file : undefined
       const bytes = file === undefined ? undefined : await options.loadDocument(chatId, file.id)

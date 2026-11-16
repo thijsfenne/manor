@@ -3,6 +3,13 @@ import path from 'node:path'
 
 export const SCRATCH_ATTACHMENT_RETENTION_MS = 7 * 24 * 60 * 60 * 1000
 
+/**
+ * The file name `materialiseImages` gives a message's picture in a thread's `attachments`
+ * folder, without its extension. One definition, because the prompt finds each path's
+ * `Image #n` by it and the trace tells the user's own pictures apart by it.
+ */
+export const materialisedImageStem = (eventId: string, index: number): string => `${eventId}-${index}`
+
 const directoryName = (threadId: string): string => threadId.replace(/[^a-zA-Z0-9_-]/g, '_')
 
 /** Creates the empty scratch directory one thread's turns run in. */

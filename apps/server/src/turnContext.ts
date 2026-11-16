@@ -17,9 +17,9 @@ import {
   SESSION_CONTEXT_TOKEN_CAP,
   catchUpCut,
   composeSideContext,
-  materialisedImageStem,
   renderCatchUpEvents,
 } from './composer.js'
+import { materialisedImageStem } from './scratch.js'
 import type { AgentSession, ChatSummary, Store } from './store.js'
 import { access, mkdir, writeFile } from 'node:fs/promises'
 import path from 'node:path'
