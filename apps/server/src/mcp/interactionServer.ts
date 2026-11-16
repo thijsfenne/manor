@@ -14,6 +14,7 @@ import {
   GOAL_RESULT_MAX,
   MAX_GOAL_CHOICES,
   MAX_GOAL_POINTS,
+  GOAL_CHOICE_QUESTION_MAX,
   GOAL_POINT_MAX,
   MAX_GOAL_EVIDENCE,
   OutboundDraftContentSchema,
@@ -281,7 +282,7 @@ const deliverTool = {
 // Nothing to broker: Manor reads the successful call off the turn's own tool stream.
 const goalTool = {
   name: 'goal_reached',
-  description: 'Mark this Session\'s goal reached once every done criterion is verified. Never call it to stop unfinished work; ask the user instead. The user reads only report.points, report.limitations and report.choices, on a small result card, plus report.result where one line has to stand for the whole: write the result as one short sentence in the conversation language about what they can now do or what you concluded; give one to three points, each one short line about what changed or what they can now do, no prose; and a limitation only when a real one affects using or accepting the result, in one line. When the work leaves decisions to the user, list each in choices with its options and your recommendation, most important first; the card shows three. No internal roles, gates, file lists, test counts, or a claim that unconfirmed work was committed. Claims stay inside the Session: list each done criterion with how far you proved it: stated (you only say so), pointed (a real file:line), traced (you walked the failure path), ran (a test or script against the real code that would fail loud), reproduced (observed in the running app). Never round a level up. When screenshots show the result, such as verify-manor evidence, pass their paths in screenshots; the card shows them as thumbnails. Feedback before acceptance can reopen this same goal.',
+  description: 'Mark this Session\'s goal reached once every done criterion is verified. Never call it to stop unfinished work; ask the user instead. The user reads only report.points, report.limitations and report.choices, on a small result card, plus report.result where one line has to stand for the whole: write the result as one short sentence in the conversation language about what they can now do or what you concluded; give one to three points, each one short line about what changed or what they can now do, no prose; and a limitation only when a real one affects using or accepting the result, in one line. List in choices only decisions the user really has to make, most important first; the card shows three. Take a cosmetic or easily reversed detail yourself instead of listing it. Write each choice for someone who does not read code: a question that says what is going on and what they decide, and options that say what happens, without internal terms. No internal roles, gates, file lists, test counts, or a claim that unconfirmed work was committed. Claims stay inside the Session: list each done criterion with how far you proved it: stated (you only say so), pointed (a real file:line), traced (you walked the failure path), ran (a test or script against the real code that would fail loud), reproduced (observed in the running app). Never round a level up. When screenshots show the result, such as verify-manor evidence, pass their paths in screenshots; the card shows them as thumbnails. Feedback before acceptance can reopen this same goal.',
   inputSchema: {
     type: 'object',
     properties: {
@@ -300,15 +301,16 @@ const goalTool = {
           choices: {
             type: 'array',
             maxItems: MAX_GOAL_CHOICES,
-            description: 'Only for decisions this work leaves open for the user. Omit when there are none.',
+            description: 'Only for decisions the user really has to make. A cosmetic or easily reversed detail, such as whether to join two labels with a dot, is yours to decide: take it and leave it out. Omit when there are none.',
             items: {
               type: 'object',
               properties: {
-                title: { type: 'string', minLength: 1, maxLength: 80, description: 'The choice in a few words, such as "Open large".' },
-                options: { type: 'array', minItems: 2, maxItems: 4, items: { type: 'string', minLength: 1, maxLength: 80 }, description: 'Each option in a few words.' },
-                recommended: { type: 'string', minLength: 1, maxLength: 80, description: 'The option you recommend, in a word or two.' },
+                title: { type: 'string', minLength: 1, maxLength: 80, description: 'A short key of a few words, such as "Stale phone checks". The pick goes back to you as "title: option".' },
+                question: { type: 'string', minLength: 1, maxLength: GOAL_CHOICE_QUESTION_MAX, description: 'What the card shows: at most two short plain sentences in the conversation language with what is going on and what the user decides, such as "A phone check whose folder was deleted keeps blocking its ports for a day. Should Manor clean those up on its own?" No internal terms such as checkout, fixture or module.' },
+                options: { type: 'array', minItems: 2, maxItems: 4, items: { type: 'string', minLength: 1, maxLength: 80 }, description: 'Each option says in a few plain words what happens, such as "Clean them up on its own" or "Leave them for a day".' },
+                recommended: { type: 'string', minLength: 1, maxLength: 80, description: 'The option you recommend, written exactly as in options.' },
               },
-              required: ['title', 'options'],
+              required: ['title', 'question', 'options'],
               additionalProperties: false,
             },
           },

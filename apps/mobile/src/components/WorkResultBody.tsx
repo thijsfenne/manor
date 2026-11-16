@@ -65,9 +65,10 @@ function ResultLines({ result, settled }: { result: WorkResult; settled: boolean
 }
 
 /**
- * The decisions a report leaves to the user, under a divider: each question on one line and
- * its options as small grey buttons, the picked one in a blue wash. A tap writes the pick
- * into Follow up, which opens, so several picks go to the Session as one message.
+ * The decisions a report leaves to the user, under a divider: each choice's plain question
+ * on up to two lines (its title on one line for an older report) and its options as small
+ * grey buttons, the picked one in a blue wash. A tap writes `Title: option` into Follow up,
+ * which opens, so several picks go to the Session as one message.
  */
 function YourCall({ result, picked, disabled, onPick }: {
   result: WorkResult
@@ -81,7 +82,7 @@ function YourCall({ result, picked, disabled, onPick }: {
     <View style={styles.choices}>
       {choices.map((choice) => (
         <View key={choice.title} style={styles.choice}>
-          <Text numberOfLines={1} style={styles.question}>{choice.title}</Text>
+          <Text numberOfLines={choice.question === undefined ? 1 : 2} style={styles.question}>{choice.question ?? choice.title}</Text>
           <View style={styles.options}>
             {choice.options.map((option) => {
               const recommended = option === choice.recommended
@@ -91,7 +92,7 @@ function YourCall({ result, picked, disabled, onPick }: {
                   key={option}
                   accessibilityRole="button"
                   accessibilityLabel={recommended ? `${option}, recommended` : option}
-                  accessibilityHint={`Adds "${choice.title}: ${option}" to Follow up, for you to send`}
+                  accessibilityHint="Adds this answer to your Follow up message"
                   accessibilityState={{ disabled, selected: on }}
                   disabled={disabled}
                   onPress={() => onPick(choice, option)}

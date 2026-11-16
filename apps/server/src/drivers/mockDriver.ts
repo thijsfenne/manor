@@ -349,8 +349,8 @@ function mockMemoryEdit(input: TurnInput): Extract<RuntimeEvent, { type: 'tool_u
  * the real goal broker; "shots: <path>,<path>" after it names screenshots for the card, "steps: A / B / C" a plan it leaves open
  * and "commit: <subject> // <body>" the commit message Confirm commits a worktree Session with.
  * "mock report: …" reports the same way without writing the file, a result with nothing
- * to commit; "choices: <title> = <option> / <option>*; …" after either adds the choices
- * it leaves open, a trailing * on the recommended option.
+ * to commit; "choices: <title> {<question>} = <option> / <option>*; …" after either adds the
+ * choices it leaves open, the braced question optional, a trailing * on the recommended option.
  * In a worktree Session Manor commits that file itself at Confirm and merges it. A commit
  * request that does reach the lead (a shared checkout, a commit Git refused, or Retry)
  * commits that file on the Session's branch and skips a commit already made, unless the
@@ -414,11 +414,12 @@ function workScriptFor(input: TurnInput, request: typeof fetch): MockWorkStep | 
     const message = /\bcommit:\s*(.+?)(?=\b(?:shots|choices|steps|points):|$)/i.exec(line)?.[1]?.split('//').map((part) => part.trim())
     const commit = message?.[0] ? { subject: message[0], ...(message[1] ? { body: message[1] } : {}) } : undefined
     const choices = /\bchoices:\s*(.+?)(?=\b(?:shots|commit|points):|$)/i.exec(line)?.[1]?.split(';').flatMap((entry) => {
-      const [title, options] = entry.split('=').map((part) => part.trim())
+      const [head, options] = entry.split('=').map((part) => part.trim())
+      const [, title, question] = /^([^{]*?)\s*(?:\{([^}]+)\})?$/.exec(head ?? '') ?? []
       if (!title || !options) return []
       const listed = options.split('/').map((option) => option.trim()).filter(Boolean)
       const recommended = listed.find((option) => option.endsWith('*'))?.slice(0, -1).trim()
-      return [{ title, options: listed.map((option) => option.replace(/\*$/, '').trim()), ...(recommended === undefined ? {} : { recommended }) }]
+      return [{ title, ...(question === undefined ? {} : { question: question.trim() }), options: listed.map((option) => option.replace(/\*$/, '').trim()), ...(recommended === undefined ? {} : { recommended }) }]
     })
     const writesFile = goal[1]!.toLowerCase() === 'goal'
     const result = goal[2]!.replace(/\b(shots|choices|steps|commit|points):.*$/i, '').trim()

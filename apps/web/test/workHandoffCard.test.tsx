@@ -499,6 +499,15 @@ describe('the two result cards (2026-10-14)', () => {
     expect(working).not.toContain('>Follow up<')
   })
 
+  it('shows a choice\'s plain question in place of its title, on up to two lines, and an older choice by its title', () => {
+    const question = 'A phone check whose folder was deleted keeps blocking its ports for a day. Should Manor clean those up on its own?'
+    const asked = [{ title: 'Stale phone checks', question, options: ['Clean them up on its own', 'Leave them for a day'], recommended: 'Clean them up on its own' }, choices[1]!]
+    const markup = render({ ...base, result: 'Checks stop on their own.', files: 0, operation: 'none', choices: asked })
+    expect(markup).toContain(`class="m-0 line-clamp-2 text-[13px] leading-[1.45] text-text [overflow-wrap:anywhere]">${question}</p>`)
+    expect(markup).not.toContain('>Stale phone checks</p>')
+    expect(markup).toContain('>Theme</p>')
+  })
+
   it('keeps Request changes and Confirm with its tooltip on a result with files, and shows no Open report without choices', () => {
     const markup = render({ ...base, result: 'Export works.', files: 12, reviewer: 'Argus', operation: 'commit' })
     expect(markup).toMatch(/title="Show the diff"[^>]*>12 files<\/button>/)

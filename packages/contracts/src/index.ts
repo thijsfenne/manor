@@ -2398,10 +2398,14 @@ export const GOAL_POINT_MAX = 100
 
 /**
  * A decision a report leaves to the user (2026-10-14): the choice, its options and the one
- * the lead recommends. The card shows the first `GOAL_CHOICES_SHOWN` as one line each.
+ * the lead recommends. The card shows the first `GOAL_CHOICES_SHOWN`. `question` (2026-11-16)
+ * says in plain words what is going on and what the user decides; the card shows it in
+ * place of `title`, which stays the short key Follow up writes as `Title: option`.
  */
+export const GOAL_CHOICE_QUESTION_MAX = 160
 export const GoalChoiceSchema = z.object({
   title: z.string().trim().min(1).max(80),
+  question: z.string().trim().min(1).max(GOAL_CHOICE_QUESTION_MAX).optional(),
   options: z.array(z.string().trim().min(1).max(80)).min(2).max(4),
   recommended: z.string().trim().min(1).max(80).optional(),
 })

@@ -842,7 +842,7 @@ describe('durable Work proposals', () => {
     const { store, filename } = fixture()
     const proposal = await pendingProposal(store)
     await workModule(store).module.accept(proposal.id)
-    const choices = [{ title: 'Open large', options: ["Manor's Browser", 'a zoom view like T3'], recommended: 'zoom' }]
+    const choices = [{ title: 'Open large', question: 'Wide pages are cramped in the chat. Where should they open large?', options: ["Manor's Browser", 'a zoom view like T3'], recommended: 'zoom' }]
     await store.reachWorkGoal(proposal.id, { type: 'system_note', kind: 'info', text: 'Ready.',
       workGoalHandoffId: proposal.id, goalReport: { result: 'Native-looking HTML works in the chat.', choices } })
     store.close()

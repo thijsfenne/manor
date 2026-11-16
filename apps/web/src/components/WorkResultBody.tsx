@@ -102,9 +102,10 @@ function ResultLines({ result, settled }: { result: WorkResult; settled: boolean
 }
 
 /**
- * The decisions a report leaves to the user, under a divider: each question on one line and
- * its options as small grey buttons, the picked one in a blue wash. A press writes the pick
- * into Follow up, which opens, so several picks go to the Session as one message.
+ * The decisions a report leaves to the user, under a divider: each choice's plain question
+ * on up to two lines (its title on one line for an older report) and its options as small
+ * grey buttons, the picked one in a blue wash. A press writes `Title: option` into Follow up,
+ * which opens, so several picks go to the Session as one message.
  */
 function YourCall({ result, picked, disabled, onPick }: {
   result: WorkResult
@@ -118,7 +119,9 @@ function YourCall({ result, picked, disabled, onPick }: {
     <div className="flex min-w-0 flex-col gap-2.5 border-t border-line pt-2.5">
       {choices.map((choice) => (
         <div key={choice.title} className="flex min-w-0 flex-col gap-1.5">
-          <p title={choice.title} className="m-0 truncate text-[13px] leading-[1.45] text-text">{choice.title}</p>
+          {choice.question === undefined
+            ? <p title={choice.title} className="m-0 truncate text-[13px] leading-[1.45] text-text">{choice.title}</p>
+            : <p title={choice.question} className="m-0 line-clamp-2 text-[13px] leading-[1.45] text-text [overflow-wrap:anywhere]">{choice.question}</p>}
           <div className="flex flex-wrap gap-1.5">
             {choice.options.map((option) => {
               const recommended = option === choice.recommended
@@ -130,7 +133,7 @@ function YourCall({ result, picked, disabled, onPick }: {
                   label={option}
                   on={on}
                   disabled={disabled}
-                  hint={`${recommended ? 'Recommended. ' : ''}Adds "${choice.title}: ${option}" to Follow up, for you to send.`}
+                  hint={`${recommended ? 'Recommended. ' : ''}Adds this answer to your Follow up message.`}
                   onToggle={() => onPick(choice, option)}
                 />
               )

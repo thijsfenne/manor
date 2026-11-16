@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { isModelOnlyMessage, modelTextOf, splitUserMessage } from './userMessage.js'
-import { DriverSchema, EffortSchema, EventImageSchema, GoalClaimsSchema, GoalReportSchema, GOAL_POINT_MAX, SystemNoteEventSchema, placeQuotesAfterText, ImageAttachmentSchema, McpServerDraftSchema, SKIPPED_ANSWER, SingleRuntimeSchema, defaultSingleRuntime, isOpenRoom, isSkippedAnswer, isSoloRoom } from './index.js'
+import { DriverSchema, EffortSchema, EventImageSchema, GoalClaimsSchema, GoalReportSchema, GOAL_CHOICE_QUESTION_MAX, GOAL_POINT_MAX, SystemNoteEventSchema, placeQuotesAfterText, ImageAttachmentSchema, McpServerDraftSchema, SKIPPED_ANSWER, SingleRuntimeSchema, defaultSingleRuntime, isOpenRoom, isSkippedAnswer, isSoloRoom } from './index.js'
 
 test('single mode preserves the wire choice and closes household routing', () => {
   const runtime = { driver: 'codex', model: 'gpt-5.6-sol', effort: 'medium' }
@@ -265,6 +265,14 @@ test('a goal report carries up to three short points, and older reports parse wi
   assert.equal(GoalReportSchema.safeParse({ result: 'Done.', points: [...points, 'One more'] }).success, false)
   assert.equal(GoalReportSchema.safeParse({ result: 'Done.', points: [] }).success, false)
   assert.equal(GoalReportSchema.safeParse({ result: 'Done.', points: ['x'.repeat(GOAL_POINT_MAX + 1)] }).success, false)
+})
+
+test('a choice may carry a plain question, and a choice without one parses as before', () => {
+  const choice = { title: 'Stale phone checks', options: ['Clean up on its own', 'Leave them'] }
+  assert.deepEqual(GoalReportSchema.parse({ result: 'Done.', choices: [choice] }).choices, [choice])
+  const question = 'A phone check whose folder was deleted keeps its ports for a day. Should Manor clean those up on its own?'
+  assert.equal(GoalReportSchema.parse({ result: 'Done.', choices: [{ ...choice, question }] }).choices?.[0]?.question, question)
+  assert.equal(GoalReportSchema.safeParse({ result: 'Done.', choices: [{ ...choice, question: 'x'.repeat(GOAL_CHOICE_QUESTION_MAX + 1) }] }).success, false)
 })
 
 test('a question counts as skipped only when every line of its answer is the skip line', () => {
