@@ -48,7 +48,6 @@ import { createContext, useContext, useEffect, useMemo, useRef, useState, type R
 import { Modal, Pressable, StyleSheet, View, useWindowDimensions, type AccessibilityState } from 'react-native'
 import { Gesture, GestureDetector } from 'react-native-gesture-handler'
 import Animated, { Easing, FadeIn, ReduceMotion, runOnJS, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated'
-import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { Attachments } from '@/components/Attachments'
 import { AgentStack } from '@/components/AgentStack'
@@ -69,6 +68,7 @@ import { ConnectCards } from '@/components/ConnectCards'
 import { Text } from '@/components/Text'
 import type { QuoteSelectionSource } from '@/components/QuoteSelectionSheet'
 import { colors, fonts, radius, spacing, squircle } from '@/theme'
+import { useWindowInsets } from '@/lib/windowInsets'
 
 /**
  * One persona's turn, read the way the Mac reads it: her face and name, the stable
@@ -431,7 +431,7 @@ export function ConsultedAgents({
   const triggerRef = useRef<View>(null)
   const [anchor, setAnchor] = useState<{ top: number; right: number } | null>(null)
   const { width, height } = useWindowDimensions()
-  const insets = useSafeAreaInsets()
+  const insets = useWindowInsets()
   const agentIds = consultations.map((consultation) => consultation.agentId)
   const names = agentIds.map((agentId) => personaOf(agents, agentId).name)
   const count = consultations.length
@@ -604,7 +604,7 @@ function TurnActions({
   onMemory: () => void
   onMemoryChanges: () => void
 }) {
-  const insets = useSafeAreaInsets()
+  const insets = useWindowInsets()
   return (
     <Modal animationType="fade" onRequestClose={onClose} transparent visible>
       <View style={[styles.actionScrim, { paddingBottom: Math.max(insets.bottom, spacing.lg) }]}>

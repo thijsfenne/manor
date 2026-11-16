@@ -12,7 +12,7 @@ import {
 } from '@manor/contracts'
 import type { RemindersState } from '@manor/client-runtime/reminders'
 import { personaOf, type ChatListRow, type Inbox } from '../state'
-import { rankSearchResults, type SearchChat, type SearchResult } from '../search'
+import { rankSearchResults, type SearchChat, type SearchResult } from '@manor/client-runtime/search-ranking'
 import { relativeTime } from '../relativeTime'
 import type { RequestEvents } from '../useRequest'
 import { Icon } from './Icon'

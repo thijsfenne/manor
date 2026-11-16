@@ -62,11 +62,11 @@ export function GlassSurface({
         colorScheme={scheme}
         glassEffectStyle={glassStyle}
         isInteractive={interactive}
-        // Native glass owns its shape and grows under a hold, so a control that
-        // morphs must not be clipped or the growth is cut off at its own rim. A
-        // panel never morphs and does clip: it holds content with corners of its
-        // own, and a row scrolling past the curve has to stop at it.
-        style={[shape, interactive ? null : styles.clip, style]}
+        // Never clipped: clipping cuts the glass's own rim and shadow, which is what
+        // keeps a light surface apart from a light screen, and the growth of a
+        // control under a hold. Content that scrolls past the curve, such as a
+        // menu's rows, rounds its own scroll view instead.
+        style={[shape, style]}
         tintColor={tintColor}
       >
         {children}

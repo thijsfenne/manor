@@ -5,6 +5,7 @@ import CellsIcon from '@hugeicons/core-free-icons/CellsIcon'
 import DashboardSpeed02Icon from '@hugeicons/core-free-icons/DashboardSpeed02Icon'
 import Logout01Icon from '@hugeicons/core-free-icons/Logout01Icon'
 import PuzzleIcon from '@hugeicons/core-free-icons/PuzzleIcon'
+import Search01Icon from '@hugeicons/core-free-icons/Search01Icon'
 import {
   Clock01Icon as Clock01SolidIcon,
   Archive02Icon as Archive02SolidIcon,
@@ -12,36 +13,40 @@ import {
   CellsIcon as CellsSolidIcon,
   DashboardSpeed02Icon as DashboardSpeed02SolidIcon,
   PuzzleIcon as PuzzleSolidIcon,
+  Search01Icon as Search01SolidIcon,
 } from '@manor/client-runtime/solid-icons'
 import { HugeiconsIcon, type IconSvgElement } from '@hugeicons/react-native'
 import { CRITICAL_AT, WARN_AT, displayPercent, peakUsed } from '@manor/client-runtime/usage'
-import { router, type Href } from 'expo-router'
+import { router, useNavigationContainerRef, type Href } from 'expo-router'
 import { Alert, Pressable, StyleSheet, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { hostName } from '@/lib/config'
+import { openTabActions, resetTab } from '@/lib/tabNavigation'
 import { useAuth } from '@/providers/AuthProvider'
 import { useWorkspaceActions, useWorkspaceData, useWorkspaceStatus } from '@/providers/WorkspaceProvider'
 import { AiBotHeadLookingIcon, AiBotHeadLookingSolidIcon } from '@/components/customIcons'
 import { Text } from '@/components/Text'
 import { colors, fonts, radius, spacing, squircle } from '@/theme'
 
-export type HouseSection = 'inbox' | 'direct' | 'routines' | 'plugins' | 'knowledge' | 'artifacts' | 'usage'
+export type HouseSection = 'inbox' | 'direct' | 'knowledge' | 'search' | 'routines' | 'plugins' | 'artifacts' | 'usage'
 
-type Item = { key: HouseSection; label: string; icon: IconSvgElement; activeIcon: IconSvgElement; href: Href }
+/** `tab` names the tab bar route a tab item switches to; a room opens by `href`. */
+type Item = { key: HouseSection; label: string; icon: IconSvgElement; activeIcon: IconSvgElement; href: Href; tab?: string }
 
 /**
  * A solid glyph takes no strokeWidth: the icon component would stroke every shape
  * in it, and that stroke closes the cut-outs (the Agents head lost its eyes).
  *
- * The Mac rail's doors in the rail's order and with its glyphs, the solid one worn
- * only by the current room. Browser and Reminders are desktop hosts, so the phone
- * has no door for them.
+ * The four tabs first, in the tab bar's order, then the rooms that have no tab; the
+ * solid glyph is worn only by the current one. Browser and Reminders are desktop
+ * hosts, so the phone has no door for them.
  */
 const ITEMS: Item[] = [
-  { key: 'direct', label: 'Agents', icon: AiBotHeadLookingIcon, activeIcon: AiBotHeadLookingSolidIcon, href: '/direct' },
-  { key: 'inbox', label: 'Sessions', icon: CellsIcon, activeIcon: CellsSolidIcon, href: '/' },
-  { key: 'knowledge', label: 'Knowledge', icon: BookOpen01Icon, activeIcon: BookOpen01SolidIcon, href: '/knowledge' },
+  { key: 'direct', label: 'Agents', icon: AiBotHeadLookingIcon, activeIcon: AiBotHeadLookingSolidIcon, href: '/agents', tab: '(agents)' },
+  { key: 'inbox', label: 'Sessions', icon: CellsIcon, activeIcon: CellsSolidIcon, href: '/', tab: '(sessions)' },
+  { key: 'knowledge', label: 'Knowledge', icon: BookOpen01Icon, activeIcon: BookOpen01SolidIcon, href: '/knowledge', tab: '(knowledge)' },
+  { key: 'search', label: 'Search', icon: Search01Icon, activeIcon: Search01SolidIcon, href: '/search', tab: '(search)' },
   { key: 'artifacts', label: 'Artifacts', icon: Archive02Icon, activeIcon: Archive02SolidIcon, href: '/artifacts' },
   { key: 'routines', label: 'Scheduled tasks', icon: Clock01Icon, activeIcon: Clock01SolidIcon, href: '/routines' },
   { key: 'plugins', label: 'Plugins', icon: PuzzleIcon, activeIcon: PuzzleSolidIcon, href: '/plugins' },
@@ -56,19 +61,22 @@ export function HouseMenu({ active, onClose }: { active: HouseSection; onClose: 
   const auth = useAuth()
   const { signOut } = useWorkspaceActions()
   const { workspace } = useWorkspaceData()
-  // As on the Mac's rail, Knowledge and Artifacts exist only where their host does.
-  // Still unknown keeps the row, so it does not blink away while the Mac answers.
-  const items = ITEMS.filter((item) =>
-    item.key === 'knowledge' ? workspace.vault.status !== 'none'
-      : item.key === 'artifacts' ? workspace.artifacts.status !== 'none'
-        : true)
+  // As on the Mac's rail, Artifacts exists only where its host does. Still unknown keeps
+  // the row, so it does not blink away while the Mac answers. Knowledge is a tab and
+  // always stays; without a vault it says so.
+  const items = ITEMS.filter((item) => item.key !== 'artifacts' || workspace.artifacts.status !== 'none')
   const status = useWorkspaceStatus()
+  const navigation = useNavigationContainerRef()
 
   const pick = (item: Item) => {
     onClose()
-    // A room takes the place of the room it was picked from. Stacking them would make
-    // the back swipe walk the rooms visited, and the way out of a room is this menu.
-    if (item.key !== active) router.replace(item.href)
+    // A tab picked again still returns to its list, the way a second tap on the bar does.
+    if (item.tab === undefined) {
+      if (item.key !== active) openRoom(item.href, active)
+    } else if (navigation.isReady()) {
+      resetTab(item.tab)
+      for (const action of openTabActions(navigation.getRootState(), item.tab)) navigation.dispatch(action)
+    }
   }
 
   return (
@@ -101,7 +109,7 @@ export function HouseMenu({ active, onClose }: { active: HouseSection; onClose: 
 
       <View style={styles.spacer} />
 
-      <UsageItem active={active === 'usage'} onClose={onClose} />
+      <UsageItem current={active} onClose={onClose} />
 
       {auth.enabled ? (
         <Pressable
@@ -122,6 +130,19 @@ export function HouseMenu({ active, onClose }: { active: HouseSection; onClose: 
   )
 }
 
+/** Rooms without a tab, which open inside the current tab's stack. */
+const ROOMS = new Set<HouseSection>(['artifacts', 'routines', 'plugins', 'usage'])
+
+/**
+ * A room opens on top of the current tab, so the tab bar stays under it; picked from
+ * another room it takes that room's place, because the way out of a room is this menu
+ * or the tab bar, not a trail of rooms.
+ */
+function openRoom(href: Href, current: HouseSection) {
+  if (ROOMS.has(current)) router.replace(href)
+  else router.push(href)
+}
+
 /**
  * Not a room in the list but the house's subscription headroom, sitting with the
  * account acts at the bottom — the same footer position the row has on the Mac,
@@ -129,7 +150,8 @@ export function HouseMenu({ active, onClose }: { active: HouseSection; onClose: 
  * that is not yet full as its one ambient number, and no number before the first
  * reading. House 100% only when every returned window is full.
  */
-function UsageItem({ active, onClose }: { active: boolean; onClose: () => void }) {
+function UsageItem({ current, onClose }: { current: HouseSection; onClose: () => void }) {
+  const active = current === 'usage'
   const { workspace } = useWorkspaceData()
   const peak = peakUsed(workspace.providerUsage)
   const heat = peak === undefined ? 'normal' : peak >= CRITICAL_AT ? 'critical' : peak >= WARN_AT ? 'warn' : 'normal'
@@ -140,7 +162,7 @@ function UsageItem({ active, onClose }: { active: boolean; onClose: () => void }
       accessibilityState={{ selected: active }}
       onPress={() => {
         onClose()
-        if (!active) router.replace('/usage')
+        if (!active) openRoom('/usage', current)
       }}
       style={({ pressed }) => [styles.item, active && styles.itemActive, pressed && styles.pressed]}
     >

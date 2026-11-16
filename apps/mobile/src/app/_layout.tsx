@@ -15,9 +15,10 @@ import { SafeAreaProvider } from 'react-native-safe-area-context'
 
 import { AuthProvider } from '@/providers/AuthProvider'
 import { WorkspaceProvider } from '@/providers/WorkspaceProvider'
+import { WindowInsetsProvider } from '@/lib/windowInsets'
 import { chatIdFromNotificationResponse, Notifications } from '@/lib/notifications'
 import { notificationOpen } from '@/lib/notificationRoute'
-import { colors, fonts } from '@/theme'
+import { colors } from '@/theme'
 
 export default function RootLayout() {
   const scheme = useColorScheme()
@@ -40,54 +41,21 @@ export default function RootLayout() {
           which tracks the keyboard natively from this provider down. */}
       <KeyboardProvider>
       <SafeAreaProvider>
+      <WindowInsetsProvider>
         <ThemeProvider value={scheme === 'dark' ? DarkTheme : DefaultTheme}>
           <AuthProvider>
             <WorkspaceProvider>
               <NotificationNavigation />
-              <Stack
-                screenOptions={{
-                  contentStyle: { backgroundColor: colors.background },
-                  // The left edge belongs to the house menu, not to a browser's history.
-                  // Only a screen that sits one level inside a room turns the back swipe
-                  // back on, and it lands on that room; the rooms themselves replace each
-                  // other, so there is no visited-rooms trail to swipe through.
-                  gestureEnabled: false,
-                  // A screen two or more steps under the top stops re-rendering on every
-                  // streamed event; it catches up when the screen above it closes.
-                  freezeOnBlur: true,
-                  headerBackButtonDisplayMode: 'minimal',
-                  headerStyle: { backgroundColor: colors.background },
-                  headerShadowVisible: false,
-                  headerTintColor: colors.text,
-                  // A native header title is not our Text, so it names the Medium cut itself.
-                  headerTitleStyle: { fontFamily: fonts.sansMedium },
-                }}
-              >
-                <Stack.Screen name="index" options={{ headerShown: false }} />
-                <Stack.Screen
-                  name="new-chat"
-                  options={{
-                    gestureEnabled: true,
-                    headerShown: false,
-                  }}
-                />
-                <Stack.Screen name="chat/[id]" options={{ gestureEnabled: true, headerShown: false }} />
-                <Stack.Screen name="subagent/[callId]" options={{ gestureEnabled: true, headerShown: false }} />
-                {/* A project's Sessions, one step behind its thread; back lands on the thread. */}
-                <Stack.Screen name="sessions/[threadId]" options={{ gestureEnabled: true, headerShown: false }} />
-                {/* A DM's Files, one step behind the chat; back lands on the chat. */}
-                <Stack.Screen name="files/[chatId]" options={{ gestureEnabled: true, headerShown: false }} />
-                <Stack.Screen name="direct" options={{ headerShown: false }} />
-                <Stack.Screen name="routines" options={{ headerShown: false }} />
-                <Stack.Screen name="plugins" options={{ headerShown: false }} />
-                <Stack.Screen name="knowledge" options={{ headerShown: false }} />
-                <Stack.Screen name="artifacts" options={{ headerShown: false }} />
-                <Stack.Screen name="usage" options={{ headerShown: false }} />
+              {/* The four tabs and every screen reached from them live one level down,
+                  each in its tab's own stack (see `(tabs)/_layout.tsx`). */}
+              <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.background } }}>
+                <Stack.Screen name="(tabs)" />
               </Stack>
               <StatusBar style="auto" />
             </WorkspaceProvider>
           </AuthProvider>
         </ThemeProvider>
+      </WindowInsetsProvider>
       </SafeAreaProvider>
       </KeyboardProvider>
     </GestureHandlerRootView>

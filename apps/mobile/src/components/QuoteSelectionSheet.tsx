@@ -4,10 +4,10 @@ import type { MessageQuote } from '@manor/contracts'
 import { quoteFromRange } from '@manor/client-runtime/message-quotes'
 import { useState } from 'react'
 import { Modal, Pressable, StyleSheet, TextInput, View } from 'react-native'
-import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { Text } from '@/components/Text'
 import { colors, fonts, radius, spacing, squircle } from '@/theme'
+import { useWindowInsets } from '@/lib/windowInsets'
 
 export interface QuoteSelectionSource {
   eventId: string
@@ -25,7 +25,7 @@ export function QuoteSelectionSheet({
   onClose: () => void
   onQuote: (quote: MessageQuote) => void
 }) {
-  const insets = useSafeAreaInsets()
+  const insets = useWindowInsets()
   const [range, setRange] = useState({ start: 0, end: 0 })
   if (source === null) return null
   const quote = quoteFromRange(source.eventId, source.text, range.start, range.end, source.agentId)

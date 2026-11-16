@@ -15,7 +15,6 @@ import { useEffect, useRef, useState } from 'react'
 import { ActivityIndicator, FlatList, Modal, Pressable, ScrollView, StyleSheet, View, useWindowDimensions, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import Animated, { FadeIn, useReducedMotion } from 'react-native-reanimated'
-import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { GlassIconButton } from '@/components/GlassIconButton'
 import { Markdown } from '@/components/Markdown'
@@ -23,6 +22,7 @@ import { Text } from '@/components/Text'
 import { serverMediaUri } from '@/lib/config'
 import { FILE_GONE, fileFailure, saveToShareSheet } from '@/lib/fileSave'
 import { colors, fonts, radius, spacing, squircle } from '@/theme'
+import { useWindowInsets } from '@/lib/windowInsets'
 
 const GLYPHS = { image: Image01Icon, video: Video01Icon, pdf: Pdf01Icon, file: File01Icon } as const
 /** The glyph a file of this kind wears where there is no picture to show. */
@@ -55,7 +55,7 @@ export function FileViewer({ files, initialId, agents, onClose }: {
   onClose: () => void
 }) {
   const { width } = useWindowDimensions()
-  const insets = useSafeAreaInsets()
+  const insets = useWindowInsets()
   const start = Math.max(0, files.findIndex((file) => file.id === initialId))
   const [current, setCurrent] = useState(start)
   const [error, setError] = useState<string | null>(null)
@@ -203,7 +203,7 @@ function TextBody({ file, uri, reads, agents }: { file: DmFile; uri: string; rea
   const still = useReducedMotion()
   const [text, setText] = useState<string | null>(null)
   const [failed, setFailed] = useState(false)
-  const insets = useSafeAreaInsets()
+  const insets = useWindowInsets()
 
   useEffect(() => {
     const abort = new AbortController()

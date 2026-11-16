@@ -7,6 +7,8 @@ import {
   type InlineQuote,
   type MessageReply,
   type Project,
+  type SearchMessageHit,
+  type SearchNoteHit,
   type ServerMessage,
   type UserInputAnswers,
 } from '@manor/contracts'
@@ -94,6 +96,12 @@ export interface WorkspaceData {
  * Stable for the provider's lifetime: every command reads live state through refs,
  * so a component that only acts never re-renders on streaming.
  */
+/** The Mac's answer to one search, chat titles excluded: the phone matches those itself. */
+export interface SearchAnswer {
+  messages: SearchMessageHit[]
+  notes: SearchNoteHit[]
+}
+
 export interface WorkspaceActions {
   clearCreatedChat: () => void
   clearCreatedProject: () => void
@@ -164,6 +172,11 @@ export interface WorkspaceActions {
   /** Asks for the vault's note listing; nothing until the Knowledge screen wants it. */
   listVault: () => boolean
   readVaultFile: (path: string) => boolean
+  /**
+   * Searches message content and note bodies on the Mac. Rejects when the Mac refuses,
+   * the request cannot be sent, or the connection drops before the answer.
+   */
+  search: (query: string) => Promise<SearchAnswer>
   /** Asks mymind for objects matching `query`; the id comes back so a stale answer can be told apart. */
   listArtifacts: (query: string) => string | null
   loadMoreArtifacts: () => boolean
@@ -179,6 +192,7 @@ const WorkspaceLiveContext = createContext<LiveWorkspace | null>(null)
 const WorkspaceStatusContext = createContext<ConnectionStatus | null>(null)
 const WorkspaceActionsContext = createContext<WorkspaceActions | null>(null)
 
+const SEARCH_CONNECTION_LOST = 'Not connected. Search again when Manor is back.'
 const requestId = (prefix: string) => `mobile-${prefix}-${Date.now()}-${Math.random().toString(36).slice(2)}`
 
 export function WorkspaceProvider({ children }: { children: ReactNode }) {
@@ -204,9 +218,13 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   /** Result Accept and Request changes in flight, settled by the ack or notice carrying their id. */
   const resultRequests = useRef(new Map<string, { resolve: () => void; reject: (error: Error) => void }>())
   // An answer lost with the socket never arrives; the reconnect snapshot shows whether it landed.
+  /** Searches in flight, settled by `search_results` or a notice carrying their id. */
+  const searchRequests = useRef(new Map<string, { resolve: (answer: SearchAnswer) => void; reject: (error: Error) => void }>())
   const dropResultRequests = () => {
     for (const waiting of resultRequests.current.values()) waiting.reject(new Error(WORK_RESULT_CONNECTION_LOST))
     resultRequests.current.clear()
+    for (const waiting of searchRequests.current.values()) waiting.reject(new Error(SEARCH_CONNECTION_LOST))
+    searchRequests.current.clear()
   }
   const workAcceptance = useRef(createWorkAcceptance())
   /** Override requests still in flight, so an ack or a notice can settle the right chat. */
@@ -334,6 +352,14 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
           if (waiting !== undefined) {
             resultRequests.current.delete(message.requestId)
             if (message.type === 'ack') waiting.resolve()
+            else waiting.reject(new Error(message.text))
+          }
+        }
+        if ((message.type === 'search_results' || message.type === 'notice') && message.requestId !== undefined) {
+          const waiting = searchRequests.current.get(message.requestId)
+          if (waiting !== undefined) {
+            searchRequests.current.delete(message.requestId)
+            if (message.type === 'search_results') waiting.resolve({ messages: message.messages, notes: message.notes })
             else waiting.reject(new Error(message.text))
           }
         }
@@ -661,6 +687,14 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
 
   const readVaultFile = useCallback((path: string) => commands().readVaultFile(path), [commands])
 
+  const search = useCallback((query: string) => new Promise<SearchAnswer>((resolve, reject) => {
+    const id = requestId('search')
+    searchRequests.current.set(id, { resolve, reject })
+    if (send({ type: 'search', requestId: id, query })) return
+    searchRequests.current.delete(id)
+    reject(new Error(SEARCH_CONNECTION_LOST))
+  }), [send])
+
   const listArtifacts = useCallback(
     (query: string) => {
       const id = requestId('artifacts')
@@ -732,10 +766,11 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       signOut,
       listVault,
       readVaultFile,
+      search,
       listArtifacts,
       loadMoreArtifacts,
     }),
-    [acceptWorkHandoff, answerSecretRequest, answerUserInput, changeSessionAnswer, askCheckoutStatus, askProjectCheckout, clearCreatedChat, clearCreatedProject, closeDirs, confirmWorkGoal, acceptWorkResult, reviseWorkResult, retryWorkResult, approveMergeFix, createChat, addFolder, removeFolder, deleteProject, discardOutboundDraft, ignoreOutboundDraft, listWorkflowSuggestions, listArtifacts, getDmFiles, listDirs, listRepoFiles, listVault, loadMoreArtifacts, openChat, leaveChat, openSubagentThread, readOutboundThread, readRepoFile, readVaultFile, rejectWorkHandoff, restoreOutboundDraft, runRoutine, sendMessage, setChatOverride, setChatSettled, signOut, snoozeOutboundDraft, stopBackground, stopSubagent, stopTurn, submitOutboundDraft, updateProject],
+    [acceptWorkHandoff, answerSecretRequest, answerUserInput, changeSessionAnswer, askCheckoutStatus, askProjectCheckout, clearCreatedChat, clearCreatedProject, closeDirs, confirmWorkGoal, acceptWorkResult, reviseWorkResult, retryWorkResult, approveMergeFix, createChat, addFolder, removeFolder, deleteProject, discardOutboundDraft, ignoreOutboundDraft, listWorkflowSuggestions, listArtifacts, getDmFiles, listDirs, listRepoFiles, listVault, loadMoreArtifacts, openChat, leaveChat, openSubagentThread, readOutboundThread, readRepoFile, readVaultFile, rejectWorkHandoff, search, restoreOutboundDraft, runRoutine, sendMessage, setChatOverride, setChatSettled, signOut, snoozeOutboundDraft, stopBackground, stopSubagent, stopTurn, submitOutboundDraft, updateProject],
   )
 
   const data = useMemo<WorkspaceData>(

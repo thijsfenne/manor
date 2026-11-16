@@ -710,7 +710,7 @@ export function Composer({
       {contextMeter === undefined || !contextOpen ? null : (
         <Animated.View entering={glassRise} exiting={glassSink} style={[styles.overlay, styles.contextOverlay]}>
           <GlassSurface fallbackStyle={styles.floatingFallback} radius={radius.panel}>
-            <ScrollView style={{ maxHeight: 300 }}>
+            <ScrollView style={styles.ringScroll}>
               <ContextRingCopy {...contextMeter} />
             </ScrollView>
           </GlassSurface>
@@ -1042,7 +1042,10 @@ const styles = StyleSheet.create({
     shadowRadius: 20,
     elevation: 8,
   },
-  menuScroll: { maxHeight: MENU_MAX_HEIGHT },
+  // The scroll view rounds its own corners, so rows stop at the panel's curve while the
+  // glass around it keeps its rim and shadow.
+  menuScroll: { maxHeight: MENU_MAX_HEIGHT, borderRadius: radius.panel, ...squircle },
+  ringScroll: { maxHeight: 300, borderRadius: radius.panel, ...squircle },
   menuRows: { padding: spacing.xs },
   menuEmpty: { color: colors.dim, fontFamily: fonts.sans, fontSize: 13, lineHeight: 19, paddingHorizontal: spacing.md, paddingVertical: spacing.md },
   menuNote: { color: colors.dim, fontFamily: fonts.sans, fontSize: 11, paddingHorizontal: spacing.md, paddingVertical: 6 },

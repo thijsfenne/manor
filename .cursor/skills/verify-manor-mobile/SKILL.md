@@ -105,7 +105,9 @@ Stable handles from this repo:
 |---|---|
 | `Open menu` | House chrome on every room |
 | `Sluit menu` | Drawer backdrop |
-| `Agents` / `Sessions` / `Knowledge` / `Artifacts` / `Scheduled tasks` / `Plugins` / `Usage, NN%` | House menu rows (`HouseMenu.tsx`); the Usage row reads its peak percent into its label |
+| `Agents` / `Sessions` / `Knowledge` / `Search` / `Artifacts` / `Scheduled tasks` / `Plugins` / `Usage, NN%` | House menu rows (`HouseMenu.tsx`); the Usage row reads its peak percent into its label |
+| Tab bar `Agents` / `Sessions` / `Knowledge` / `Search` | The native tab bar shares its labels with the menu rows, and `Search` also matches a search field's hint. Tap a tab by point instead, from a hand-written Maestro flow: `point: "18%,94%"`, `"39%,94%"`, `"61%,94%"`, `"82%,94%"` on the iPhone 18 Pro |
+| `Search chats, messages and notes` | Search tab field; submit with `pressKey: Enter`, because `hideKeyboard` may tap a result |
 | `Zoek gesprekken` | Inbox search field |
 | `Zoeken annuleren` | Search cancel (visible while the field is focused) |
 | `Nieuwe sessie` | Inbox compose control |
@@ -139,7 +141,8 @@ The fixture is a static house plus a few reactions. Most rooms never answer a se
 - **Mail cards.** `Mail klaarzetten` (`chat-mail-drafts`, Manor) is a Single Session with three outbound Gmail cards, one per turn: an open card (scrolled above the first screen) with `Draft subject`, `Draft Cc`, `Draft body`, `Discard draft` and `Send`, then `Sent · info@example.com` with the reply `Sent to info@example.com.` below it, then `Discarded · info@example.com`. `Open mail card` on a fold reopens it read-only. Send and Discard are only acked.
 - **Inline steering.** `Bijsturen in de stream` is a Single Session with a saved steer halfway through an assistant message. Its completed trace checks the text before and after the addition and its visibility with the trace closed. No live provider is involved.
 - **Reactions.** Accept on a proposal creates its Session and opens on a markdown kickoff. Accept on the Ready result goes pending, then lands as committed three seconds later; a stale version is refused with a notice. Project settings save, broadcast and ack. A `/compact`, `/clear` or `/goal` send adds its line in any room, no bubble and no turn. Everything else is acked.
-- **Vault and mymind.** `kill -USR2 $(lsof -tiTCP:43182 -sTCP:LISTEN)` flips both off (Knowledge and Artifacts leave the menu) and back on.
+- **Vault and mymind.** Two notes, `Projects/Manor.md` and `Daily/2026-11-16.md`; Knowledge lists them and Search finds them (`inbox` hits both). `kill -USR2 $(lsof -tiTCP:43182 -sTCP:LISTEN)` flips both hosts off (Artifacts leaves the menu, Knowledge stays and says there is no vault) and back on.
+- **Search.** The fixture answers `search` with every user or assistant message whose text contains the query, plus matching vault notes. `weekmenu` gives a chat, four messages and no notes.
 
 ## Evidence
 

@@ -17,16 +17,17 @@ interface DrawerProps {
   onOpenChange: (open: boolean) => void
   menu: ReactNode
   children: ReactNode
+  /** Whether a swipe from the left edge opens it; a closing swipe always works. */
+  swipeEnabled?: boolean
 }
 
 /**
  * The house menu, the way a phone chat app keeps one: behind the page, revealed by
  * sliding the page aside. The page keeps its own header and its own scroll; this
  * only moves it, scales it a touch so it reads as lifted, and takes it back on a
- * tap or a swipe. Owned here rather than by a drawer navigator so each top-level
- * room can keep its own list state while sharing the same house menu gesture.
+ * tap or a swipe. It wraps the native tab bar, so the bar slides with the page.
  */
-export function Drawer({ open, onOpenChange, menu, children }: DrawerProps) {
+export function Drawer({ open, onOpenChange, menu, children, swipeEnabled = true }: DrawerProps) {
   const { width } = useWindowDimensions()
   const travel = Math.round(width * OPEN_FRACTION)
   const still = useReducedMotion()
@@ -49,6 +50,7 @@ export function Drawer({ open, onOpenChange, menu, children }: DrawerProps) {
   // keep their own swipe. Open: a swipe anywhere on the page closes. Both follow
   // the finger and settle on release by where it left.
   const pan = Gesture.Pan()
+    .enabled(open || swipeEnabled)
     .hitSlop(open ? { left: 0, right: 0, top: 0, bottom: 0 } : { left: 0, width: EDGE })
     .activeOffsetX([-12, 12])
     .failOffsetY([-16, 16])

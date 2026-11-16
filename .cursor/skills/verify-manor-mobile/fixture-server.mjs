@@ -1232,6 +1232,11 @@ const http = createServer((request, response) => {
   response.writeHead(200, { 'content-type': 'image/png', 'content-length': String(shot.bytes.byteLength) })
   response.end(shot.bytes)
 })
+/** The fixture vault: what Knowledge lists and what a note search finds. */
+const VAULT_NOTES = {
+  'Projects/Manor.md': '# Manor\n\nThe phone gets a native tab bar: Agents, Sessions, Knowledge and Search.\n\nOpen question: does the inbox need its own tab?',
+  'Daily/2026-11-16.md': '# 2026-11-16\n\n- Tab bar spike on the simulator\n- Inbox cleanup after lunch',
+}
 /** Per-chat runtime pins set from the phone during this run. */
 const overrides = new Map()
 const server = new WebSocketServer({ server: http, path: '/ws' })
@@ -1252,6 +1257,28 @@ server.on('connection', (socket) => {
     try {
       message = JSON.parse(raw.toString())
     } catch {
+      return
+    }
+    // Search: message text from the fixture's own threads, note bodies from the small vault below.
+    if (message.type === 'search' && typeof message.query === 'string') {
+      const needle = message.query.trim().toLowerCase()
+      const messages = Object.entries(snapshots).flatMap(([chatId, events]) => events
+        .filter((event) => (event.type === 'user_message' || event.type === 'agent_message') && typeof event.text === 'string' && event.text.toLowerCase().includes(needle))
+        .map((event) => ({ chatId, eventId: event.id, ...(event.agentId === undefined ? {} : { agentId: event.agentId }), ts: event.ts, snippet: event.text.slice(0, 160), phrase: true })))
+        .slice(0, 20)
+      const notes = Object.entries(VAULT_NOTES)
+        .filter(([path, body]) => `${path}\n${body}`.toLowerCase().includes(needle))
+        .map(([path, body]) => ({ path, title: path.slice(path.lastIndexOf('/') + 1, -3), snippet: body.split('\n').find((line) => line.toLowerCase().includes(needle)), phrase: true, modifiedAt: Date.now() - 3_600_000 }))
+      send(socket, { type: 'search_results', requestId: message.requestId, query: message.query, messages, notes })
+      return
+    }
+    if (message.type === 'list_vault') {
+      send(socket, { type: 'vault_files', files: Object.keys(VAULT_NOTES), truncated: false })
+      return
+    }
+    if (message.type === 'read_vault_file') {
+      const content = VAULT_NOTES[message.path]
+      send(socket, { type: 'vault_file', path: message.path, result: content === undefined ? { status: 'unavailable', message: 'Not in the fixture vault.' } : { status: 'ready', content } })
       return
     }
     if (message.type === 'list_workflow_suggestions') {

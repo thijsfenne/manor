@@ -6,7 +6,7 @@ export type StackState = {
 }
 
 /**
- * What a tapped notification does to the stack. The chat it names lands directly on
+ * What a tapped notification does to the current tab's stack. The chat it names lands on
  * the room the user was in, so back leads out of the app's notification path rather than
  * into whatever Session was left open hours ago: `push` when the room is all there is,
  * `reset` (dismiss to the room, then push) when screens sit on it, and `stay` when that

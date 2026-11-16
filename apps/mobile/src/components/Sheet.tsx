@@ -2,11 +2,11 @@ import ArrowLeft01Icon from '@hugeicons/core-free-icons/ArrowLeft01Icon'
 import Cancel01Icon from '@hugeicons/core-free-icons/Cancel01Icon'
 import type { ReactNode } from 'react'
 import { Modal, StyleSheet, View } from 'react-native'
-import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { GlassIconButton } from '@/components/GlassIconButton'
 import { Text } from '@/components/Text'
 import { colors, fonts, spacing } from '@/theme'
+import { useWindowInsets } from '@/lib/windowInsets'
 
 interface SheetProps {
   open: boolean
@@ -30,7 +30,7 @@ interface SheetProps {
  * this owns the frame and the way out.
  */
 export function Sheet({ open, title, subtitle, onClose, onBack, onDismiss, action, children }: SheetProps) {
-  const insets = useSafeAreaInsets()
+  const insets = useWindowInsets()
   return (
     <Modal
       animationType="slide"

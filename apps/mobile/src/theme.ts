@@ -51,6 +51,8 @@ export const colors = {
   lightControl: adaptive('#ffffff', '#ffffff'),
   scrim: adaptive('rgba(24, 26, 31, 0.32)', 'rgba(0, 0, 0, 0.55)'),
   chip: adaptive('rgba(0, 0, 0, 0.07)', 'rgba(255, 255, 255, 0.1)'),
+  // Floating controls where glass is missing: black in both modes, softened by opacity.
+  shadow: adaptive('#000000', '#000000'),
 } as const
 
 /** Literal tints passed to native glass, whose API does not accept dynamic colours. */

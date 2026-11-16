@@ -14,12 +14,12 @@ const phone = path.resolve(import.meta.dirname, '../../mobile/src')
  * This test sits with the web tests because the phone package has no Babel of its own.
  */
 const HOT: Record<string, readonly string[]> = {
-  'app/chat/[id].tsx': ['ChatContent', 'ChatComposer', 'LiveTranscript', 'useTranscriptRows', 'TranscriptRowBody'],
+  'app/(tabs)/(agents,sessions,knowledge,search)/chat/[id].tsx': ['ChatContent', 'ChatComposer', 'LiveTranscript', 'useTranscriptRows', 'TranscriptRowBody'],
   'components/SubagentConversation.tsx': ['ChildConversation'],
   'components/Composer.tsx': ['Composer'],
   'components/Turn.tsx': ['Turn'],
-  'app/index.tsx': ['ProjectInbox'],
-  'app/direct.tsx': ['DirectList'],
+  'app/(tabs)/(sessions)/index.tsx': ['ProjectInbox'],
+  'app/(tabs)/(agents)/agents.tsx': ['DirectList'],
 }
 
 /** What the compiler said about one phone file, with the options Expo's preset gives it. */
