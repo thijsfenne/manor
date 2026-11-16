@@ -8,7 +8,7 @@ import NoteEditIcon from '@hugeicons/core-free-icons/NoteEditIcon'
 import PencilEdit02Icon from '@hugeicons/core-free-icons/PencilEdit02Icon'
 import ReplyIcon from '@hugeicons/core-free-icons/ReplyIcon'
 import Search01Icon from '@hugeicons/core-free-icons/Search01Icon'
-import TerminalIcon from '@hugeicons/core-free-icons/TerminalIcon'
+import CommandLineIcon from '@hugeicons/core-free-icons/CommandLineIcon'
 import TextSelectionIcon from '@hugeicons/core-free-icons/TextSelectionIcon'
 import Tick02Icon from '@hugeicons/core-free-icons/Tick02Icon'
 import ViewIcon from '@hugeicons/core-free-icons/ViewIcon'
@@ -45,7 +45,7 @@ import { activeCall, activityBlocks, type ActivityBlock, groupLabel, hasFold, ha
 import { endFace, turnFace } from '@manor/client-runtime/face-activity'
 import * as Clipboard from 'expo-clipboard'
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { Modal, Pressable, StyleSheet, View, useWindowDimensions, type AccessibilityState } from 'react-native'
+import { Modal, Pressable, StyleSheet, View, useWindowDimensions, type AccessibilityState, type ColorValue } from 'react-native'
 import { Gesture, GestureDetector } from 'react-native-gesture-handler'
 import Animated, { Easing, FadeIn, ReduceMotion, runOnJS, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated'
 
@@ -900,7 +900,7 @@ function GroupRow({ group, current, accent }: { group: Extract<TraceRow, { kind:
   return (
     <View style={styles.traceItem}>
       <Pressable accessibilityRole="button" accessibilityState={{ expanded: open }} hitSlop={ROW_HIT_SLOP} onPress={() => setOpen((value) => !value)} style={styles.stepRow}>
-        <HugeiconsIcon color={live ? accent : colors.dim} icon={icon} size={14} strokeWidth={1.8} />
+        <StepIcon color={live ? accent : colors.dim} icon={icon} />
         {live ? (
           <ShimmerText numberOfLines={1} style={styles.stepText} text={currentLabel(current)} />
         ) : (
@@ -919,13 +919,22 @@ function GroupRow({ group, current, accent }: { group: Extract<TraceRow, { kind:
   )
 }
 
+/** A step row's leading glyph. HugeiconsIcon drops `style`, so the offset sits on a wrapper. */
+function StepIcon({ icon, color }: { icon: IconSvgElement; color: ColorValue }) {
+  return (
+    <View style={styles.stepIcon}>
+      <HugeiconsIcon color={color} icon={icon} size={14} strokeWidth={1.8} />
+    </View>
+  )
+}
+
 function EditRows({ edits }: { edits: FileEdit[] }) {
   const files = useMemo(() => changedFiles(edits), [edits])
   return (
     <>
       {files.map((file) => (
         <View key={file.raw} style={styles.stepRow}>
-          <HugeiconsIcon color={colors.dim} icon={PencilEdit02Icon} size={14} strokeWidth={1.8} />
+          <StepIcon color={colors.dim} icon={PencilEdit02Icon} />
           <Text numberOfLines={1} style={styles.stepText}>
             {file.status === 'created' ? 'Created' : file.status === 'deleted' ? 'Deleted' : 'Edited'} {tail(file.path)}
           </Text>
@@ -940,7 +949,7 @@ function ReasoningRow({ step }: { step: ReasoningStep }) {
   const [open, setOpen] = useState(false)
   return (
     <Pressable accessibilityRole="button" accessibilityState={{ expanded: open }} onPress={() => setOpen((value) => !value)} style={styles.stepRow}>
-      <HugeiconsIcon color={colors.dim} icon={Brain02Icon} size={14} strokeWidth={1.8} />
+      <StepIcon color={colors.dim} icon={Brain02Icon} />
       <Text numberOfLines={open ? undefined : 1} selectable={open} style={[styles.stepText, styles.thought]}>
         {open ? step.text : firstLine(step.text)}
       </Text>
@@ -959,7 +968,7 @@ function RoutineTriggerRow({ trigger }: { trigger: RoutineTrigger }) {
     late && trigger.dueAt !== undefined ? `, late, due ${TRIGGER_DUE.format(new Date(trigger.dueAt))}` : ''}`
   return (
     <Pressable accessibilityRole="button" accessibilityState={{ expanded: open }} onPress={() => setOpen((value) => !value)} style={styles.stepRow}>
-      <HugeiconsIcon color={colors.dim} icon={Clock01Icon} size={14} strokeWidth={1.8} />
+      <StepIcon color={colors.dim} icon={Clock01Icon} />
       <View style={styles.triggerCopy}>
         <Text style={[styles.stepText, styles.trigger]}>{label}</Text>
         {open ? <Text selectable style={[styles.stepText, styles.trigger]}>{trigger.prompt}</Text> : null}
@@ -977,7 +986,7 @@ function toolIcon(tool: string) {
   if (isReadTool(tool)) return ViewIcon
   if (isSearchTool(tool)) return Search01Icon
   if (isEditTool(tool)) return PencilEdit02Icon
-  if (isShellTool(tool)) return TerminalIcon
+  if (isShellTool(tool)) return CommandLineIcon
   return Wrench01Icon
 }
 
@@ -988,7 +997,7 @@ function ToolRow({ step, active, accent }: { step: ToolStep; active: boolean; ac
   const detail = stepDetail(step)
   const row = (
     <>
-      <HugeiconsIcon color={current ? accent : colors.dim} icon={step.status === 'error' ? CancelCircleIcon : toolIcon(step.tool)} size={14} strokeWidth={1.8} />
+      <StepIcon color={current ? accent : colors.dim} icon={step.status === 'error' ? CancelCircleIcon : toolIcon(step.tool)} />
       {current ? <ShimmerText numberOfLines={1} style={styles.stepText} text={label} /> : <Text numberOfLines={1} style={styles.stepText}>{label}</Text>}
     </>
   )
@@ -1200,7 +1209,7 @@ const styles = StyleSheet.create({
   bundleChevron: { marginTop: 4 },
   activity: { gap: spacing.sm },
   rows: { gap: 6 },
-  traceList: { gap: 8, marginTop: 6, marginLeft: 22, paddingRight: spacing.sm },
+  traceList: { gap: 8, marginTop: 6, marginLeft: 11, paddingRight: spacing.sm },
   traceItem: { gap: 8 },
   groupMembers: { gap: 8, marginLeft: 22 },
   stepDetail: { gap: 4, marginLeft: 22, paddingRight: spacing.sm },
@@ -1209,6 +1218,8 @@ const styles = StyleSheet.create({
   detailPath: { color: colors.muted, fontFamily: fonts.mono, fontSize: 12, lineHeight: 16 },
   detailCommand: { color: colors.muted, fontFamily: fonts.mono, fontSize: 12, lineHeight: 16 },
   stepRow: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm, paddingTop: 1 },
+  // Drops the 14pt glyph onto the middle of the 18pt line beside it.
+  stepIcon: { marginTop: 2 },
   stepText: { flexShrink: 1, color: colors.dim, fontFamily: fonts.sans, fontSize: 14, lineHeight: 18 },
   thought: { fontSize: 12, fontStyle: 'italic', lineHeight: 17 },
   trigger: { fontSize: 12, lineHeight: 17 },

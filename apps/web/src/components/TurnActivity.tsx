@@ -3,9 +3,9 @@ import {
   Brain02Icon,
   CancelCircleIcon,
   ChevronDownIcon,
+  CommandLineIcon,
   PencilEdit02Icon,
   Search01Icon,
-  TerminalIcon,
   ViewIcon,
   Wrench01Icon,
 } from '@hugeicons/core-free-icons'
@@ -77,7 +77,7 @@ function toolIcon(tool: string) {
   if (isReadTool(tool)) return ViewIcon
   if (isSearchTool(tool)) return Search01Icon
   if (isEditTool(tool)) return PencilEdit02Icon
-  if (isShellTool(tool)) return TerminalIcon
+  if (isShellTool(tool)) return CommandLineIcon
   return Wrench01Icon
 }
 
@@ -327,7 +327,7 @@ function ActivityScroll({ children, revision, followEnd }: { children: ReactNode
   }, [revision, followEnd])
 
   return (
-    <div className="relative mt-1.5 ml-[22px] min-w-0">
+    <div className="relative mt-1.5 ml-[14px] min-w-0">
       <ol
         ref={scroller}
         data-activity-scroller
