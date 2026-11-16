@@ -51,10 +51,12 @@ describe('the clay finish', () => {
     expect(hot.inner).toBe(rest.inner)
   })
 
-  it('keeps the contact shadow on the ground when a still pose moves the figure', () => {
+  it('draws nothing on the ground, and keeps its defs ahead of a still pose', () => {
+    for (const size of [20, 32, 64]) expect(blobatar('Wren', { shading: 'clay', size })).not.toContain('<ellipse')
     const posed = blobatar('Wren', { shading: 'clay', expression: sad })
-    expect(posed).toContain('<g transform=')
-    expect(posed.indexOf('<ellipse')).toBeLessThan(posed.indexOf('<g transform='))
+    expect(posed).not.toContain('<ellipse')
+    expect(posed).toContain('<defs>')
+    expect(posed.indexOf('<defs>')).toBeLessThan(posed.indexOf('<g transform='))
   })
 
   it('relights the finish from the head, so a tint on the head carries the finish with it', () => {
@@ -79,7 +81,6 @@ describe('the clay finish', () => {
     const large = blobatar('Wren', { shading: 'clay', size: CLAY.glint })
     // A filter per list row is the costly part of the finish, and haze at that size.
     expect(small).not.toContain('<filter')
-    expect(small).not.toContain('<ellipse')
     expect(middle.match(/<filter/g)).toHaveLength(2)
     expect(defined(large)).toHaveLength(defined(middle).length + 1)
   })
@@ -98,15 +99,5 @@ describe('the clay finish', () => {
     const large = eyes(blobatar('Wren', { shading: 'clay', size: 64 }))
     expect(large).toHaveLength(4)
     expect(large[1]).toBe(flat[0])
-  })
-
-  it('stands on a glow where a shadow cannot show', () => {
-    const head = _layout('Wren').palette.head!
-    const day = blobatar('Wren', { shading: 'clay' })
-    const night = blobatar('Wren', { shading: 'clay', ground: 'glow' })
-    // The shadow is the head relit deep; the glow is the head itself.
-    expect(night.match(new RegExp(head, 'g'))!.length).toBeGreaterThan(day.match(new RegExp(head, 'g'))!.length)
-    // A small face has no shadow by day, and keeps its glow by night.
-    expect(blobatar('Wren', { shading: 'clay', ground: 'glow', size: 20 })).toContain('<ellipse')
   })
 })

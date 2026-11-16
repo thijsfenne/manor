@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useSyncExternalStore } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 
 /** What the user picked. `system` is a standing deferral, not a third palette. */
 export type ThemeChoice = 'system' | 'light' | 'dark'
@@ -22,32 +22,6 @@ const systemTheme = (): Theme => {
     return 'dark'
   }
 }
-
-const watchers = new Set<() => void>()
-let watching = false
-
-// Dark where there is no page to ask, which is the theme Manor is drawn for.
-const shown = (): Theme => (typeof document !== 'undefined' && document.documentElement?.dataset.theme === 'light' ? 'light' : 'dark')
-
-function watch(listener: () => void) {
-  watchers.add(listener)
-  if (!watching && typeof document !== 'undefined' && document.documentElement && typeof MutationObserver !== 'undefined') {
-    watching = true
-    new MutationObserver(() => watchers.forEach((each) => each())).observe(document.documentElement, {
-      attributes: true,
-      attributeFilter: ['data-theme'],
-    })
-  }
-  return () => watchers.delete(listener)
-}
-
-/**
- * The theme on screen, for the few things the stylesheet cannot reach. A still
- * persona face is an `<img>`, a document of its own, so what it draws under itself
- * has to be told. Read off `<html data-theme>`, which stays the one place the theme
- * lives; `useTheme` stays the one thing that writes it.
- */
-export const useShownTheme = () => useSyncExternalStore(watch, shown, (): Theme => 'dark')
 
 /**
  * The theme, and the one control that changes it. Which theme is showing lives on

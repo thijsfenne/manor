@@ -15,7 +15,6 @@ import { Select } from '../components/ui/Select'
 import { Switch } from '../components/ui/Switch'
 import { BUSY_LOOK, VARIATIONS, VARIATION_IDS, stepLabels, useBusyFace, type BusyLook, type Segment } from '../components/busyFace'
 import { useFaceEyes, useFaceGesture } from '../components/faceMotion'
-import { useShownTheme } from '../useTheme'
 
 type Mode = 'resting' | 'working' | 'sidebar' | 'busy'
 
@@ -288,7 +287,6 @@ export function PlaygroundPane({ theme }: { theme: string }) {
 function Face({ settings }: { settings: Settings }) {
   const { name, color, tone, shape, size, mode, animate } = settings
   const hue = accentHue(color)
-  const ground = useShownTheme() === 'dark' ? 'glow' : 'shadow'
   // A moment is composed the way `Avatar` composes it: eyes, pose and gesture from one look.
   const look = settings.moment === '' || !animate ? undefined : FACE_LOOK[settings.moment as FaceState]
   const working = look === undefined && mode === 'working'
@@ -307,7 +305,7 @@ function Face({ settings }: { settings: Settings }) {
   const dot = palette(hue ?? seedTraits(name)('hue') * 360, true, tone).head ?? 'var(--accent-fg)'
   const slot = useRef<HTMLSpanElement>(null)
   const busy = animate && (look === undefined ? mode === 'busy' : look.eyes === 'loop' || look.eyes === 'dots')
-  const drawn = JSON.stringify([name, color, tone, traits, size, ground])
+  const drawn = JSON.stringify([name, color, tone, traits, size])
   const run = useBusyFace(slot, busy, look?.eyes === 'dots' ? { ...settings.busy, variation: 'dots', dots: true } : settings.busy, drawn)
   const gesture = look === undefined ? settings.gesture : (look.gesture ?? '')
   useFaceGesture(slot, animate && gesture !== '' ? (gesture as GestureId) : undefined, drawn)
@@ -340,7 +338,6 @@ function Face({ settings }: { settings: Settings }) {
           size={size}
           tone={tone}
           shading="clay"
-          ground={ground}
           traits={traits}
           {...(animate ? { animate: 'always' as const } : {})}
           {...(hue === undefined ? {} : { hue })}

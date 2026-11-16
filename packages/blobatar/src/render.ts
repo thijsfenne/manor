@@ -92,18 +92,9 @@ export interface BlobatarOptions {
   expression?: Expression;
   /**
    * A finish over the flat head. `"clay"` models it with light from the top
-   * left, an inner shadow, a matte highlight and a contact shadow underneath;
-   * see `shading.ts`. Omitted, the output is the flat default, byte for byte.
+   * left, an inner shadow and a matte highlight; see `shading.ts`. Omitted, the output is the flat default, byte for byte.
    */
   shading?: "clay";
-  /**
-   * What `shading` puts under the figure. `"shadow"`, the default, is a contact
-   * shadow. `"glow"` is a glow in the head's own colour, for a dark canvas where a
-   * shadow cannot show. The library cannot see the page, and a still face is an
-   * `<img>` that no stylesheet reaches, so the caller states which it is.
-   * Ignored without `shading`.
-   */
-  ground?: "shadow" | "glow";
   /**
    * Prefixes the gradient and filter ids that `shading` defines. Ids are
    * document-wide, so every inline blobatar on a page needs its own; the React
@@ -123,10 +114,10 @@ export interface Style<L> {
    */
   /**
    * `finish` asks for the clay finish and carries its id prefix, absent for the
-   * flat head. `ground` is what the finish puts under the figure, outside any
+   * flat head. `defs` are the finish's gradients, clip and filters, outside any
    * pose; it is empty without a finish.
    */
-  render(l: L, p: Palette, mo?: boolean, finish?: Finish): { ground: string; body: string };
+  render(l: L, p: Palette, mo?: boolean, finish?: Finish): { defs: string; body: string };
   background: boolean | "square" | "circle" | "squircle";
 }
 
@@ -163,7 +154,7 @@ let shaded = 0;
  */
 const shade = (opts: BlobatarOptions): Finish | undefined =>
   opts.shading
-    ? { id: `s${opts.idPrefix ?? ++shaded}-`, size: opts.size, glow: opts.ground === "glow" }
+    ? { id: `s${opts.idPrefix ?? ++shaded}-`, size: opts.size }
     : undefined;
 
 /** Wraps the body in the pose transform, when there is one. */
@@ -269,12 +260,12 @@ export function makeBlobatar<L>(style: Style<L>) {
     const pose = posed(style.layout(t), opts);
     // The pose wraps the figure but not the backdrop, for the same reason the
     // motion groups sit inside `style.render` — a plate that scales and leans
-    // with the creature stops being a plate. The ground shadow stays out for the same reason.
+    // with the creature stops being a plate. The finish's defs stay out for the same reason.
     const figure = style.render(pose.l, p, false, shade(opts));
     const body =
       label(opts) +
       plate(backdrop(style, opts, p)) +
-      figure.ground +
+      figure.defs +
       wrap(figure.body, pose.wrap);
     return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"${dim}>${body}</svg>`;
   };
@@ -319,7 +310,7 @@ export function makeParts<L>(style: Style<L>) {
       cls: mo?.cls,
       bg: backdrop(style, opts, p),
       /** Everything below the root `<g>`. Free of both of the above. */
-      inner: figure.ground + wrap(figure.body, pose.wrap),
+      inner: figure.defs + wrap(figure.body, pose.wrap),
       vars: mo?.vars,
     };
   };

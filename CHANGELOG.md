@@ -4,6 +4,7 @@ What changed for someone who uses Manor, newest first. A version is a tag on `ma
 
 ## Unreleased
 
+- Persona faces no longer draw a shadow under them, or a glow in the dark theme. The light and shade on the face itself stay as they were, on the Mac and on the phone.
 - One Stop halts the whole message. Every agent it addressed that has not started yet is cancelled too, the ones you mentioned by name included. Each used to need its own Stop.
 - The Single and Multiple switch on a new Session explains itself in a tooltip when you point at it. The line under the message field is gone.
 - The sidebar names its sections Project threads and Standalone sessions, on the Mac and on the phone. Adding a project thread opens New project thread, with one line on what it is.
@@ -28,7 +29,7 @@ What changed for someone who uses Manor, newest first. A version is a tag on `ma
 - A new agent opens its DM with three or four question cards, then writes its own instructions from your answers, once. After that only you change them. Its first message greets you by name, says what it left out and makes a suggestion or asks a question about its job. Skipping every question still leaves instructions built from the form.
 - New agent opens a short form over the workspace: a face, a name, what it should help with, and a model with effort. Create opens the agent's DM. A new agent starts with memory on. The onboarding's first agent uses the same form. The Role field is gone from creation.
 - A persona's face now shows what her turn is doing. She tilts her head while she thinks, follows lines while she reads, melts into three dots while her answer streams in, dozes while she waits on a colleague, turns to you when she needs an answer, nods when she is done and shakes when a turn fails. Any other work keeps the eye loop she already had. Reduced motion and photo avatars show none of it. The phone shows it on the face behind the latest reply and in a DM's working line.
-- Persona faces have a richer finish. The light on a face is now tinted from its own colour, small faces are drawn simpler with larger eyes, and in the dark theme a face stands on a glow in its colour, where its shadow could not be seen.
+- Persona faces have a richer finish. The light on a face is now tinted from its own colour, and small faces are drawn simpler with larger eyes.
 - After you push a branch, the Session panel shows the pull or merge request page your remote offers, one click away. It needs no sign in in Manor.
 - A push that fails because this Mac is not signed in to the remote now says so and names the way out, instead of repeating Git's last line.
 - The README says that agents use your own git and `gh` sign in.

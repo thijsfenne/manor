@@ -7,7 +7,6 @@ import { useReducedMotion } from 'motion/react'
 import { memo, useEffect, useRef, useState, type CSSProperties } from 'react'
 import { accentHue, accentStyle } from '../accent'
 import { BLOB_FACE_TRAITS, DEFAULT_BLOB_TONE, SIDEBAR_WORKING_GAZE, WORKING_GAZE, blobShapeOf, blobShapeTraits } from '../blobShapes'
-import { useShownTheme } from '../useTheme'
 import { BUSY_LOOK, useBusyFace } from './busyFace'
 import { useFaceEyes, useFaceGesture } from './faceMotion'
 
@@ -112,11 +111,9 @@ export const Avatar = memo(function Avatar({ name, color, src, shape, tone = DEF
   const moving = pageVisible && (working || settling || sidebarWorking || look !== undefined || (onScreen && (hovered || windowFocused)))
   const square = { width: size, height: size }
   const hue = accentHue(color)
-  // A shadow under a face cannot show on the dark canvas, so there she stands on a glow.
-  const ground = useShownTheme() === 'dark' ? 'glow' : 'shadow'
   // The loop is the costly part of a working face, so one scrolled out of view rests
   // and picks up the next variation when it comes back.
-  const drawn = JSON.stringify([name, hue, tone, shape, size, ground])
+  const drawn = JSON.stringify([name, hue, tone, shape, size])
   useBusyFace(slot, busy && moving && onScreen, look?.eyes === 'dots' ? DOTS_LOOK : BUSY_LOOK, drawn)
   // The body and the added eye moves rest with the loop when the face is out of sight.
   const shown = moving && onScreen ? look : undefined
@@ -172,7 +169,6 @@ export const Avatar = memo(function Avatar({ name, color, src, shape, tone = DEF
         size={size}
         tone={tone}
         shading="clay"
-        ground={ground}
         // Resting faces render still until the focused window or pointer needs them.
         {...(moving ? { animate: 'always' as const } : {})}
         {...(hue === undefined ? {} : { hue })}

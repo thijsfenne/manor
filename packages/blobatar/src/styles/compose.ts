@@ -9,7 +9,7 @@
  */
 import type { Palette } from "../color";
 import { superellipse } from "../shape";
-import { CLAY, clay, clayTones, groundY, paint, type Finish } from "../shading";
+import { CLAY, clay, clayTones, paint, type Finish } from "../shading";
 import type { Traits } from "../traits";
 import type { Body, Deco, Ellipse, Shape } from "./shapes";
 
@@ -144,9 +144,7 @@ export function compose(bands: Band[], fit: Fit) {
       l.petals.map(d => `<circle cx="${r2(d.cx)}" cy="${r2(d.cy)}" r="${r2(d.r)}"/>`).join("") +
       l.extra.map(d => `<path d="${d}"/>`).join("") +
       `<path d="${outline}"/>`;
-    const finished = look === undefined
-      ? undefined
-      : clay(look, shapes, groundY([...l.extra, outline], l.petals));
+    const finished = look && clay(look, shapes);
     const body =
       `<g fill="${p.head}">` +
       shapes +
@@ -156,8 +154,8 @@ export function compose(bands: Band[], fit: Fit) {
       eyes.map(eye).join("") +
       `</g>`;
     return {
-      // Outside the breathe, the bob and a static pose: the ground the face floats over.
-      ground: finished ? finished.defs + finished.contact : "",
+      // Outside the breathe, the bob and a static pose, so the ids they reference stay put.
+      defs: finished?.defs ?? "",
       body: mo ? `<g class="mo-breathe"><g class="mo-bob">${body}</g></g>` : body,
     };
   }

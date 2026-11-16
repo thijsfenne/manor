@@ -1,7 +1,7 @@
 /**
  * Manor's clay finish: the head lit in its own colour from the top left, a soft
  * shadow inside its bottom-right edge with a thin bounce light closing that edge,
- * a matte highlight, and a contact shadow on the ground below it.
+ * and a matte highlight.
  *
  * Opt-in through `shading: "clay"`, so the frozen default output stays exactly
  * what it was. Every layer is an overlay, and the head keeps its one flat fill.
@@ -21,9 +21,9 @@ import { fromHex, toHex } from "./color"
 
 /**
  * Which colour a layer wears. `hi`, `lo` and `deep` are the head relit, see
- * `clayTones`; `head` is the head itself.
+ * `clayTones`.
  */
-export type Tone = "white" | "hi" | "lo" | "deep" | "head"
+export type Tone = "white" | "hi" | "lo" | "deep"
 
 /** A gradient stop: offset, opacity and tone. */
 export type Stop = readonly [offset: number, opacity: number, tone: Tone]
@@ -70,23 +70,6 @@ export const CLAY = {
   /** What a dark head keeps of its white layers, and what the highlight keeps under a glint. */
   dim: { dark: 0.64, under: 0.7 },
   /**
-   * The contact shadow. It sits `gap` below the head's lowest point, so a face
-   * drawn high keeps its shadow close, and never lower than `cy`, which keeps it
-   * inside the viewBox so a tight slot never clips it. See `groundY`.
-   */
-  contact: {
-    cx: 50, cy: 92, rx: 33, ry: 6.5, gap: 3,
-    stops: [[0, 0.42, "deep"], [0.5, 0.2, "deep"], [1, 0, "deep"]],
-  } satisfies Glow & { gap: number },
-  /**
-   * What takes the contact shadow's place on a dark canvas, where a shadow cannot
-   * show: a glow in the head's own colour. Asked for with `ground: "glow"`.
-   */
-  glow: {
-    cx: 50, cy: 92, rx: 36, ry: 8,
-    stops: [[0, 0.5, "head"], [0.5, 0.22, "head"], [1, 0, "head"]],
-  } satisfies Glow,
-  /**
    * The inner shadow: the silhouette, blurred by `blur` and moved by `dx`/`dy`
    * toward the light, cut out of itself. What is left is a soft band along the
    * bottom-right edge, painted in `tone` at `opacity`.
@@ -124,7 +107,6 @@ export function clayTones(head: string): Tones {
     toHex({ l: Math.max(0.05, Math.min(0.98, o.l + dl)), c: Math.max(0, o.c + dc), h: toward(o.h, target, by) })
   return {
     white: "white",
-    head,
     hi: relit(dark ? 0.16 : 0.1, -0.01, 95, 14),
     lo: relit(-0.13, 0.02, 285, 18),
     deep: relit(-0.26, 0.01, 285, 24),
@@ -150,7 +132,6 @@ const r2 = (v: number) => Math.round(v * 100) / 100
 export interface Finish {
   id: string
   size?: number
-  glow?: boolean
   tones?: Tones
   dark?: boolean
 }
@@ -171,29 +152,11 @@ const glow = (id: string, g: Glow, tones?: Tones, keep = 1) =>
   g.stops.map(([offset, opacity, tone]) => `<stop offset="${offset}" ${paint("stop-color", tone, tones)} stop-opacity="${r2(opacity * keep)}"/>`).join("") +
   `</radialGradient>`
 
-/**
- * Where the contact shadow centres for a head drawn from these paths and circles.
- * Curve control points count as drawn, which can only place it a touch lower.
- */
-export function groundY(paths: readonly string[], circles: readonly { cy: number; r: number }[]) {
-  let lowest = -Infinity
-  for (const c of circles) lowest = Math.max(lowest, c.cy + c.r)
-  for (const d of paths) {
-    for (const [, command, args = ""] of d.matchAll(/([MLCQHVZ])([^MLCQHVZ]*)/g)) {
-      const values = args.trim().split(/[\s,]+/).filter(Boolean).map(Number)
-      if (command === "V") for (const y of values) lowest = Math.max(lowest, y)
-      else if (command !== "H") for (let i = 1; i < values.length; i += 2) lowest = Math.max(lowest, values[i]!)
-    }
-  }
-  const { cy, gap } = CLAY.contact
-  return lowest === -Infinity ? cy : Math.min(cy, lowest + gap)
-}
-
 /** The whole viewBox; the head's clip trims it to the silhouette. */
 const box = (fill = "") => `<rect width="100" height="100"${fill && ` fill="${fill}"`}/>`
 
 /**
- * The clay finish around one head, as the three places it goes.
+ * The clay finish around one head, as the two places it goes.
  *
  * `shapes` is the head's parts, unfilled. They become one clip path, and every
  * overlay is a full-box rect inside that clip. Drawing the overlays on the parts
@@ -205,18 +168,16 @@ const box = (fill = "") => `<rect width="100" height="100"${fill && ` fill="${fi
  * group's last path is still the silhouette. A box measure of that group counts
  * the rects, so measure its parts instead.
  *
- * At `CLAY.small` and under there are no filters at all, only the light, and no
- * contact shadow: both are haze at that size, and a filter per list row is the
- * costly part of the finish.
+ * At `CLAY.small` and under there are no filters at all, only the light: the rest
+ * is haze at that size, and a filter per list row is the costly part of the finish.
  */
-export function clay(finish: Finish, shapes: string, ground: number) {
+export function clay(finish: Finish, shapes: string) {
   const { id, tones } = finish
   const dark = finish.dark ?? tones?.dark ?? false
   const small = finish.size !== undefined && finish.size <= CLAY.small
   const spark = finish.size !== undefined && finish.size >= CLAY.glint
   const url = (key: string) => `url(#${id}${key})`
   const whites = dark ? CLAY.dim.dark : 1
-  const floor = finish.glow ? CLAY.glow : small ? undefined : CLAY.contact
   // Filtered as a group, so `SourceAlpha` is the clipped silhouette, not the rect.
   const band = (key: string, s: { blur: number; dx: number; dy: number; tone: Tone }, opacity: number) =>
     `<filter id="${id}${key}" x="-20%" y="-20%" width="140%" height="140%">` +
@@ -231,7 +192,6 @@ export function clay(finish: Finish, shapes: string, ground: number) {
     defs:
       `<defs><clipPath id="${id}k">${shapes}</clipPath>` +
       glow(`${id}l`, CLAY.light, tones) +
-      (floor ? glow(`${id}c`, { ...floor, cy: ground }, tones) : "") +
       (small
         ? ""
         : glow(`${id}h`, CLAY.highlight, tones, whites * (spark ? CLAY.dim.under : 1)) +
@@ -239,7 +199,6 @@ export function clay(finish: Finish, shapes: string, ground: number) {
           band("i", CLAY.inner, CLAY.inner.opacity) +
           band("b", CLAY.bounce, dark ? CLAY.bounce.dark : CLAY.bounce.opacity)) +
       `</defs>`,
-    contact: floor ? `<ellipse cx="${floor.cx}" cy="${r2(ground)}" rx="${floor.rx}" ry="${floor.ry}" fill="${url("c")}"/>` : "",
     overlays: small
       ? cut(box(url("l")))
       : cut(box(url("l"))) +

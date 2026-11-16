@@ -3,7 +3,7 @@ import { BLOB_FACE_TRAITS, DEFAULT_BLOB_TONE, SIDEBAR_WORKING_GAZE, WORKING_GAZE
 import { BUSY_LOOK, DOT, order, timeline, type Key, type Pair } from '@manor/client-runtime/busy-face'
 import { EYE_MOVE_MS, FACE_LOOK, scanStops, seesawStops, towardStops, type FaceLook, type FaceState } from '@manor/client-runtime/face-activity'
 import { frameOf, outlinePoints, plan } from '@manor/client-runtime/face-gesture'
-import { CLAY, clayTones, groundY, palette, traits as seedTraits, type Glow, type Tones } from '@manor/blobatar'
+import { CLAY, clayTones, palette, traits as seedTraits, type Glow, type Tones } from '@manor/blobatar'
 import { happy, sad, sleepy, thinking, unsure } from '@manor/blobatar/expression'
 import { _parts } from '@manor/blobatar/internal'
 import MaskedView from '@react-native-masked-view/masked-view'
@@ -11,11 +11,11 @@ import { Image } from 'expo-image'
 import { useEffect, useId, useMemo, useState } from 'react'
 import { StyleSheet, View, type ColorValue, type ViewStyle } from 'react-native'
 import Animated, { cubicBezier, useReducedMotion, type CSSAnimationKeyframes, type CSSAnimationTimingFunction, type CSSStyle, FadeIn, FadeOut, LayoutAnimationConfig, ReduceMotion } from 'react-native-reanimated'
-import Svg, { Circle, ClipPath, Defs, Ellipse, G, Path, RadialGradient, Rect, Stop } from 'react-native-svg'
+import Svg, { Circle, ClipPath, Defs, G, Path, RadialGradient, Rect, Stop } from 'react-native-svg'
 
 import { keyOffsets } from '@/lib/busyFrames'
 import { eyeFrames, gestureFrames, type Layer } from '@/lib/faceFrames'
-import { colors, shimmerTones, useScheme } from '@/theme'
+import { colors, shimmerTones } from '@/theme'
 
 /** A block of CSS animation or transition settings, as the view's style takes them. */
 type Motion = CSSStyle<ViewStyle>
@@ -205,8 +205,6 @@ interface Face {
   size: number
   bodyFill: string | undefined
   body: BodyPart[]
-  /** Where her contact shadow centres, in box units. */
-  ground: number
   /** The head's parts as one clip outline; see `silhouette`. */
   silhouette: string[]
   /** The library's ink for this face; absent leaves the path to its own default. */
@@ -276,10 +274,6 @@ function takeApart(parts: ReturnType<typeof _parts>, size: number): Face | null 
     // The custom properties carry a tinting pose's colours; the markup keeps the resting pair.
     bodyFill: vars['--mo-head'] ?? bodyFill,
     body,
-    ground: groundY(
-      body.flatMap((part) => (part.kind === 'path' ? [part.d] : [])),
-      body.flatMap((part) => (part.kind === 'circle' ? [part] : [])),
-    ),
     silhouette: silhouette(body),
     eyeFill: vars['--mo-eye'] ?? eyeFill,
     eyes,
@@ -422,11 +416,10 @@ function LiveFace({ face, size, blinkOnly = false }: { face: Face; size: number;
 
   return (
     <View style={square}>
-      <Ground face={face} size={size} />
       <Animated.View style={[square, breathe]}>
         <Animated.View style={[square, bob]}>
           <Svg height={size} viewBox={`0 0 ${BOX} ${BOX}`} width={size}>
-            <Body face={face} ground={false} />
+            <Body face={face} />
           </Svg>
           <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, gaze]}>
             {face.eyes.map((eye) => (
@@ -602,38 +595,6 @@ function ClayGlow({ id, glow, tones, keep = 1 }: { id: string; glow: Glow; tones
 }
 
 /**
- * What is on the ground under her: a contact shadow by day, and by night, where a
- * shadow cannot show, a glow in her own colour. A small face by day has neither.
- */
-function Contact({ face }: { face: Face }) {
-  const id = useId().replace(/[^\w-]/g, '')
-  const night = useScheme() === 'dark'
-  const floor = night ? CLAY.glow : face.size <= CLAY.small ? undefined : CLAY.contact
-  if (floor === undefined || face.bodyFill === undefined) return null
-  const contact = { ...floor, cy: face.ground }
-  return (
-    <>
-      <Defs>
-        <ClayGlow glow={contact} id={`${id}c`} tones={clayTones(face.bodyFill)} />
-      </Defs>
-      <Ellipse cx={contact.cx} cy={contact.cy} fill={`url(#${id}c)`} rx={contact.rx} ry={contact.ry} />
-    </>
-  )
-}
-
-/**
- * The contact shadow as a layer of its own, for a face whose head breathes, bobs or
- * melts: the ground stays put while she moves over it.
- */
-function Ground({ face, size }: { face: Face; size: number }) {
-  return (
-    <Svg height={size} pointerEvents="none" style={StyleSheet.absoluteFill} viewBox={`0 0 ${BOX} ${BOX}`} width={size}>
-      <Contact face={face} />
-    </Svg>
-  )
-}
-
-/**
  * The head in the library's clay finish, drawn with the same numbers the web draws.
  * Every overlay is a full-box rect inside one clip of all the head's parts, so a pill
  * or a cloud is shaded as one silhouette with no seams where its parts overlap.
@@ -650,7 +611,7 @@ function Ground({ face, size }: { face: Face; size: number }) {
  * and the larger eyes of a small face would have to be redrawn from the layout;
  * none is worth its cost on a scrolling list.
  */
-function Body({ face, ground = true }: { face: Face; ground?: boolean }) {
+function Body({ face }: { face: Face }) {
   const id = useId().replace(/[^\w-]/g, '')
   const fill = face.bodyFill ?? colors.muted
   const tones = useMemo(() => (face.bodyFill === undefined ? undefined : clayTones(face.bodyFill)), [face.bodyFill])
@@ -682,7 +643,6 @@ function Body({ face, ground = true }: { face: Face; ground?: boolean }) {
         {tones && !small ? <ClayGlow glow={CLAY.highlight} id={`${id}h`} keep={whites * (spark ? CLAY.dim.under : 1)} tones={tones} /> : null}
         {tones && spark ? <ClayGlow glow={CLAY.spark} id={`${id}g`} keep={whites} tones={tones} /> : null}
       </Defs>
-      {ground ? <Contact face={face} /> : null}
       <G fill={fill}>
         <Parts body={face.body} />
       </G>
@@ -895,10 +855,9 @@ function BusyFace({ face, size, held = false }: { face: Face; size: number; held
   const drop = DOT.r * unit
   return (
     <>
-      <Ground face={face} size={size} />
       <Animated.View style={[StyleSheet.absoluteFill, { transformOrigin: [`${mx}%`, `${my}%`, 0] as (string | number)[] }, rig.body]}>
         <Svg height={size} viewBox={`0 0 ${BOX} ${BOX}`} width={size}>
-          <Body face={face} ground={false} />
+          <Body face={face} />
         </Svg>
       </Animated.View>
       {rig.dots.map((motion, index) => (
@@ -969,8 +928,8 @@ function layerMotion(layer: Layer | undefined, arrived: boolean): { rest: Motion
  * A face in a state with a look of its own: the pose the library gave her eyes, a small
  * eye move added on top, and a body gesture from the shared plan, sized for her
  * silhouette. The body layers hold the head and the eyes, so the whole figure moves as
- * one over a ground that stays put. She does not breathe, bob or glance here: the
- * gesture is the body's motion, and it means something.
+ * one. She does not breathe, bob or glance here: the gesture is the body's motion, and
+ * it means something.
  */
 function StateFace({ face, size, look }: { face: Face; size: number; look: FaceLook }) {
   const unit = size / BOX
@@ -1004,13 +963,12 @@ function StateFace({ face, size, look }: { face: Face; size: number; look: FaceL
   const turn = layerMotion(layers.body?.turn, arrived)
   return (
     <>
-      <Ground face={face} size={size} />
       <Animated.View style={[StyleSheet.absoluteFill, about(layers.foot), fig.rest]}>
         <Animated.View style={[StyleSheet.absoluteFill, about(layers.foot), fig.loop]}>
           <Animated.View style={[StyleSheet.absoluteFill, about(layers.middle), turn.rest]}>
             <Animated.View style={[StyleSheet.absoluteFill, about(layers.middle), turn.loop]}>
               <Svg height={size} viewBox={`0 0 ${BOX} ${BOX}`} width={size}>
-                <Body face={face} ground={false} />
+                <Body face={face} />
               </Svg>
               {face.eyes.map((eye) => {
                 const added = layerMotion(layers.eyes.get(eye.wrap), arrived)

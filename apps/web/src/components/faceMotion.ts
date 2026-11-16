@@ -14,7 +14,7 @@ import { headOf, partsMiddle } from './busyFace'
  * The library nests two groups around the figure, for a breathe and a bob Manor does
  * not play. A gesture uses them as its two layers: the outer one moves, stretches and
  * leans the figure about its foot, the inner one turns it and draws it in about its
- * middle. The contact shadow sits outside both, so the ground stays put.
+ * middle.
  */
 
 const WALK = 240
