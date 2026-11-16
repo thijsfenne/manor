@@ -1,11 +1,11 @@
 # Connectors marketplace
 
-Plugins → Connectors is one page for every connector: a search field, a Connected section (mymind, Manor's own MCP rows and the Composio apps connected under the personal or work alias), then Composio's app catalogue grouped by how each app connects. On the spike the server's mock Composio serves 28 named apps plus 600 filler apps, three seeded accounts (Gmail personal, GitHub personal, Notion work), and sign-ins that land 6 seconds after Connect. Nothing reaches Composio's API.
+Plugins → Connectors is one page for every connector: a search field, a Connected section (mymind, Manor's own MCP rows and the Composio apps connected under the personal or work alias), then Composio's app catalogue as cards grouped into the page's own categories (Productivity, Communication, Documents, Research, Data, Design, Business, AI, Coding, Other), apps that connect in one click first inside each. On the spike the server's mock Composio serves 28 named apps plus 600 filler apps, three seeded accounts (Gmail personal, GitHub personal, Notion work), and sign-ins that land 6 seconds after Connect. Nothing reaches Composio's API.
 
 ## Sub-features
 
 - `marketplace-search` filters own rows, connected apps and the catalogue by name, slug, description and category.
-- `marketplace-category` narrows the catalogue with the `App category` dropdown.
+- `marketplace-category` narrows the catalogue with the `App category` tablist. `All` shows eight cards per category with `Show all <n>`; a category shows its cards with `Show more`. Typing a search selects `All` and searches every category; clearing it brings the pick back, and picking a tab clears the search.
 - `marketplace-connect` asks for the alias, then shows `Finish in your browser` and lands in Connected.
 - `marketplace-connect-failed` shows `Failed`, the reason and `Retry` (the mock app `Failbox` always fails).
 - `marketplace-disconnect` asks `Disconnect <app>?` and removes the app from Connected.
@@ -19,8 +19,9 @@ Plugins → Connectors is one page for every connector: a search field, a Connec
 
 Preconditions: spike launched by `control-manor.mjs launch`, then `home`.
 
-- **Open.** `click --role button --name Plugins --exact --within navigation`, `wait-settle`. Expect `Connected` with GitHub, Gmail and Notion (each `Disconnect`), then `Apps 628` and `Connect in one click`.
-- **Search.** `fill --placeholder "Search connectors and apps" --value "mail"`. Expect Gmail in Connected, Gmail (`Add Work`) and Outlook under one click, Mailchimp under `Needs its own credentials`.
+- **Open.** `click --role button --name Plugins --exact --within navigation`, `wait-settle`. Expect `Connected` with GitHub, Gmail and Notion (each `Disconnect`), then `Apps 628`, the `App category` tabs and `Productivity 84`.
+- **Category.** `click --role tab --name Coding --exact`. Expect `Apps 152`, Failbox and GitHub first, `Show more (32 left)`.
+- **Search.** `fill --placeholder "Search connectors and apps" --value "mail"`. Expect Gmail in Connected, Gmail (`Add Work`) and Outlook under Communication, Mailchimp (`Own credentials`) under Business.
 - **Connect.** Search `linear`, `click --role button --name "Connect Linear" --exact`, then `click --role menuitem --name "Work account" --exact`. Expect `Finish in your browser`; within 8 seconds Linear appears in Connected as `Composio · Work` and its row offers `Add Personal`.
 - **Failed.** Search `failbox`, connect with `Personal account`, wait 8 seconds. Expect `Failed`, `Retry` and `Press Connect again for a fresh link.`
 - **Disconnect.** `click --role button --name "Disconnect Linear" --exact`; expect `dialog "Disconnect Linear?"`; confirm with `click --role button --name Disconnect --exact --within-name "Disconnect Linear?"`.

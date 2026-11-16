@@ -1,4 +1,4 @@
-import { useDeferredValue, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useDeferredValue, useEffect, useId, useMemo, useState } from 'react'
 import { Cancel01Icon, PlugSocketIcon, PlusSignIcon, Search01Icon } from '@hugeicons/core-free-icons'
 import type {
   AgentConfig,
@@ -16,20 +16,22 @@ import { McpServerDialog } from '../agents/McpServerDialog'
 import { useMcpDialog } from '../agents/useMcpDialog'
 import { Modal, ModalFooter } from '../Modal'
 import { Button } from '../ui/Button'
-import { Select } from '../ui/Select'
-import { ComposioAppRow, ComposioConnectedRow, DisconnectDialog } from './ComposioApps'
+import { SegmentedControl, type SegmentOption } from '../ui/SegmentedControl'
+import { ComposioAppCard, ComposioConnectedRow, DisconnectDialog } from './ComposioApps'
 import { ComposioKeyNote, ComposioKeySetup, RemoveComposioKeyDialog } from './ComposioKey'
 import {
   ALL_CATEGORIES,
+  type AppCategoryId,
   type ComposioBinding,
-  CONNECT_GROUPS,
   accountStateFor,
   appMatches,
-  categoryOptions,
+  groupByCategory,
 } from './composioCatalogue'
 
-/** Rows drawn before "Show more"; the rest wait so a first open stays instant. */
+/** Cards drawn for one category or a search before "Show more"; the rest wait so a first open stays instant. */
 const CATALOGUE_PAGE = 120
+/** Cards per category when all of them show: two rows at the page's full width. */
+const CATEGORY_PREVIEW = 8
 
 interface ConnectorsViewProps {
   agents: AgentConfig[]
@@ -68,7 +70,8 @@ export function ConnectorsView({
 }: ConnectorsViewProps) {
   const [query, setQuery] = useState('')
   const deferredQuery = useDeferredValue(query.trim().toLowerCase())
-  const [category, setCategory] = useState(ALL_CATEGORIES)
+  const [category, setCategory] = useState<AppCategoryId | typeof ALL_CATEGORIES>(ALL_CATEGORIES)
+  const categoryTabs = useId()
   const [limit, setLimit] = useState(CATALOGUE_PAGE)
   const [pageError, setPageError] = useState<string | null>(null)
   const [disconnecting, setDisconnecting] = useState<{ slug: string; name: string; alias: ComposioAlias | null } | null>(null)
@@ -115,17 +118,38 @@ export function ConnectorsView({
 
   const apps = composio.catalog?.apps
   const bySlug = useMemo(() => new Map((apps ?? []).map((app) => [app.slug, app])), [apps])
-  const categories = useMemo(() => categoryOptions(apps ?? []), [apps])
-  const matching = useMemo(() => (apps ?? []).filter((app) =>
-    (category === ALL_CATEGORIES || app.categories.includes(category)) && appMatches(app, deferredQuery)), [apps, category, deferredQuery])
-  // Group order, then cut once, so "Show more" extends the list rather than every group.
+  const groups = useMemo(() => groupByCategory(apps ?? []), [apps])
+  const searching = deferredQuery.length > 0
+  // A search reaches every category; the pick waits underneath and returns once the field is empty.
+  const activeCategory = searching || !groups.some((group) => group.category.id === category) ? ALL_CATEGORIES : category
+  const browsingAll = !searching && activeCategory === ALL_CATEGORIES
+  const matchingGroups = useMemo(() => groups
+    .filter((group) => activeCategory === ALL_CATEGORIES || group.category.id === activeCategory)
+    .map((group) => ({ ...group, apps: group.apps.filter((app) => appMatches(app, deferredQuery)) }))
+    .filter((group) => group.apps.length > 0), [groups, activeCategory, deferredQuery])
+  const matchingCount = matchingGroups.reduce((sum, group) => sum + group.apps.length, 0)
+  // All categories show a taste of each; one category or a search cuts once across its
+  // groups, so "Show more" extends the list rather than every group.
   const shown = useMemo(() => {
-    const ordered = CONNECT_GROUPS.flatMap((group) => matching.filter((app) => app.connect === group.kind))
-    const visible = ordered.slice(0, limit)
-    return CONNECT_GROUPS
-      .map((group) => ({ ...group, apps: visible.filter((app) => app.connect === group.kind) }))
-      .filter((group) => group.apps.length > 0)
-  }, [matching, limit])
+    if (browsingAll) return matchingGroups.map((group) => ({ ...group, total: group.apps.length, apps: group.apps.slice(0, CATEGORY_PREVIEW) }))
+    let left = limit
+    return matchingGroups.flatMap((group) => {
+      const visible = group.apps.slice(0, Math.max(left, 0))
+      left -= visible.length
+      return visible.length === 0 ? [] : [{ ...group, total: group.apps.length, apps: visible }]
+    })
+  }, [browsingAll, matchingGroups, limit])
+  const tabId = (value: string) => `${categoryTabs}-${value}`
+  const panelId = `${categoryTabs}-apps`
+  const categoryOptions: SegmentOption<AppCategoryId | typeof ALL_CATEGORIES>[] = [
+    { value: ALL_CATEGORIES, label: 'All', tabId: tabId(ALL_CATEGORIES), panelId },
+    ...groups.map(({ category: { id, label, hint } }) => ({ value: id, label, hint, tabId: tabId(id), panelId })),
+  ]
+  /** Picking a category is browsing, so it clears a search that would otherwise hide the pick. */
+  const chooseCategory = (value: AppCategoryId | typeof ALL_CATEGORIES) => {
+    setCategory(value)
+    setQuery('')
+  }
 
   const connected = composio.accounts?.connected ?? []
   const connects = composio.accounts?.connects ?? []
@@ -265,34 +289,44 @@ export function ConnectorsView({
           <p className="mt-2 mb-0 px-2 text-label text-muted">Composio accounts: {composio.accounts.unavailable}</p>
         )}
 
-        <SectionHeading
-          title="Apps"
-          count={noKey || apps === undefined ? undefined : matching.length}
-          accessory={noKey || apps === undefined || apps.length === 0 ? undefined : (
-            <div className="w-[220px] flex-none">
-              <Select label="App category" value={category} options={categories} onChange={setCategory} />
+        <SectionHeading title="Apps" count={noKey || apps === undefined ? undefined : matchingCount} />
+        {noKey || groups.length === 0 ? null : (
+          // Scrolls sideways in a narrow pane; the padding keeps the focus ring inside the clip.
+          <div className="-mt-1 mb-5 flex flex-col gap-1.5 px-1">
+            <div className="overflow-x-auto p-1">
+              <SegmentedControl label="App category" value={activeCategory} options={categoryOptions} onChange={chooseCategory} />
             </div>
-          )}
-        />
+            <p className="m-0 px-2 text-meta text-dim">
+              {searching ? 'Searching every category.' : 'Apps marked Own credentials need an auth config in Composio first; then they connect here.'}
+            </p>
+          </div>
+        )}
         {noKey ? (
           <p className="m-0 px-2 text-label text-dim">The app catalogue appears here once the key is saved.</p>
         ) : composio.catalog === null ? (
           <p className="m-0 px-2 text-label text-muted" role="status">Loading the Composio catalogue…</p>
         ) : composio.catalog.unavailable !== undefined ? (
           <p className="m-0 px-2 text-label text-muted" role="status">{composio.catalog.unavailable}</p>
-        ) : shown.length === 0 ? (
-          <p className="m-0 px-2 text-label text-muted">No app matches that search.</p>
         ) : (
-          <div className="flex flex-col gap-6">
-            {shown.map((group) => (
-              <section key={group.kind} aria-label={group.label} className="flex flex-col gap-2">
-                <div className="flex items-baseline gap-2 px-2">
-                  <h3 className="m-0 text-label font-medium text-muted">{group.label}</h3>
-                  {group.hint === undefined ? null : <span className="min-w-0 truncate text-meta text-dim">{group.hint}</span>}
+          <div id={panelId} role="tabpanel" aria-labelledby={tabId(activeCategory)} className="flex flex-col gap-8">
+            {shown.length > 0 ? null : <p className="m-0 px-2 text-label text-muted">No app matches that search.</p>}
+            {shown.map(({ category: group, apps: cards, total }) => (
+              <section key={group.id} aria-label={group.label} className="flex flex-col gap-3">
+                <div className="flex min-h-7 items-center gap-2 px-2">
+                  <h3 className="m-0 flex flex-none items-baseline gap-1.5 text-label font-medium text-text">
+                    {group.label}
+                    <span className="text-meta text-dim">{total}</span>
+                  </h3>
+                  <span className="min-w-0 flex-1 truncate text-meta text-dim">{group.hint}</span>
+                  {!browsingAll || total <= cards.length ? null : (
+                    <Button variant="ghost" size="compact" className="flex-none" onClick={() => chooseCategory(group.id)}>
+                      Show all {total}
+                    </Button>
+                  )}
                 </div>
-                <div className="grid grid-cols-2 gap-x-8 gap-y-1 max-[760px]:grid-cols-1">
-                  {group.apps.map((app) => (
-                    <ComposioAppRow
+                <div className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-3">
+                  {cards.map((app) => (
+                    <ComposioAppCard
                       key={app.slug}
                       app={app}
                       state={accountStateFor(app.slug, connected, connects)}
@@ -303,10 +337,10 @@ export function ConnectorsView({
                 </div>
               </section>
             ))}
-            {matching.length <= limit ? null : (
+            {browsingAll || matchingCount <= limit ? null : (
               <div className="flex justify-center">
                 <Button variant="ghost" size="compact" onClick={() => setLimit((current) => current + CATALOGUE_PAGE * 2)}>
-                  Show more ({matching.length - limit} left)
+                  Show more ({matchingCount - limit} left)
                 </Button>
               </div>
             )}
@@ -383,14 +417,13 @@ export function ConnectorsView({
   )
 }
 
-function SectionHeading({ title, count, accessory }: { title: string; count?: number | undefined; accessory?: ReactNode | undefined }) {
+function SectionHeading({ title, count }: { title: string; count?: number | undefined }) {
   return (
     <div className="mt-9 mb-3 flex min-h-8 items-center justify-between gap-4 px-2">
       <h2 className="m-0 flex items-baseline gap-2 text-[16px] font-medium text-text">
         {title}
         {count === undefined ? null : <span className="text-label text-dim">{count}</span>}
       </h2>
-      {accessory}
     </div>
   )
 }

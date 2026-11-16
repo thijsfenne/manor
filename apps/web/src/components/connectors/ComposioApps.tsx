@@ -8,8 +8,6 @@ import { Button } from '../ui/Button'
 import { ContextMenu } from '../ui/ContextMenu'
 import { aliasLabel, openAliases, type AppAccountState } from './composioCatalogue'
 
-const ROW = 'flex min-w-0 items-center gap-3 rounded-xl px-2 py-2'
-
 /**
  * The app's own brand mark, from Composio's logo host. Lazy, so a catalogue of
  * hundreds loads only the marks on screen; a mark that fails falls back to its initial.
@@ -54,7 +52,7 @@ export function ComposioConnectedRow({ slug, name, aliases, onDisconnect }: {
     setMenu({ x: box.left, y: box.bottom + 4 })
   }
   return (
-    <div className={ROW} data-composio-connected={slug}>
+    <div className="flex min-w-0 items-center gap-3 rounded-xl px-2 py-2" data-composio-connected={slug}>
       <AppLogo slug={slug} name={name} />
       <span className="flex min-w-0 flex-1 flex-col">
         <span className="truncate text-[16px] font-medium text-text">{name}</span>
@@ -78,8 +76,8 @@ export function ComposioConnectedRow({ slug, name, aliases, onDisconnect }: {
   )
 }
 
-/** One catalogue app with what can happen to it right now. */
-export function ComposioAppRow({ app, state, canConnect, onConnect }: {
+/** One catalogue app as a card: its mark, name, tagline and what can happen to it right now. */
+export function ComposioAppCard({ app, state, canConnect, onConnect }: {
   app: ComposioApp
   state: AppAccountState
   /** False while the socket is down or another connect is being started. */
@@ -98,43 +96,49 @@ export function ComposioAppRow({ app, state, canConnect, onConnect }: {
   }
 
   return (
-    // Off-screen rows skip layout and paint, so a catalogue of hundreds scrolls like a short list.
-    <div className={`${ROW} [contain-intrinsic-size:auto_56px] [content-visibility:auto]`} data-composio-app={app.slug}>
-      <AppLogo slug={app.slug} name={app.name} />
-      <span className="flex min-w-0 flex-1 flex-col">
-        <span className="flex min-w-0 items-center gap-2">
-          <span className="truncate text-[16px] font-medium text-text">{app.name}</span>
-          {connectedLine === undefined ? null : <span className="flex-none text-meta text-ok">{connectedLine}</span>}
+    // Off-screen cards skip layout and paint, so a long category scrolls like a short one.
+    <div
+      className="flex min-w-0 flex-col gap-2.5 rounded-xl border border-line p-3 [contain-intrinsic-size:auto_124px] [content-visibility:auto]"
+      data-composio-app={app.slug}
+    >
+      {/* A long state (Finish in your browser, Failed and Retry) wraps under the logo in a narrow card. */}
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <AppLogo slug={app.slug} name={app.name} />
+        <span className="ml-auto flex min-h-8 flex-none items-center gap-1">
+          {waiting ? (
+            <ConnectStatusMark status="waiting" />
+          ) : app.connect === 'no_auth' ? (
+            <span className="flex-none px-1.5 text-meta text-dim">No sign-in</span>
+          ) : app.connect === 'own_credentials' ? (
+            <span className="flex-none px-1.5 text-meta text-dim">Own credentials</span>
+          ) : open.length === 0 ? (
+            <ConnectStatusMark status="connected" />
+          ) : (
+            <>
+              {state.connect?.status === 'failed' ? <ConnectStatusMark status="failed" /> : null}
+              <Button
+                variant="secondary"
+                size="compact"
+                className="inline-flex flex-none items-center gap-1"
+                disabled={!canConnect}
+                aria-label={`Connect ${app.name}`}
+                aria-haspopup="menu"
+                onClick={chooseAlias}
+              >
+                <Icon icon={Plug01Icon} size={13} />
+                {state.connect?.status === 'failed' ? 'Retry' : state.aliases.length === 0 ? 'Connect' : `Add ${aliasLabel(open[0]!)}`}
+              </Button>
+            </>
+          )}
         </span>
-        <span className={`truncate text-label ${detail === undefined ? 'text-muted' : 'text-danger'}`} title={detail ?? app.description}>
+      </div>
+      <span className="flex min-w-0 flex-col gap-0.5">
+        <span className="truncate text-[16px] font-medium text-text">{app.name}</span>
+        <span className={`line-clamp-2 min-h-9 text-label ${detail === undefined ? 'text-muted' : 'text-danger'}`}>
           {detail ?? (app.description || 'No description from Composio.')}
         </span>
+        {connectedLine === undefined ? null : <span className="truncate text-meta text-ok">{connectedLine}</span>}
       </span>
-      {waiting ? (
-        <ConnectStatusMark status="waiting" />
-      ) : app.connect === 'no_auth' ? (
-        <span className="flex-none px-1.5 text-meta text-dim">No sign-in</span>
-      ) : app.connect === 'own_credentials' ? (
-        <span className="flex-none px-1.5 text-meta text-dim">Own credentials</span>
-      ) : open.length === 0 ? (
-        <ConnectStatusMark status="connected" />
-      ) : (
-        <>
-          {state.connect?.status === 'failed' ? <ConnectStatusMark status="failed" /> : null}
-          <Button
-            variant="secondary"
-            size="compact"
-            className="inline-flex flex-none items-center gap-1"
-            disabled={!canConnect}
-            aria-label={`Connect ${app.name}`}
-            aria-haspopup="menu"
-            onClick={chooseAlias}
-          >
-            <Icon icon={Plug01Icon} size={13} />
-            {state.connect?.status === 'failed' ? 'Retry' : state.aliases.length === 0 ? 'Connect' : `Add ${aliasLabel(open[0]!)}`}
-          </Button>
-        </>
-      )}
       {menu === null ? null : (
         <ContextMenu
           x={menu.x}

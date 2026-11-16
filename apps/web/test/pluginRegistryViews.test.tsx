@@ -109,9 +109,9 @@ describe('plugin registry layouts', () => {
     expect(html).not.toContain('attached to')
   })
 
-  it('lists connected Composio apps first, then the catalogue grouped by how each app connects', () => {
-    const app = (slug: string, name: string, connect: ComposioApp['connect']): ComposioApp =>
-      ({ slug, name, description: `${name} tools`, categories: ['productivity'], connect })
+  it('lists connected Composio apps first, then the catalogue as cards grouped by category', () => {
+    const app = (slug: string, name: string, connect: ComposioApp['connect'], category: string): ComposioApp =>
+      ({ slug, name, description: `${name} tools`, categories: [category], connect })
     const html = renderToStaticMarkup(
       <ConnectorsView
         requestEvents={requestEvents}
@@ -129,18 +129,21 @@ describe('plugin registry layouts', () => {
         live
         composio={{
           ...noComposio,
-          catalog: { apps: [app('stripe', 'Stripe', 'own_credentials'), app('github', 'GitHub', 'one_click'), app('linear', 'Linear', 'one_click')] },
+          catalog: { apps: [app('stripe', 'Stripe', 'own_credentials', 'payment processing'), app('github', 'GitHub', 'one_click', 'developer tools'), app('linear', 'Linear', 'one_click', 'project management')] },
           accounts: { connected: [{ toolkit: 'github', aliases: ['personal'] }], connects: [{ toolkit: 'linear', alias: 'work', status: 'waiting' }] },
         }}
       />,
     )
 
-    expect(html.indexOf('Disconnect GitHub')).toBeLessThan(html.indexOf('Connect in one click'))
+    expect(html.indexOf('Disconnect GitHub')).toBeLessThan(html.indexOf('data-composio-app="github"'))
     expect(html).toContain('Composio, Personal')
     expect(html).toContain('logos.composio.dev/api/github')
     expect(html).toContain('Add Work')
     expect(html).toContain('Finish in your browser')
-    expect(html.indexOf('Connect in one click')).toBeLessThan(html.indexOf('Needs its own credentials'))
+    // Productivity, then Business, then Coding: the page's own order, not Composio's names.
+    expect(html.indexOf('aria-label="Productivity"')).toBeLessThan(html.indexOf('aria-label="Business"'))
+    expect(html.indexOf('aria-label="Business"')).toBeLessThan(html.indexOf('aria-label="Coding"'))
+    expect(html).toContain('role="tab"')
     expect(html).toContain('Own credentials')
     expect(html).not.toContain('Connect Stripe')
   })
