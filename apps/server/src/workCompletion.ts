@@ -72,7 +72,8 @@ export async function prepareWorkCompletion(
     const paths = relative.map((file) => `:(literal)${file}`)
     const tracked = before === '' ? '' : await git(root, ['ls-tree', '-r', '--name-only', '-z', before, '--', ...paths])
     const committable = new Set((tracked + '\0' + await git(root, ['ls-files', '--cached', '--others', '--exclude-standard', '-z', '--', ...paths])).split('\0'))
-    const changed = new Set(before === '' ? relative : (await git(root, ['diff', '--name-only', '-z', before, tree, '--', ...paths])).split('\0'))
+    // Without --no-renames a moved file lists only its new path, and the old one stays behind on the branch.
+    const changed = new Set(before === '' ? relative : (await git(root, ['diff', '--no-renames', '--name-only', '-z', before, tree, '--', ...paths])).split('\0'))
     relative = relative.filter((file) => committable.has(file) && changed.has(file))
     if (relative.length === 0) continue
     const mapping = mappings.find((row) => row.real === root)

@@ -56,6 +56,13 @@ describe('observed Work completion', () => {
     await expect(assertSameWorkResult(ready, await prepareWorkCompletion([root], files, []))).rejects.toThrow('files changed')
   })
 
+  it('approves both sides of a moved file, so the old path leaves with the commit', async () => {
+    const root = fixture()
+    git(root, 'mv', 'result.txt', 'moved.txt')
+    const ready = await prepareWorkCompletion([root], [path.join(root, 'moved.txt'), path.join(root, 'result.txt')], [])
+    expect(ready.repos[0]?.files).toEqual(['moved.txt', 'result.txt'])
+  })
+
   it('measures a symlink as its own entry, also when it points outside the repository or nowhere', async () => {
     const root = fixture()
     const outside = mkdtempSync(path.join(os.tmpdir(), 'manor-outside-'))
