@@ -43,8 +43,8 @@ type Item = { key: HouseSection; label: string; icon: IconSvgElement; activeIcon
  * hosts, so the phone has no door for them.
  */
 const ITEMS: Item[] = [
-  { key: 'direct', label: 'Agents', icon: AiBotHeadLookingIcon, activeIcon: AiBotHeadLookingSolidIcon, href: '/agents', tab: '(agents)' },
-  { key: 'inbox', label: 'Sessions', icon: CellsIcon, activeIcon: CellsSolidIcon, href: '/', tab: '(sessions)' },
+  { key: 'direct', label: 'Agents', icon: AiBotHeadLookingIcon, activeIcon: AiBotHeadLookingSolidIcon, href: '/', tab: '(agents)' },
+  { key: 'inbox', label: 'Sessions', icon: CellsIcon, activeIcon: CellsSolidIcon, href: '/sessions', tab: '(sessions)' },
   { key: 'knowledge', label: 'Knowledge', icon: BookOpen01Icon, activeIcon: BookOpen01SolidIcon, href: '/knowledge', tab: '(knowledge)' },
   { key: 'search', label: 'Search', icon: Search01Icon, activeIcon: Search01SolidIcon, href: '/search', tab: '(search)' },
   { key: 'artifacts', label: 'Artifacts', icon: Archive02Icon, activeIcon: Archive02SolidIcon, href: '/artifacts' },

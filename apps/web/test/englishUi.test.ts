@@ -58,7 +58,7 @@ describe('English interface copy', () => {
     expect(sources(resolve(root, 'apps/mobile/src')).flatMap((file) =>
       violations(readFileSync(file, 'utf8'), relative(root, file), nativeProjectWords))).toEqual([])
     // These two surfaces contain thread state labels; the rest of the native app remains Dutch.
-    for (const file of ['apps/mobile/src/app/(tabs)/(sessions)/index.tsx', 'apps/mobile/src/components/WorkDecisionDock.tsx']) {
+    for (const file of ['apps/mobile/src/app/(tabs)/(sessions)/sessions.tsx', 'apps/mobile/src/components/WorkDecisionDock.tsx']) {
       expect(violations(readFileSync(resolve(root, file), 'utf8'), file, nativeStates)).toEqual([])
     }
   })

@@ -23,7 +23,7 @@ const ICONS = {
 
 const ROOMS = new Set<string>(['artifacts', 'routines', 'plugins', 'usage'] satisfies HouseSection[])
 /** The screens that wear the menu button: each tab's root and the rooms. */
-const MENU_SCREENS = new Set<string>([...ROOMS, '(sessions)', 'agents', 'knowledge', 'search'])
+const MENU_SCREENS = new Set<string>([...ROOMS, '(agents)', 'sessions', 'knowledge', 'search'])
 const TAB_SECTIONS: Record<string, HouseSection> = {
   '(agents)': 'direct',
   '(sessions)': 'inbox',
@@ -42,7 +42,7 @@ export default function TabsLayout() {
   const segments: string[] = useSegments()
   // A room from the menu is the current section while it is on top; otherwise the tab is.
   const leaf = segments.at(-1) ?? ''
-  const active: HouseSection = ROOMS.has(leaf) ? (leaf as HouseSection) : (TAB_SECTIONS[segments[1] ?? ''] ?? 'inbox')
+  const active: HouseSection = ROOMS.has(leaf) ? (leaf as HouseSection) : (TAB_SECTIONS[segments[1] ?? ''] ?? 'direct')
   // Everywhere else the left edge is the native back swipe, so the menu stays put.
   const swipeOpens = MENU_SCREENS.has(leaf)
   const drawer = useMemo(() => ({ open: menuOpen, setOpen: setMenuOpen }), [menuOpen])

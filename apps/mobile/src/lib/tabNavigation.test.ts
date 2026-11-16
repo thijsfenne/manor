@@ -21,7 +21,7 @@ const app = (agents: NavState['routes'] | undefined): NavState => ({
       index: 1,
       routes: [
         { name: '(agents)', ...(agents === undefined ? {} : { state: { key: 'agents-stack', type: 'stack', index: agents.length - 1, routes: agents } }) },
-        { name: '(sessions)', state: { key: 'sessions-stack', type: 'stack', index: 0, routes: [{ name: 'index' }] } },
+        { name: '(sessions)', state: { key: 'sessions-stack', type: 'stack', index: 0, routes: [{ name: 'sessions' }] } },
       ],
     },
   }],
@@ -29,7 +29,7 @@ const app = (agents: NavState['routes'] | undefined): NavState => ({
 
 describe('openTabActions', () => {
   it('pops the tab back to its list before switching, so no second list lands on an open chat', () => {
-    expect(openTabActions(app([{ name: 'agents' }, { name: 'chat/[id]' }]), '(agents)')).toEqual([
+    expect(openTabActions(app([{ name: 'index' }, { name: 'chat/[id]' }]), '(agents)')).toEqual([
       { type: 'POP_TO_TOP', target: 'agents-stack' },
       { type: 'JUMP_TO', payload: { name: '(agents)' }, target: 'tabs' },
     ])
@@ -37,7 +37,7 @@ describe('openTabActions', () => {
 
   it('only switches when the tab already shows its list or was never opened', () => {
     const jump = [{ type: 'JUMP_TO', payload: { name: '(agents)' }, target: 'tabs' }]
-    expect(openTabActions(app([{ name: 'agents' }]), '(agents)')).toEqual(jump)
+    expect(openTabActions(app([{ name: 'index' }]), '(agents)')).toEqual(jump)
     expect(openTabActions(app(undefined), '(agents)')).toEqual(jump)
   })
 

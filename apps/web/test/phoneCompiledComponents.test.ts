@@ -18,8 +18,8 @@ const HOT: Record<string, readonly string[]> = {
   'components/SubagentConversation.tsx': ['ChildConversation'],
   'components/Composer.tsx': ['Composer'],
   'components/Turn.tsx': ['Turn'],
-  'app/(tabs)/(sessions)/index.tsx': ['ProjectInbox'],
-  'app/(tabs)/(agents)/agents.tsx': ['DirectList'],
+  'app/(tabs)/(sessions)/sessions.tsx': ['ProjectInbox'],
+  'app/(tabs)/(agents)/index.tsx': ['DirectList'],
 }
 
 /** What the compiler said about one phone file, with the options Expo's preset gives it. */

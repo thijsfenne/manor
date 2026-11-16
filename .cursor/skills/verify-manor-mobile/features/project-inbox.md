@@ -1,6 +1,6 @@
 # Project inbox
 
-The Work inbox is the first room after launch. The user sees open project threads, can reveal Settled history, search titles and previews, and open a conversation with one tap.
+The Sessions tab lists the user's Work. The user sees open project threads, can reveal Settled history, search titles and previews, and open a conversation with one tap.
 
 ## Sub-features
 
@@ -11,7 +11,7 @@ The Work inbox is the first room after launch. The user sees open project thread
 
 ## How to get to it (user POV)
 
-- Launch the app. The stack lands on `/` (Work).
+- Launch the app and choose the `Sessions` tab (`/sessions`). The app opens on Agents.
 - Choose a row named `Open Mobiele inbox voor Manor`.
 - Choose the Settled disclosure, then `Open settled gesprek PWA navigatie afmaken`.
 - Focus `Zoek gesprekken`, type a word from a title or preview.
@@ -24,7 +24,7 @@ Preconditions:
 - `control-manor-mobile.mjs doctor` reports `fixtureOpen: true` and `appInstalled: true`.
 - House menu is closed.
 
-- **Confirm Work.** Run `node .cursor/skills/verify-manor-mobile/control-manor-mobile.mjs home`. The screen title is `Work` and a row `Open Mobiele inbox voor Manor` is present.
+- **Confirm Work.** Run `node .cursor/skills/verify-manor-mobile/control-manor-mobile.mjs home`, then `tap --name "Sessions"`, since the app opens on Agents. The screen title is `Sessions` and a row `Open Mobiele inbox voor Manor` is present.
 - **Search.** Run `node .cursor/skills/verify-manor-mobile/control-manor-mobile.mjs fill --name "Zoek gesprekken" --value "inbox"`. The matching row remains; unrelated titles leave the list.
 - **Cancel search.** Run `node .cursor/skills/verify-manor-mobile/control-manor-mobile.mjs tap --name "Zoeken annuleren"`. The full inbox returns.
 - **Open thread.** Run `node .cursor/skills/verify-manor-mobile/control-manor-mobile.mjs tap --name "Open Mobiele inbox voor Manor"`. The chat route shows a back control named `Terug`.

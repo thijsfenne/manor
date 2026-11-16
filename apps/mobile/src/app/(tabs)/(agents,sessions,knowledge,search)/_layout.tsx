@@ -5,8 +5,8 @@ import { colors, fonts } from '@/theme'
 
 /** Each tab's own first screen; everything else in this folder is shared by the four stacks. */
 const ROOTS: Record<string, string> = {
-  '(agents)': 'agents',
-  '(sessions)': 'index',
+  '(agents)': 'index',
+  '(sessions)': 'sessions',
   '(knowledge)': 'knowledge',
   '(search)': 'search',
 }
