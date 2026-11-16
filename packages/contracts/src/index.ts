@@ -1398,7 +1398,10 @@ export const TurnFileChangeSchema = z.object({
   added: z.number().int().nonnegative(),
   removed: z.number().int().nonnegative(),
   edits: z.array(FileEditSchema).max(MAX_EDITS_PER_CALL),
+  /** A hunk or the file's patch was too large, so part of its diff is missing. */
   diffTruncated: z.boolean().optional(),
+  /** The turn's diff budget ran out before this file, so it keeps its counts and no hunks. */
+  diffSkipped: z.boolean().optional(),
 })
 export type TurnFileChange = z.infer<typeof TurnFileChangeSchema>
 

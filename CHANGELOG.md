@@ -4,6 +4,7 @@ What changed for someone who uses Manor, newest first. A version is a tag on `ma
 
 ## Unreleased
 
+- A turn that changed more than 40 files shows every small file's diff. The files after the fortieth used to say partial and too large to show, even at one line. When a very wide turn does run out of room, the largest files say their diff was not loaded, and only a hunk that really is too large still says so.
 - Persona faces no longer draw a shadow under them, or a glow in the dark theme. The light and shade on the face itself stay as they were, on the Mac and on the phone.
 - One Stop halts the whole message. Every agent it addressed that has not started yet is cancelled too, the ones you mentioned by name included. Each used to need its own Stop.
 - The Single and Multiple switch on a new Session explains itself in a tooltip when you point at it. The line under the message field is gone.

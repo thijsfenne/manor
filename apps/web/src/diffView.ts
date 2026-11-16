@@ -27,6 +27,8 @@ export interface DiffViewFile {
   binary: boolean
   /** Part of this file's diff is not here. */
   truncated: boolean
+  /** The turn's diff budget ran out before this file, so none of its lines were read. */
+  skipped?: true
   /** Changed in the Session but left out of the result waiting for Confirm. */
   excluded?: true
   rows: DiffViewRow[]
@@ -111,6 +113,7 @@ export function turnDiffView(files: readonly ChangedFile[], panelPaths?: Readonl
       removed: file.removed,
       binary: false,
       truncated: file.diffTruncated === true,
+      ...(file.diffSkipped ? { skipped: true as const } : {}),
       rows,
     }
   })
@@ -128,6 +131,11 @@ export function withoutWhitespaceChanges(files: readonly DiffViewFile[]): { file
   let hidden = 0
   const kept: DiffViewFile[] = []
   for (const file of files) {
+    // No lines to read (skipped, binary, too large): the recorded counts are all there is.
+    if (file.rows.length === 0) {
+      kept.push(file)
+      continue
+    }
     const rows: DiffViewRow[] = []
     for (let at = 0; at < file.rows.length;) {
       const row = file.rows[at]!

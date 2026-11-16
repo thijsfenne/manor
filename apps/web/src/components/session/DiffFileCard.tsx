@@ -157,6 +157,7 @@ function FileBody({ file, layout, scrollRoot, text, bodyId }: {
       <p className="m-0 px-3 py-2.5 text-label text-dim">
         {file.binary ? 'Binary file, no lines to show.'
           : file.truncated ? 'Too large to show here. Open it in the files panel to read all of it.'
+            : file.skipped ? 'Diff not loaded, this turn changed many files. Open it in the files panel to read it.'
             : file.status === 'deleted' ? 'Deleted.' : 'No line changes.'}
       </p>
     )
@@ -295,12 +296,13 @@ function TextLines({ rows, markdown }: { rows: readonly DiffViewRow[]; markdown:
       {blocks.map((block, index) => {
         if (block.kind === 'gap') return <TextGap key={index} {...(block.count === undefined ? {} : { count: block.count })} />
         const tone = block.kind === 'added' ? `${ADDED} text-text` : block.kind === 'removed' ? `${REMOVED} text-muted line-through [&_*]:text-muted` : 'text-text'
-        const type = 'text-[length:var(--msg-size,16px)] leading-[1.6]'
+        // Close to the 12px source view: a diff is read beside the chat, not as a message.
+        const type = 'text-label leading-[1.6]'
         if (markdown) {
           const text = block.lines.join('\n')
           return text.trim() === '' ? <div key={index} aria-hidden className="h-2" /> : (
             <div key={index} className={`px-3 py-0.5 ${type} ${tone}`}>
-              <Markdown text={text} variant="document" />
+              <Markdown text={text} variant="panel" />
             </div>
           )
         }

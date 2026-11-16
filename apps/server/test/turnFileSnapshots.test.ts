@@ -4,7 +4,8 @@ import { chmod, mkdir, mkdtemp, readFile, rm, stat, utimes, writeFile } from 'no
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { afterEach, expect, it } from 'vitest'
-import { captureFolderStats, captureTurnTree, changedFolderFiles, diffTurnTrees, namesFile, unmeasuredPaths } from '../src/turnFileSnapshots.js'
+import { EDIT_SIDE_LIMIT } from '@manor/contracts'
+import { TURN_DIFF_BUDGET, captureFolderStats, captureTurnTree, changedFolderFiles, diffTurnTrees, namesFile, unmeasuredPaths } from '../src/turnFileSnapshots.js'
 import { shellMayWrite, writingParts } from '../src/drivers/commands.js'
 
 const run = promisify(execFile)
@@ -271,4 +272,42 @@ it('places each hunk at the line it occupies in the file', async () => {
     { before: 7, after: 7 },
     { before: 27, after: 26 },
   ])
+})
+
+it('gives every small file of a wide turn its diff, never a too-large mark', async () => {
+  const root = await mkdtemp(path.join(tmpdir(), 'manor-turn-files-'))
+  roots.push(root)
+  await git(root, 'init', '-q')
+  const start = await captureTurnTree(root)
+  const names = Array.from({ length: 60 }, (_, index) => `file-${String(index).padStart(2, '0')}.txt`)
+  await Promise.all(names.map((name) => writeFile(path.join(root, name), `${name}\n`)))
+  const changes = await diffTurnTrees(root, start, await captureTurnTree(root))
+
+  expect(changes).toHaveLength(60)
+  for (const change of changes) {
+    expect(change.diffTruncated).toBeUndefined()
+    expect(change.edits[0]?.after).toBe(path.basename(change.path))
+  }
+})
+
+it('leaves the largest files of a turn past its diff budget without hunks, marked skipped rather than too large', async () => {
+  const root = await mkdtemp(path.join(tmpdir(), 'manor-turn-files-'))
+  roots.push(root)
+  await git(root, 'init', '-q')
+  const start = await captureTurnTree(root)
+  // Each big file stores one hunk of 6 to 8 thousand characters, under EDIT_SIDE_LIMIT, so about 140 fit the budget.
+  await Promise.all(Array.from({ length: 200 }, (_, index) => writeFile(path.join(root, `big-${index}.txt`),
+    `${Array.from({ length: 300 + index % 99 }, (_, line) => `line ${String(line).padStart(4, '0')} of ${String(index).padStart(5, '0')}`).join('\n')}\n`)))
+  await writeFile(path.join(root, 'zz-small.txt'), 'small\n')
+  const changes = await diffTurnTrees(root, start, await captureTurnTree(root))
+
+  const skipped = changes.filter((change) => change.diffSkipped === true)
+  const shown = changes.filter((change) => change.diffSkipped !== true)
+  expect(skipped.length).toBeGreaterThan(0)
+  expect(changes.some((change) => change.diffTruncated === true)).toBe(false)
+  expect(skipped.every((change) => change.edits.length === 0 && change.added > 0)).toBe(true)
+  expect(Math.min(...skipped.map((change) => change.added))).toBeGreaterThanOrEqual(Math.max(...shown.map((change) => change.added)))
+  expect(shown.find((change) => change.path.endsWith('zz-small.txt'))?.edits[0]?.after).toBe('small')
+  const stored = shown.flatMap((change) => change.edits).reduce((sum, edit) => sum + (edit.after?.length ?? 0), 0)
+  expect(stored).toBeLessThan(TURN_DIFF_BUDGET + EDIT_SIDE_LIMIT * 2)
 })

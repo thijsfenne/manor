@@ -291,20 +291,49 @@ export async function diffTurnTrees(
   if (files.some((file) => path.join(cwd, file.path).length > 1_024)) {
     throw new Error('Turn contains a path longer than the transcript limit')
   }
-  return Promise.all(files.map(async (file, index) => {
-    const patch = index < 40
-      ? await git(cwd, [...base, '--unified=2', '--', ...(file.oldPath ? [file.oldPath] : []), file.path], undefined, 1_000_000)
-          .catch(() => null)
-      : null
-    const parsed = patch === null ? { edits: [], truncated: true } : parseHunks(patch, file.path)
+  // Smallest files first, so a wide turn spends its budget on many readable diffs
+  // and only its largest files go without hunks. A batch's results are counted in
+  // that order, so the budget overshoots by at most one file's capped hunks.
+  const order = [...files.keys()].sort((left, right) => lineCount(files[left]) - lineCount(files[right]))
+  const parsed = new Map<number, ReturnType<typeof parseHunks>>()
+  let spent = 0
+  for (let start = 0; start < order.length && spent < TURN_DIFF_BUDGET; start += PATCH_BATCH) {
+    const batch = order.slice(start, start + PATCH_BATCH).flatMap((index) => {
+      const file = files[index]
+      return file === undefined ? [] : [{ index, file }]
+    })
+    const patches = await Promise.all(batch.map(({ file }) =>
+      git(cwd, [...base, '--unified=2', '--', ...(file.oldPath ? [file.oldPath] : []), file.path], undefined, 1_000_000)
+        .catch(() => null)))
+    batch.forEach(({ index, file }, at) => {
+      if (spent >= TURN_DIFF_BUDGET) return
+      const patch = patches[at] ?? null
+      const result = patch === null ? { edits: [], truncated: true } : parseHunks(patch, file.path)
+      spent += result.edits.reduce((sum, edit) => sum + (edit.before?.length ?? 0) + (edit.after?.length ?? 0), 0)
+      parsed.set(index, result)
+    })
+  }
+  return files.map((file, index) => {
+    const result = parsed.get(index)
     return {
       path: path.join(cwd, file.path),
       ...(file.oldPath === undefined ? {} : { oldPath: path.join(cwd, file.oldPath) }),
       status: statuses.get(file.path) ?? 'edited',
       added: file.added,
       removed: file.removed,
-      edits: parsed.edits,
-      ...(parsed.truncated ? { diffTruncated: true } : {}),
+      edits: result?.edits ?? [],
+      ...(result === undefined ? { diffSkipped: true } : result.truncated ? { diffTruncated: true } : {}),
     }
-  }))
+  })
 }
+
+/**
+ * Characters of hunk text one turn's measured diff may store per checkout. The
+ * transcript is read back whole on every chat open; per file, the contract caps
+ * already hold a diff to `MAX_EDITS_PER_CALL` hunks of `EDIT_SIDE_LIMIT` a side.
+ */
+export const TURN_DIFF_BUDGET = 1_000_000
+/** Patches git computes at once. */
+const PATCH_BATCH = 16
+
+const lineCount = (file: { added: number; removed: number } | undefined) => (file?.added ?? 0) + (file?.removed ?? 0)

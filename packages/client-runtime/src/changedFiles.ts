@@ -24,6 +24,8 @@ export interface ChangedFile {
   edits: FileEdit[]
   /** Snapshot or hunk limits omitted part of this file's diff. */
   diffTruncated?: boolean
+  /** The turn's diff budget ran out before this file, so its hunks were never read. */
+  diffSkipped?: boolean
 }
 
 /**
@@ -110,6 +112,7 @@ function reportedChangedFiles(turn: TurnRow, listing?: readonly string[]): Chang
       status: change.status,
       edits: change.edits,
       ...(change.diffTruncated ? { diffTruncated: true } : {}),
+      ...(change.diffSkipped ? { diffSkipped: true } : {}),
     }
   })
   const unmeasured = new Set(turn.fileChangeUnmeasured ?? [])
@@ -157,6 +160,7 @@ export function chatChangedFiles(turns: readonly TurnRow[], listing?: readonly s
       existing.removed += file.removed
       existing.edits.push(...file.edits)
       existing.diffTruncated ||= file.diffTruncated
+      existing.diffSkipped ||= file.diffSkipped
       if (existing.status !== 'created') existing.status = file.status
       else if (file.status === 'deleted') existing.status = 'deleted'
     }

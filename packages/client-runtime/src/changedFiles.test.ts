@@ -34,6 +34,13 @@ describe('measured turn changes', () => {
     expect(files[1]).toMatchObject({ raw: '/notes/log.md', added: 1, removed: 1 })
   })
 
+  it('keeps a file the turn budget skipped apart from a clipped one', () => {
+    const skipped = { path: `${root}/src/App.tsx`, status: 'edited' as const, added: 1, removed: 0, edits: [], diffSkipped: true }
+    const [file] = turnChangedFiles(turn({ fileChanges: [skipped], fileChangeRoots: [root] }), listing)
+    expect(file).toMatchObject({ diffSkipped: true, edits: [] })
+    expect(file?.diffTruncated).toBeUndefined()
+  })
+
   // A turn that only wrote memory shows no banner; a real code edit beside it still does.
   it('leaves memory files out and keeps every other change', () => {
     const daily = '/Users/sam/notes/memory/daily/2026-09-28.md'

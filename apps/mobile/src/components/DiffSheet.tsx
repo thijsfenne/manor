@@ -129,17 +129,19 @@ function FileDiff({ file }: { file: ChangedFile }) {
     [file.edits],
   )
   const truncatedNote = 'Part of this diff was too large to show.'
+  const skippedNote = 'Diff not loaded, this turn changed many files.'
 
   return (
     <Animated.View entering={FadeIn.duration(160)} style={styles.diff}>
       {hunks.length === 0 ? (
         <Text style={styles.empty}>
-          {file.diffTruncated ? truncatedNote : file.status === 'deleted' ? 'This file was deleted.' : 'The runtime sent no content, so there is no diff to show.'}
+          {file.diffTruncated ? truncatedNote : file.diffSkipped ? skippedNote : file.status === 'deleted' ? 'This file was deleted.' : 'The runtime sent no content, so there is no diff to show.'}
         </Text>
       ) : (
         hunks.map((edit, index) => <Hunk edit={edit} key={`${file.raw}:hunk:${index}`} labelled={hunks.length > 1} />)
       )}
       {file.diffTruncated && hunks.length > 0 ? <Text style={styles.truncated}>{truncatedNote}</Text> : null}
+      {file.diffSkipped && hunks.length > 0 ? <Text style={styles.truncated}>{skippedNote}</Text> : null}
     </Animated.View>
   )
 }

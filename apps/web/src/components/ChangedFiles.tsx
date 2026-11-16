@@ -208,7 +208,7 @@ function FileRow({
 }) {
   const [open, setOpen] = useState(false)
   const indent = depth * STEP + NO_CHEVRON
-  const hasDiff = (file.added + file.removed > 0 && file.edits.length > 0) || file.diffTruncated === true
+  const hasDiff = (file.added + file.removed > 0 && file.edits.length > 0) || file.diffTruncated === true || file.diffSkipped === true
 
   return (
     <>
@@ -249,6 +249,7 @@ function FileRow({
             <DiffBody key={`${file.raw}-${index}`} edit={edit} />
           ))}
           {file.diffTruncated ? <p className="m-0 text-warn">Part of this diff was too large to show.</p> : null}
+          {file.diffSkipped ? <p className="m-0 text-dim">Diff not loaded, this turn changed many files.</p> : null}
         </div>
       ) : null}
     </>

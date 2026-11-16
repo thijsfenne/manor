@@ -42,6 +42,11 @@ describe('the diff pane’s files', () => {
     expect(files).toEqual([real])
   })
 
+  it('keeps the recorded counts of a file with no lines to read', () => {
+    const skipped: DiffViewFile = { key: 'b', path: 'b.ts', status: 'edited', added: 2, removed: 1, binary: false, truncated: false, skipped: true, rows: [] }
+    expect(withoutWhitespaceChanges([skipped]).files).toEqual([skipped])
+  })
+
   it('pairs removed and added runs side by side and keeps unchanged lines on both sides', () => {
     expect(splitRows([
       { kind: 'same', text: 'x', oldNo: 1, newNo: 1 },

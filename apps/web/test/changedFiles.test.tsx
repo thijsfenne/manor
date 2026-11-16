@@ -215,4 +215,9 @@ describe('the changed-files card', () => {
     expect(html).toContain('−7')
     expect(html).toContain('Partial diff')
   })
+
+  it('never calls a file the turn budget skipped partial or too large', () => {
+    const html = renderToStaticMarkup(<ChangedFiles files={[{ ...files[0]!, edits: [], diffSkipped: true }]} />)
+    expect(html).not.toContain('artial')
+  })
 })
