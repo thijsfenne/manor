@@ -40,7 +40,7 @@ describe('English interface copy', () => {
     expect(violations('const label = <button title="Bevestigen">Confirm</button>', 'planted.tsx')).toHaveLength(1)
     expect(violations('const label = `Sessie ${name}`', 'planted.tsx')).toHaveLength(1)
     expect(violations('const label = "\\u0057acht op jou"', 'planted.tsx')).toHaveLength(1)
-    expect(violations('// wacht op jou\nconst label = "Waiting on you"', 'planted.tsx')).toEqual([])
+    expect(violations('// wacht op jou\nconst label = "Needs you"', 'planted.tsx')).toEqual([])
   })
 
   it('keeps the English web interface and generated project receipts free of Dutch copy', () => {

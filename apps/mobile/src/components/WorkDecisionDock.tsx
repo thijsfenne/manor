@@ -40,7 +40,7 @@ export function WorkDecisionDock({ rows, inView, agents, onReject, onReveal }: {
           Accept and Confirm too faint to find. */}
       <View style={styles.card}>
         <FadingScrollView
-          accessibilityLabel="Waiting on you"
+          accessibilityLabel="Needs you"
           keyboardShouldPersistTaps="handled"
           style={{ maxHeight: MAX_HEIGHT }}
           contentContainerStyle={styles.list}

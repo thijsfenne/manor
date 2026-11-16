@@ -97,7 +97,7 @@ export function waitingPing(before: WorkspaceShape, after: WorkspaceShape, msg: 
   const { title } = noticeText(after, chat)
   if (first.secret !== undefined) return { chatId: chat.id, key: `ask:${requestId}`, title, body: 'A secret request is waiting' }
   const name = after.agents.find((agent) => agent.id === agentId)?.name
-  const wants = first.optionsOnly === true ? 'needs your approval' : 'is waiting on you'
+  const wants = first.optionsOnly === true ? 'needs your approval' : 'needs you'
   const lead = chat.kind === 'dm' || name === undefined ? `${wants[0]!.toUpperCase()}${wants.slice(1)}` : `${name} ${wants}`
   const body = `${lead}: ${first.question.replace(/\s+/g, ' ').trim()}`
   return { chatId: chat.id, key: `ask:${requestId}`, title, body: body.length > BODY_LIMIT ? `${body.slice(0, BODY_LIMIT - 1)}…` : body }

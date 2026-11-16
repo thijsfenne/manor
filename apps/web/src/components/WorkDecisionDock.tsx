@@ -61,7 +61,7 @@ export function WorkDecisionDock({
         <motion.div
           key="work-decisions"
           role="region"
-          aria-label="Waiting on you"
+          aria-label="Needs you"
           className="pointer-events-auto mb-2 w-full min-w-0 max-w-[760px]"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}

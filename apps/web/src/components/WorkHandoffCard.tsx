@@ -426,7 +426,7 @@ function OptionsPanel({ id, open, children }: { id: string; open: boolean; child
 /**
  * An accepted Session in its project thread: the Sessions mark in its state's colour, like
  * every Session line in the thread, its title and the word the overview has for it
- * (Working, Waiting on you). A press opens the Session.
+ * (Working, Needs you). A press opens the Session.
  */
 function SessionLine({ id, row, status, onOpen }: { id: string; row: WorkHandoffRow; status: WorkStatus; onOpen?: () => void }) {
   const tile = useContext(InBundle)

@@ -321,7 +321,7 @@ const replaced = {
 directory.workHandoffs.push(...proposals, replaced)
 
 // The Notities thread started six Sessions, one per card shape: a proposal, a line that
-// says Working (a build left running) or Waiting on you, a Ready result that keeps the full
+// says Working (a build left running) or Needs you, a Ready result that keeps the full
 // card, and finished ones folded to Done or Confirmed (never the branch it merged into).
 const notesSession = (id, title, minutesAgo, extra = {}) => ({
   id, sourceChatId: 'chat-thread-notes', sourceTurnId: `turn-${id}`, workChatId: `chat-${id}`,

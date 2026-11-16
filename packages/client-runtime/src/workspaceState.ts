@@ -334,7 +334,7 @@ export interface WorkspaceState {
    * Set until the next directory lights the turns it lists: from the start and again
    * whenever a socket opens (`clearRunningTurns`). Turns kept running while this client
    * was away, and a Session busy with tools sends no delta or `turn_state` that would
-   * light its dot again, so it read Done under Waiting on you. `ended` holds the turns
+   * light its dot again, so it read Done under Needs you. `ended` holds the turns
    * this socket heard end meanwhile: a listing read just before a turn ended can still
    * arrive after its end, and must not bring it back.
    */

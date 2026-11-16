@@ -130,7 +130,7 @@ describe('project thread selectors', () => {
     expect(projectThreads(withChats([chat('blocked')], [blocked]))[0]?.waiting).toBe(true)
   })
 
-  it('groups the sessions the thread started into Waiting on you, Working and Settled', () => {
+  it('groups the sessions the thread started into Needs you, Working and Settled', () => {
     const handoffs = [
       { ...started, goalReachedAt: 3, goalReport: { result: 'Done.' } },
       handoff('h2', { workChatId: 'busy' }),
@@ -329,9 +329,9 @@ describe('a DM brief handed to its project thread', () => {
     expect(forwardedLine(card([withLink, { ...report, goalConfirmedAt: 4 }]))).toBe('Closed in project thread Manor')
     const [running] = projectWorkHandoffs([note(2)], [withLink, report], [chat('thread'), chat('session')], [project], [], {}, () => ({ running: true, asking: false }))
     expect(running?.kind === 'work_handoff' && forwardedLine(running)).toBe('Running via project thread Manor')
-    // The Session asks: the overview lists it under Waiting on you, and so does the line.
+    // The Session asks: the overview lists it under Needs you, and so does the line.
     const [asking] = projectWorkHandoffs([note(2)], [withLink, linked], [chat('thread'), chat('session')], [project], [], {}, () => ({ running: true, asking: true }))
-    expect(asking?.kind === 'work_handoff' && forwardedLine(asking)).toBe('Waiting on you in project thread Manor')
+    expect(asking?.kind === 'work_handoff' && forwardedLine(asking)).toBe('Needs you in project thread Manor')
     // A brief whose Session has not started yet is neither running nor waiting.
     expect(forwardedLine(card([brief]))).toBe('To project thread Manor')
   })
@@ -369,7 +369,7 @@ describe('one status per Session, read by its card, its overview row and its pro
     expect(standing(asking, 'session')).toEqual({ group: 'waiting', status: 'waiting', running: false, waiting: true })
     expect(projectThreads(asking)[0]).toMatchObject({ running: 0, waiting: true })
 
-    // Stopped, or a turn that ended without a result, reads Done under Waiting on you, yet the project row stays quiet.
+    // Stopped, or a turn that ended without a result, reads Done under Needs you, yet the project row stays quiet.
     const stopped = reduce(running, { type: 'turn_state', chatId: 'session', turnId: 'turn_1', agentId: 'wren', state: 'done' } as ServerMessage)
     expect(workCardStatus(card(stopped, 'h1'))?.text).toBe('Done')
     expect(standing(stopped, 'session')).toEqual({ group: 'waiting', status: 'done', running: false, waiting: false })
@@ -392,7 +392,7 @@ describe('one status per Session, read by its card, its overview row and its pro
     expect(projectThreads(proposed)[0]).toMatchObject({ running: 0, waiting: true })
   })
 
-  it('reads a Session still running after a reconnect as Working, not Waiting on you', () => {
+  it('reads a Session still running after a reconnect as Working, not Needs you', () => {
     const running = reduce(workspace([accepted]), { type: 'turn_state', chatId: 'session', turnId: 'turn_1', agentId: 'wren', state: 'running', startedAt: 1 })
     // The socket came back: every dot went dark, and the reconnect directory still lists the turn.
     const reconnected = reduce(clearRunningTurns(running), {
@@ -400,7 +400,7 @@ describe('one status per Session, read by its card, its overview row and its pro
     })
     expect(standing(reconnected, 'session')).toEqual({ group: 'working', status: 'working', running: true, waiting: false })
     expect(workCardStatus(card(reconnected, 'h1'))?.text).toBe('Working')
-    // A question it still holds reads Waiting on you after the reconnect too.
+    // A question it still holds reads Needs you after the reconnect too.
     const asking = reduce(clearRunningTurns(running), {
       type: 'directory', projects: [project], chats: running.chats, workHandoffs: [accepted],
       runningTurns: { session: ['turn_1'] }, awaitingInput: { session: ['request_1'] },
@@ -467,8 +467,8 @@ describe('a Session card in its project thread', () => {
 
   it('changes shape from proposal to one line to done, and its word is the overview’s', () => {
     expect(view(handoff('h1', { acceptedAt: null }))).toEqual({ shape: 'proposal' })
-    // Accepted and quiet: the overview says Waiting on you, so the line does too.
-    expect(view(handoff('h1', { workChatId: 'session' }))).toEqual({ shape: 'line', status: { tone: 'warn', text: 'Waiting on you' } })
+    // Accepted and quiet: the overview says Needs you, so the line does too.
+    expect(view(handoff('h1', { workChatId: 'session' }))).toEqual({ shape: 'line', status: { tone: 'warn', text: 'Needs you' } })
     const busy = reduce(workspace([handoff('h1', { workChatId: 'session' })]), { type: 'turn_state', chatId: 'session', turnId: 't1', agentId: 'wren', state: 'running', startedAt: 1 })
     const busyRow = projectWorkHandoffs([note], busy.workHandoffs, busy.chats, busy.projects, busy.agents, busy.checkoutStatus, sessionLiveOf(busy))[0] as WorkHandoffRow
     expect(threadWorkCard(busyRow)).toEqual({ shape: 'line', status: { tone: 'busy', text: 'Working' } })
@@ -673,7 +673,7 @@ describe('the project thread bundle', () => {
   const state = workspace([
     // Confirmed: settled in the overview, Done in the thread.
     handoff('h1', { workChatId: 'loose', goalReachedAt: 2, goalReport: { result: 'Export works.' }, goalConfirmedAt: 3 }),
-    // Accepted and quiet: Waiting on you in both.
+    // Accepted and quiet: Needs you in both.
     handoff('h2', { workChatId: 'session' }),
     // A result to confirm and a proposal to accept: The user acts on both.
     handoff('h3', { workChatId: 'quiet', goalReachedAt: 2, goalReport: { result: 'Ready.' } }),
@@ -693,7 +693,7 @@ describe('the project thread bundle', () => {
     expect(feed.map((row) => row.key)).toEqual(['u1', 'turn:t1:__single__', 'work:h4', 'work:h3', 'bundle:u1'])
     const [bundle] = bundles(feed)
     expect(bundle?.items.map((row) => row.key)).toEqual(['work:h1', 'n1', 'work:h2', 'n2', 'n3', 'l1'])
-    expect(bundle?.summary).toBe('1 Session done, 1 waiting on you, 2 lines in notes.md, 1 line in preferences.md, learnings from 1 Session')
+    expect(bundle?.summary).toBe('1 Session done, 1 needs you, 2 lines in notes.md, 1 line in preferences.md, learnings from 1 Session')
   })
 
   it('shows one chip per kind of thing that happened, and one tile per item, kind by kind in the chips\' order', () => {
@@ -774,7 +774,7 @@ describe('the project thread bundle', () => {
     const overview = projectSessionOverview(state, 'thread')
     expect(overview.settled.map((row) => row.key)).toEqual(['loose'])
     expect(overview.waiting.map((row) => row.key)).toContain('session')
-    expect(bundle?.summary).toBe('1 Session done, 1 waiting on you')
+    expect(bundle?.summary).toBe('1 Session done, 1 needs you')
   })
 
   it('starts a new bundle at each message from the user and leaves the earlier one where it was', () => {

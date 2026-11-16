@@ -421,7 +421,7 @@ function ActiveRow({
 function ThreadRow({ row, onPress }: { row: ProjectThreadRow; onPress: () => void }) {
   return (
     <Pressable
-      accessibilityLabel={`Open project thread ${row.project.name}${row.waiting ? ', waiting on you' : ''}`}
+      accessibilityLabel={`Open project thread ${row.project.name}${row.waiting ? ', needs you' : ''}`}
       accessibilityRole="button"
       onPress={onPress}
       style={({ pressed }) => [styles.threadRow, pressed && styles.rowPressed]}

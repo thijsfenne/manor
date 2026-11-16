@@ -38,7 +38,7 @@ interface ProjectSessionsOverviewProps {
 }
 
 const GROUPS: { id: SessionOverviewSection; label: string; hint: string }[] = [
-  { id: 'waiting', label: 'Waiting on you', hint: 'Proposals, questions, reviews and results to confirm.' },
+  { id: 'waiting', label: 'Needs you', hint: 'Proposals, questions, reviews and results to confirm.' },
   { id: 'working', label: 'Working', hint: 'Sessions with a turn running.' },
   { id: 'settled', label: 'Settled', hint: 'Settled sessions.' },
   { id: 'archived', label: 'Archived', hint: 'Archived sessions.' },

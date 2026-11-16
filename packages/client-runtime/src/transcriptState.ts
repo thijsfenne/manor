@@ -594,7 +594,7 @@ export interface ThreadBundleRow {
   key: string
   /** In the order they arrived, each drawn as it would stand on its own. */
   items: Row[]
-  /** "2 Sessions done, 1 waiting on you, 3 lines in notes.md". */
+  /** "2 Sessions done, 1 needs you, 3 lines in notes.md". */
   summary: string
   /** The thread's advice on a question in this bundle, by its requestId (`threadQuestionAdvice`). */
   advice?: Readonly<Record<string, string>>
@@ -1373,7 +1373,7 @@ export function forwardedLine(row: Pick<WorkHandoffRow, 'projectName' | 'forward
   if (row.status === 'Settled' || row.status === 'Archived') return `Settled in project thread ${row.projectName}`
   if (phase === 'ready') return report ? `Ready in project thread ${row.projectName}` : `Ready, confirm in project thread ${row.projectName}`
   // The overview's own fold decides: a question, a result to confirm or a quiet Session is the user's move.
-  if (phase === 'working') return `${sessionGroup(row.session) === 'waiting' ? 'Waiting on you in' : 'Running via'} project thread ${row.projectName}`
+  if (phase === 'working') return `${sessionGroup(row.session) === 'waiting' ? 'Needs you in' : 'Running via'} project thread ${row.projectName}`
   return `To project thread ${row.projectName}`
 }
 
@@ -1987,7 +1987,7 @@ export function fileWriteGroups(writes: readonly ProjectFileWrite[]): FileWriteG
  * Confirm, or a commit that did not land, keeps the full card because the user acts on it;
  * an accepted Session is one line with its state; a finished one is one line with its
  * outcome. The line's word is the overview group of the row's shared `session` status,
- * so the line and the overview never disagree about Working and Waiting on you.
+ * so the line and the overview never disagree about Working and Needs you.
  */
 export type ThreadWorkCard =
   | { shape: 'proposal' }
@@ -1997,7 +1997,7 @@ export type ThreadWorkCard =
 
 export const THREAD_SESSION_STATUS: Record<SessionGroup, WorkStatus> = {
   working: { tone: 'busy', text: 'Working' },
-  waiting: { tone: 'warn', text: 'Waiting on you' },
+  waiting: { tone: 'warn', text: 'Needs you' },
   // Muted until the user confirms it; Confirmed carries the green.
   settled: { tone: 'dim', text: 'Done' },
 }

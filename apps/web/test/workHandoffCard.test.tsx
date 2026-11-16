@@ -395,7 +395,7 @@ describe('a Session card in its project thread', () => {
     expect(proposal).not.toContain('>Manor<')
     const accepted = { ...card('Working'), workChatId: 'work_1', acceptedAt: 2, worktreeBranch: 'manor/tabs' }
     const waiting = render({ ...accepted, session: 'done' })
-    expect(waiting).toContain('aria-label="Open Session Keep DM browser tabs, Waiting on you"')
+    expect(waiting).toContain('aria-label="Open Session Keep DM browser tabs, Needs you"')
     expect(waiting).not.toContain('>Accept<')
     expect(waiting).not.toContain('manor/tabs')
     expect(render({ ...accepted, session: 'working' })).toContain('Open Session Keep DM browser tabs, Working')

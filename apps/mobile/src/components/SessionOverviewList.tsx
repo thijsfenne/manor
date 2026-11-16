@@ -13,7 +13,7 @@ import { colors, fonts, radius, spacing, squircle } from '@/theme'
 
 /** Project thread states use the same English labels as the Mac. */
 const GROUPS: { id: SessionOverviewGroup; label: string; hint: string }[] = [
-  { id: 'waiting', label: 'Waiting on you', hint: 'Proposals, questions, reviews and results to confirm.' },
+  { id: 'waiting', label: 'Needs you', hint: 'Proposals, questions, reviews and results to confirm.' },
   { id: 'working', label: 'Working', hint: 'Sessions with a turn running.' },
   { id: 'settled', label: 'Settled', hint: 'Settled sessions.' },
 ]

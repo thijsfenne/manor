@@ -99,7 +99,7 @@ export function ProjectThreadsSection({
                   {/* Sized on the span: `[font:inherit]` on the button outranks a text-size utility there. */}
                   <span className="min-w-0 flex-1 truncate text-[14px]">{row.project.name}</span>
                   {row.waiting ? (
-                    <span className="flex-none text-[12px] font-medium text-warn">Waiting on you</span>
+                    <span className="flex-none text-[12px] font-medium text-warn">Needs you</span>
                   ) : row.running > 0 ? (
                     <span className="flex-none text-[12px] text-dim">{runningLabel(row.running)}</span>
                   ) : (

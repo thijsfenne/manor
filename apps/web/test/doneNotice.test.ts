@@ -321,7 +321,7 @@ describe('the waiting notice', () => {
       turn('t1', 'running'), asked, asked, ask('r2', 'Allow Smith to use Safari?', { optionsOnly: true }),
     ])
     expect(pings).toEqual([
-      { chatId: 'chat_1', key: 'ask:r1', title: 'Manor', body: 'Smith is waiting on you: Ship it today?' },
+      { chatId: 'chat_1', key: 'ask:r1', title: 'Manor', body: 'Smith needs you: Ship it today?' },
       { chatId: 'chat_1', key: 'ask:r2', title: 'Manor', body: 'Smith needs your approval: Allow Smith to use Safari?' },
     ])
   })
@@ -333,7 +333,7 @@ describe('the waiting notice', () => {
       turn('t1', 'running', { chatId: 'dm_smith' }), ask('r1', 'Which one?', { chatId: 'dm_smith' }),
       turn('t1', 'running', { chatId: 'chat_2' }), ask('r2', 'Still there?', { chatId: 'chat_2' }),
     ])
-    expect(pings).toEqual([{ chatId: 'dm_smith', key: 'ask:r1', title: 'Smith', body: 'Is waiting on you: Which one?' }])
+    expect(pings).toEqual([{ chatId: 'dm_smith', key: 'ask:r1', title: 'Smith', body: 'Needs you: Which one?' }])
   })
 })
 

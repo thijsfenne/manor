@@ -16,7 +16,7 @@ export const QUIET_SESSION = { running: false, asking: false }
 /**
  * Where one Session stands, the single reading its card, its overview row and its
  * project row all draw from (2026-10-11). A card that said Working beside an overview
- * that said Waiting on you was two computations drifting apart.
+ * that said Needs you was two computations drifting apart.
  *
  * - `proposed`: waits for Accept.
  * - `working`: a turn runs, or work it started does.

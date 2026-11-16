@@ -552,7 +552,7 @@ export interface SessionOverview extends Record<SessionOverviewGroup, SessionOve
 
 /**
  * The sessions a project thread started, newest first, in the three groups its overview
- * shows (decided 2026-10-11), each from the Session's shared status. Waiting on you holds
+ * shows (decided 2026-10-11), each from the Session's shared status. Needs you holds
  * a proposal to accept, a question, a result to confirm, or a session that has gone
  * quiet, all of them the user's move, even mid-turn. Working is a running turn, or work it started
  * that outlives the turn (a Manor helper, or a provider's helper or shell in its live
