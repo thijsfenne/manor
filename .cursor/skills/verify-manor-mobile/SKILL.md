@@ -94,8 +94,7 @@ node .cursor/skills/verify-manor-mobile/control-manor-mobile.mjs home
 node .cursor/skills/verify-manor-mobile/control-manor-mobile.mjs tap --name "Open menu"
 node .cursor/skills/verify-manor-mobile/control-manor-mobile.mjs tap --name "Agents"
 node .cursor/skills/verify-manor-mobile/control-manor-mobile.mjs tap --name "Sessions"
-node .cursor/skills/verify-manor-mobile/control-manor-mobile.mjs fill --name "Zoek gesprekken" --value "inbox"
-node .cursor/skills/verify-manor-mobile/control-manor-mobile.mjs tap --name "Nieuwe sessie"
+node .cursor/skills/verify-manor-mobile/control-manor-mobile.mjs tap --name "New session"
 node .cursor/skills/verify-manor-mobile/control-manor-mobile.mjs wait-settle
 ```
 
@@ -108,9 +107,7 @@ Stable handles from this repo:
 | `Agents` / `Sessions` / `Knowledge` / `Search` / `Artifacts` / `Scheduled tasks` / `Plugins` / `Usage, NN%` | House menu rows (`HouseMenu.tsx`); the Usage row reads its peak percent into its label |
 | Tab bar `Agents` / `Sessions` / `Knowledge` / `Search` | The native tab bar shares its labels with the menu rows, and `Search` also matches a search field's hint. Tap a tab by point instead, from a hand-written Maestro flow: `point: "18%,94%"`, `"39%,94%"`, `"61%,94%"`, `"82%,94%"` on the iPhone 18 Pro |
 | `Search chats, messages and notes` | Search tab field; submit with `pressKey: Enter`, because `hideKeyboard` may tap a result |
-| `Zoek gesprekken` | Inbox search field |
-| `Zoeken annuleren` | Search cancel (visible while the field is focused) |
-| `Nieuwe sessie` | Inbox compose control |
+| `New session` | Sessions compose button; Sessions has no search field of its own, the Search tab covers it |
 | `Start een sessie in Manor` | New-chat project picker |
 | `Open ${title}` / `Open settled gesprek ${title}` | Inbox rows |
 | `Open gesprek met ${name}` | Direct list |

@@ -55,9 +55,13 @@ export const colors = {
   shadow: adaptive('#000000', '#000000'),
 } as const
 
-/** Literal tints passed to native glass, whose API does not accept dynamic colours. */
+/**
+ * Literal tints passed to native glass, whose API does not accept dynamic colours;
+ * `useScheme` picks one. The primary tint is `colors.text` a little sheer, so the
+ * material still shows through a dark button in light mode and a light one in dark.
+ */
 export const glassTints = {
-  lightControl: '#ffffff',
+  primary: { light: 'rgba(22, 24, 27, 0.86)', dark: 'rgba(247, 248, 248, 0.86)' },
 } as const
 
 /**

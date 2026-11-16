@@ -4,6 +4,7 @@ What changed for someone who uses Manor, newest first. A version is a tag on `ma
 
 ## Unreleased
 
+- The phone's Sessions screen drops its own search field; the Search tab finds every Session. The button at the bottom right now reads New session, in dark glass on the light theme and light glass on the dark theme.
 - The phone app opens on the Agents tab instead of Sessions. Sessions is one tap away in the tab bar.
 - Confirm on a Session that moved a file now also removes it from its old place. The commit used to add the file at its new path and leave the old copy behind, so a phone app built from such a commit could crash on launch.
 - The decisions on a Session's result card read as a plain question, such as whether Manor should clean something up on its own, instead of a short internal label, on the Mac and on the phone. Their options say what happens, and an agent no longer asks you about details it can settle itself.

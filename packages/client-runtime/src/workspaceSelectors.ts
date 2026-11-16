@@ -893,36 +893,6 @@ export function filterChatRows(rows: ChatListRow[], query: string): ChatListRow[
   return rows.filter((row) => row.title.toLowerCase().includes(needle))
 }
 
-/**
- * One thread a live search can land on. Title and preview are what the sidebar
- * already shows; keywords match those plus any extra haystack (project name).
- */
-export interface ThreadSearchHit {
-  chatId: string
-  title: string
-  preview: string
-  lastMessageAt: number
-  fields: string[]
-  /**
-   * The room, when the thread lives in one. Empty on a DM or group. Shown on
-   * the row so two chats with the same title are distinguishable.
-   */
-  projectName: string
-}
-
-/**
- * Live thread search: substring over the fields a reader can already see on a
- * row. Empty query matches nothing, because an open field is not "show every
- * thread". Newest first, the same order the lists themselves use.
- */
-export function searchThreads(hits: ThreadSearchHit[], query: string): ThreadSearchHit[] {
-  const needle = query.trim().toLowerCase()
-  if (needle === '') return []
-  return hits
-    .filter((hit) => hit.fields.some((field) => field.toLowerCase().includes(needle)))
-    .sort((a, b) => b.lastMessageAt - a.lastMessageAt)
-}
-
 /** How many personas the top of the chat list holds; the form refuses a third. */
 export const CHAT_LIST_PIN_LIMIT = 2
 

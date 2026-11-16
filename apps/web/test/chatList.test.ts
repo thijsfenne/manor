@@ -5,8 +5,6 @@ import {
   emptyWorkspace,
   filterChatRows,
   inbox,
-  searchThreads,
-  type ThreadSearchHit,
   type WorkspaceState,
 } from '../src/state'
 import { sidebarViewForChat, sidebarViewFrom } from '../src/useSidebar'
@@ -147,34 +145,6 @@ describe('the sidebar chat list', () => {
     expect(filterChatRows(rows, 'RELEASE').map((row) => row.title)).toEqual(['Release crew'])
     expect(filterChatRows(rows, '  ').map((row) => row.title)).toEqual(rows.map((row) => row.title))
     expect(filterChatRows(rows, 'nobody')).toEqual([])
-  })
-
-  it('searches threads on title, preview and extra fields, newest first', () => {
-    const hits: ThreadSearchHit[] = [
-      {
-        chatId: 'old',
-        title: 'Release notes',
-        preview: 'Ship Monday',
-        lastMessageAt: 1,
-        fields: ['Release notes', 'Ship Monday', 'Manor'],
-        projectName: 'Manor',
-      },
-      {
-        chatId: 'new',
-        title: 'Inbox sorter',
-        preview: 'Sorted one note',
-        lastMessageAt: 2,
-        fields: ['Inbox sorter', 'Sorted one note'],
-        projectName: '',
-      },
-    ]
-
-    expect(searchThreads(hits, '  ').map((hit) => hit.chatId)).toEqual([])
-    expect(searchThreads(hits, 'monday').map((hit) => hit.chatId)).toEqual(['old'])
-    expect(searchThreads(hits, 'Manor').map((hit) => hit.chatId)).toEqual(['old'])
-    expect(searchThreads(hits, 'Manor')[0]?.projectName).toBe('Manor')
-    expect(searchThreads(hits, 's').map((hit) => hit.chatId)).toEqual(['new', 'old'])
-    expect(searchThreads(hits, 'nobody')).toEqual([])
   })
 
   // A renamed persona must not keep her old name in the list until someone writes to

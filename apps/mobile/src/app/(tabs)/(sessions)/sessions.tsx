@@ -2,16 +2,13 @@
  * THESIS: One quiet Sessions list makes open work and settled history legible: projects first, standalone Sessions below; it refuses a grouped card dashboard.
  * OWN-WORLD: Quiet House neutrals, flat edge-to-edge rows, muted metadata, persona accents, and rounded floating native chrome.
  * STORY: the user sees what needs attention, finds finished threads, and starts a project conversation on their Mac with one hand.
- * FIRST VIEWPORT: The Sessions title sits above active rows; Settled follows; menu, search, and Compose stay in a bottom tool cluster. Compose keeps context through project and host-folder selection with native sheet motion.
+ * FIRST VIEWPORT: The Sessions title sits above active rows; Settled follows; a New session button sits at the bottom right, searching lives in the Search tab. Compose keeps context through project and host-folder selection with native sheet motion.
  * FORM: Operate, a messaging inbox.
  * FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, DESIGN.md, and every shipping raster carrying its provenance
  */
 import ArrowDown01Icon from '@hugeicons/core-free-icons/ArrowDown01Icon'
 import BubbleChatIcon from '@hugeicons/core-free-icons/BubbleChatIcon'
-import Cancel01Icon from '@hugeicons/core-free-icons/Cancel01Icon'
 import FolderOffIcon from '@hugeicons/core-free-icons/FolderOffIcon'
-import PencilEdit01Icon from '@hugeicons/core-free-icons/PencilEdit01Icon'
-import Search01Icon from '@hugeicons/core-free-icons/Search01Icon'
 import Tick02Icon from '@hugeicons/core-free-icons/Tick02Icon'
 import Undo02Icon from '@hugeicons/core-free-icons/Undo02Icon'
 import { HugeiconsIcon } from '@hugeicons/react-native'
@@ -21,21 +18,12 @@ import {
   createListedState,
   inbox,
   projectThreads,
-  searchThreads,
   type InboxChat,
   type ProjectThreadRow,
-  type ThreadSearchHit,
 } from '@manor/client-runtime/state'
 import { router } from 'expo-router'
 import { useMemo, useRef, useState, type ComponentType, type ReactElement, type Ref } from 'react'
-import {
-  FlatList,
-  Pressable,
-  StyleSheet,
-  TextInput,
-  View,
-} from 'react-native'
-import { useKeyboardState } from 'react-native-keyboard-controller'
+import { FlatList, Pressable, StyleSheet, View } from 'react-native'
 import ReanimatedSwipeable, {
   type SwipeableMethods,
   type SwipeableProps,
@@ -46,19 +34,18 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { AuthGate } from '@/components/AuthGate'
 import { DisclosureChevron } from '@/components/DisclosureChevron'
 import { GlassPressable } from '@/components/GlassPressable'
-import { GlassGroup, GlassSurface } from '@/components/GlassSurface'
 import { KeyboardFooter } from '@/components/KeyboardFooter'
 import { SectionScaffold } from '@/components/SectionScaffold'
 import { SessionMark } from '@/components/SessionMark'
 import { Text } from '@/components/Text'
 import { relativeTime } from '@/lib/time'
 import { useWorkspace } from '@/providers/WorkspaceProvider'
-import { colors, fonts, glassTints, radius, spacing, squircle, tracking } from '@/theme'
+import { colors, fonts, glassTints, radius, spacing, squircle, tracking, useScheme } from '@/theme'
 
 type InboxRow =
   | { kind: 'section-header'; key: string; label: string; first?: true }
   | { kind: 'thread'; key: string; row: ProjectThreadRow }
-  | { kind: 'active'; key: string; entry: InboxChat; searchResult?: boolean }
+  | { kind: 'active'; key: string; entry: InboxChat }
   | { kind: 'settled-header'; key: string; count: number }
   | { kind: 'settled'; key: string; entry: InboxChat }
 
@@ -80,52 +67,20 @@ export default function HomeScreen() {
 function ProjectInbox() {
   const { workspace, status, openChat, setChatSettled } = useWorkspace()
   const insets = useSafeAreaInsets()
-  const [query, setQuery] = useState('')
+  const scheme = useScheme()
   const [settledOpen, setSettledOpen] = useState(true)
   const [visibleSettled, setVisibleSettled] = useState(INITIAL_SETTLED_COUNT)
-  const [searchFocused, setSearchFocused] = useState(false)
-  const searchRef = useRef<TextInput>(null)
-  // The toolbar rides the keyboard like the composer does.
-  const keyboardUp = useKeyboardState((state) => state.isVisible)
   // The desktop sidebar's two sections from the same selectors (2026-10-12): Projects,
   // whose rows carry the Sessions their thread started, then Sessions, which leaves
-  // those Sessions out. Search still reaches every Session, a thread's included.
+  // those Sessions out. The Search tab still reaches every Session, a thread's included.
   // Memoized on the slices the lists read, not on `workspace`: a streamed reply gives the
   // workspace a new identity every frame, and this screen stays mounted under an open chat.
   const [listedOf] = useState(createListedState)
   const listed = listedOf(workspace)
   const agents = workspace.agents
   const directory = useMemo(() => inbox(listed, { hideThreadSessions: true }), [listed])
-  const everySession = useMemo(() => inbox(listed), [listed])
-  // Where a search hit sits; a listed row already says so by its kind.
-  const settledIds = useMemo(() => new Set(everySession.settled.map((entry) => entry.chat.id)), [everySession.settled])
-  const entriesById = useMemo(
-    () => new Map([...everySession.unsettled, ...everySession.settled].map((entry) => [entry.chat.id, entry])),
-    [everySession.settled, everySession.unsettled],
-  )
   const threads = useMemo(() => projectThreads(listed), [listed])
-  const searchHits = useMemo<ThreadSearchHit[]>(
-    () => [...everySession.unsettled, ...everySession.settled].map((entry) => ({
-      chatId: entry.chat.id,
-      title: entry.chat.title,
-      preview: entry.chat.lastMessagePreview ?? '',
-      lastMessageAt: entry.chat.lastMessageAt,
-      fields: [entry.chat.title, entry.chat.lastMessagePreview ?? '', entry.projectName],
-      projectName: entry.projectName,
-    })),
-    [everySession.settled, everySession.unsettled],
-  )
-
   const rows = useMemo<InboxRow[]>(() => {
-    if (query.trim() !== '') {
-      return searchThreads(searchHits, query).flatMap((hit) => {
-        const entry = entriesById.get(hit.chatId)
-        return entry === undefined
-          ? []
-          : [{ kind: 'active' as const, key: `search:${hit.chatId}`, entry, searchResult: true }]
-      })
-    }
-
     const result: InboxRow[] = []
     // Project threads first, in the projects' own order, then the Sessions no thread started.
     if (threads.length > 0) {
@@ -141,8 +96,7 @@ function ProjectInbox() {
     if (directory.settled.length > 0) {
       result.push({ kind: 'settled-header', key: 'settled-header', count: directory.settled.length })
       if (settledOpen) {
-        // Only the first page is a row; the rest arrives via onEndReached. Search
-        // never reads this slice, it scans the full directory above.
+        // Only the first page is a row; the rest arrives via onEndReached.
         result.push(...directory.settled.slice(0, visibleSettled).map((entry) => ({
           kind: 'settled' as const,
           key: `settled:${entry.chat.id}`,
@@ -151,16 +105,11 @@ function ProjectInbox() {
       }
     }
     return result
-  }, [directory.settled, directory.unsettled, entriesById, query, searchHits, settledOpen, threads, visibleSettled])
+  }, [directory.settled, directory.unsettled, settledOpen, threads, visibleSettled])
 
   const loadMoreSettled = () => {
-    if (query.trim() !== '' || !settledOpen || directory.settled.length <= visibleSettled) return
+    if (!settledOpen || directory.settled.length <= visibleSettled) return
     setVisibleSettled((count) => Math.min(count + SETTLED_PAGE_SIZE, directory.settled.length))
-  }
-
-  const cancelSearch = () => {
-    setQuery('')
-    searchRef.current?.blur()
   }
 
   const enterChat = (chatId: string) => {
@@ -168,15 +117,13 @@ function ProjectInbox() {
     router.push({ pathname: '/chat/[id]', params: { id: chatId } })
   }
 
-  const empty = query.trim() !== ''
-    ? { title: 'No Sessions found', copy: 'Try a project name, a title, or a word from the last message.' }
-    : workspace.hasDirectory
-      ? { title: 'No sessions yet', copy: 'Start a Session with the button at the bottom right.' }
-      : status === 'offline'
-        ? { title: 'No connection to your Mac', copy: 'Open Manor on your Mac. Your Sessions show up here once the connection is back.' }
-        : status === 'connecting'
-          ? { title: 'Connecting to your Mac', copy: 'Your projects and Sessions show up here once Manor connects.' }
-          : { title: 'Loading Sessions', copy: 'Your Mac is sending over your projects and Sessions.' }
+  const empty = workspace.hasDirectory
+    ? { title: 'No sessions yet', copy: 'Start a Session with the button at the bottom right.' }
+    : status === 'offline'
+      ? { title: 'No connection to your Mac', copy: 'Open Manor on your Mac. Your Sessions show up here once the connection is back.' }
+      : status === 'connecting'
+        ? { title: 'Connecting to your Mac', copy: 'Your projects and Sessions show up here once Manor connects.' }
+        : { title: 'Loading Sessions', copy: 'Your Mac is sending over your projects and Sessions.' }
 
   return (
     <SectionScaffold compactTitle edgeToEdge title="Sessions">
@@ -188,8 +135,6 @@ function ProjectInbox() {
         ]}
         data={rows}
         keyExtractor={(row) => row.key}
-        keyboardDismissMode="on-drag"
-        keyboardShouldPersistTaps="handled"
         onEndReached={loadMoreSettled}
         onEndReachedThreshold={0.4}
         ListEmptyComponent={
@@ -228,15 +173,13 @@ function ProjectInbox() {
               </Pressable>
             )
           }
-          const settled = item.kind === 'settled' || settledIds.has(item.entry.chat.id)
+          const settled = item.kind === 'settled'
           const row = item.kind === 'settled' ? (
             <SettledRow agents={agents} entry={item.entry} onPress={() => enterChat(item.entry.chat.id)} />
           ) : (
             <ActiveRow
               agents={agents}
               entry={item.entry}
-              searchResult={item.searchResult === true}
-              settled={settled}
               onPress={() => enterChat(item.entry.chat.id)}
             />
           )
@@ -248,64 +191,22 @@ function ProjectInbox() {
         }}
       />
 
-      <KeyboardFooter
-        enabled={keyboardUp}
-        sink={insets.bottom}
-        pointerEvents="box-none"
-        style={styles.toolbarArea}
-      >
-        <GlassGroup spacing={10} style={styles.toolbar}>
-          <GlassSurface fallbackStyle={styles.floatingFallback} radius={25} style={styles.searchControl}>
-            <HugeiconsIcon color={colors.muted} icon={Search01Icon} size={21} strokeWidth={1.7} />
-            <TextInput
-              accessibilityLabel="Search Sessions"
-              clearButtonMode="while-editing"
-              maxFontSizeMultiplier={1.35}
-              onBlur={() => setSearchFocused(false)}
-              onChangeText={setQuery}
-              onFocus={() => setSearchFocused(true)}
-              placeholder="Search"
-              placeholderTextColor={colors.muted}
-              ref={searchRef}
-              returnKeyType="search"
-              selectionColor={colors.text}
-              style={styles.searchInput}
-              value={query}
-            />
-          </GlassSurface>
-
-          {searchFocused ? (
-            <GlassPressable
-              accessibilityLabel="Cancel search"
-              fallbackStyle={styles.floatingFallback}
-              fill
-              hitSlop={6}
-              onPress={cancelSearch}
-              radius={25}
-              style={styles.roundControl}
-            >
-              <View style={styles.controlPressable}>
-                <HugeiconsIcon color={colors.text} icon={Cancel01Icon} size={20} strokeWidth={1.7} />
-              </View>
-            </GlassPressable>
-          ) : (
-            <GlassPressable
-              accessibilityLabel="New Session"
-              fallbackColor={colors.lightControl}
-              fallbackStyle={styles.lightControlShadow}
-              fill
-              hitSlop={6}
-              onPress={() => router.push('/new-chat')}
-              radius={25}
-              style={styles.roundControl}
-              tintColor={glassTints.lightControl}
-            >
-              <View style={styles.controlPressable}>
-                <HugeiconsIcon color={colors.onLight} icon={PencilEdit01Icon} size={22} strokeWidth={1.7} />
-              </View>
-            </GlassPressable>
-          )}
-        </GlassGroup>
+      <KeyboardFooter enabled={false} sink={insets.bottom} pointerEvents="box-none" style={styles.toolbarArea}>
+        <View pointerEvents="box-none" style={styles.toolbar}>
+          <GlassPressable
+            accessibilityLabel="New session"
+            fallbackColor={colors.text}
+            fallbackStyle={styles.buttonShadow}
+            hitSlop={6}
+            onPress={() => router.push('/new-chat')}
+            radius={25}
+            tintColor={glassTints.primary[scheme]}
+          >
+            <View style={styles.newSessionContent}>
+              <Text maxFontSizeMultiplier={1.35} style={styles.newSessionLabel}>New session</Text>
+            </View>
+          </GlassPressable>
+        </View>
       </KeyboardFooter>
     </SectionScaffold>
   )
@@ -348,8 +249,7 @@ function SettleSwipe({
         // Only a right panel exists, so any open is the settle gesture; the direction
         // the library reports is the row's travel, which this must not depend on.
         onSwipe()
-        // A row that stays mounted (a search hit keeps its key) must not sit open with
-        // the opposite label, and a refused send must not sit open on a promise.
+        // A refused send must not leave the row sitting open on a promise.
         ref.current?.close()
       }}
     >
@@ -371,14 +271,10 @@ function SwipeAction({ drag, settled }: { drag: SharedValue<number>; settled: bo
 function ActiveRow({
   entry,
   agents,
-  searchResult,
-  settled,
   onPress,
 }: {
   entry: InboxChat
   agents: AgentConfig[]
-  searchResult: boolean
-  settled: boolean
   onPress: () => void
 }) {
   return (
@@ -400,7 +296,7 @@ function ActiveRow({
           {entry.noProject === true ? 'No project' : entry.projectName || 'Project'}
           {entry.viaThread === true ? <Text style={styles.viaThread}>{' via project thread'}</Text> : null}
         </Text>
-        <Standing entry={entry} settled={searchResult && settled} />
+        <Standing entry={entry} />
       </View>
       <View style={styles.titleRow}>
         <Text numberOfLines={1} style={styles.chatTitle}>{entry.chat.title}</Text>
@@ -440,11 +336,11 @@ function ThreadRow({ row, onPress }: { row: ProjectThreadRow; onPress: () => voi
  * The top-right slot: what the chat wants from the user, or when it last spoke.
  * Waiting is the loudest, then Working, then Done for an unread answer.
  */
-function Standing({ entry, settled }: { entry: InboxChat; settled: boolean }) {
+function Standing({ entry }: { entry: InboxChat }) {
   if (entry.waiting) return <Text style={styles.waiting}>Waiting</Text>
   if (entry.running) return <Text style={styles.runningText}>Working</Text>
   if (entry.unread) return <Text style={styles.doneText}>Done</Text>
-  return <Text style={styles.time}>{settled ? 'Settled, ' : ''}{relativeTime(entry.chat.lastMessageAt)}</Text>
+  return <Text style={styles.time}>{relativeTime(entry.chat.lastMessageAt)}</Text>
 }
 
 function SettledRow({ entry, agents, onPress }: { entry: InboxChat; agents: AgentConfig[]; onPress: () => void }) {
@@ -558,47 +454,21 @@ const styles = StyleSheet.create({
     left: 0,
     paddingTop: spacing.md,
   },
-  toolbar: {
-    width: '100%',
-    maxWidth: 760,
-    alignSelf: 'center',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
+  toolbar: { width: '100%', maxWidth: 760, alignSelf: 'center', alignItems: 'flex-end' },
+  newSessionContent: { height: 50, justifyContent: 'center', paddingHorizontal: spacing.xl },
+  newSessionLabel: {
+    color: colors.onPrimary,
+    fontFamily: fonts.sans,
+    fontSize: 17,
+    fontWeight: '500',
+    letterSpacing: tracking.body,
   },
-  roundControl: { width: 50, height: 50 },
-  floatingFallback: {
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.24,
-    shadowRadius: 20,
-    elevation: 8,
-  },
-  lightControlShadow: {
-    shadowColor: colors.onLight,
+  buttonShadow: {
+    shadowColor: colors.shadow,
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.18,
     shadowRadius: 20,
     elevation: 8,
-  },
-  controlPressable: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  searchControl: {
-    flex: 1,
-    height: 50,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    paddingLeft: spacing.lg,
-    paddingRight: spacing.sm,
-  },
-  searchInput: {
-    flex: 1,
-    height: 50,
-    color: colors.text,
-    fontFamily: fonts.sans,
-    fontSize: 17,
-    letterSpacing: tracking.body,
-    paddingVertical: 0,
   },
   pressed: { opacity: 0.64 },
   swipeAction: {
