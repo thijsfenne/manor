@@ -534,12 +534,19 @@ describe('project file writes in the thread', () => {
       write('d', 'replace', 'preferences.md', 'Corners are round, never square'),
       write('e', 'remove', 'notes.md', 'Old status'),
     ].map((event) => (event as Extract<ThreadEvent, { type: 'system_note' }>).projectFileWrite!)
-    expect(fileWriteGroups(writes)).toEqual([
+    expect(fileWriteGroups(writes).map(({ label, lines }) => ({ label, lines }))).toEqual([
       { label: 'Saved 2 lines to preferences.md', lines: ['Corners are round', 'Rows keep one hairline'] },
       { label: 'Saved 1 line to notes.md', lines: ['Export shipped'] },
       { label: 'Updated 1 line in preferences.md', lines: ['Corners are round, never square'] },
       { label: 'Removed 1 line from notes.md', lines: ['Old status'] },
     ])
+    // Each line keeps its write, which is what its Undo names.
+    expect(fileWriteGroups(writes)[0]!.writes).toEqual([writes[0], writes[2]])
+  })
+
+  it('names an agent’s own notes as its notes, since the file is named after the agent', () => {
+    const own = { file: 'sage.md', action: 'add' as const, line: 'Write in Dutch', agentId: 'sage', by: 'Sage' }
+    expect(fileWriteGroups([own]).map((group) => group.label)).toEqual(['Saved 1 line to its notes'])
   })
 
   it('names a card the thread created, and a dated line it put on one', () => {

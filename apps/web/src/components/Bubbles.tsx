@@ -1,4 +1,4 @@
-import { memo, useId, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
+import { memo, useContext, useId, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import type { FaceState } from '@manor/client-runtime/face-activity'
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import { DISCLOSURE } from '../motion'
@@ -25,6 +25,8 @@ import { useAgentMentions, useMessageChips } from './mentionMarkdown'
 import { ImageNumberBadge } from './MentionText'
 import { ZoomableImage, type GalleryImage } from './ui/ZoomableImage'
 import { MiddleCut } from './MiddleCut'
+import { NotesActionsContext } from './NotesLine'
+import { useRequest, type RequestEvents } from '../useRequest'
 
 /**
  * One turn, signed once, and what that turn is doing.
@@ -644,8 +646,9 @@ export function ProjectFileWriteCard({ write, projectName }: { write: ProjectFil
 }
 
 /**
- * What a project thread reply wrote to its two files, as one footnote under it:
- * "Saved 1 line to notes.md". It opens to the lines themselves.
+ * What a reply wrote to memory through the memory tool, as one footnote under it:
+ * "Saved 1 line to notes.md" for a project thread, "Saved 1 rule" for an agent. It
+ * opens to the lines themselves, each with its own Undo.
  */
 export function FileWriteFootnote({ writes }: { writes: readonly ProjectFileWrite[] }) {
   const [open, setOpen] = useState(false)
@@ -683,9 +686,7 @@ export function FileWriteFootnote({ writes }: { writes: readonly ProjectFileWrit
                 <div key={group.label} className="flex flex-col">
                   {/* One kind of write is already named on the line above. */}
                   <dt className={groups.length === 1 ? 'sr-only' : 'text-dim'}>{group.label}</dt>
-                  {group.lines.map((line, index) => (
-                    <dd key={index} className="m-0 text-muted [overflow-wrap:anywhere]">{line}</dd>
-                  ))}
+                  {group.writes.map((write, index) => <WrittenLine key={write.writeId ?? index} write={write} line={group.lines[index]!} />)}
                 </div>
               ))}
             </dl>
@@ -695,6 +696,40 @@ export function FileWriteFootnote({ writes }: { writes: readonly ProjectFileWrit
     </div>
   )
 }
+
+/**
+ * One written line with its Undo. The server refuses when the line changed since, and
+ * its reason shows beside the button; nothing is written then.
+ */
+function WrittenLine({ write, line }: { write: ProjectFileWrite; line: string }) {
+  const actions = useContext(NotesActionsContext)
+  const { pending, start } = useRequest(actions?.requestEvents ?? NO_REQUEST_EVENTS)
+  const [refusal, setRefusal] = useState<string | null>(null)
+  const { writeId } = write
+  const undone = write.undone === true
+  return (
+    <dd className="m-0 flex min-w-0 flex-wrap items-baseline gap-x-2 text-muted">
+      <span className={`min-w-0 [overflow-wrap:anywhere] ${undone ? 'text-dim line-through' : ''}`}>{line}</span>
+      {undone ? <span className="text-dim">Undone</span> : null}
+      {undone || writeId === undefined || actions === undefined ? null : (
+        <button
+          type="button"
+          disabled={pending || !actions.connected}
+          className="cursor-pointer border-0 bg-transparent p-0 text-[12px] text-dim underline-offset-2 [font-family:inherit] hover:text-text hover:underline disabled:cursor-default disabled:no-underline"
+          onClick={() => {
+            setRefusal(null)
+            start((requestId) => actions.undoWrite(writeId, requestId), { onNotice: (notice) => setRefusal(notice.text), noticeInPlace: true })
+          }}
+        >
+          {pending ? 'Undoing…' : 'Undo'}
+        </button>
+      )}
+      {refusal === null ? null : <span role="status" className="text-warn">{refusal}</span>}
+    </dd>
+  )
+}
+
+const NO_REQUEST_EVENTS: RequestEvents = { subscribe: () => () => undefined }
 
 /** A centred note line; `action` puts one small text button after its words. */
 export function SystemLine({ kind, text, action }: { kind: 'error' | 'aborted' | 'info'; text: string; action?: { label: string; onClick: () => void } }) {

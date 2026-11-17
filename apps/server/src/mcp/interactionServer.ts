@@ -17,6 +17,7 @@ import {
   GOAL_CHOICE_QUESTION_MAX,
   GOAL_POINT_MAX,
   MAX_GOAL_EVIDENCE,
+  SESSION_STATUS_MAX,
   OutboundDraftContentSchema,
   UserInputQuestionsSchema,
 } from '@manor/contracts'
@@ -381,7 +382,7 @@ const reviewTool = {
 // The project thread's own tools (decided 2026-10-10). One endpoint, one action each.
 const projectFileTool = {
   name: 'update_project_file',
-  description: 'Change one line of this project\'s preferences.md or notes.md, the two files only you and the user write, or one memory card in the same folder. add needs line; replace needs old (quoted exactly) and line; remove needs old. A newer preference replaces the older line rather than sitting next to it. A preference line holds at most 160 characters with the date Manor appends: the rule itself, ideally as [Rule](card.md): when it applies. Its reason and detail go on that card: add puts one dated line on the Decision section of a card MEMORY.md lists. create makes a new card (title, description, when and line) and lists it in MEMORY.md, only after the user picked the confirming first option of an ask_user question naming that file in this turn. Cards take no replace or remove. Keep open Notes rows as [ ]; finish work by replacing its row with [x]. Completed text moves to _archive/notes.md on idle ticks, including while other Sessions run. Each change shows in the thread.',
+  description: 'Change one line of this project\'s preferences.md or notes.md, the two files only you and the user write, or one memory card in the same folder. add needs line; replace needs old (quoted exactly) and line; remove needs old. A newer preference replaces the older line rather than sitting next to it. A preference line holds at most 160 characters with the date Manor appends: the rule itself, ideally as [Rule](card.md): when it applies. Its reason and detail go on that card: add puts one dated line on the Decision section of a card MEMORY.md lists. create makes a new card (title, description, when and line) and lists it in MEMORY.md, only after the user picked the confirming first option of an ask_user question naming that file in this turn. Cards take no replace or remove. A notes.md line holds at most 200 characters. Keep open Notes rows as [ ]; finish work by replacing its row with [x]. Completed text moves to _archive/notes.md on idle ticks, including while other Sessions run. Each change shows in the thread with Undo.',
   inputSchema: {
     type: 'object',
     properties: {
@@ -429,6 +430,22 @@ const projectReportTool = {
   },
 } as const
 
+// An agent's own standing notes, `memory/agents/<id>.md`, for an agent with memory on.
+const notesTool = {
+  name: 'update_notes',
+  description: 'Change one line of your own standing notes, the agreements on how you work for the user that load on every turn. One agreement per line, at most 160 characters with the date Manor appends. A lasting rule the user states for how you work with them is one line here, never an edit to your instructions; a newer rule replaces the older line rather than sitting next to it. add needs line; replace needs old (quoted exactly) and line; remove needs old. Each change shows in the chat with Undo.',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      action: { type: 'string', enum: ['add', 'replace', 'remove'] },
+      line: { type: 'string', minLength: 1, maxLength: 500 },
+      old: { type: 'string', minLength: 1, maxLength: 500 },
+    },
+    required: ['action'],
+    additionalProperties: false,
+  },
+} as const
+
 // A thread-started Session's one notes.md line, keyed by its handoff id.
 const sessionStatusTool = {
   name: 'set_session_status',
@@ -436,7 +453,7 @@ const sessionStatusTool = {
   inputSchema: {
     type: 'object',
     properties: {
-      status: { type: 'string', minLength: 1, maxLength: 300, description: 'One line, without the title.' },
+      status: { type: 'string', minLength: 1, maxLength: SESSION_STATUS_MAX, description: 'One line, without the title.' },
     },
     required: ['status'],
     additionalProperties: false,
@@ -511,14 +528,14 @@ const sessionForwardTool = {
   },
 } as const
 
-const PROJECT_TOOL_ACTIONS = { update_project_file: 'write', answer_session_question: 'answer', report_to_project: 'report', send_to_session: 'forward', set_session_status: 'status' } as const
+const PROJECT_TOOL_ACTIONS = { update_project_file: 'write', update_notes: 'write', answer_session_question: 'answer', report_to_project: 'report', send_to_session: 'forward', set_session_status: 'status' } as const
 const isProjectTool = (name: string): name is keyof typeof PROJECT_TOOL_ACTIONS => Object.hasOwn(PROJECT_TOOL_ACTIONS, name)
 
 async function projectThreadCall(projectUrl: string, capability: string, tool: keyof typeof PROJECT_TOOL_ACTIONS, arguments_: JsonRecord): Promise<string> {
   const response = await fetch(projectUrl, {
     method: 'POST',
     headers: { 'content-type': 'application/json', 'x-manor-user-input-capability': capability },
-    body: JSON.stringify({ ...arguments_, action: PROJECT_TOOL_ACTIONS[tool], ...(tool === 'update_project_file' ? { lineAction: arguments_.action } : {}) }),
+    body: JSON.stringify({ ...arguments_, action: PROJECT_TOOL_ACTIONS[tool], ...(PROJECT_TOOL_ACTIONS[tool] === 'write' ? { lineAction: arguments_.action } : {}) }),
   })
   const payload: unknown = await response.json().catch(() => undefined)
   if (!response.ok) {
@@ -735,7 +752,7 @@ export function interactionMcpServer(argv: readonly string[]): McpToolServer {
     name: 'manor-interaction',
     tools: [
       askTool(askMode), secretTool(askMode), draftTool, relayTool(relayMode), ...(catalog === undefined ? [] : subagentTools(catalog)),
-      deliverTool, goalTool, reviewTool, projectFileTool, sessionAnswerTool, projectReportTool, sessionForwardTool, sessionStatusTool,
+      deliverTool, goalTool, reviewTool, projectFileTool, notesTool, sessionAnswerTool, projectReportTool, sessionForwardTool, sessionStatusTool,
       instructionsTool, instructionsOfferTool,
     ].filter((tool) => enabled.has(tool.name)),
     failureMessage: 'The Manor tool failed.',

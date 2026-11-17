@@ -1,8 +1,10 @@
 /**
- * The server keeps a hidden source marker at the end of each Notes row in notes.md.
- * Readers strip it for display and use its date for the age of an open row.
+ * The server ends a Session-owned Notes row in notes.md with a hidden short id of that
+ * Session, `<!-- manor-note 1a2b3c4d -->`. Rows written before 2026-11-17 carry a longer
+ * form with a timestamp and a fingerprint; both are stripped for display. Dates now live
+ * in the server's own store.
  */
-export const NOTE_MARKER = /\s*<!-- manor-note handoff=([^\s]+) updated=(\d+) text=([a-f0-9]+) -->$/
+export const NOTE_MARKER = /\s*<!-- manor-note [^>\n]*? -->$/
 
 const DAY_MS = 86_400_000
 /** An open row unchanged this long gets an age next to it. */

@@ -612,6 +612,7 @@ export function ChatPanelRegion({
         status={status}
         requestEvents={manor.requestEvents}
         onLoad={manor.getProjectMemory}
+        onOpenSession={onOpenChat}
         overlay={dock.overlay}
         revealed={dock.revealed}
         phone={phone}

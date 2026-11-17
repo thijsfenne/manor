@@ -1,4 +1,4 @@
-import { CODE_REVIEWER_ID, DEFAULT_PROJECT_COLOR, DEFAULT_PROJECT_ICON, GOAL_CHOICES_SHOWN, MAX_GOAL_POINTS, SINGLE_CHAT_VOICE, isCommandGoal, isProjectThreadFile, isProseFile, projectFileWriteDetail, projectFileWriteLabel, splitUserMessage } from '@manor/contracts'
+import { CODE_REVIEWER_ID, DEFAULT_PROJECT_COLOR, DEFAULT_PROJECT_ICON, GOAL_CHOICES_SHOWN, MAX_GOAL_POINTS, SINGLE_CHAT_VOICE, isCommandGoal, isProjectThreadFile, isProseFile, projectFileWriteDetail, projectFileWriteLabel, splitUserMessage, writtenFileName } from '@manor/contracts'
 import type {
   ConnectCardKind,
   DeliveredFile,
@@ -2029,6 +2029,8 @@ export function closedWorkHandoff(row: WorkHandoffRow): 'Rejected' | 'Deleted' |
 export interface FileWriteGroup {
   label: string
   lines: string[]
+  /** The write behind each line, in the same order, for the Undo each line offers. */
+  writes: ProjectFileWrite[]
 }
 
 const WRITE_VERB: Record<ProjectFileWrite['action'], (lines: string, file: string) => string> = {
@@ -2040,22 +2042,25 @@ const WRITE_VERB: Record<ProjectFileWrite['action'], (lines: string, file: strin
 }
 
 /**
- * A turn's project file writes, one group per action and file in the order they first
- * happened: "Saved 2 lines to preferences.md", "Updated 1 line in notes.md". Each group
- * keeps the lines it touched, which the footnote shows when it is opened.
+ * A turn's memory writes, one group per action and file in the order they first
+ * happened: "Saved 2 lines to preferences.md", "Updated 1 line in notes.md", "Saved 1
+ * line to its notes". Each group keeps the lines it touched, which the footnote shows
+ * when it is opened, and the write behind each line for its Undo.
  */
 export function fileWriteGroups(writes: readonly ProjectFileWrite[]): FileWriteGroup[] {
-  const groups = new Map<string, { action: ProjectFileWrite['action']; file: string; lines: string[] }>()
+  const groups = new Map<string, ProjectFileWrite[]>()
   for (const write of writes) {
     const key = `${write.action}\0${write.file}`
-    const group = groups.get(key) ?? { action: write.action, file: write.file, lines: [] }
-    group.lines.push(projectFileWriteDetail(write) ?? '')
-    groups.set(key, group)
+    groups.set(key, [...groups.get(key) ?? [], write])
   }
-  return [...groups.values()].map(({ action, file, lines }) => ({
-    label: WRITE_VERB[action](`${lines.length} ${lines.length === 1 ? 'line' : 'lines'}`, file),
-    lines: lines.filter((line) => line !== ''),
-  }))
+  return [...groups.values()].map((group) => {
+    const kept = group.filter((write) => (projectFileWriteDetail(write) ?? '') !== '')
+    return {
+      label: WRITE_VERB[group[0]!.action](`${group.length} ${group.length === 1 ? 'line' : 'lines'}`, writtenFileName(group[0]!)),
+      lines: kept.map((write) => projectFileWriteDetail(write)!),
+      writes: kept,
+    }
+  })
 }
 
 /**

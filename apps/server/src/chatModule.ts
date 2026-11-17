@@ -1,20 +1,19 @@
 import type { AgentConfig, ClientMessage, EventSync, ServerMessage } from '@manor/contracts'
 import { SINGLE_CHAT_VOICE, isModelOnlyMessage, placeQuotesAfterText, splitUserMessage, summaryInContext } from '@manor/contracts'
 import { NEW_CHAT_TITLE, type GenerateChatTitle } from './chatTitle.js'
-import { composeAgentNotesBundle, undoNotesUpdate } from './agentNotes.js'
+import { composeAgentNotesBundle } from './agentNotes.js'
 import type { AdvanceChatSummary } from './chatSummary.js'
 import { listDmFiles } from './dmFiles.js'
-import { agentNotesPath, type MemoryTarget } from './memoryTarget.js'
+import type { MemoryTarget } from './memoryTarget.js'
 import type { Orchestrator } from './orchestrator.js'
 import type { OutboundDraftPort } from './outboundDrafts.js'
 import type { Store } from './store.js'
 import { subagentSummary } from './subagents.js'
-import { patchTurnResult } from './turnResultPatch.js'
 
 type ChatMessage = Extract<
   ClientMessage,
   {
-    type: 'open_chat' | 'get_chat_summary' | 'get_agent_notes' | 'get_dm_files' | 'undo_notes_update' | 'send_message' | 'stop' | 'stop_background' | 'answer_user_input' | 'answer_secret_request' | 'submit_outbound_draft' | 'discard_outbound_draft' | 'snooze_outbound_draft' | 'ignore_outbound_draft' | 'restore_outbound_draft' | 'outbound_thread_read' | 'set_chat_override'
+    type: 'open_chat' | 'get_chat_summary' | 'get_agent_notes' | 'get_dm_files' | 'send_message' | 'stop' | 'stop_background' | 'answer_user_input' | 'answer_secret_request' | 'submit_outbound_draft' | 'discard_outbound_draft' | 'snooze_outbound_draft' | 'ignore_outbound_draft' | 'restore_outbound_draft' | 'outbound_thread_read' | 'set_chat_override'
   }
 >
 
@@ -67,55 +66,12 @@ export class ChatModule {
 
   constructor(private readonly options: ChatModuleOptions) {}
 
-  /** The same notes, under the same conditions and cut, that the agent's DM and Session turns inject. */
+  /** The same notes, under the same conditions, that the agent's DM and Session turns inject. */
   private async injectedNotes(agentId: string | undefined) {
     const agent = this.options.agents().find((candidate) => candidate.id === agentId)
     if (agent?.memoryScope !== true) return undefined
     const bundle = await composeAgentNotesBundle(this.options.memoryTarget, agent.id)
-    const source = bundle.sources[0]
-    return source === undefined ? undefined : { ...source, truncated: bundle.truncated }
-  }
-
-  /**
-   * The Undo on a turn's "Updated its notes" line. The file path comes from the turn's
-   * agent, never the client. Refused, and nothing written, when the notes changed since
-   * the turn left them; a done Undo marks the result so every client shows it undone.
-   */
-  private async undoNotes(chatId: string, turnId: string, reply: (message: ServerMessage) => void, ack: () => void): Promise<void> {
-    const result = [...await this.options.store.loadEvents(chatId)].reverse()
-      .find((event) => event.type === 'turn_result' && event.turnId === turnId)
-    const update = result?.type === 'turn_result' ? result.notesUpdate : undefined
-    const filePath = result?.type === 'turn_result' ? agentNotesPath(this.options.memoryTarget, result.agentId) : undefined
-    if (result?.type !== 'turn_result' || update === undefined || update.undone === true || filePath === undefined) {
-      reply({ type: 'notice', kind: 'error', text: 'There is no notes change to undo here.' })
-      return
-    }
-    // A running turn of this persona may be writing the notes right now; restoring under it would lose its line.
-    const running = this.options.orchestrator.activeChatIds()
-      .some((id) => this.options.orchestrator.activeTurn(id)?.agentId === result.agentId)
-    if (running) {
-      reply({ type: 'notice', kind: 'info', text: 'It is working right now, so nothing was undone. Try again when it is done.' })
-      return
-    }
-    let outcome: 'undone' | 'changed'
-    try {
-      outcome = await undoNotesUpdate(filePath, update)
-    } catch {
-      reply({ type: 'notice', kind: 'error', text: 'Could not read the notes, so nothing was undone.' })
-      return
-    }
-    if (outcome === 'changed') {
-      reply({ type: 'notice', kind: 'info', text: 'The notes changed since, so nothing was undone.' })
-      return
-    }
-    await patchTurnResult(
-      this.options.store,
-      (event) => this.options.broadcast({ type: 'event', chatId, event }),
-      chatId,
-      turnId,
-      (current) => current.notesUpdate === undefined ? undefined : { ...current, notesUpdate: { ...current.notesUpdate, undone: true } },
-    )
-    ack()
+    return bundle.sources[0]
   }
 
   /** Called by the runtime only after the opening user event is durable. */
@@ -250,9 +206,6 @@ export class ChatModule {
         })
         return
       }
-      case 'undo_notes_update':
-        await this.undoNotes(message.chatId, message.turnId, reply, ack)
-        return
       case 'open_chat':
         reply(await this.snapshot(message.chatId, message.after, message.count, message.sync))
         return

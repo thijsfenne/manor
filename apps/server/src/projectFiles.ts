@@ -1,8 +1,9 @@
 import { randomUUID } from 'node:crypto'
 import { link, mkdir, readFile, realpath, rename, rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
-import type { ProjectThreadFile } from '@manor/contracts'
+import type { ProjectFileWrite, ProjectThreadFile } from '@manor/contracts'
 import { localDate } from './memoryWriter.js'
+import { diskNote } from './noteMarkers.js'
 import { structuredProjectSlug } from './structuredMemory.js'
 
 /**
@@ -186,6 +187,14 @@ export function applyThreadLineOp(content: string, op: ThreadLineOp): { content:
   if (line.length === 0 || line.includes('\n')) return { error: 'A line must be one non-empty line.' }
   lines[at] = `- ${line}`
   return { content: lines.join('\n') }
+}
+
+/** The line change that takes a memory tool write back, or undefined for one that cannot be (a new card). */
+export function inverseWrite(write: Pick<ProjectFileWrite, 'action' | 'line' | 'old'>): ThreadLineOp | undefined {
+  if (write.action === 'add' && write.line !== undefined) return { action: 'remove', old: write.line }
+  if (write.action === 'remove' && write.old !== undefined) return { action: 'add', line: write.old }
+  if (write.action === 'replace' && write.line !== undefined && write.old !== undefined) return { action: 'replace', old: write.line, line: write.old }
+  return undefined
 }
 
 /**
@@ -385,7 +394,8 @@ export async function archiveCompletedNotes(paths: ProjectThreadPaths, content: 
   const existing = await readSetupFile(file)
   if (isPinned(existing ?? '')) throw new Error('The Notes archive is pinned.')
   let archive = existing ?? `---\n${PROJECT_THREAD_OWNER_LINE}\n---\n# Archived notes\n\n`
-  const identity = (block: string) => block.replace(/<!-- manor-note handoff=([^\s]+) updated=\d+ text=[a-f0-9]+ -->/g, '<!-- manor-note handoff=$1 -->')
+  // Blocks archived before 2026-11-17 carry the longer marker; both forms name one row.
+  const identity = (block: string) => block.split('\n').map((line) => diskNote(line)).join('\n')
   const saved = new Set(splitCompletedNotes(archive).blocks.map(identity))
   const fresh = split.blocks.filter((block) => {
     const key = identity(block)

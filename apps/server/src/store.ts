@@ -1,3 +1,4 @@
+import type { NoteAges } from './noteMarkers.js'
 import type {
   AgentConfig,
   AgentDraft,
@@ -151,6 +152,13 @@ export interface Store {
   deletePushToken(token: string): Promise<void>
   getProjectSetup(projectId: string): Promise<{ version: number } | undefined>
   setProjectSetupVersion(projectId: string, version: number): Promise<void>
+  /**
+   * When each task row of a project's notes.md last changed (`noteMarkers.ts`). A cache:
+   * an empty answer only resets the age shown beside an open row.
+   */
+  loadNoteAges(projectId: string): Promise<NoteAges>
+  /** Replaces the project's whole set, so rows that left the file leave here too. */
+  saveNoteAges(projectId: string, ages: NoteAges): Promise<void>
   /** The projects the user made. The home room is never one of them. */
   listProjects(): Promise<Project[]>
   /**

@@ -697,8 +697,9 @@ function interviewScriptFor(input: TurnInput, request: typeof fetch): MockWorkSt
 
 /**
  * "mock rule: <rule>", a lasting rule stated in chat. A memory-off turn holds
- * `offer_instructions_line` and offers the rule; a memory-on one adds it to the notes
- * file its memory block names, as a persona would with its edit tool.
+ * `offer_instructions_line` and offers the rule; a memory-on one saves it with
+ * `update_notes`, or where that tool is not offered adds it to the notes file its
+ * memory block names, as a persona would with its edit tool.
  */
 function ruleScriptFor(input: TurnInput, request: typeof fetch): MockWorkStep | undefined {
   const rule = /\bmock rule:\s*([^\n]+)/i.exec(lastUserLine(input))?.[1]?.trim()
@@ -713,12 +714,22 @@ function ruleScriptFor(input: TurnInput, request: typeof fetch): MockWorkStep | 
       },
     }
   }
+  const writer = manorEndpoint(input, 'update_notes', '--project-url')
+  if (writer !== undefined) {
+    return {
+      tool: 'mcp__manor__update_notes',
+      run: async (signal) => {
+        await postManor(request, writer, { action: 'write', lineAction: 'add', line: rule }, signal)
+        return 'Got it, I will keep doing that.'
+      },
+    }
+  }
   const notes = /notes that are only about how you work for the user live at (\S+\.md)\./.exec(input.agent.character)?.[1]
   if (notes === undefined) return undefined
   return {
     tool: 'Edit',
     run: async () => {
-      const current = await readFile(notes, 'utf8').catch(() => `# ${input.agent.name}'s notes\n> capacity: 0/400 words\n`)
+      const current = await readFile(notes, 'utf8').catch(() => `# ${input.agent.name}\n\n`)
       await mkdir(path.dirname(notes), { recursive: true })
       await writeFile(notes, `${current.trimEnd()}\n- ${rule}\n`)
       return 'Got it, I will keep doing that.'

@@ -1385,7 +1385,7 @@ const TurnRow = memo(function TurnRow({
         </div>
       )}
       {turn.fileWrites === undefined ? null : <FileWriteFootnote writes={turn.fileWrites} />}
-      {running ? null : <NotesLine turnId={turn.turnId} agentId={turn.agentId} update={turn.notesUpdate} offer={turn.instructionsOffer} />}
+      {running ? null : <NotesLine agentId={turn.agentId} update={turn.notesUpdate} offer={turn.instructionsOffer} />}
       {/* Last in the turn, so sticking above the composer while it runs and settling
           when it ends are the same place: nothing moves when the turn finishes. */}
       {pinPlan && turn.todos !== undefined && turn.todos.length > 0 ? (

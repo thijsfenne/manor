@@ -15,7 +15,7 @@ let listeners: Set<(response: RequestResponse) => void>
 let events: RequestEvents
 const load = vi.fn((_chatId: string, _requestId: string) => true)
 const refreshNotes = vi.fn()
-const sageNotes: AgentNotesLoad = { kind: 'ready', notes: { path: 'memory/agents/sage.md', content: 'Log first, then answer once.', truncated: false } }
+const sageNotes: AgentNotesLoad = { kind: 'ready', notes: { path: 'memory/agents/sage.md', content: 'Log first, then answer once.' } }
 /** The view with its tab held the way Agent settings holds it. */
 function Page({ dm = true, memory = true, notes = sageNotes }) {
   const [tab, setTab] = useState<AgentMemoryTab>('summary')

@@ -1,5 +1,5 @@
-import { ArrowLeft01Icon, BubbleChatIcon, Cancel01Icon, File01Icon, RefreshIcon } from '@hugeicons/core-free-icons'
-import { NOTE_MARKER, noteAge, type ContextFile, type ProjectMemoryScope, type ServerMessage } from '@manor/contracts'
+import { ArrowLeft01Icon, BubbleChatIcon, Cancel01Icon, CheckmarkSquare02Icon, File01Icon, RefreshIcon, SquareIcon } from '@hugeicons/core-free-icons'
+import { NOTE_MARKER, type ContextFile, type ProjectMemoryScope, type ServerMessage } from '@manor/contracts'
 import { Fragment, useEffect, useMemo, useState, type ComponentPropsWithoutRef, type CSSProperties } from 'react'
 import type { Components } from 'react-markdown'
 import { messageTime } from '../messageMeta'
@@ -46,22 +46,12 @@ const fallbackTitle = (path: string): string =>
     .replace(/[_-]+/g, ' ')
     .replace(/^./, (letter) => letter.toUpperCase())
 
-/** Rendered as a muted badge by the detail's link components, never as a link. */
-const NOTE_AGE_HREF = '#note-age'
-
 /**
  * Frontmatter and the server's Notes source markers route the file for agents; the
- * user-facing detail starts at the memory itself. An open row the marker dates three
- * days or more back gets its age instead.
+ * user-facing detail starts at the memory itself.
  */
-export const projectMemoryBody = (content: string, now = Date.now()): string =>
-  content.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/, '').trim().split(/\r?\n/).map((line) => {
-    const marker = NOTE_MARKER.exec(line)
-    if (marker === null) return line
-    const text = line.slice(0, marker.index)
-    const age = /^- \[ \] /.test(text) ? noteAge(Number(marker[2]), now) : undefined
-    return age === undefined ? text : `${text} [${age}](${NOTE_AGE_HREF})`
-  }).join('\n')
+export const projectMemoryBody = (content: string): string =>
+  content.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/, '').trim().split(/\r?\n/).map((line) => line.replace(NOTE_MARKER, '')).join('\n')
 
 interface Props {
   projectId: string
@@ -85,6 +75,8 @@ interface Props {
    */
   summaryChatId?: string
   onLoadSummary?: (chatId: string, requestId: string) => boolean
+  /** Opens the Session a notes.md row belongs to. */
+  onOpenSession?: (chatId: string) => void
   overlay?: boolean
   revealed?: boolean
   phone?: boolean
@@ -105,6 +97,7 @@ export function ProjectMemoryPanel({
   memoryScope = 'project',
   summaryChatId,
   onLoadSummary,
+  onOpenSession,
   overlay = false,
   revealed = true,
   phone = false,
@@ -180,11 +173,10 @@ export function ProjectMemoryPanel({
     : (titles.get(fileName(selected.path)) ?? fallbackTitle(selected.path))
   const detailKey = summaryOpen ? SUMMARY_KEY : selected?.path ?? 'list'
   const selectedBody = selected === null ? '' : projectMemoryBody(selected.content)
+  // The thread's notes.md reads as rows: their ages live on the server, not in the file.
+  const noteRows = selected !== null && !selected.path.startsWith(USER_KEY) && fileName(selected.path) === 'notes.md' ? memory?.noteRows : undefined
   const memoryLinks = useMemo<Components>(() => ({
     a: ({ href, children }) => {
-      if (href === NOTE_AGE_HREF) {
-        return <span className="ml-1 whitespace-nowrap rounded-chip bg-raised px-1.5 py-0.5 text-meta text-dim">{children}</span>
-      }
       if (href !== undefined && /^https?:\/\//i.test(href)) return <ExternalLink href={href}>{children}</ExternalLink>
       // Only loaded sibling cards can open here; User files have a separate scope.
       const sibling = href?.match(/^(?:\.\/)?([^/\\:?#]+\.md)$/i)?.[1]
@@ -347,10 +339,12 @@ export function ProjectMemoryPanel({
           </div>
         ) : (
           <article className="px-5 py-5 text-label leading-[1.6] text-text">
-            {/^#\s/.test(selectedBody) ? null : (
+            {noteRows === undefined && /^#\s/.test(selectedBody) ? null : (
               <h1 className="mt-0 mb-2 text-[16px] leading-snug font-medium tracking-[-0.01em] text-text">{title}</h1>
             )}
-            <Markdown text={selectedBody} variant="panel" components={memoryLinks} />
+            {noteRows === undefined
+              ? <Markdown text={selectedBody} variant="panel" components={memoryLinks} />
+              : <NoteRows rows={noteRows} onOpenSession={onOpenSession} />}
           </article>
         )}
       </div>
@@ -396,5 +390,49 @@ function SelectedBadge() {
     >
       This turn
     </span>
+  )
+}
+
+/**
+ * A project thread's notes.md as rows: the box, the text, the Session that owns the row
+ * and how long an open row has stood. A done row fades until Manor archives it.
+ */
+function NoteRows({ rows, onOpenSession }: { rows: NonNullable<Memory['noteRows']>; onOpenSession?: ((chatId: string) => void) | undefined }) {
+  if (rows.length === 0) return <p className="m-0 text-dim">No notes yet.</p>
+  return (
+    <ol aria-label="Notes" className="m-0 flex list-none flex-col gap-3 p-0">
+      {rows.map((row, index) => (
+        <li key={index} className={`flex min-w-0 items-start gap-2 ${row.done === true ? 'opacity-50' : ''}`}>
+          {row.done === undefined ? <span className="w-[15px] flex-none" /> : (
+            <Icon
+              icon={row.done ? CheckmarkSquare02Icon : SquareIcon}
+              size={15}
+              className="mt-[3px] flex-none text-dim"
+              {...{ role: 'img', 'aria-label': row.done ? 'Done' : 'Open' }}
+            />
+          )}
+          <div className="flex min-w-0 flex-1 flex-col items-start gap-1">
+            <span className={`[overflow-wrap:anywhere] ${row.done === true ? 'line-through decoration-dim' : ''}`}>{row.text}</span>
+            {row.session === undefined && row.age === undefined ? null : (
+              <span className="flex min-w-0 flex-wrap items-center gap-1.5">
+                {row.session === undefined ? null : onOpenSession === undefined ? (
+                  <span className="max-w-full truncate rounded-chip border border-line px-1.5 py-0.5 text-meta text-muted">{row.session.title}</span>
+                ) : (
+                  <button
+                    type="button"
+                    title={`Open the Session ${row.session.title}`}
+                    className="max-w-full cursor-pointer truncate rounded-chip border border-line bg-transparent px-1.5 py-0.5 text-meta text-muted [font-family:inherit] hover:border-dim hover:text-text"
+                    onClick={() => onOpenSession(row.session!.chatId)}
+                  >
+                    {row.session.title}
+                  </button>
+                )}
+                {row.age === undefined ? null : <span className="whitespace-nowrap rounded-chip bg-raised px-1.5 py-0.5 text-meta text-dim">{row.age}</span>}
+              </span>
+            )}
+          </div>
+        </li>
+      ))}
+    </ol>
   )
 }

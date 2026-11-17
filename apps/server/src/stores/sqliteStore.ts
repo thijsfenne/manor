@@ -9,6 +9,7 @@ import { agents as seedAgents } from '../agents.js'
 import { sessionChangedFiles } from '../goalReview.js'
 import { attachmentFields } from '../handoffAttachments.js'
 import { nextRunAfter } from '../routineSchedule.js'
+import type { NoteAges } from '../noteMarkers.js'
 import { checkChatDraft, checkGroupMembers, checkRoutineDraft, assertEventId, deriveAgentId, isLaterEventId, SIDE_CHAT_TITLE, stampEvent, scrubPersistedEvent, type ChatDraft, type ChatSummary, type ChatWorktree, type ClaimedRoutine, type DraftEvent, type OutboundThreadDecision, type RoutineRunRecord, type Store, ENDED_ROUTINE, RUNNING_ONE_TIME, SUPERSEDED_PROPOSAL, withRoutineDefaults, withUnreadRun, } from '../store.js'
 export interface SqliteStoreOptions {
   filename: string
@@ -113,6 +114,7 @@ export function createSqliteStore(options: SqliteStoreOptions): Store & {
   const profile = new SqliteRecords<UserProfile>(db, 'profile')
   const houseSettings = new SqliteRecords<unknown>(db, 'settings')
   const projectSetup = new SqliteRecords<{ version: number }>(db, 'projectSetup')
+  const noteAges = new SqliteRecords<NoteAges>(db, 'noteAges')
   let projectCounter = 0
   let chatCounter = 0
   let mcpCounter = 0
@@ -372,6 +374,11 @@ export function createSqliteStore(options: SqliteStoreOptions): Store & {
       if (projectSetup.get(projectId)?.version !== version) projectSetup.set(projectId, { version })
       return undefined
     },
+    loadNoteAges: (projectId) => noteAges.get(projectId) ?? {},
+    saveNoteAges(projectId, ages) {
+      if (JSON.stringify(noteAges.get(projectId) ?? {}) !== JSON.stringify(ages)) noteAges.set(projectId, ages)
+      return undefined
+    },
     listProjects: () => [...projects.values()],
     setHomeFolders(repoPaths) {
       homeFolders = [...repoPaths]
@@ -529,6 +536,7 @@ export function createSqliteStore(options: SqliteStoreOptions): Store & {
         if (handoff.projectId === projectId) workHandoffs.set(id, { ...handoff, state: 'deleted' })
       }
       projectSetup.delete(projectId)
+      noteAges.delete(projectId)
       projects.delete(projectId)
       return undefined
     },
@@ -1538,5 +1546,5 @@ const READS = new Set<keyof SyncStore>([
   'workHandoffForTarget', 'loadRoster', 'listMcpServers', 'listSkills', 'loadSkillBundle', 'loadEvents', 'loadThread', 'loadDocument', 'documentIds',
   'listUnresolvedOutboundSubmissions', 'getOutboundThreadDecision', 'getChatSummary', 'getSessions',
   'loadChatOverrides', 'loadChatWorktrees', 'usageRuns', 'searchMessages', 'listRoutines', 'listRuns', 'getSubagentPolicy',
-  'getProfile', 'getHouseSettings', 'getProjectSetup',
+  'getProfile', 'getHouseSettings', 'getProjectSetup', 'loadNoteAges',
 ])

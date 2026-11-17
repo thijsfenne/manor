@@ -16,7 +16,8 @@ import { validateRepoPaths } from './repo.js'
 import { listRepoFiles, readRepoFile, resolveInRepo, writeRepoFile } from './repoFiles.js'
 import type { ExternalFileOpener } from './externalFiles.js'
 import type { ChatWorktree, Store } from './store.js'
-import { projectThreadPaths, threadFilePath } from './projectFiles.js'
+import { notesRows, shortNoteId } from './noteMarkers.js'
+import { projectThreadPaths, readThreadFile, threadFilePath } from './projectFiles.js'
 import { subagentDirectory } from './subagents.js'
 import {
   attachWorktrees,
@@ -253,6 +254,22 @@ export class ProjectModule {
     return { directoriesRemoved: orphans.directoriesRemoved, nodeModulesRemoved, worktreesReleased }
   }
 
+  /** A project thread's notes.md as rows for the memory panel, its Sessions named and its ages from the store. */
+  private async noteRows(project: Project): Promise<Pick<Extract<ServerMessage, { type: 'project_memory' }>, 'noteRows'>> {
+    const { store, structuredMemoryRoot } = this.options
+    if (project.threadChatId === undefined || structuredMemoryRoot === undefined) return {}
+    const content = await readThreadFile(projectThreadPaths(structuredMemoryRoot, project.name).notes)
+    if (content.trim() === '') return {}
+    const sessions = new Map<string, { chatId: string; title: string } | undefined>()
+    for (const handoff of await store.listWorkHandoffs()) {
+      if (handoff.sourceChatId !== project.threadChatId || handoff.workChatId === null) continue
+      const id = shortNoteId(handoff.id)
+      // Two Sessions behind one short id name neither.
+      sessions.set(id, sessions.has(id) ? undefined : { chatId: handoff.workChatId, title: handoff.title })
+    }
+    return { noteRows: notesRows(content, await store.loadNoteAges(project.id), sessions, Date.now()) }
+  }
+
   async handle(message: ProjectMessage, context: ProjectReplyContext): Promise<void> {
     const { store } = this.options
     const { reply, send, ack, requestId } = context
@@ -280,6 +297,7 @@ export class ProjectModule {
         reply({
           type: 'project_memory', projectId: project.id, ...(requestId === undefined ? {} : { requestId }), ...listing,
           ...(writes.size === 0 ? {} : { writes: [...writes.values()] }),
+          ...await this.noteRows(project),
         })
         return
       }

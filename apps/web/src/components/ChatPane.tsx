@@ -111,7 +111,7 @@ interface ChatPaneProps {
   onEditProject?: () => void
   onEditPersona?: (agentId: string) => void
   /** Undo on a turn's "Updated its notes" line. */
-  onUndoNotes?: (chatId: string, turnId: string, requestId: string) => boolean
+  onUndoMemoryWrite?: (chatId: string, writeId: string, requestId: string) => boolean
   onAcceptWork: (handoffId: string, options: WorkAcceptanceOptions) => Promise<unknown> | void
   onRejectWork: (handoffId: string) => boolean
   onConfirmGoal: (handoffId: string, mergeInto?: string, version?: number, requestId?: string) => boolean
@@ -217,7 +217,7 @@ export function ChatPane({
   onFocus,
   onEditProject,
   onEditPersona,
-  onUndoNotes,
+  onUndoMemoryWrite,
   onAcceptWork,
   onRejectWork,
   onConfirmGoal,
@@ -415,10 +415,10 @@ export function ChatPane({
   const houseAgents = browserHouse ? chatRoster(workspace.agents, chat, []) : NO_AGENTS
   // Mentions offer only who can sit in this room: Session personas in a Session.
   const composerAgents = singleChat ? NO_AGENTS : roomAgents(workspace.agents, chat)
-  const notesActions: NotesActions | undefined = onEditPersona === undefined || onUndoNotes === undefined ? undefined : {
+  const notesActions: NotesActions | undefined = onEditPersona === undefined || onUndoMemoryWrite === undefined ? undefined : {
     requestEvents,
     connected: status === 'live',
-    undo: (turnId, requestId) => onUndoNotes(chat.id, turnId, requestId),
+    undoWrite: (writeId, requestId) => onUndoMemoryWrite(chat.id, writeId, requestId),
     editAgent: onEditPersona,
   }
   const resultActions: WorkResultActions = {

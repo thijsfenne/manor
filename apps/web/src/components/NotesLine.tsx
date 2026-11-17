@@ -1,15 +1,16 @@
-import { createContext, useContext, useState, type ReactNode } from 'react'
+import { createContext, useContext, type ReactNode } from 'react'
 import { Book02Icon, File01Icon } from '@hugeicons/core-free-icons'
 import type { NotesUpdate } from '@manor/contracts'
 import { openAgentPage } from '../agentSettingsIntent'
-import { useRequest, type RequestEvents } from '../useRequest'
+import type { RequestEvents } from '../useRequest'
 import { Icon } from './Icon'
 
 /** What a turn's notes line can do from inside a chat. Absent where the chat cannot, as in a read-only view. */
 export interface NotesActions {
   requestEvents: RequestEvents
   connected: boolean
-  undo: (turnId: string, requestId: string) => boolean
+  /** Takes one memory tool write back; the server refuses when the line changed since. */
+  undoWrite: (writeId: string, requestId: string) => boolean
   /** Opens the agent's settings wherever they live: its DM's panel, or Settings. */
   editAgent: (agentId: string) => void
 }
@@ -34,43 +35,27 @@ function Line({ icon, children }: { icon: Parameters<typeof Icon>[0]['icon']; ch
 }
 
 /**
- * Under a reply: "Updated its notes +1 line, View, Undo", or a memory-off agent's
- * offer, "Add to instructions". Undo is the server's to refuse, when the notes changed
- * since or the agent is mid-turn; its answer shows beside the button and nothing is written.
+ * Under a reply: "Updated its notes +1 line, View" when the agent changed its notes with
+ * a file tool, or a memory-off agent's offer, "Add to instructions". The lines it wrote
+ * with `update_notes` are in the footnote above instead, each with its own Undo.
  */
-export function NotesLine({ turnId, agentId, update, offer }: {
-  turnId: string
+export function NotesLine({ agentId, update, offer }: {
   agentId: string
   update?: NotesUpdate | undefined
   offer?: string | undefined
 }) {
   const actions = useContext(NotesActionsContext)
-  const { pending, start } = useRequest(actions?.requestEvents ?? NO_EVENTS)
-  const [refusal, setRefusal] = useState<string | null>(null)
   if (actions === undefined || (update === undefined && offer === undefined)) return null
   const open = (page: 'notes' | 'instructions', line?: string) => {
     openAgentPage({ agentId, page, ...(line === undefined ? {} : { line }) })
     actions.editAgent(agentId)
   }
-  const undo = () => {
-    setRefusal(null)
-    start((requestId) => actions.undo(turnId, requestId), {
-      onNotice: (notice) => setRefusal(notice.text),
-      noticeInPlace: true,
-    })
-  }
   return (
     <div data-chrome="" className="flex min-w-0 flex-col gap-1">
       {update === undefined ? null : (
         <Line icon={Book02Icon}>
-          <span>{update.undone === true ? 'Undid its notes change' : `Updated its notes ${notesCountLabel(update)}`}</span>
+          <span>Updated its notes {notesCountLabel(update)}</span>
           <button type="button" className={LINK} onClick={() => open('notes')}>View</button>
-          {update.undone === true ? null : (
-            <button type="button" className={LINK} disabled={pending || !actions.connected} onClick={undo}>
-              {pending ? 'Undoing…' : 'Undo'}
-            </button>
-          )}
-          {refusal === null ? null : <span role="status" className="text-warn">{refusal}</span>}
         </Line>
       )}
       {offer === undefined ? null : (
@@ -82,5 +67,3 @@ export function NotesLine({ turnId, agentId, update, offer }: {
     </div>
   )
 }
-
-const NO_EVENTS: RequestEvents = { subscribe: () => () => undefined }

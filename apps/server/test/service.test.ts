@@ -388,13 +388,13 @@ describe('ManorService', () => {
     const replies: ServerMessage[] = []
     await manor.handle({ type: 'get_chat_summary', chatId: dm.id }, (message) => replies.push(message))
     expect(replies.at(-1)).toMatchObject({
-      type: 'chat_summary', notes: { path: notesPath, content: '# Sage\n\n- Coach, do not answer.', truncated: false },
+      type: 'chat_summary', notes: { path: notesPath, content: '# Sage\n\n- Coach, do not answer.' },
     })
     // Agent settings reads the same notes by agent, so a Session agent without a DM has them too.
     await manor.handle({ type: 'get_agent_notes', agentId: 'sage', requestId: 'notes-1' }, (message) => replies.push(message))
     expect(replies.at(-1)).toEqual({
       type: 'agent_notes', agentId: 'sage', requestId: 'notes-1',
-      notes: { path: notesPath, content: '# Sage\n\n- Coach, do not answer.', truncated: false },
+      notes: { path: notesPath, content: '# Sage\n\n- Coach, do not answer.' },
     })
     live = [{ ...sage, memoryScope: false }]
     await manor.handle({ type: 'get_chat_summary', chatId: dm.id }, (message) => replies.push(message))

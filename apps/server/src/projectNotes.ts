@@ -1,21 +1,10 @@
-import { createHash } from 'node:crypto'
-import { NOTE_MARKER as MARKER, noteAge, type ThreadEvent, type WorkHandoff } from '@manor/contracts'
+import { noteAge, type ThreadEvent, type WorkHandoff } from '@manor/contracts'
+import { noteHandoff, noteStamp, noteText, shortNoteId, sourceNote } from './noteMarkers.js'
 import type { Store } from './store.js'
 import { landedNoteCommit, currentSessionCommits, observeWorkCompletion } from './workCompletion.js'
 import { autoBranchName } from './worktree.js'
 
-const fingerprint = (text: string) => createHash('sha256').update(text.replace(/^- /, '')).digest('hex').slice(0, 16)
-export const noteText = (line: string): string => line.replace(MARKER, '')
-export const noteHandoff = (line: string): string | undefined => {
-  const id = MARKER.exec(line)?.[1]
-  return id === '-' ? undefined : id
-}
-
-/** Identity survives title changes. The fingerprint dates human edits conservatively on first observation. */
-export function sourceNote(line: string, handoffId: string, updatedAt: number): string {
-  const text = noteText(line)
-  return `${text} <!-- manor-note handoff=${handoffId} updated=${updatedAt} text=${fingerprint(text)} -->`
-}
+export { noteHandoff, noteText, sourceNote } from './noteMarkers.js'
 
 /**
  * Confirm checks a Notes row only once nothing is left to land: a result with nothing
@@ -39,20 +28,24 @@ export interface NotesGit {
 
 /** No I/O or title matching. Unknown provenance and uncertain Git evidence leave rows open. */
 export function reconcileNotes(rows: readonly string[], handoffs: readonly NoteSession[], git: NotesGit): string[] {
-  const sessions = new Map(handoffs.map((session) => [session.handoff.id, session]))
+  const sessions = new Map<string, NoteSession>()
+  const shared = new Set<string>()
+  for (const session of handoffs) {
+    const id = shortNoteId(session.handoff.id)
+    if (sessions.has(id)) shared.add(id)
+    sessions.set(id, session)
+  }
+  // Two Sessions behind one short id prove nothing about either row.
+  for (const id of shared) sessions.delete(id)
   return rows.map((row) => {
     if (!/^- \[[ xX]\] /.test(row)) return row
     const id = noteHandoff(row)
     const session = id === undefined ? undefined : sessions.get(id)
-    if (session === undefined) {
-      const marker = MARKER.exec(row)
-      return sourceNote(row, id ?? '-', marker !== null && marker[3] === fingerprint(noteText(row)) ? Number(marker[2]) : git.now)
-    }
+    const stamp = noteStamp(row)
+    let updatedAt = stamp?.current === true ? stamp.updatedAt : git.now
+    if (session === undefined) return sourceNote(row, id ?? '-', updatedAt)
     const { handoff, settled } = session
     let text = noteText(row)
-    const marker = MARKER.exec(row)!
-    let updatedAt = Number(marker[2])
-    if (marker[3] !== fingerprint(text)) updatedAt = git.now
     if (handoff.unsettledAt !== undefined) return sourceNote(text, handoff.id, updatedAt)
     const commits = git.landed.get(handoff.id) ?? []
     const reportedAt = handoff.goalReachedAt ?? handoff.resultAt
@@ -79,13 +72,12 @@ export function reconcileNotes(rows: readonly string[], handoffs: readonly NoteS
   })
 }
 
-/** Context only. An unchanged open row says its age inline; age never changes a checkbox or the file. */
+/** Context only, from working rows (`hydrateNotes`). An unchanged open row says its age inline; age never changes a checkbox or the file. */
 export function notesContext(content: string, now = Date.now()): string {
   return content.split('\n').map((line) => {
-    const marker = MARKER.exec(line)
-    const text = noteText(line)
-    const age = /^- \[ \] /.test(line) && marker !== null && marker[3] === fingerprint(text) ? noteAge(Number(marker[2]), now) : undefined
-    return age === undefined ? text : `${text} (${age})`
+    const stamp = noteStamp(line)
+    const age = /^- \[ \] /.test(line) && stamp?.current === true ? noteAge(stamp.updatedAt, now) : undefined
+    return age === undefined ? noteText(line) : `${noteText(line)} (${age})`
   }).join('\n')
 }
 
@@ -150,7 +142,7 @@ export async function loadNotesEvidence(
     const chat = await store.getChat(handoff.workChatId!)
     const settled = chat?.settledAt != null
     sessions.push({ handoff, settled })
-    const ownRows = rows.filter((row) => noteHandoff(row) === handoff.id && /^- \[ \] /.test(row))
+    const ownRows = rows.filter((row) => noteHandoff(row) === shortNoteId(handoff.id) && /^- \[ \] /.test(row))
     if (ownRows.length === 0 || handoff.unsettledAt !== undefined) continue
     const candidates = [...handoff.goalCompletion?.commits ?? []]
     let complete = true

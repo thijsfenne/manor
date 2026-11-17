@@ -39,6 +39,7 @@ import {
 } from '@manor/contracts'
 import { groupTurnTranscript } from './groupTurnRouter.js'
 import { preferenceAnswerText, type AnsweredQuestion } from './interactionBroker.js'
+import { hydrateNotes } from './noteMarkers.js'
 import { notesContext } from './projectNotes.js'
 import {
   DM_ROUTINE_OUTCOME_BLOCK,
@@ -991,6 +992,8 @@ export class TurnRunner {
         // Capability cleanup must not replace the turn outcome or keep it active.
       }
       state.revokeSkillMcp = undefined
+      // A stopped or failed turn never reads them; they must not wait for a turn that reuses the id.
+      this.options.takeNotesWrites?.(turnId)
       const notesTurns = this.notesTurns.get(agent.id)
       if (notesTurns?.delete(state) === true && notesTurns.size === 0) this.notesTurns.delete(agent.id)
       chat.active = undefined
@@ -1281,6 +1284,8 @@ export class TurnRunner {
       allowGoal,
       allowReview: turn.goal !== undefined && agent.id === CODE_REVIEWER_ID,
       allowProjectFiles: threadTurn,
+      // An agent with memory on keeps its own notes in a DM or a group only: not in a side chat, a Single Session or a talk between agents.
+      allowNotes: (room?.kind === 'dm' || room?.kind === 'group') && !threadTurn && !single && agent.memoryScope && this.options.memoryTarget !== undefined,
       allowSessionAnswer: threadTurn,
       allowSessionForward: threadTurn,
       mayAnswer: threadTurn && (threadReason === 'user' || threadReason === 'question'),
@@ -1353,7 +1358,7 @@ export class TurnRunner {
     const agentNotes = notesTracked
       ? await composeAgentNotesBundle(this.options.memoryTarget, agent.id)
       : { text: '', sources: [] }
-    // The notes as this turn found them, so a change it makes gets its chat line and Undo.
+    // The notes as this turn found them, so a file-tool change it makes gets its chat line with View.
     // Undefined where the persona keeps no notes or the file cannot be read.
     const notesPath = notesTracked ? agentNotesPath(this.options.memoryTarget, agent.id) : undefined
     if (notesPath !== undefined) {
@@ -1364,7 +1369,9 @@ export class TurnRunner {
     }
     const notesBefore = notesPath === undefined ? undefined : await readNotesFile(notesPath)
     const preferencesText = threadPaths === undefined ? '' : await readThreadFile(threadPaths.preferences)
-    const notesText = threadTurn ? await readThreadFile(threadPaths.notes) : ''
+    const notesText = threadTurn && project !== undefined
+      ? hydrateNotes(threadFileBody(await readThreadFile(threadPaths.notes)), await this.options.store.loadNoteAges(project.id), Date.now())
+      : ''
     // What changes between turns travels in the turn's message rather than the prompt,
     // each block only when it changed for that provider session (`resumedContext`), so
     // the prompt prefix and the provider's cache survive a notes write or a wake.
@@ -1373,7 +1380,7 @@ export class TurnRunner {
     const volatileBlocks: VolatileBlock[] = [
       ...(threadTurn && project !== undefined && threadPaths !== undefined
         ? [
-            { key: 'notes' as const, text: `[Manor] Current notes.md for ${project.name}, from ${threadPaths.notes}:\n${notesContext(threadFileBody(notesText)) || '(no notes yet)'}` },
+            { key: 'notes' as const, text: `[Manor] Current notes.md for ${project.name}, from ${threadPaths.notes}:\n${notesContext(notesText) || '(no notes yet)'}` },
             // Every thread turn, so a wake does not withdraw it; only the user's turn can act on it.
             { key: 'sessions' as const, text: threadSessionsBlock(await threadSessions(this.options.store, chatId)) },
           ]
@@ -2310,7 +2317,7 @@ export class TurnRunner {
     const notesAfter = notesPath === undefined || notesBefore === undefined ? undefined : await readNotesFile(notesPath)
     const notesUpdate = notesBefore === undefined || notesAfter === undefined || state.notesShared === true
       ? undefined
-      : notesUpdateOf(notesBefore, notesAfter)
+      : notesUpdateOf(notesBefore, notesAfter, this.options.takeNotesWrites?.(turnId))
     const instructionsOffer = this.options.takeInstructionsOffer?.(turnId)
     await this.append(chat, chatId, {
       type: 'turn_result',

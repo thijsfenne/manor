@@ -2025,23 +2025,15 @@ export const MemoryChangeSchema = z.object({
 })
 export type MemoryChange = z.infer<typeof MemoryChangeSchema>
 
-/** The largest notes file a turn keeps a copy of for Undo; past it the chat line is not offered. */
-export const NOTES_UNDO_MAX = 20_000
-
 /**
- * A persona's own standing notes changed in this turn (`memory/agents/<id>.md`). The
- * chat shows "Updated its notes" with View and Undo. Undo puts `before` back only
- * while the file still hashes to `afterHash`; a later change refuses it.
+ * A persona changed its own standing notes (`memory/agents/<id>.md`) with a file tool in
+ * this turn. The chat shows "Updated its notes" with View. The lines `update_notes` wrote
+ * are left out: those carry their own Undo.
  */
 export const NotesUpdateSchema = z.object({
   /** Note lines added and removed, headings and the capacity line left out. */
   added: z.number().int().min(0),
   removed: z.number().int().min(0),
-  /** The file as the turn found it; null when it did not exist, so Undo removes it. */
-  before: z.string().max(NOTES_UNDO_MAX).nullable(),
-  /** SHA-256 of the file as the turn left it; null when the turn removed it. */
-  afterHash: z.string().max(128).nullable(),
-  undone: z.literal(true).optional(),
 })
 export type NotesUpdate = z.infer<typeof NotesUpdateSchema>
 
@@ -2338,9 +2330,9 @@ export const isProjectThreadFile = (file: string): file is ProjectThreadFile =>
 /** A memory card beside the thread's two files: a flat Markdown file in the same folder. */
 export const PROJECT_CARD_FILE = /^[a-z0-9][a-z0-9_-]*\.md$/
 
-// A write to a project thread's own file, or a dated line on (or a new) memory card in
-// its folder. `restore` is Manor undoing a write by someone else. `by` names the writer
-// for display only; nothing matches on it.
+// A write to a project thread's own file, a dated line on (or a new) memory card in its
+// folder, or a line in an agent's own notes. `restore` is Manor undoing a write by someone
+// else. `by` names the writer for display only; nothing matches on it.
 export const ProjectFileWriteSchema = z.object({
   file: z.union([ProjectThreadFileSchema, z.string().max(200).regex(PROJECT_CARD_FILE)]),
   action: z.enum(['add', 'replace', 'remove', 'restore', 'create']),
@@ -2350,8 +2342,24 @@ export const ProjectFileWriteSchema = z.object({
   // The thread turn that wrote it. Clients fold the write into that turn's reply as a
   // footnote; a restore has none and stands as its own line.
   turnId: z.string().max(200).optional(),
+  /** Set when an agent wrote its own notes with `update_notes`; absent for a project's files. */
+  agentId: z.string().max(200).optional(),
+  /** Names the write for `undo_memory_write`. Absent on a write that cannot be undone. */
+  writeId: z.string().max(200).optional(),
+  /** The Session a removed Notes row belonged to, so Undo puts it back as that Session's row. */
+  noteId: z.string().max(200).optional(),
+  undone: z.literal(true).optional(),
 })
 export type ProjectFileWrite = z.infer<typeof ProjectFileWriteSchema>
+
+/** A thread-written notes.md line holds at most this; a longer one written by hand stays. */
+export const NOTES_LINE_MAX = 200
+/** A Session's `set_session_status` line holds at most this, its title not counted. */
+export const SESSION_STATUS_MAX = 200
+
+/** The file a write names in its label: an agent's notes file is named after the agent, which says nothing. */
+export const writtenFileName = (write: Pick<ProjectFileWrite, 'file' | 'agentId'>): string =>
+  write.agentId === undefined ? write.file : 'its notes'
 
 const LOST_CONNECTION_TAIL = "'s turn lost its connection to the server, most likely a restart. Whatever it was doing may still have landed, so check the result rather than assume it did not run."
 
@@ -2369,22 +2377,23 @@ export const workReopenedLine = (lead: string | undefined): string =>
 export const isLostConnectionNote = (text: string): boolean => text.endsWith(LOST_CONNECTION_TAIL)
 
 /** The short label a project file write wears in the transcript, e.g. "Saved to preferences.md". */
-export function projectFileWriteLabel(write: Pick<ProjectFileWrite, 'action' | 'file'>, projectName?: string): string {
+export function projectFileWriteLabel(write: Pick<ProjectFileWrite, 'action' | 'file' | 'agentId'>, projectName?: string): string {
+  const file = writtenFileName(write)
   if (projectName !== undefined) {
     switch (write.action) {
-      case 'add': return `${projectName} saved 1 line to ${write.file}`
-      case 'replace': return `${projectName} updated 1 line in ${write.file}`
-      case 'remove': return `${projectName} removed 1 line from ${write.file}`
-      case 'restore': return `${projectName} restored ${write.file}`
-      case 'create': return `${projectName} created ${write.file}`
+      case 'add': return `${projectName} saved 1 line to ${file}`
+      case 'replace': return `${projectName} updated 1 line in ${file}`
+      case 'remove': return `${projectName} removed 1 line from ${file}`
+      case 'restore': return `${projectName} restored ${file}`
+      case 'create': return `${projectName} created ${file}`
     }
   }
   switch (write.action) {
-    case 'add': return `Saved to ${write.file}`
-    case 'replace': return `Updated in ${write.file}`
-    case 'remove': return `Removed from ${write.file}`
-    case 'restore': return `Restored ${write.file}`
-    case 'create': return `Created ${write.file}`
+    case 'add': return `Saved to ${file}`
+    case 'replace': return `Updated in ${file}`
+    case 'remove': return `Removed from ${file}`
+    case 'restore': return `Restored ${file}`
+    case 'create': return `Created ${file}`
   }
 }
 
@@ -4272,8 +4281,8 @@ const ClientMessageWireSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('get_agent_notes'), agentId: z.string(), ...optionalRequestId }),
   /** Every file of one DM, newest first, for the Files page of its Agent settings. */
   z.object({ type: z.literal('get_dm_files'), chatId: z.string(), ...optionalRequestId }),
-  /** Puts an agent's notes back as a turn found them, only while nothing changed them since. */
-  z.object({ type: z.literal('undo_notes_update'), chatId: z.string(), turnId: z.string(), ...optionalRequestId }),
+  /** Takes back one memory tool write, only while the line it wrote still reads that way. */
+  z.object({ type: z.literal('undo_memory_write'), chatId: z.string(), writeId: z.string().max(200), ...optionalRequestId }),
   z.object({
     type: z.literal('list_repo_files'),
     projectId: z.string(),
@@ -5014,7 +5023,6 @@ export const ServerMessageSchema = z.discriminatedUnion('type', [
     notes: z.object({
       path: z.string(),
       content: z.string(),
-      truncated: z.boolean(),
     }).optional(),
   }),
   /** Reply to get_dm_files, to the socket that asked. Newest first. */
@@ -5027,7 +5035,6 @@ export const ServerMessageSchema = z.discriminatedUnion('type', [
     notes: z.object({
       path: z.string(),
       content: z.string(),
-      truncated: z.boolean(),
     }).optional(),
   }),
   z.object({
@@ -5048,6 +5055,19 @@ export const ServerMessageSchema = z.discriminatedUnion('type', [
       at: z.number(),
       action: ProjectFileWriteSchema.shape.action,
       line: z.string().optional(),
+    })).optional(),
+    /**
+     * The thread's notes.md as parsed rows, no marker left in them, for the panel to show in
+     * place of the raw file. Ages come from the server's store, not the file.
+     */
+    noteRows: z.array(z.object({
+      text: z.string(),
+      /** Absent on a plain note, which has no checkbox. */
+      done: z.boolean().optional(),
+      /** `open 5d` once an open row stood unchanged for three days. */
+      age: z.string().optional(),
+      /** The Session that owns the row. */
+      session: z.object({ chatId: z.string(), title: z.string() }).optional(),
     })).optional(),
   }),
   // One project's mentionable files, sent to the socket that asked. Paths are

@@ -257,19 +257,29 @@ describe('project memory presentation', () => {
 })
 
 describe('notes detail', () => {
-  const now = Date.UTC(2026, 10, 17)
-  const marked = (row: string, updated: number) => `${row} <!-- manor-note handoff=h1 updated=${updated} text=0123456789abcdef -->`
+  it('hides both forms of the source marker', () => {
+    const legacy = '- [ ] Old task <!-- manor-note handoff=h1 updated=5 text=0123456789abcdef -->'
+    expect(projectMemoryBody(`# Notes\n${legacy}\r\n- [ ] New task <!-- manor-note abcd1234 -->\n- A plain note`))
+      .toBe('# Notes\n- [ ] Old task\n- [ ] New task\n- A plain note')
+  })
 
-  it('hides source markers and ages only open rows unchanged for three days', () => {
-    const body = projectMemoryBody([
-      '# Notes',
-      marked('- [ ] Old task', now - 4 * 86_400_000),
-      marked('- [ ] Recent task', now - 86_400_000),
-      marked('- [x] Done task', now - 9 * 86_400_000),
-      '- A plain note',
-    ].join('\n'), now)
-    expect(body).toBe('# Notes\n- [ ] Old task [open 4d](#note-age)\n- [ ] Recent task\n- [x] Done task\n- A plain note')
-    expect(projectMemoryBody(`${marked('- [ ] One', now)}\r\n- Two`, now)).toBe('- [ ] One\n- Two')
+  it('shows the thread\'s notes.md as rows with their Session and age, and opens that Session', () => {
+    const open = vi.fn()
+    act(() => panel.update(<ProjectMemoryPanel {...props()} onOpenSession={open} />))
+    const response = reply(load.mock.calls[0]![1])
+    response.files.push({ path: '/memory/manor/notes.md', kind: 'file', modifiedAt: 2, content: '# Notes\n- [ ] Export button: CSV ships <!-- manor-note abcd1234 -->\n- [x] Old task\n' })
+    response.noteRows = [
+      { text: 'CSV ships', done: false, age: 'open 5d', session: { chatId: 'chat_9', title: 'Export button' } },
+      { text: 'Old task', done: true },
+    ]
+    emit(response)
+    act(() => panel.root.findByProps({ title: '/memory/manor/notes.md' }).props.onClick())
+    expect(content()).toContain('CSV ships')
+    expect(content()).toContain('open 5d')
+    expect(content()).not.toContain('manor-note')
+    expect(panel.root.findByProps({ 'aria-label': 'Done' })).toBeDefined()
+    act(() => panel.root.findByProps({ title: 'Open the Session Export button' }).props.onClick())
+    expect(open).toHaveBeenCalledWith('chat_9')
   })
 })
 

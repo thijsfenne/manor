@@ -191,6 +191,8 @@ export interface OrchestratorOptions {
        * say which of those calls this turn's capability lets through.
        */
       allowProjectFiles?: boolean
+      /** A DM or group turn of an agent with memory on: `update_notes` for its own notes file. */
+      allowNotes?: boolean
       allowSessionAnswer?: boolean
       allowSessionForward?: boolean
       /** The user's own message or a Session question started this thread turn. */
@@ -213,6 +215,8 @@ export interface OrchestratorOptions {
   interviewKickoff?: (agentId: string, messageId: string) => boolean
   /** The line a memory-off persona offered for its instructions in this turn, taken once for its result. */
   takeInstructionsOffer?: (turnId: string) => string | undefined
+  /** The lines this turn's `update_notes` calls added and removed, taken once at its end. */
+  takeNotesWrites?: (turnId: string) => { added: readonly string[]; removed: readonly string[] }
   /** Create and update this persona's own schedules, offered only in a manual DM turn. */
   routineMcp?: (chatId: string, agent: AgentConfig, turnId: string) => AttachedMcpServer
   /**

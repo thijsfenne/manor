@@ -34,6 +34,7 @@ import {
   type PreferenceSource,
 } from '@manor/contracts'
 import { AgentModule } from './agentModule.js'
+import { AgentNotesWriter, type AgentNotesInput } from './agentNotes.js'
 import { interviewInstruction } from './agentInterview.js'
 import { ChatModule } from './chatModule.js'
 import type { GenerateChatTitle } from './chatTitle.js'
@@ -75,7 +76,7 @@ import type { RemindersSource } from './reminders.js'
 import type { OpenLoopsSync } from './openLoopsSync.js'
 import { RemindersModule } from './remindersModule.js'
 import { MergeTargetMoved, WorkModule } from './workModule.js'
-import { ProjectThreads } from './projectThreads.js'
+import { ProjectThreads, type FileWriteInput } from './projectThreads.js'
 import { PROJECT_THREAD_WRITER } from './projectFiles.js'
 import type { GenerateWorkOutcome } from './workOutcome.js'
 import { SessionModule } from './sessionModule.js'
@@ -148,6 +149,7 @@ export interface ManorServiceOptions {
       /** Argus's turn in a goal Session: `review_passed`; absent means off. */
       allowReview?: boolean
       allowProjectFiles?: boolean
+      allowNotes?: boolean
       allowSessionAnswer?: boolean
       allowSessionForward?: boolean
       mayAnswer?: boolean
@@ -329,6 +331,10 @@ export class ManorService {
   private readonly sessionModule: SessionModule
   /** The project thread: its files, its sessions' questions and the briefs it turns into sessions. */
   readonly projectThreads: ProjectThreads
+  /** `update_notes`: an agent's own notes, one line at a time. */
+  readonly agentNotes: AgentNotesWriter
+  /** Undo requests in flight by write id, so a second click cannot apply the same reverse twice. */
+  private readonly undoingWrites = new Set<string>()
 
   stopActiveTurns(): number {
     return this.orchestrator.stopActiveTurns()
@@ -368,6 +374,7 @@ export class ManorService {
       ...(options.guardMcp === undefined ? {} : { guardMcp: options.guardMcp }),
       ...(options.interactionMcp === undefined ? {} : { interactionMcp: options.interactionMcp }),
       interviewKickoff: (agentId, messageId) => this.agentModule.interviews.isKickoff(agentId, messageId),
+      takeNotesWrites: (turnId) => this.agentNotes.takeTurnWrites(turnId),
       takeInstructionsOffer: (turnId) => {
         const line = this.instructionsOffers.get(turnId)
         this.instructionsOffers.delete(turnId)
@@ -480,6 +487,13 @@ export class ManorService {
         // The done notice a message typed there gets, once its errand ends.
         void finished.then(() => this.chatModule.announceFinished(sessionChatId, startedAt), () => undefined)
       },
+    })
+    this.agentNotes = new AgentNotesWriter({
+      store: options.store,
+      memoryTarget: options.memoryTarget,
+      agents: options.agents,
+      emit: options.broadcast,
+      isActiveTurn: (chatId, agentId, turnId) => this.orchestrator.isActiveTurn(chatId, agentId, turnId),
     })
     this.sessionModule = new SessionModule({
       store: options.store,
@@ -650,6 +664,51 @@ export class ManorService {
 
   recordConnectStatus(...args: Parameters<Orchestrator['recordConnectStatus']>): Promise<void> {
     return this.orchestrator.recordConnectStatus(...args)
+  }
+
+  /**
+   * One memory line from a running turn, the internal endpoint's `write`: a project thread
+   * writes a file of its project (`update_project_file`), any other turn its own notes (`update_notes`).
+   */
+  async writeMemory(context: UserInputContext, input: Omit<FileWriteInput, 'file'> & { file?: string }): Promise<string> {
+    if (await this.projectThreads.threadProject(context.chatId) !== undefined) {
+      if (input.file === undefined) throw new Error('update_project_file needs `file`: preferences.md, notes.md or a card.')
+      return this.projectThreads.writeFile(context, { ...input, file: input.file })
+    }
+    if (input.action === 'create') throw new Error('Your notes take add, replace or remove.')
+    const notes: AgentNotesInput = { action: input.action, ...(input.line === undefined ? {} : { line: input.line }), ...(input.old === undefined ? {} : { old: input.old }) }
+    return this.agentNotes.write(context, notes)
+  }
+
+  /**
+   * Undo on one memory tool write, from its footnote line. The reverse change lands only
+   * while the line still reads as written; the event is then marked undone for every client.
+   */
+  private async undoMemoryWrite(message: Extract<ClientMessage, { type: 'undo_memory_write' }>, reply: (message: ServerMessage) => void, ack: () => void): Promise<void> {
+    if (this.undoingWrites.has(message.writeId)) return
+    this.undoingWrites.add(message.writeId)
+    try {
+      const event = (await this.options.store.loadEvents(message.chatId)).find((candidate) =>
+        candidate.type === 'system_note' && candidate.projectFileWrite?.writeId === message.writeId)
+      const write = event?.type === 'system_note' ? event.projectFileWrite : undefined
+      if (event?.type !== 'system_note' || write === undefined || write.undone === true) {
+        reply({ type: 'notice', kind: 'error', text: 'There is no memory write to undo here.' })
+        return
+      }
+      const refusal = write.agentId === undefined
+        ? await this.projectThreads.undoWrite(message.chatId, write)
+        : await this.agentNotes.undoWrite(write)
+      if (refusal !== undefined) {
+        reply({ type: 'notice', kind: 'info', text: refusal })
+        return
+      }
+      const undone = { ...event, projectFileWrite: { ...write, undone: true as const } }
+      await this.options.store.replaceEvent(message.chatId, undone)
+      this.options.broadcast({ type: 'event', chatId: message.chatId, event: undone })
+      ack()
+    } finally {
+      this.undoingWrites.delete(message.writeId)
+    }
   }
 
   /** Checks and stores a file from `deliver_file`; the returned note goes back to the persona. */
@@ -1040,7 +1099,6 @@ export class ManorService {
       case 'get_chat_summary':
       case 'get_agent_notes':
       case 'get_dm_files':
-      case 'undo_notes_update':
       case 'send_message':
       case 'stop':
       case 'stop_background':
@@ -1136,6 +1194,9 @@ export class ManorService {
         ack()
         return
       }
+      case 'undo_memory_write':
+        await this.undoMemoryWrite(message, reply, ack)
+        return
       case 'get_project_memory':
       case 'list_repo_files':
       case 'read_repo_file':

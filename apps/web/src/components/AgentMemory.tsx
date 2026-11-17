@@ -188,12 +188,6 @@ function StandingNotes({ name, memory, notes }: { name: string; memory: boolean;
       <dl className="m-0 grid grid-cols-[4.25rem_minmax(0,1fr)] gap-x-3 gap-y-1.5 border-b border-line px-5 py-4 text-label">
         <dt className="text-dim">Notes</dt>
         <dd className="m-0 truncate text-muted" title={notes.notes.path}>{notes.notes.path}</dd>
-        {notes.notes.truncated ? (
-          <>
-            <dt className="text-dim">Cut</dt>
-            <dd className="m-0 text-muted">Over the cap, the rest is only in the file.</dd>
-          </>
-        ) : null}
       </dl>
       <article className="px-5 py-5 text-label leading-[1.6] text-text">
         <Markdown text={notes.notes.content} variant="panel" />

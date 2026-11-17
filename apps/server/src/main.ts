@@ -23,6 +23,7 @@ import {
   GOAL_POINT_MAX,
   MAX_GOAL_EVIDENCE,
   PROJECT_CARD_FILE,
+  SESSION_STATUS_MAX,
   ProjectThreadFileSchema,
   UserInputAnswersSchema,
   OutboundDraftContentSchema,
@@ -976,6 +977,7 @@ async function main(): Promise<void> {
         allowGoal: permissions?.allowGoal ?? false,
         allowReview: permissions?.allowReview ?? false,
         allowProjectFiles: permissions?.allowProjectFiles ?? false,
+        allowNotes: permissions?.allowNotes ?? false,
         allowSessionAnswer: permissions?.allowSessionAnswer ?? false,
         allowSessionForward: permissions?.allowSessionForward ?? false,
         allowProjectReport: permissions?.allowProjectReport ?? false,
@@ -2270,11 +2272,12 @@ const GoalReportInputSchema = GoalReportSchema.omit({ evidence: true }).extend({
   limitations: z.string().trim().min(1).max(GOAL_LIMITATIONS_MAX).optional(),
 })
 
-/** The project thread's tools and the report tool, one endpoint keyed by `action` (2026-10-10). */
+/** The project thread's tools, the report tool and an agent's `update_notes`, one endpoint keyed by `action` (2026-10-10). */
 const ProjectThreadRequestSchema = z.discriminatedUnion('action', [
   z.object({
     action: z.literal('write'),
-    file: z.union([ProjectThreadFileSchema, z.string().max(200).regex(PROJECT_CARD_FILE)]),
+    // A project thread names its file; an agent's `update_notes` has none, its own notes file is implied.
+    file: z.union([ProjectThreadFileSchema, z.string().max(200).regex(PROJECT_CARD_FILE)]).optional(),
     lineAction: z.enum(['add', 'replace', 'remove', 'create']),
     line: z.string().trim().min(1).max(500).optional(),
     old: z.string().trim().min(1).max(500).optional(),
@@ -2302,7 +2305,7 @@ const ProjectThreadRequestSchema = z.discriminatedUnion('action', [
   }),
   z.object({
     action: z.literal('status'),
-    status: z.string().trim().min(1).max(300),
+    status: z.string().trim().min(1).max(SESSION_STATUS_MAX),
   }),
 ])
 
@@ -2355,8 +2358,9 @@ async function handleProjectThreadRequest(
     }
     const input = parsed.data
     const note = input.action === 'write'
-      ? await service.projectThreads.writeFile(context, {
-        file: input.file, action: input.lineAction,
+      ? await service.writeMemory(context, {
+        action: input.lineAction,
+        ...(input.file === undefined ? {} : { file: input.file }),
         ...(input.line === undefined ? {} : { line: input.line }),
         ...(input.old === undefined ? {} : { old: input.old }),
         ...(input.title === undefined ? {} : { title: input.title }),

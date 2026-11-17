@@ -645,8 +645,14 @@ describe('project thread sessions', () => {
     await writeFile(h.paths.preferences, `${await readFile(h.paths.preferences, 'utf8')}${hand}\n`)
     await h.threads.writeFile(turn, { file: 'preferences.md', action: 'add', line: 'Short rule' })
     expect(await readFile(h.paths.preferences, 'utf8')).toContain(hand)
-    // Notes keep their own, larger limit.
-    await h.threads.writeFile(turn, { file: 'notes.md', action: 'add', line: 'n'.repeat(300) })
+    // Notes keep their own, larger limit, and a longer line typed by hand stays.
+    await h.threads.writeFile(turn, { file: 'notes.md', action: 'add', line: 'n'.repeat(200) })
+    const notesBefore = await readFile(h.paths.notes, 'utf8')
+    await expect(h.threads.writeFile(turn, { file: 'notes.md', action: 'add', line: 'm'.repeat(201) })).rejects.toThrow('at most 200 characters; this one has 201')
+    expect(await readFile(h.paths.notes, 'utf8')).toBe(notesBefore)
+    await writeFile(h.paths.notes, `${notesBefore}- ${'h'.repeat(300)}\n`)
+    await h.threads.writeFile(turn, { file: 'notes.md', action: 'add', line: 'Short note' })
+    expect(await readFile(h.paths.notes, 'utf8')).toContain('h'.repeat(300))
     // A preference quoted without its appended date still matches its line.
     await h.threads.writeFile(turn, { file: 'preferences.md', action: 'replace', old: 'Short rule', line: 'Shorter rule' })
     await h.threads.writeFile(turn, { file: 'preferences.md', action: 'remove', old: 'Shorter rule' })
@@ -789,6 +795,7 @@ describe('project thread sessions', () => {
     await h.threads.turnStarted(turn.turnId)
     expect(await h.threads.writeSessionStatus(turn, 'CSV export ships; PDF stays open')).toContain('Saved your status line')
     expect(await h.threads.writeSessionStatus(turn, '  CSV and PDF export ship\n')).toContain('Saved your status line')
+    await expect(h.threads.writeSessionStatus(turn, 's'.repeat(201))).rejects.toThrow('at most 200 characters')
     const written = await readFile(h.paths.notes, 'utf8')
     expect(visibleNotes(written)).toContain('- [ ] Export button: CSV and PDF export ship\n')
     expect(written).toContain('the thread wrote this first')
@@ -1229,7 +1236,7 @@ describe('project thread sessions', () => {
     } finally { warning.mockRestore() }
   })
 
-  it('keeps a hand edit made while the completed text is being archived', async () => {
+  it('redoes the write on a hand edit made while the completed text is being archived', async () => {
     const h = await harness()
     const owner = { chatId: h.threadChatId, agentId: '__single__', turnId: 'owner_turn' }
     await h.threads.writeFile(owner, { file: 'notes.md', action: 'add', line: '[ ] Keep task' })
@@ -1241,9 +1248,11 @@ describe('project thread sessions', () => {
       return cleaned
     })
     try {
-      await expect(h.threads.writeFile(owner, { file: 'notes.md', action: 'replace', old: '[ ] Keep task', line: '[x] Keep task' })).rejects.toThrow('Notes changed while archiving')
-      expect(await readFile(h.paths.notes, 'utf8')).toBe(`${before}- A hand edit\n`)
-      expect(await readFile(path.join(h.paths.folder, '_archive', 'notes.md'), 'utf8')).toContain('- [x] Keep task')
+      await h.threads.writeFile(owner, { file: 'notes.md', action: 'replace', old: '[ ] Keep task', line: '[x] Keep task' })
+      const notes = await readFile(h.paths.notes, 'utf8')
+      expect(notes).toContain('- A hand edit')
+      expect(notes).not.toContain('Keep task')
+      expect((await readFile(path.join(h.paths.folder, '_archive', 'notes.md'), 'utf8')).match(/- \[x\] Keep task/g)).toHaveLength(1)
     } finally { archive.mockRestore() }
   })
 })
@@ -2312,5 +2321,114 @@ describe('waiting thread wakes', () => {
     expect(said(later.input)).not.toContain('Export is next')
     later.finish()
     await again
+  })
+})
+
+describe('the thread\'s file writes and their Undo', () => {
+  const turn = (h: Awaited<ReturnType<typeof harness>>) => ({ chatId: h.threadChatId, agentId: '__single__', turnId: 'thread_write' })
+  const listCard = async (h: Awaited<ReturnType<typeof harness>>, file: string) => {
+    await writeFile(path.join(h.paths.folder, file), '**Decision:**\n- Corners are round.\n\n**Stop:** Ask the user.\n')
+    await writeFile(h.paths.index, `${await readFile(h.paths.index, 'utf8')}- [Corners](${file}): Corner radius.\n`)
+    return path.join(h.paths.folder, file)
+  }
+  /** The newest write the thread recorded, which carries what Undo needs. */
+  const lastWrite = async (h: Awaited<ReturnType<typeof harness>>) => {
+    const write = (await notes(h, h.threadChatId)).flatMap((note) => note.projectFileWrite ?? []).at(-1)
+    if (write === undefined) throw new Error('no write recorded')
+    return write
+  }
+
+  it('routes each write by its file, plain notes included', async () => {
+    const h = await harness()
+    const card = await listCard(h, 'project_client_corners.md')
+    await h.threads.writeFile(turn(h), { file: 'preferences.md', action: 'add', line: 'Corners are round' })
+    await h.threads.writeFile(turn(h), { file: 'notes.md', action: 'add', line: 'Launch is Friday' })
+    await h.threads.writeFile(turn(h), { file: 'project_client_corners.md', action: 'add', line: 'Print keeps square corners' })
+    expect(await readFile(h.paths.preferences, 'utf8')).toContain('- Corners are round')
+    expect(await readFile(h.paths.notes, 'utf8')).toContain('- Launch is Friday')
+    expect(await readFile(card, 'utf8')).toContain('- Print keeps square corners')
+    expect((await notes(h, h.threadChatId)).flatMap((note) => note.projectFileWrite?.file ?? []))
+      .toEqual(['preferences.md', 'notes.md', 'project_client_corners.md'])
+  })
+
+  it('takes back an add, a replace and a remove', async () => {
+    const h = await harness()
+    await h.threads.writeFile(turn(h), { file: 'preferences.md', action: 'add', line: 'Corners are round' })
+    expect(await h.threads.undoWrite(h.threadChatId, await lastWrite(h))).toBeUndefined()
+    expect(await readFile(h.paths.preferences, 'utf8')).not.toContain('Corners are round')
+
+    await h.threads.writeFile(turn(h), { file: 'notes.md', action: 'add', line: '[ ] Round the buttons' })
+    await h.threads.writeFile(turn(h), { file: 'notes.md', action: 'replace', old: '[ ] Round the buttons', line: '[ ] Round the cards' })
+    expect(await h.threads.undoWrite(h.threadChatId, await lastWrite(h))).toBeUndefined()
+    expect(await readFile(h.paths.notes, 'utf8')).toContain('- [ ] Round the buttons')
+    expect(await readFile(h.paths.notes, 'utf8')).not.toContain('Round the cards')
+
+    await h.threads.writeFile(turn(h), { file: 'notes.md', action: 'remove', old: '[ ] Round the buttons' })
+    expect(await h.threads.undoWrite(h.threadChatId, await lastWrite(h))).toBeUndefined()
+    expect(await readFile(h.paths.notes, 'utf8')).toContain('- [ ] Round the buttons')
+  })
+
+  it('takes back a dated line on a card', async () => {
+    const h = await harness()
+    const card = await listCard(h, 'project_client_corners.md')
+    await h.threads.writeFile(turn(h), { file: 'project_client_corners.md', action: 'add', line: 'Print keeps square corners' })
+    expect((await lastWrite(h)).writeId).toBeDefined()
+    expect(await h.threads.undoWrite(h.threadChatId, await lastWrite(h))).toBeUndefined()
+    expect(await readFile(card, 'utf8')).not.toContain('Print keeps square corners')
+  })
+
+  it('puts a removed Session row back with its marker', async () => {
+    const h = await harness()
+    const row = '- [ ] Round the buttons <!-- manor-note abc12345 -->'
+    await writeFile(h.paths.notes, `${await readFile(h.paths.notes, 'utf8')}${row}\n`)
+    await h.threads.writeFile(turn(h), { file: 'notes.md', action: 'remove', old: '[ ] Round the buttons' })
+    expect(await lastWrite(h)).toMatchObject({ old: '[ ] Round the buttons', noteId: 'abc12345' })
+    expect(await h.threads.undoWrite(h.threadChatId, await lastWrite(h))).toBeUndefined()
+    expect(await readFile(h.paths.notes, 'utf8')).toContain(row)
+  })
+
+  it('offers no Undo for a checked row that left for the archive', async () => {
+    const h = await harness()
+    await h.threads.writeFile(turn(h), { file: 'notes.md', action: 'add', line: '[ ] Round the buttons' })
+    await h.threads.writeFile(turn(h), { file: 'notes.md', action: 'replace', old: '[ ] Round the buttons', line: '[x] Round the buttons' })
+    expect((await lastWrite(h)).writeId).toBeUndefined()
+  })
+
+  it('refuses after a hand edit of the line, and matches a preference only with its own date', async () => {
+    const h = await harness()
+    await h.threads.writeFile(turn(h), { file: 'preferences.md', action: 'add', line: 'Corners are round' })
+    const edited = await lastWrite(h)
+    await writeFile(h.paths.preferences, (await readFile(h.paths.preferences, 'utf8')).replace('Corners are round', 'Corners are square'))
+    expect(await h.threads.undoWrite(h.threadChatId, edited)).toContain('Nothing was undone')
+    expect(await readFile(h.paths.preferences, 'utf8')).toContain('Corners are square')
+
+    await h.threads.writeFile(turn(h), { file: 'preferences.md', action: 'add', line: 'Buttons are blue' })
+    const dated = await lastWrite(h)
+    await writeFile(h.paths.preferences, (await readFile(h.paths.preferences, 'utf8')).replace(`Buttons are blue (${localDate(new Date())})`, 'Buttons are blue (2020-01-01)'))
+    expect(await h.threads.undoWrite(h.threadChatId, dated)).toContain('Nothing was undone')
+    expect(await readFile(h.paths.preferences, 'utf8')).toContain('- Buttons are blue (2020-01-01)')
+  })
+
+  it('redoes a write on the file as a hand edit left it', async () => {
+    const h = await harness()
+    await h.threads.writeFile(turn(h), { file: 'preferences.md', action: 'add', line: 'First rule' })
+    const original = projectFiles.writeThreadFile
+    let raced = false
+    const spy = vi.spyOn(projectFiles, 'writeThreadFile').mockImplementation(async (file, content, expected) => {
+      if (file === h.paths.preferences && !raced) {
+        raced = true
+        // The user types a line between the thread's read and its rename.
+        await writeFile(file, `${await readFile(file, 'utf8')}- Typed by hand\n`)
+      }
+      return original(file, content, expected)
+    })
+    try {
+      await h.threads.writeFile(turn(h), { file: 'preferences.md', action: 'add', line: 'Second rule' })
+    } finally {
+      spy.mockRestore()
+    }
+    const content = await readFile(h.paths.preferences, 'utf8')
+    expect(content).toContain('- Typed by hand')
+    expect(content).toContain('- Second rule')
   })
 })

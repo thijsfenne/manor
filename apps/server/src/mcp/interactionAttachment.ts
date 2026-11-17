@@ -7,7 +7,7 @@ export const INTERACTION_TOOL_NAMES = [
   'ask_user', 'request_secret', 'prepare_outbound_draft', 'message_agent',
   'delegate_task', 'task_result', 'task_cancel', 'subagent_capabilities',
   'deliver_file', 'goal_reached', 'review_passed',
-  'update_project_file', 'answer_session_question', 'report_to_project', 'send_to_session', 'set_session_status',
+  'update_project_file', 'update_notes', 'answer_session_question', 'report_to_project', 'send_to_session', 'set_session_status',
   'write_instructions', 'offer_instructions_line',
 ] as const
 export const SUBAGENT_TOOLS = ['delegate_task', 'task_result', 'task_cancel', 'subagent_capabilities'] as const
@@ -62,6 +62,8 @@ export function interactionMcpAttachment(
     allowReview?: boolean
     /** A project thread turn writes its two files (2026-10-10). */
     allowProjectFiles?: boolean
+    /** A DM or group turn of an agent with memory on keeps its own notes with `update_notes`. */
+    allowNotes?: boolean
     /** A project thread turn answers its sessions' questions from preferences. */
     allowSessionAnswer?: boolean
     /** Only a project thread turn the user's own message started sends it on to a Session. */
@@ -97,6 +99,7 @@ export function interactionMcpAttachment(
     ...(runtime.allowGoal === true ? ['goal_reached'] : []),
     ...(runtime.allowReview === true ? ['review_passed'] : []),
     ...(runtime.allowProjectFiles === true ? ['update_project_file'] : []),
+    ...(runtime.allowNotes === true ? ['update_notes'] : []),
     ...(runtime.allowSessionAnswer === true ? ['answer_session_question'] : []),
     ...(runtime.allowSessionForward === true ? ['send_to_session'] : []),
     ...(runtime.allowProjectReport === true ? ['report_to_project'] : []),
@@ -145,6 +148,7 @@ export function interactionMcpAttachment(
         ...(runtime.allowGoal === true ? ['Mark this Session\'s goal reached with goal_reached.'] : []),
         ...(runtime.allowReview === true ? ['Pass a clean review of this Session\'s diff with review_passed.'] : []),
         ...(runtime.allowProjectFiles === true ? ['Write this project\'s preferences.md and notes.md with update_project_file.'] : []),
+        ...(runtime.allowNotes === true ? ['Keep your own standing notes with update_notes.'] : []),
         ...(runtime.allowSessionAnswer === true ? ['Answer a waiting session question from preferences with answer_session_question.'] : []),
         ...(runtime.allowSessionForward === true ? ['Send the user\'s follow-up on to the Session it is about with send_to_session.'] : []),
         ...(runtime.allowProjectReport === true ? ['Report a preference to its project thread with report_to_project.'] : []),

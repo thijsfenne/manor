@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import { rm } from 'node:fs/promises'
 import path from 'node:path'
 import type {
@@ -21,6 +22,8 @@ import {
   HOME_PROJECT_ID,
   isProjectThreadFile,
   NEW_SINGLE_CHAT_DEFAULT,
+  NOTES_LINE_MAX,
+  SESSION_STATUS_MAX,
   PROJECT_CARD_FILE,
   projectFileWriteDetail,
   projectFileWriteLabel,
@@ -31,7 +34,8 @@ import {
 import { attachmentFields, loadHandoffAttachments } from './handoffAttachments.js'
 import { answersMatch } from './interactionBroker.js'
 import type { UserInputContext } from './interactionCapability.js'
-import { confirmedAndLanded, loadNotesEvidence, noteHandoff, noteText, reconcileNotes, sourceNote } from './projectNotes.js'
+import { dehydrateNotes, diskNote, hydrateNotes, shortNoteId } from './noteMarkers.js'
+import { confirmedAndLanded, loadNotesEvidence, noteHandoff, noteText, reconcileNotes } from './projectNotes.js'
 import {
   appendCardDecision,
   applyThreadLineOp,
@@ -40,6 +44,7 @@ import {
   datedPreference,
   ensureProjectThreadFiles,
   indexedCards,
+  inverseWrite,
   linkedCardLines,
   newCard,
   overPreferencesBudget,
@@ -190,6 +195,9 @@ export interface GuardedTurn {
   /** Files its shell commands certainly wrote, as absolute paths (`shellWriteDestinations`). */
   shellWrites?: readonly string[]
 }
+
+/** A file line without its bullet marker. */
+const bareLine = (line: string): string => line.replace(/^\s*-\s+/, '').trim()
 
 export interface FileWriteInput {
   /** `preferences.md`, `notes.md`, or a memory card in the same folder. */
@@ -694,7 +702,7 @@ export class ProjectThreads {
     }
   }
 
-  /** The thread's one way to write its files: one line, under the shared lock, shown as an event. */
+  /** The thread's one way to write its files: one line, under the shared lock, shown as an event with Undo. */
   async writeFile(context: UserInputContext, input: FileWriteInput): Promise<string> {
     const project = await this.threadProject(context.chatId)
     if (project === undefined || !this.options.isActiveTurn(context.chatId, context.agentId, context.turnId)) {
@@ -706,74 +714,137 @@ export class ProjectThreads {
     if (file === 'preferences.md' && written !== undefined && written.length > PREFERENCE_LINE_MAX) {
       throw new Error(`A preference line holds at most ${PREFERENCE_LINE_MAX} characters, its date included; this one has ${written.length}. Keep the rule itself short, ideally as [Rule](card.md): when it applies, and put its reason and detail on that card with update_project_file.`)
     }
+    if (file === 'notes.md' && written !== undefined && bareLine(written).length > NOTES_LINE_MAX) {
+      throw new Error(`A notes.md line holds at most ${NOTES_LINE_MAX} characters; this one has ${bareLine(written).length}. Keep the row to its status and next step, and put detail on a card.`)
+    }
     const op: ThreadLineOp | undefined =
       input.action === 'add' && written !== undefined ? { action: 'add', line: written }
         : input.action === 'replace' && written !== undefined && input.old !== undefined ? { action: 'replace', old: input.old, line: written }
           : input.action === 'remove' && input.old !== undefined ? { action: 'remove', old: input.old }
             : undefined
     if (op === undefined) throw new Error('add needs `line`, replace needs `old` and `line`, remove needs `old`. create is for a new card.')
+    const applied = await this.applyLine(project, file, op)
+    await this.recordWrite(context, project, {
+      file, action: op.action,
+      ...('line' in applied.op ? { line: applied.op.line } : {}),
+      ...('old' in applied.op ? { old: applied.op.old } : {}),
+      ...(applied.noteId === undefined ? {} : { noteId: applied.noteId }),
+    }, !applied.archived)
+    // A row's age counts from this write, not from the next Session turn that happens to reconcile.
+    if (file === 'notes.md' && this.guarded.size === 0) await this.adoptWhenIdle().catch(() => undefined)
+    return applied.over
+      ? `Saved in ${file}. It is now past its one-screen budget of ${PREFERENCES_BUDGET} characters: shorten its lines and move their detail into the linked cards before you add another.`
+      : applied.archived ? 'Saved in notes.md. Completed notes moved to _archive/notes.md.'
+      : `Saved in ${file}.`
+  }
+
+  /**
+   * One line change to preferences.md or notes.md. The file is read again just before
+   * the rename and the change is redone on what it then reads, so a hand edit made
+   * meanwhile is kept. Returns the change as it landed, without a Notes marker. `exact`
+   * is for Undo, which takes back a preference only as it was written, date included.
+   */
+  private async applyLine(project: Project, file: ProjectThreadFile, op: ThreadLineOp, exact = false): Promise<{ op: ThreadLineOp; over: boolean; archived: boolean; noteId?: string }> {
     const paths = this.paths(project)
     const target = threadFilePath(paths, file)
-    let over = false
-    let archived = false
     await ensureProjectThreadFiles(paths, project.name)
-    await withThreadFileLock(target, async () => {
-      const current = await readThreadFile(target)
-      if (isPinned(current)) throw new Error('This project file is pinned.')
-      if (input.file === 'notes.md' && this.guarded.size !== 0 && current !== this.known.get(target)) {
-        throw new Error('Notes have pending Session edits. Retry after the Session turns end.')
-      }
-      let ownerOp = op
-      // A preference may be quoted without the date Manor appended to it.
-      if (file === 'preferences.md' && op.action !== 'add') {
-        const undated = (text: string) => text.replace(/^\s*-\s+/, '').trim().replace(/\s*\(\d{4}-\d{2}-\d{2}\)$/, '')
-        const matches = threadFileLines(current).filter((line) => undated(line) === undated(op.old))
-        if (matches.length === 1) ownerOp = { ...op, old: matches[0]! }
-      }
-      if (input.file === 'notes.md' && op.action !== 'add') {
-        const visibleOld = noteText(op.old.replace(/^\s*-\s+/, '').trim())
-        const matches = threadFileLines(current).filter((line) => noteText(line) === visibleOld)
-        if (matches.length === 1) {
-          const old = matches[0]!
-          ownerOp = op.action === 'remove' ? { ...op, old } : {
-            ...op, old, line: sourceNote(noteText(op.line.replace(/^\s*-\s+/, '').trim()), noteHandoff(old) ?? '-', Date.now()),
+    return withThreadFileLock(target, async () => {
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        const current = await readThreadFile(target)
+        if (isPinned(current)) throw new Error('This project file is pinned.')
+        if (file === 'notes.md' && this.guarded.size !== 0 && current !== this.known.get(target)) {
+          throw new Error('Notes have pending Session edits. Retry after the Session turns end.')
+        }
+        let ownerOp = op
+        // A preference may be quoted without the date Manor appended to it.
+        if (file === 'preferences.md' && op.action !== 'add' && !exact) {
+          const undated = (text: string) => bareLine(text).replace(/\s*\(\d{4}-\d{2}-\d{2}\)$/, '')
+          const matches = threadFileLines(current).filter((line) => undated(line) === undated(op.old))
+          if (matches.length === 1) ownerOp = { ...op, old: matches[0]! }
+        }
+        // A Notes row is quoted without its marker, and a rewritten row stays its Session's.
+        if (file === 'notes.md' && op.action !== 'add') {
+          const matches = threadFileLines(current).filter((line) => noteText(line) === noteText(bareLine(op.old)))
+          if (matches.length === 1) {
+            const old = matches[0]!
+            ownerOp = op.action === 'remove' ? { ...op, old } : { ...op, old, line: diskNote(bareLine(op.line), noteHandoff(old)) }
           }
         }
+        const applied = applyThreadLineOp(current, ownerOp)
+        if ('error' in applied) throw new Error(applied.error)
+        const content = file === 'notes.md' ? await archiveCompletedNotes(paths, applied.content) : applied.content
+        if (!await writeThreadFile(target, content, current)) continue
+        this.known.set(target, content)
+        const shown = (text: string) => noteText(bareLine(text))
+        const noteId = ownerOp.action === 'remove' ? noteHandoff(ownerOp.old) : undefined
+        return {
+          op: ownerOp.action === 'add' ? { action: 'add', line: shown(ownerOp.line) }
+            : ownerOp.action === 'remove' ? { action: 'remove', old: shown(ownerOp.old) }
+              : { action: 'replace', old: shown(ownerOp.old), line: shown(ownerOp.line) },
+          over: file === 'preferences.md' && overPreferencesBudget(content),
+          archived: content !== applied.content,
+          ...(noteId === undefined ? {} : { noteId }),
+        }
       }
-      const applied = applyThreadLineOp(current, ownerOp)
-      if ('error' in applied) throw new Error(applied.error)
-      const content = input.file === 'notes.md'
-        ? await archiveCompletedNotes(paths, applied.content) : applied.content
-      archived = content !== applied.content
-      if (input.file === 'notes.md') {
-        if (await readThreadFile(target) !== current) throw new Error('Notes changed while archiving. Read the file again before updating it.')
-        await writeThreadFile(target, content)
-      }
-      else await writeThreadFile(target, content)
-      this.known.set(target, content)
-      over = input.file === 'preferences.md' && overPreferencesBudget(content)
+      throw new Error(`${file} kept changing while Manor wrote to it. Read it again and retry.`)
     })
-    const displayLine = (text: string) => (input.file === 'notes.md' ? noteText(text) : text).replace(/^\s*-\s+/, '').trim()
-    const line = op.action === 'remove' ? undefined : displayLine(op.line)
-    const old = op.action === 'add' ? undefined : displayLine(op.old)
-    const write: ProjectFileWrite = {
-      file: input.file,
-      action: op.action,
-      ...(line === undefined ? {} : { line: line.slice(0, 2_000) }),
-      ...(old === undefined ? {} : { old: old.slice(0, 2_000) }),
+  }
+
+  /**
+   * The event a write leaves in the thread. One with a line to put back can be undone;
+   * a checked row that already left for the archive cannot.
+   */
+  private async recordWrite(
+    context: UserInputContext, project: Project,
+    write: Pick<ProjectFileWrite, 'file' | 'action' | 'line' | 'old' | 'noteId'>,
+    undoable = true,
+  ): Promise<void> {
+    const stored: ProjectFileWrite = {
+      ...write,
+      ...(write.line === undefined ? {} : { line: write.line.slice(0, 2_000) }),
+      ...(write.old === undefined ? {} : { old: write.old.slice(0, 2_000) }),
       by: PROJECT_THREAD_WRITER,
       turnId: context.turnId,
+      ...(undoable && inverseWrite(write) !== undefined ? { writeId: randomUUID() } : {}),
     }
     await this.append(context.chatId, {
       type: 'system_note',
       kind: 'info',
-      text: `${projectFileWriteLabel(write, project.name)}: ${projectFileWriteDetail(write) ?? ''}`,
-      projectFileWrite: write,
+      text: `${projectFileWriteLabel(stored, project.name)}: ${projectFileWriteDetail(stored) ?? ''}`,
+      projectFileWrite: stored,
     })
-    return over
-      ? `Saved in ${input.file}. It is now past its one-screen budget of ${PREFERENCES_BUDGET} characters: shorten its lines and move their detail into the linked cards before you add another.`
-      : archived ? 'Saved in notes.md. Completed notes moved to _archive/notes.md.'
-      : `Saved in ${input.file}.`
+  }
+
+  /**
+   * Undo on one write of the thread: the reverse line change, only while the line it
+   * wrote still reads exactly that way. Returns why nothing was undone, or undefined when it was.
+   */
+  async undoWrite(threadChatId: string, write: ProjectFileWrite): Promise<string | undefined> {
+    const project = await this.threadProject(threadChatId)
+    const reverse = inverseWrite(write)
+    if (project === undefined || reverse === undefined) return 'There is no memory write to undo here.'
+    try {
+      if (isProjectThreadFile(write.file)) {
+        const back = reverse.action === 'add' && write.noteId !== undefined ? { ...reverse, line: diskNote(reverse.line, write.noteId) } : reverse
+        await this.applyLine(project, write.file, back, true)
+      } else {
+        // A card only ever takes an add from the thread, so its Undo removes that dated line.
+        const target = path.join(this.paths(project).folder, write.file)
+        await withThreadFileLock(target, async () => {
+          for (let attempt = 0; attempt < 3; attempt += 1) {
+            const current = await readThreadFile(target)
+            if (isPinned(current)) throw new Error('This card is pinned.')
+            const applied = applyThreadLineOp(current, reverse)
+            if ('error' in applied) throw new Error(applied.error)
+            if (await writeThreadFile(target, applied.content, current)) return
+          }
+          throw new Error(`${write.file} kept changing while Manor wrote to it.`)
+        })
+      }
+    } catch (error) {
+      return `Nothing was undone: ${error instanceof Error ? error.message : 'the file could not be written.'}`
+    }
+    return undefined
   }
 
   /**
@@ -836,13 +907,7 @@ export class ProjectThreads {
         throw new Error('MEMORY.md kept changing while Manor listed the card, so the card was not created. Try again in a moment.')
       }))
     }
-    const write: ProjectFileWrite = { file, action: input.action, line: line.slice(0, 2_000), by: PROJECT_THREAD_WRITER, turnId: context.turnId }
-    await this.append(context.chatId, {
-      type: 'system_note',
-      kind: 'info',
-      text: `${projectFileWriteLabel(write, project.name)}: ${projectFileWriteDetail(write) ?? ''}`,
-      projectFileWrite: write,
-    })
+    await this.recordWrite(context, project, { file, action: input.action, line })
     return input.action === 'add' ? `Saved one dated line on ${file}.` : `Created ${file} and listed it in MEMORY.md.`
   }
 
@@ -918,7 +983,7 @@ export class ProjectThreads {
   private sessionStatusRow(handoff: WorkHandoff) {
     const asLine = (text: string) => text.replace(/\s+/g, ' ').trim().replace(/^-\s+/, '')
     const title = asLine(handoff.title)
-    const ownLine = (content: string) => threadFileLines(content).find((existing) => noteHandoff(existing) === handoff.id)
+    const ownLine = (content: string) => threadFileLines(content).find((existing) => noteHandoff(existing) === shortNoteId(handoff.id))
     return { asLine, title, ownLine }
   }
 
@@ -955,8 +1020,9 @@ export class ProjectThreads {
     const { asLine, title, ownLine } = this.sessionStatusRow(handoff)
     const text = asLine(status)
     if (text.length === 0) throw new Error('`status` must be one non-empty line.')
+    if (text.length > SESSION_STATUS_MAX) throw new Error(`\`status\` holds at most ${SESSION_STATUS_MAX} characters; this one has ${text.length}. Say what works and what stays open, shorter.`)
     const statusLine = `${title}: ${text}`
-    let line = sourceNote(`[ ] ${statusLine}`, handoff.id, Date.now())
+    let line = diskNote(`[ ] ${statusLine}`, handoff.id)
     const withLine = (content: string): string => {
       const previous = ownLine(content)
       if (previous === line) return content
@@ -975,7 +1041,7 @@ export class ProjectThreads {
       const confirmed = currentHandoff !== undefined && confirmedAndLanded(currentHandoff) && currentHandoff.unsettledAt === undefined
       const reopened = currentHandoff?.unsettledAt !== undefined || (currentHandoff?.goalConfirmations?.length ?? 0) > 0
       const check = confirmed ? '[x]' : reopened ? '[ ]' : old?.match(/^\[[ xX]\]/)?.[0] ?? '[ ]'
-      line = sourceNote(`${check} ${statusLine}`, handoff.id, Date.now())
+      line = diskNote(`${check} ${statusLine}`, handoff.id)
       if (old !== undefined && noteText(old) === noteText(line)) line = old
       if (old !== line) await writeThreadFile(paths.notes, withLine(current))
       // Only this line becomes known, also when the file already read it: any other
@@ -1125,9 +1191,13 @@ export class ProjectThreads {
         const baseline = this.guarded.size === 0 ? current : this.known.get(target)
         if (baseline === undefined) return
         try {
-          const evidence = await loadNotesEvidence(this.options.store, project.threadChatId, baseline, Date.now(), this.noteSources.get(target))
+          const now = Date.now()
+          const working = hydrateNotes(baseline, await this.options.store.loadNoteAges(project.id), now)
+          const evidence = await loadNotesEvidence(this.options.store, project.threadChatId, working, now, this.noteSources.get(target))
           this.noteSources.set(target, evidence.sources)
-          const reconciled = reconcileNotes(evidence.rows, evidence.sessions, evidence.git).join('\n')
+          // Rows go back to disk with only their Session's short id; their dates stay in the store.
+          const { content: reconciled, ages } = dehydrateNotes(reconcileNotes(evidence.rows, evidence.sessions, evidence.git).join('\n'))
+          await this.options.store.saveNoteAges(project.id, ages)
           // Server changes apply only to exact trusted rows. Pending foreign edits stay guarded.
           const oldRows = baseline.split('\n')
           const newRows = reconciled.split('\n')

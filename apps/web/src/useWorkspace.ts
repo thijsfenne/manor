@@ -147,8 +147,8 @@ export interface Manor {
   getProjectMemory: (projectId: string, requestId: string) => boolean
   getChatSummary: (chatId: string, requestId: string) => boolean
   getAgentNotes: (agentId: string, requestId: string) => boolean
-  /** Undo on a turn's "Updated its notes" line; the server refuses it when the notes changed since. */
-  undoNotesUpdate: (chatId: string, turnId: string, requestId: string) => boolean
+  /** Undo on one line a memory tool wrote; the server refuses it when that line changed since. */
+  undoMemoryWrite: (chatId: string, writeId: string, requestId: string) => boolean
   /** One palette query; the answer arrives on `requestEvents` as `search_results` with this id. */
   search: (query: string, requestId: string) => boolean
   /** Direct replies for request-scoped UI lifecycles; broadcasts remain workspace state. */
@@ -1136,8 +1136,8 @@ export function useWorkspace(url: string, auth?: WorkspaceAuth): Manor {
     (agentId: string, requestId: string) => send({ type: 'get_agent_notes', agentId, requestId }),
     [send],
   )
-  const undoNotesUpdate = useCallback(
-    (chatId: string, turnId: string, requestId: string) => send({ type: 'undo_notes_update', chatId, turnId, requestId }),
+  const undoMemoryWrite = useCallback(
+    (chatId: string, writeId: string, requestId: string) => send({ type: 'undo_memory_write', chatId, writeId, requestId }),
     [send],
   )
 
@@ -1657,7 +1657,7 @@ export function useWorkspace(url: string, auth?: WorkspaceAuth): Manor {
     getProjectMemory,
     getChatSummary,
     getAgentNotes,
-    undoNotesUpdate,
+    undoMemoryWrite,
     search,
     browserActivity,
     browserUse,
