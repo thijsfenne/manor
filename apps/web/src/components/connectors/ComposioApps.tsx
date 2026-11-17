@@ -104,7 +104,7 @@ export function ComposioAppCard({ app, state, canConnect, onConnect }: {
       {/* A long state (Finish in your browser, Failed and Retry) wraps under the logo in a narrow card. */}
       <div className="flex flex-wrap items-start justify-between gap-2">
         <AppLogo slug={app.slug} name={app.name} />
-        <span className="ml-auto flex min-h-8 flex-none items-center gap-1">
+        <span className="ml-auto flex min-h-8 flex-none items-center gap-1 text-meta">
           {waiting ? (
             <ConnectStatusMark status="waiting" />
           ) : app.connect === 'no_auth' ? (

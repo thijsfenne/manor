@@ -177,7 +177,7 @@ export function UserBubble({
         </div>
       ) : null}
       {hasBubble ? <div
-        className={`min-w-0 text-[length:var(--msg-size,16px)] ${dm ? `max-w-[80%] ${DM_BUBBLE}` : 'max-w-[78%] rounded-xl rounded-br-sm px-[13px] pt-[9px] pb-[11px]'} ${tint === undefined ? 'bg-user-bubble' : ''}`}
+        className={`min-w-0 text-[length:var(--msg-size,16px)] ${dm ? `max-w-bubble ${DM_BUBBLE}` : 'max-w-[78%] rounded-xl rounded-br-sm px-[13px] pt-[9px] pb-[11px]'} ${tint === undefined ? 'bg-user-bubble' : ''}`}
         {...(tint === undefined ? {} : { style: { backgroundColor: tint.fill } })}
       >
         {quote === undefined ? null : (
@@ -467,7 +467,7 @@ interface AgentBubbleProps {
 function AgentBubbleView({ color, text, agents, images = [], live = false, bubble = false, quoteSources, quoteAgentId }: AgentBubbleProps) {
   const { plugins, components } = useAgentMentions(agents)
   return (
-    <div className={bubble ? 'flex w-fit max-w-[80%] min-w-0' : 'flex min-w-0'}>
+    <div className={bubble ? 'flex w-fit max-w-bubble min-w-0' : 'flex min-w-0'}>
       {/* The reading size is stated on the two message bodies rather than inherited
           from the page: everything else in the transcript (work lines, the routine
           event, timestamps) names its own smaller size, so a size on the column would

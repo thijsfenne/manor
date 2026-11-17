@@ -217,6 +217,7 @@ The desktop window is an L-frame (`--color-frame`, `--color-sidebar`, `--color-s
 - **Headline** (weight 500, 20px, letter-spacing -0.01em): Dialog titles and major panel headings.
 - **Title** (weight 500, 16px, letter-spacing -0.01em): Strong local hierarchy, names, and compact headings.
 - **Body** (weight 400, 16px, line-height 1.6, letter-spacing -0.011em): Conversation and general interface copy.
+- **Card** (weight 400 or 500, 14px, line-height 20px, `text-card`): Body text of the cards inside a turn (ask, permission, secret, connect, outbound draft) in every column, so they stay in step. Their buttons keep their own sizes; meta lines inside them stay Label or Metadata.
 - **Label** (weight 500, 13px, line-height 18px): Field labels, hints, menu rows, and supporting controls.
 - **Metadata** (weight 400, 12px, line-height 16px): The smallest text role and the hard readability floor.
 

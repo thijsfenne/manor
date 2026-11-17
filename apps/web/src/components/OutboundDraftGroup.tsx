@@ -22,7 +22,7 @@ export function OutboundDraftGroup({ drafts, bubble = false, ...card }: Outbound
   if (drafts.length === 0) return null
   const only = drafts.length === 1 ? drafts[0] : undefined
   return (
-    <div className={bubble ? 'w-full max-w-[80%] min-w-0' : 'w-full min-w-0'}>
+    <div className={bubble ? 'w-full max-w-bubble min-w-0' : 'w-full min-w-0'}>
       {only !== undefined ? <OutboundDraftBubble draft={only} {...card} /> : <DraftList drafts={drafts} {...card} />}
     </div>
   )

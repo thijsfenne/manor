@@ -713,6 +713,7 @@ export function Transcript({
         {...(unannouncedHere === undefined ? {} : { unannounced: unannouncedHere })}
       />
     ) : row.kind === 'work_handoff' ? (
+      <div className={bubbleReplies ? 'min-w-0 max-w-bubble' : 'contents'}>
       <WorkHandoffCard
         row={row}
         agents={agents}
@@ -726,6 +727,7 @@ export function Transcript({
         {...(resultActions === undefined ? {} : { resultActions })}
         {...(inThread ? { inThread } : {})}
       />
+      </div>
     ) : row.kind === 'pending' ? (
       <UserBubble
         text={row.text}
@@ -813,7 +815,7 @@ export function Transcript({
               ? 'mx-auto flex min-w-0 w-full max-w-[768px] flex-1 flex-col gap-6 px-3.5 pt-4 pb-4 [--msg-size:14px]'
               // A header that joined the top bar sits above the pane; one kept in place
               // (the phone, the Browser session column) floats over the first message.
-              : `mx-auto flex w-full max-w-[780px] flex-1 flex-col gap-[32px] px-5 ${headerInBar ? 'pt-8' : 'pt-[76px]'} pb-[calc(var(--composer-dock,0px)+var(--work-dock,0px)+3.5rem)] ${denseText ? '[--msg-size:14px] [--card-size:14px]' : '[--msg-size:15px]'}`
+              : `mx-auto flex w-full max-w-[780px] flex-1 flex-col gap-[32px] px-5 ${headerInBar ? 'pt-8' : 'pt-[76px]'} pb-[calc(var(--composer-dock,0px)+var(--work-dock,0px)+3.5rem)] ${denseText ? '[--msg-size:14px]' : '[--msg-size:15px]'}`
           }
         >
           {leading}
@@ -1627,7 +1629,7 @@ function StandingSegment({
       </div>
     )
   }
-  if (segment.kind === 'todo') return <TodoList todos={segment.todos} foldKey={segment.key} />
+  if (segment.kind === 'todo') return <div className={bubble ? 'min-w-0 max-w-bubble' : 'min-w-0'}><TodoList todos={segment.todos} foldKey={segment.key} /></div>
   if (segment.kind === 'draft') {
     return (
       <OutboundDraftGroup
@@ -1640,9 +1642,11 @@ function StandingSegment({
     )
   }
   return (
-    <AskAnswers
-      questions={segment.ask.questions}
-      {...(segment.ask.answers === undefined ? {} : { answers: segment.ask.answers })}
-    />
+    <div className={bubble ? 'min-w-0 max-w-bubble' : 'min-w-0'}>
+      <AskAnswers
+        questions={segment.ask.questions}
+        {...(segment.ask.answers === undefined ? {} : { answers: segment.ask.answers })}
+      />
+    </div>
   )
 }

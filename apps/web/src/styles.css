@@ -64,6 +64,14 @@
   --text-meta--line-height: 1rem;
   --text-label: 13px;
   --text-label--line-height: 1.125rem;
+  /* Body text of the cards inside a turn (ask, permission, secret, connect, outbound
+     draft), one size wherever the column reads, so the cards stay in step. */
+  --text-card: 14px;
+  --text-card--line-height: 1.25rem;
+
+  /* How wide a DM bubble may grow, and so how wide every card in a DM chat runs
+     (`max-w-bubble`): a card lines up with the replies around it. */
+  --container-bubble: 80%;
 
   /* The width every bare `border` (and `divide`) utility draws, Tailwind reads this
      token instead of its own 1px default. 0.5px is a true hairline only on a 2x
@@ -1058,7 +1066,6 @@ button {
 [data-focus-mode] [data-reading-column] {
   max-width: 680px;
   --msg-size: 16px;
-  --card-size: 16px;
   /* The stage starts under the empty bar; the first message still clears it. */
   padding-top: calc(var(--top-bar-height) + 2rem);
 }

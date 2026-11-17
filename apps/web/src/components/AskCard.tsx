@@ -41,7 +41,7 @@ import { SecretCard } from './SecretCard'
 
 /** Same geometry as `formInputClass`, 14px on this card only. */
 const askInputClass =
-  'w-full rounded-lg border border-line bg-stage px-2.5 py-[7px] text-[14px] text-text outline-none placeholder:text-dim focus:border-dim'
+  'w-full rounded-lg border border-line bg-stage px-2.5 py-[7px] text-card text-text outline-none placeholder:text-dim focus:border-dim'
 
 /**
  * Long enough that the row you picked is on screen as picked before the card moves
@@ -273,7 +273,7 @@ export function AskCard({ questions, accent, connected = true, more = 0, onSubmi
           </span>
         ) : null}
         <span
-          className={`min-w-0 flex-1 text-[14px] leading-5 font-medium text-text ${
+          className={`min-w-0 flex-1 text-card font-medium text-text ${
             collapsed ? 'truncate' : '[overflow-wrap:anywhere]'
           }`}
         >
@@ -363,7 +363,7 @@ export function AskCard({ questions, accent, connected = true, more = 0, onSubmi
                       } ${on ? 'bg-user-bg text-text' : `bg-surface-2 text-muted ${locked ? '' : 'hover:bg-user-bg hover:text-text'}`}`}
                     >
                       <span className="min-w-0 flex-1">
-                        <span className="block text-[14px] leading-5 [overflow-wrap:anywhere]">{option.label}</span>
+                        <span className="block text-card [overflow-wrap:anywhere]">{option.label}</span>
                         {option.description === undefined || option.description.length === 0 ? null : (
                           <span className={`mt-0.5 block ${formHintClass}`}>{option.description}</span>
                         )}
@@ -386,7 +386,7 @@ export function AskCard({ questions, accent, connected = true, more = 0, onSubmi
                       aria-checked={otherOn}
                       disabled={locked}
                       onClick={() => choose(otherIndex)}
-                      className={`flex min-h-11 w-full min-w-0 items-center gap-3 rounded-lg border-0 bg-transparent px-3 py-2 text-left text-[14px] leading-5 ${
+                      className={`flex min-h-11 w-full min-w-0 items-center gap-3 rounded-lg border-0 bg-transparent px-3 py-2 text-left text-card ${
                         locked ? 'cursor-default' : 'cursor-pointer'
                       } ${otherOn ? 'text-text' : `text-muted ${locked ? '' : 'hover:text-text'}`}`}
                     >
@@ -645,14 +645,14 @@ export function AskAnswers({
             {question.header === undefined || question.header.length === 0 ? null : (
               <span className="block text-meta text-dim">{question.header}</span>
             )}
-            <span className="block text-[length:var(--card-size,16px)] leading-[1.5] text-dim [overflow-wrap:anywhere]">{question.question}</span>
+            <span className="block text-card leading-[1.5] text-dim [overflow-wrap:anywhere]">{question.question}</span>
             {given === undefined ? (
-              <span className="block text-[length:var(--card-size,16px)] leading-[1.5] text-warn">
+              <span className="block text-card leading-[1.5] text-warn">
                 {question.secret === undefined ? 'Never answered. The turn ended first.' : SECRET_CLOSED_TEXT}
               </span>
             ) : (
               <span
-                className={`block text-[length:var(--card-size,16px)] leading-[1.5] [overflow-wrap:anywhere] ${
+                className={`block text-card leading-[1.5] [overflow-wrap:anywhere] ${
                   skipped ? 'text-dim' : 'text-text'
                 }`}
               >

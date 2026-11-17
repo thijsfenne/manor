@@ -48,10 +48,10 @@ const when = (iso: string) =>
 const untilLabel = (ms: number) =>
   new Intl.DateTimeFormat(undefined, { weekday: 'short', hour: '2-digit', minute: '2-digit' }).format(new Date(ms))
 
-/** Body type for the card, the chat's own size so a mail reads like the reply around it. */
-const BODY_TEXT = 'text-[length:var(--msg-size,16px)] leading-[1.5] text-text'
+/** Body type for the card, the shared card size so it stays in step with the other cards in a turn. */
+const BODY_TEXT = 'text-card leading-[1.5] text-text'
 /** A field that reads as plain text: no box, no handle, it grows with what is typed. */
-const PLAIN_FIELD = 'w-full min-w-0 border-0 bg-transparent p-0 text-text [font:inherit] outline-none placeholder:text-dim'
+const PLAIN_FIELD = 'w-full min-w-0 border-0 bg-transparent p-0 text-text outline-none placeholder:text-dim'
 /** A subject or address list is one line of text that wraps to show all of it, never a scroll. */
 const ONE_LINE_WRAPPED = 'block resize-none break-words [field-sizing:content]'
 
@@ -167,17 +167,17 @@ export function OutboundDraftBubble({
                   aria-label="Draft subject"
                   placeholder="Subject"
                   rows={1}
-                  className={`${PLAIN_FIELD} ${ONE_LINE_WRAPPED} mb-1 font-medium text-[length:var(--msg-size,16px)]`}
+                  className={`${PLAIN_FIELD} ${ONE_LINE_WRAPPED} mb-1 font-medium text-card`}
                   maxLength={OUTBOUND_DRAFT_SUBJECT_MAX}
                   value={subject}
                   onKeyDown={keepOneLine}
                   onChange={(event) => setEdit({ subject: oneLine(event.target.value) })}
                 />
               ) : shownSubject.length > 0 ? (
-                <p className="m-0 mb-1 font-medium text-[length:var(--msg-size,16px)] text-text">{shownSubject}</p>
+                <p className="m-0 mb-1 font-medium text-card text-text">{shownSubject}</p>
               ) : null
             ) : null}
-            <dl className="m-0 mb-3 text-[15px]">
+            <dl className="m-0 mb-3 text-card">
               {draft.channel === 'gmail' ? <Field label="From">{draft.from ?? 'Personal Gmail'}</Field> : null}
               <Field label="To">{draft.to}</Field>
               {draft.channel !== 'gmail' ? null : open ? (
@@ -290,8 +290,8 @@ function CardHeader({ channel, expanded, onToggle, status, tone, action }: {
       <span className="grid size-7 shrink-0 place-items-center rounded-lg bg-user-bg text-text">
         <Icon icon={channel === 'slack' ? SlackIcon : Mail01Icon} size={16} />
       </span>
-      <span className="text-[15px] text-text">{label}</span>
-      {status === undefined ? null : <span className={`min-w-0 flex-1 truncate text-[15px] ${tone}`}>{status}</span>}
+      <span className="text-card text-text">{label}</span>
+      {status === undefined ? null : <span className={`min-w-0 flex-1 truncate text-card ${tone}`}>{status}</span>}
     </>
   )
   return (
@@ -361,7 +361,7 @@ function ThreadQuote({ thread, onMore }: { thread: OutboundDraftThread; onMore?:
           )}
         </span>
       </div>
-      <p className="m-0 mt-1 line-clamp-3 whitespace-pre-line text-[length:var(--msg-size,16px)] leading-[1.45] text-muted">
+      <p className="m-0 mt-1 line-clamp-3 whitespace-pre-line text-card leading-[1.45] text-muted">
         {thread.previous.text}
       </p>
     </div>

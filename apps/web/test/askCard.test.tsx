@@ -136,7 +136,7 @@ describe('AskCard', () => {
   it('sets the question at the option rows body size, so a long one reads as card text', () => {
     const html = card()
 
-    expect(html).toMatch(/text-\[14px\] leading-5 font-medium text-text/)
+    expect(html).toMatch(/text-card font-medium text-text/)
     expect(html).not.toContain('text-[16px]')
     expect(html).not.toContain('text-meta">Which way?')
   })

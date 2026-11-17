@@ -30,7 +30,7 @@ const previewsInChat = (file: DeliveredFile) => file.mime === 'text/html' && fil
  * Files a persona handed over, under the answer of the turn that made them. An HTML
  * page is drawn into the thread itself at the full column width, in a DM too; every
  * other file is a card with Open and Save, which a DM keeps within the reply bubble's
- * 78%. The Mac opens HTML and SVG in the chat's own Browser panel, other files as a
+ * width. The Mac opens HTML and SVG in the chat's own Browser panel, other files as a
  * copy in the app macOS picks, and saves through its own dialog; a browser tab opens or
  * downloads the link, where the server itself says when a file is gone.
  */
@@ -74,7 +74,7 @@ function DeliveredFileRow({ file, bubble }: { file: DeliveredFile; bubble: boole
   // An SVG opens as the viewed page, so a browser tab shows it rather than its source.
   const openHref = src === undefined ? undefined : file.mime === 'image/svg+xml' ? withParam(src, 'view=1') : src
   return (
-    <div className={`min-w-0 ${bubble ? 'max-w-[78%]' : ''}`}>
+    <div className={`min-w-0 ${bubble ? 'max-w-bubble' : ''}`}>
       <div className="min-w-0 overflow-hidden rounded-xl border border-line bg-composer-tray">
         <div className="flex min-w-0 items-center gap-2 px-2.5 py-1.5 text-[12px]">
           <FileMark path={file.name} size={16} />

@@ -220,6 +220,8 @@ export function TurnActivity({
   }, [pendingFold, folding, foldToggle, closingAway, root])
 
   if (displayed.length === 0 && compactRecord === undefined && traceNotes.length === 0 && !compacting) return null
+  // In a DM every card runs as wide as a bubble may grow; replies and user rows size themselves.
+  const card = bubble ? 'min-w-0 max-w-bubble' : 'min-w-0'
 
   return (
     <div ref={root} className="flex w-full min-w-0 flex-col gap-1.5" style={accentStyle(persona.color)}>
@@ -251,7 +253,7 @@ export function TurnActivity({
               />
             </li>
           ) : segment.kind === 'ask' ? (
-            <li key={segment.key} data-chrome="" className="min-w-0">
+            <li key={segment.key} data-chrome="" className={card}>
               <AskAnswers
                 questions={segment.ask.questions}
                 {...(segment.ask.answers === undefined ? {} : { answers: segment.ask.answers })}
@@ -268,11 +270,11 @@ export function TurnActivity({
               />
             </li>
           ) : segment.kind === 'todo' ? (
-            <li key={segment.key} data-chrome="" className="min-w-0">
+            <li key={segment.key} data-chrome="" className={card}>
               <TodoList todos={segment.todos} foldKey={segment.key} />
             </li>
           ) : segment.kind === 'subagents' ? (
-            <li key={segment.key} data-chrome="" className="min-w-0">
+            <li key={segment.key} data-chrome="" className={card}>
               <SubagentRows agents={segment.agents} activities={turn.activities} running={running} {...(onOpenSubagents === undefined ? {} : { onOpen: onOpenSubagents })} />
             </li>
           ) : (
@@ -282,6 +284,7 @@ export function TurnActivity({
               edits={segment.edits}
               breaks={segment.breaks}
               activeTool={segment.key === active?.key ? active.tool : undefined}
+              card={card}
             />
           ),
         )}
@@ -312,7 +315,7 @@ export function TurnActivity({
 }
 
 /** One compact activity bundle between two narration messages. */
-function WorkRun({ steps, edits, breaks, activeTool }: { steps: TurnStep[]; edits: FileEdit[]; breaks: ReadonlySet<string>; activeTool?: ToolStep }) {
+function WorkRun({ steps, edits, breaks, activeTool, card }: { steps: TurnStep[]; edits: FileEdit[]; breaks: ReadonlySet<string>; activeTool?: ToolStep; card: string }) {
   const [open, setOpen] = useState(false)
   const reduce = useReducedMotion() ?? false
   // A failed call is settled, so shimmer must never make it look in flight.
@@ -332,7 +335,7 @@ function WorkRun({ steps, edits, breaks, activeTool }: { steps: TurnStep[]; edit
   const currentIsInRows = current !== undefined && steps.some((step) => step.key === current.key)
 
   return (
-    <li data-chrome="" className="min-w-0 text-[14px] text-dim">
+    <li data-chrome="" className={`${card} text-[14px] text-dim`}>
       <div className="flex min-w-0 items-start">
         <button
           type="button"

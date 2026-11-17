@@ -54,7 +54,7 @@ function ConnectCardRow({ card, bubble }: { card: ConnectRecord; bubble: boolean
   const [clicked, setClicked] = useState(false)
   useEffect(() => setClicked(false), [card.status, card.reason])
 
-  const button = 'inline-flex flex-none cursor-pointer items-center gap-1 rounded-md border-0 bg-transparent px-1.5 py-0.5 text-[12px] text-muted [font:inherit] hover:bg-picked hover:text-text disabled:cursor-default disabled:opacity-50'
+  const button = 'inline-flex flex-none cursor-pointer items-center gap-1 rounded-md border-0 bg-transparent px-1.5 py-0.5 text-muted [font:inherit] hover:bg-picked hover:text-text disabled:cursor-default disabled:opacity-50'
   const canOpen = actions !== null && actions.connected && !clicked
   const open = () => {
     if (!canOpen) return
@@ -67,9 +67,9 @@ function ConnectCardRow({ card, bubble }: { card: ConnectRecord; bubble: boolean
     : nextMessage ? 'Its tools arrive on your next message.' : undefined
 
   return (
-    <div className={`min-w-0 ${bubble ? 'max-w-[78%]' : ''}`} data-connect-card={card.status}>
+    <div className={`min-w-0 ${bubble ? 'max-w-bubble' : ''}`} data-connect-card={card.status}>
       <div className="min-w-0 overflow-hidden rounded-xl border border-line bg-composer-tray">
-        <div className="flex min-w-0 items-center gap-2 px-2.5 py-1.5 text-[12px]">
+        <div className="flex min-w-0 items-center gap-2 px-2.5 py-1.5 text-card">
           <Icon icon={Plug01Icon} size={16} className="flex-none text-muted" />
           <span className="min-w-0 flex-1 truncate text-text">
             Connect {appLabel(card.app)}
@@ -113,20 +113,20 @@ export function ConnectStatusMark({ status }: { status: 'waiting' | 'connected' 
   const reduceMotion = useReducedMotion()
   if (status === 'connected') {
     return (
-      <span className="inline-flex flex-none items-center gap-1 px-1.5 py-0.5 text-[12px] text-ok" role="status">
+      <span className="inline-flex flex-none items-center gap-1 px-1.5 py-0.5 text-ok" role="status">
         <Icon icon={CheckmarkCircle02Icon} size={13} />Connected
       </span>
     )
   }
   if (status === 'failed') {
     return (
-      <span className="inline-flex flex-none items-center gap-1 px-1.5 py-0.5 text-[12px] text-danger" role="status">
+      <span className="inline-flex flex-none items-center gap-1 px-1.5 py-0.5 text-danger" role="status">
         <Icon icon={Alert02Icon} size={13} />Failed
       </span>
     )
   }
   return (
-    <span className="inline-flex flex-none items-center gap-1 px-1.5 py-0.5 text-[12px] text-muted" role="status">
+    <span className="inline-flex flex-none items-center gap-1 px-1.5 py-0.5 text-muted" role="status">
       <motion.span
         className="inline-flex"
         {...(reduceMotion === true ? {} : { animate: { rotate: 360 }, transition: { repeat: Infinity, duration: 1.2, ease: 'linear' } })}

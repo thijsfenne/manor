@@ -18,7 +18,7 @@ function Runs({ elements }: { elements: SlackRichTextInline[] }) {
   })
 }
 export function SlackDraftPreview({ document }: { document: SlackRichText }) {
-  return <div className="min-w-0 whitespace-pre-wrap text-[length:var(--msg-size,16px)] leading-relaxed text-text [overflow-wrap:anywhere]">
+  return <div className="min-w-0 whitespace-pre-wrap text-card leading-relaxed text-text [overflow-wrap:anywhere]">
     {document.elements.map((item, i) => {
       if (item.type === 'rich_text_list') {
         const Tag = item.style === 'ordered' ? 'ol' : 'ul'
@@ -82,7 +82,7 @@ export function SlackDraftEditor({ body, document, onChange }: { body: string; d
       <Button size="compact" variant="ghost" onClick={() => { change(commitDraftEdit(state, formatDraftInline(state.blocks, link.selection, 'link'), link.selection)); setLink(null) }}>Unlink</Button>
       <Button size="compact" variant="ghost" onClick={() => setLink(null)}>Cancel</Button>
     </div>}
-    <div className="min-h-[4.5rem] text-[length:var(--msg-size,16px)] leading-relaxed text-text">
+    <div className="min-h-[4.5rem] text-card leading-relaxed text-text">
       {state.blocks.map((row, index) => {
         const list = row.kind === 'bullet' || row.kind === 'ordered'
         const Tag = row.kind === 'ordered' ? 'ol' : row.kind === 'bullet' ? 'ul' : 'div'
