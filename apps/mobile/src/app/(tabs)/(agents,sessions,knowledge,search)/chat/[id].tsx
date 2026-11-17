@@ -53,7 +53,7 @@ import { ProjectSettingsSheet } from '@/components/ProjectSettingsSheet'
 import { GlassIconButton } from '@/components/GlassIconButton'
 import { GlassSurface } from '@/components/GlassSurface'
 import { BubbleTintContext } from '@/components/bubbleTint'
-import { Markdown, type MarkdownLinks } from '@/components/Markdown'
+import { Markdown, type MarkdownLinks, type RepoLinks } from '@/components/Markdown'
 import { AgentRuntimeSheet, RuntimeSheet, SingleRuntimeSheet } from '@/components/RuntimeSheet'
 import { ReplyContextChip } from '@/components/ReplyContextChip'
 import { NoteQuoteContextChip, QuoteBlock } from '@/components/QuoteContextChip'
@@ -1522,6 +1522,7 @@ const TranscriptRow = memo(function TranscriptRowBody(props: TranscriptRowProps)
           {...(eventRow.event.quote === undefined ? {} : { quote: eventRow.event.quote })}
           {...(eventRow.event.quotes === undefined ? {} : { quotes: eventRow.event.quotes })}
           onOpenQuoteSource={onOpenQuoteSource}
+          {...(links?.repo === undefined ? {} : { repo: links.repo })}
           {...(eventRow.event.noteQuote === undefined ? {} : { noteQuote: eventRow.event.noteQuote })}
         />
     // In a project thread: the Session this message went on to. In that Session: who sent it.
@@ -1737,7 +1738,9 @@ function ConsultationExcerpt({ question, replyPending }: { question: string; rep
 const NO_INLINE_QUOTES: readonly InlineQuote[] = []
 
 /** `tint` fills a DM bubble with the face he is talking to; its chips read the same tint. A dimmed (pending) bubble stays grey so its fade cannot pull the tinted ink below AA. */
-function Bubble({ text, images, agents, files = [], documents = [], replyTo, quote, noteQuote, quotes = NO_INLINE_QUOTES, sourceEventId, onQuoteSource, onOpenQuoteSource, dim = false, tint, quoteAuthors = false }: { text: string; images: readonly EventImage[]; agents: readonly AgentConfig[]; files?: readonly FileAttachment[]; documents?: readonly (EventDocument | PendingDocument)[]; replyTo?: MessageReply; quote?: MessageQuote; noteQuote?: NoteQuote; quotes?: readonly InlineQuote[]; sourceEventId?: string; onQuoteSource?: (source: QuoteSelectionSource) => void; onOpenQuoteSource?: (eventId: string) => void; dim?: boolean; tint?: BubbleTint; quoteAuthors?: boolean }) {
+function Bubble({ text, images, agents, files = [], documents = [], replyTo, quote, noteQuote, quotes = NO_INLINE_QUOTES, sourceEventId, onQuoteSource, onOpenQuoteSource, dim = false, tint, quoteAuthors = false, repo }: { text: string; images: readonly EventImage[]; agents: readonly AgentConfig[]; files?: readonly FileAttachment[]; documents?: readonly (EventDocument | PendingDocument)[]; replyTo?: MessageReply; quote?: MessageQuote; noteQuote?: NoteQuote; quotes?: readonly InlineQuote[]; sourceEventId?: string; onQuoteSource?: (source: QuoteSelectionSource) => void; onOpenQuoteSource?: (eventId: string) => void; dim?: boolean; tint?: BubbleTint; quoteAuthors?: boolean
+  /** The chat's repo listing, so a file path he wrote opens in Files. */
+  repo?: RepoLinks }) {
   // A message that refers to its pictures by number shows those numbers; older ones stay as they were.
   const numbered = imageRefSpans(text, images.length).length > 0
   const [openImage, setOpenImage] = useState<number | null>(null)
@@ -1757,6 +1760,7 @@ function Bubble({ text, images, agents, files = [], documents = [], replyTo, quo
           {text === '' ? null : (
             <Markdown
               agents={agents}
+              {...(repo === undefined ? {} : { links: { repo } })}
               text={normalizeComposerLists(text)}
               sent={{
                 ...(numbered ? { imageCount: images.length, onOpenImage: setOpenImage } : {}),

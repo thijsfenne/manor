@@ -1376,25 +1376,31 @@ input:focus-visible + .checkbox-box {
   color: var(--bubble-ink);
 }
 
-/* `align-middle` centres a pill on the x-height, which reads low beside capitals in a
-   sent message; the composer's editor keeps its own line and stays put. A persona pill
-   already stands taller on its face, so it is centred without the lift. */
-[data-inline-chip]:not([data-agent-chip]):not([data-composer-editor] *) {
-  position: relative;
-  top: -2px;
-}
-
 .bubble-ink [data-inline-chip] {
   background-color: var(--bubble-wash);
   color: var(--bubble-ink);
 }
 
-/* What a message carries stays blue on any fill, so the blue is the fill here: blue ink
-   on a face's colour has no contrast promise, and `on-primary` flips with the theme. */
-.bubble-ink [data-quote-ref],
-.bubble-ink [data-image-ref] {
-  background-color: var(--color-busy);
-  color: var(--color-on-primary);
+/* A quote or picture pill that opens on a click darkens one more step on the same axis as
+   the wash, so the white ink only gains contrast. */
+.bubble-ink button[data-inline-chip]:hover {
+  background-color: color-mix(in srgb, var(--bubble-wash), black 14%);
+}
+
+/* The typed text of a grey user bubble: every chip but a persona's, and inline code, reads
+   blue like a quote, so what the user pointed at stands out as one kind of thing. A persona
+   chip keeps the colour of the face it names. Unlayered so it beats the chips' own colours. */
+.bubble-plain [data-inline-chip]:not([data-agent-chip]),
+.bubble-plain :not(pre) > code {
+  --color-text: var(--color-busy);
+  --color-muted: var(--color-busy);
+  --color-skill: var(--color-busy);
+  background-color: color-mix(in srgb, var(--color-busy) 18%, transparent);
+  color: var(--color-busy);
+}
+
+.bubble-plain button[data-inline-chip]:hover {
+  background-color: color-mix(in srgb, var(--color-busy) 28%, transparent);
 }
 
 /*

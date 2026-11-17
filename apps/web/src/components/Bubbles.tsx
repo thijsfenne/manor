@@ -215,7 +215,7 @@ export function UserBubble({
         ) : null}
         {text ? (
           <div
-            className={`outline-none focus-visible:ring-2 focus-visible:ring-control${tint === undefined ? '' : ' bubble-ink'}`}
+            className={`outline-none focus-visible:ring-2 focus-visible:ring-control${tint === undefined ? ' bubble-plain' : ' bubble-ink'}`}
             {...(tint === undefined ? {} : { style: { '--bubble-ink': tint.ink, '--bubble-wash': tint.wash } as CSSProperties })}
             {...(sourceEventId === undefined ? {} : { 'data-quote-event-id': sourceEventId, tabIndex: -1 })}
           >

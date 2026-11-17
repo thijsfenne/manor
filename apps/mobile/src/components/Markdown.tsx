@@ -1,4 +1,5 @@
 import CheckmarkSquare02Icon from '@hugeicons/core-free-icons/CheckmarkSquare02Icon'
+import File01Icon from '@hugeicons/core-free-icons/File01Icon'
 import Globe02Icon from '@hugeicons/core-free-icons/Globe02Icon'
 import SquareIcon from '@hugeicons/core-free-icons/SquareIcon'
 import { HugeiconsIcon } from '@hugeicons/react-native'
@@ -548,9 +549,12 @@ function Inline({
   // In a tinted bubble code and links take its ink and wash, as its chips do; their
   // page colours sat on the fill at whatever contrast they happened to get.
   const tint = useBubbleTint()
-  const codeStyle = tint === undefined ? styles.inlineCode : [styles.inlineCode, { color: tint.ink, backgroundColor: tint.wash }]
-  const linkStyle = tint === undefined ? styles.link : [styles.link, { color: tint.ink }]
   const message = useContext(SentContext)
+  // Code too long for a pill follows the pills' colours: the tint, blue in his grey bubble.
+  const codeStyle = tint !== undefined
+    ? [styles.inlineCode, { color: tint.ink, backgroundColor: tint.wash }]
+    : message === undefined ? styles.inlineCode : [styles.inlineCode, styles.inlineCodeBlue]
+  const linkStyle = tint === undefined ? styles.link : [styles.link, { color: tint.ink }]
   const cites = useContext(CitesSources)
   const plainLinks = useContext(PlainLinks) || !cites
   const out: ReactNode[] = []
@@ -571,7 +575,16 @@ function Inline({
     if (match[2] !== undefined || match[3] !== undefined) {
       out.push(<Text key={key} style={[styles.bold, style]}><Inline agents={agents} links={links} text={match[2] ?? match[3] ?? ''} /></Text>)
     } else if (match[4] !== undefined) {
-      out.push(<Text key={key} style={codeStyle}>{match[4]}</Text>)
+      // A file path is a pill with only its name, as on the Mac, and opens the file when this
+      // chat's repo holds it. Other short code is a pill too; longer code stays text so it can wrap.
+      const file = filePathName(match[4])
+      const repo = links?.repo
+      const repoPath = file === null ? null : repo?.resolve(match[4].replace(LINE_SUFFIX, '')) ?? null
+      out.push(file !== null
+        ? <InlinePill key={key} label={file} title={match[4]} tone="file" {...(repoPath === null || repo === undefined ? {} : { onPress: () => repo.open(repoPath) })} />
+        : match[4].length <= CODE_PILL_CHARS
+          ? <InlinePill key={key} label={match[4]} tone="code" />
+          : <Text key={key} style={codeStyle}>{match[4]}</Text>)
     } else if (match[5] !== undefined && match[6] !== undefined) {
       const href = match[6]
       const external = EXTERNAL_LINK.test(href)
@@ -646,7 +659,7 @@ function Mentions({ text, agents }: { text: string; agents: readonly AgentConfig
   const message = useContext(SentContext)
   const sent = message !== undefined
   const tint = useBubbleTint()
-  // His `[Image #n]` and `[Quote #n]` references read as blue pills: an image opens the
+  // His `[Image #n]` and `[Quote #n]` references read as pills: an image opens the
   // picture it names, a quote opens the words it holds.
   const refs = sentRefs(text, message)
   if (refs.length > 0) {
@@ -657,14 +670,12 @@ function Mentions({ text, agents }: { text: string; agents: readonly AgentConfig
       const quote = ref.kind === 'quote' ? message?.quotes?.[ref.number - 1] : undefined
       const open = ref.kind === 'image' ? message?.onOpenImage : message?.onOpenQuote
       parts.push(
-        <Text
-          accessibilityRole={open === undefined ? undefined : 'button'}
+        <InlinePill
           key={`${ref.kind}${ref.start}`}
+          label={quote === undefined ? `Image #${ref.number}` : quoteExcerpt(quote)}
+          tone="carried"
           {...(open === undefined ? {} : { onPress: () => open(ref.number - 1) })}
-          style={[styles.carriedRef, tint && styles.carriedRefOnTint]}
-        >
-          {quote === undefined ? `Image #${ref.number}` : quoteExcerpt(quote)}
-        </Text>,
+        />,
       )
       at = ref.end
     }
@@ -685,13 +696,80 @@ function Mentions({ text, agents }: { text: string; agents: readonly AgentConfig
       const persona = personaOf([...agents], agent.id)
       out.push(<Text key={span.start} style={[styles.mention, { color: tint?.ink ?? persona.color }]}>@{agent.name}</Text>)
     } else {
-      out.push(<Text key={span.start} style={[styles.destinationMention, tint && { backgroundColor: tint.wash, color: tint.ink }]}>{handle === 'browser' ? 'Browser' : 'Sessions'}</Text>)
+      out.push(<InlinePill key={span.start} label={handle === 'browser' ? 'Browser' : 'Sessions'} tone="chip" />)
     }
     last = span.start + 1 + span.handle.length
   }
   if (last < text.length) out.push(text.slice(last))
   return <Fragment>{out}</Fragment>
 }
+
+/** Inline code up to this length fits one pill line; longer code stays wrapping text. */
+const CODE_PILL_CHARS = 24
+/**
+ * A path with at least one folder and a file name with an extension, optionally `:line` or
+ * `:from-to`. Every named segment holds a letter and no glob or `=` is allowed, so `1/2.5`,
+ * a `--flag=a/b.json` and a glob stay code instead of losing everything before the last slash.
+ */
+const FILE_PATH = /^(?:~|\.{1,2}|[\w@.-]*[A-Za-z_][\w@.-]*)?(?:\/[\w@.-]*[A-Za-z_][\w@.-]*)*\/([\w@.-]*[A-Za-z_][\w@.-]*\.[A-Za-z0-9]+(?::\d+(?:-\d+)?)?)$/
+const LINE_SUFFIX = /:\d+(?:-\d+)?$/
+
+/** The name a file path pill shows, or null when the code is not a file path. */
+function filePathName(code: string): string | null {
+  return FILE_PATH.exec(code)?.[1] ?? null
+}
+
+/**
+ * A rounded chip inside a sentence: short code (`code`), a file path by its name (`file`), a
+ * destination handle (`chip`), or a picture or quote the message carries (`carried`, blue as on
+ * desktop). An inline view like `SourcePill`, because nested text draws no rounded corners on
+ * iOS. On a tinted bubble every tone takes the bubble's wash and ink, so it keeps contrast on
+ * any face or project colour.
+ */
+function InlinePill({ label, title = label, tone, onPress }: {
+  label: string
+  /** The whole thing the pill stands for, for VoiceOver, when the label is cut down. */
+  title?: string
+  tone: 'code' | 'chip' | 'carried' | 'file'
+  onPress?: () => void
+}) {
+  const tint = useBubbleTint()
+  const sent = useContext(SentContext) !== undefined
+  // In his own grey bubble every pill is blue like a quote; in agent prose they stay grey.
+  const blue = tint === undefined && sent
+  const box = [styles.pill, PILL_FILL[tone], blue && PILL_FILL.carried, tint && { backgroundColor: tint.wash }]
+  const text = (
+    <>
+      {tone === 'file' ? <HugeiconsIcon color={tint?.ink ?? (blue ? colors.busy : colors.muted)} icon={File01Icon} size={12} strokeWidth={1.8} /> : null}
+      <Text numberOfLines={1} style={[styles.pillText, PILL_TEXT[tone], blue && styles.pillTextBlue, tint && { color: tint.ink }]}>{label}</Text>
+    </>
+  )
+  if (onPress === undefined) return <View accessibilityLabel={title} style={box}>{text}</View>
+  return (
+    <Pressable
+      accessibilityLabel={title}
+      accessibilityRole="button"
+      onPress={onPress}
+      style={({ pressed }) => [...box, pressed && styles.sourcePillPressed]}
+    >
+      {text}
+    </Pressable>
+  )
+}
+
+const PILL_FILL = StyleSheet.create({
+  code: { backgroundColor: colors.chip },
+  file: { backgroundColor: colors.chip, gap: 4 },
+  chip: { backgroundColor: colors.chip },
+  carried: { backgroundColor: colors.busyWash },
+})
+
+const PILL_TEXT = StyleSheet.create({
+  code: { fontFamily: fonts.mono, fontSize: 13 },
+  file: {},
+  chip: { fontWeight: '500' },
+  carried: { color: colors.busy, fontWeight: '500' },
+})
 
 /** The `small` reading size, two points down with the headings the same steps above it. */
 const SMALL = StyleSheet.create({
@@ -716,15 +794,17 @@ const styles = StyleSheet.create({
   italic: { fontStyle: 'italic' },
   strike: { textDecorationLine: 'line-through', color: colors.muted },
   inlineCode: { fontFamily: fonts.mono, fontSize: 14, color: colors.text, backgroundColor: colors.chip, borderRadius: 4, ...squircle },
+  inlineCodeBlue: { color: colors.busy, backgroundColor: colors.busyWash },
   link: { color: colors.busy, textDecorationLine: 'underline' },
   deadLink: { color: colors.dim, textDecorationLine: 'underline' },
   mention: { fontWeight: '500' },
-  // A picture or quote the message carries, blue as on desktop. Like the pills
-  // around it, the radius only shows where the platform draws one on a nested run.
-  carriedRef: { overflow: 'hidden', borderRadius: radius.round, backgroundColor: colors.busyWash, color: colors.busy, fontWeight: '500', paddingHorizontal: 5, paddingVertical: 1 },
-  // Blue ink on a face's colour has no contrast promise, so on a tinted bubble the blue is the fill.
-  carriedRefOnTint: { backgroundColor: colors.busy, color: colors.onPrimary },
-  destinationMention: { overflow: 'hidden', borderRadius: radius.round, backgroundColor: colors.chip, color: colors.text, fontWeight: '500', paddingHorizontal: 5, paddingVertical: 1 },
+  // Sized and nudged like `sourcePill`, so it sits on the type without pushing lines apart.
+  pill: {
+    flexDirection: 'row', alignItems: 'center', height: 19, maxWidth: 220, paddingHorizontal: 7,
+    borderRadius: radius.round, ...squircle, transform: [{ translateY: 2 }],
+  },
+  pillText: { flexShrink: 1, color: colors.text, fontFamily: fonts.sans, fontSize: 14, lineHeight: 17 },
+  pillTextBlue: { color: colors.busy },
   rule: { height: StyleSheet.hairlineWidth, backgroundColor: colors.line, marginVertical: spacing.xs },
   imageParagraph: { gap: spacing.sm },
   imageRoom: { alignItems: 'flex-start' },

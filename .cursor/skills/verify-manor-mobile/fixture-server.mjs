@@ -514,6 +514,9 @@ const snapshots = {
       '- [Missing icon](https://no-icon.invalid/x)',
       '- https://pubmed.ncbi.nlm.nih.gov/123/',
     ].join('\n') },
+    // Inline pills on the tinted bubble (quote, destination, code, a file path by its name) take its wash.
+    { id: 'wq1', ts: now - 8_000, type: 'user_message', mentions: [], text: 'Maakt voor nu niet uit [Quote #1], open @browser en draai `pnpm test` op `apps/mobile/src/components/Markdown.tsx`.',
+      quotes: [{ kind: 'message', eventId: 'ws2', agentId: 'agent-smith', text: 'controle is onvolledig' }] },
   ],
   // The project thread holds the session's question as a system note.
   'chat-thread-manor': [
@@ -719,6 +722,9 @@ const snapshots = {
     { id: 'sn1', ts: now - 2 * 60_000, type: 'user_message', text: 'Zet de notities klaar.', mentions: [] },
     { id: 'sn2', ts: now - 60_000, type: 'agent_message', turnId: 'turn-sn', agentId: '__single__', messageId: 'sn-m1', text: 'De notities staan klaar.' },
     { id: 'sn3', ts: now - 60_000 + 1, type: 'turn_result', turnId: 'turn-sn', agentId: '__single__', contextTokens: 88_000, contextWindow: 400_000 },
+    // The same pills on a plain Session bubble, where the quote stays blue.
+    { id: 'sn4', ts: now - 30_000, type: 'user_message', mentions: [], text: 'Maakt voor nu niet uit [Quote #1], open @browser en draai `pnpm test` op `apps/mobile/src/components/Markdown.tsx`.',
+      quotes: [{ kind: 'message', eventId: 'sn2', agentId: '__single__', text: 'controle is onvolledig' }] },
   ],
   // Blocked on a secret card. The fixture counts a submitted value and never keeps it.
   'chat-secret-token': [
@@ -861,6 +867,8 @@ const snapshots = {
       text: '## Plan\n\nMaak de bubbel **vet** en `code` leesbaar, vraag @Sage en open @browser.\n\n- eerste punt\n- tweede punt\n\nregel een\nregel twee' },
     { id: 'w-md-blocks', ts: now - 3 * 60_000, type: 'user_message', mentions: [],
       text: '```\npnpm verify\n```\n\n| Kolom | Waarde |\n| --- | --- |\n| inkt | bubbel |' },
+    { id: 'g-quote', ts: now - 2 * 60_000, type: 'user_message', mentions: [], text: 'Maakt voor nu niet uit [Quote #1], open @browser en draai `pnpm test` op `apps/mobile/src/components/Markdown.tsx`.',
+      quotes: [{ kind: 'message', eventId: 'g4', agentId: 'agent-sage', text: 'controle is onvolledig' }] },
     { id: 'g6', ts: now - 30_000, type: 'user_message', text: 'Voeg die regel dan toe.', mentions: [] },
     { id: 'g7', ts: now - 29_000, type: 'tool_use', turnId: 'turn-g2', agentId: 'agent-sage', toolCallId: 'g-edit', tool: 'Edit',
       subject: 'release-notes.md', detail: 'release-notes.md' },
