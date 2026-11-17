@@ -4,6 +4,7 @@ What changed for someone who uses Manor, newest first. A version is a tag on `ma
 
 ## Unreleased
 
+- A project's Notes no longer show Manor's hidden source tags as text. A task that stayed open and unchanged for three days or more shows how long, such as open 4d, beside it. The project thread now reads that age on the task itself instead of a second stale copy of it above the list.
 - On the phone, a project thread no longer jumps up and down when a proposal or result card arrives or changes. At the bottom it moves once to keep the card in view.
 - A tasks card whose tasks are all done shows closed, as just its header with the check, the heading and the count, on the Mac and on the phone. It folds shut when the last task is ticked, and the chevron opens it again. A card you opened or closed yourself keeps that while it stays on screen, and a card that ended with tasks not done stays open.
 

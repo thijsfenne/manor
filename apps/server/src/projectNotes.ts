@@ -1,10 +1,9 @@
 import { createHash } from 'node:crypto'
-import type { ThreadEvent, WorkHandoff } from '@manor/contracts'
+import { NOTE_MARKER as MARKER, noteAge, type ThreadEvent, type WorkHandoff } from '@manor/contracts'
 import type { Store } from './store.js'
 import { landedNoteCommit, currentSessionCommits, observeWorkCompletion } from './workCompletion.js'
 import { autoBranchName } from './worktree.js'
 
-const MARKER = /\s*<!-- manor-note handoff=([^\s]+) updated=(\d+) text=([a-f0-9]+) -->$/
 const fingerprint = (text: string) => createHash('sha256').update(text.replace(/^- /, '')).digest('hex').slice(0, 16)
 export const noteText = (line: string): string => line.replace(MARKER, '')
 export const noteHandoff = (line: string): string | undefined => {
@@ -80,14 +79,14 @@ export function reconcileNotes(rows: readonly string[], handoffs: readonly NoteS
   })
 }
 
-/** Context only. Staleness never changes a checkbox or writes a second status file. */
+/** Context only. An unchanged open row says its age inline; age never changes a checkbox or the file. */
 export function notesContext(content: string, now = Date.now()): string {
-  const stale = content.split('\n').filter((line) => {
+  return content.split('\n').map((line) => {
     const marker = MARKER.exec(line)
-    return /^- \[ \] /.test(line) && marker !== null && marker[3] === fingerprint(noteText(line)) &&
-      now - Number(marker[2]) >= 3 * 86_400_000
-  }).map((line) => `stale? ${noteText(line).replace(/^- \[ \] /, '')}`)
-  return [...stale, ...content.split('\n').map(noteText)].join('\n')
+    const text = noteText(line)
+    const age = /^- \[ \] /.test(line) && marker !== null && marker[3] === fingerprint(text) ? noteAge(Number(marker[2]), now) : undefined
+    return age === undefined ? text : `${text} (${age})`
+  }).join('\n')
 }
 
 /**

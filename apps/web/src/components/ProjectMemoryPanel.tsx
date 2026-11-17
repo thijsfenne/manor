@@ -1,5 +1,5 @@
 import { ArrowLeft01Icon, BubbleChatIcon, Cancel01Icon, File01Icon, RefreshIcon } from '@hugeicons/core-free-icons'
-import type { ContextFile, ProjectMemoryScope, ServerMessage } from '@manor/contracts'
+import { NOTE_MARKER, noteAge, type ContextFile, type ProjectMemoryScope, type ServerMessage } from '@manor/contracts'
 import { Fragment, useEffect, useMemo, useState, type ComponentPropsWithoutRef, type CSSProperties } from 'react'
 import type { Components } from 'react-markdown'
 import { messageTime } from '../messageMeta'
@@ -46,9 +46,22 @@ const fallbackTitle = (path: string): string =>
     .replace(/[_-]+/g, ' ')
     .replace(/^./, (letter) => letter.toUpperCase())
 
-/** Frontmatter routes the file for agents; the user-facing detail starts at the memory itself. */
-export const projectMemoryBody = (content: string): string =>
-  content.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/, '').trim()
+/** Rendered as a muted badge by the detail's link components, never as a link. */
+const NOTE_AGE_HREF = '#note-age'
+
+/**
+ * Frontmatter and the server's Notes source markers route the file for agents; the
+ * user-facing detail starts at the memory itself. An open row the marker dates three
+ * days or more back gets its age instead.
+ */
+export const projectMemoryBody = (content: string, now = Date.now()): string =>
+  content.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/, '').trim().split(/\r?\n/).map((line) => {
+    const marker = NOTE_MARKER.exec(line)
+    if (marker === null) return line
+    const text = line.slice(0, marker.index)
+    const age = /^- \[ \] /.test(text) ? noteAge(Number(marker[2]), now) : undefined
+    return age === undefined ? text : `${text} [${age}](${NOTE_AGE_HREF})`
+  }).join('\n')
 
 interface Props {
   projectId: string
@@ -169,6 +182,9 @@ export function ProjectMemoryPanel({
   const selectedBody = selected === null ? '' : projectMemoryBody(selected.content)
   const memoryLinks = useMemo<Components>(() => ({
     a: ({ href, children }) => {
+      if (href === NOTE_AGE_HREF) {
+        return <span className="ml-1 whitespace-nowrap rounded-chip bg-raised px-1.5 py-0.5 text-meta text-dim">{children}</span>
+      }
       if (href !== undefined && /^https?:\/\//i.test(href)) return <ExternalLink href={href}>{children}</ExternalLink>
       // Only loaded sibling cards can open here; User files have a separate scope.
       const sibling = href?.match(/^(?:\.\/)?([^/\\:?#]+\.md)$/i)?.[1]

@@ -256,6 +256,23 @@ describe('project memory presentation', () => {
   })
 })
 
+describe('notes detail', () => {
+  const now = Date.UTC(2026, 10, 17)
+  const marked = (row: string, updated: number) => `${row} <!-- manor-note handoff=h1 updated=${updated} text=0123456789abcdef -->`
+
+  it('hides source markers and ages only open rows unchanged for three days', () => {
+    const body = projectMemoryBody([
+      '# Notes',
+      marked('- [ ] Old task', now - 4 * 86_400_000),
+      marked('- [ ] Recent task', now - 86_400_000),
+      marked('- [x] Done task', now - 9 * 86_400_000),
+      '- A plain note',
+    ].join('\n'), now)
+    expect(body).toBe('# Notes\n- [ ] Old task [open 4d](#note-age)\n- [ ] Recent task\n- [x] Done task\n- A plain note')
+    expect(projectMemoryBody(`${marked('- [ ] One', now)}\r\n- Two`, now)).toBe('- [ ] One\n- Two')
+  })
+})
+
 describe('this-turn selected memory', () => {
   const structured = '/Users/sam/notes/memory/structured/manor/architecture.md'
   const index = '/Users/sam/notes/memory/structured/manor/MEMORY.md'

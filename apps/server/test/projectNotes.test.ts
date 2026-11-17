@@ -67,15 +67,14 @@ describe('Notes evidence', () => {
     expect(reconcileNotes(result, sessions, { now: now + 1, landed: new Map() })).toEqual(result)
   })
 
-  it('puts unchanged three-day rows first in context and resets the clock on human edits', () => {
-    const old = row('old', 'Old task')
+  it('ages unchanged three-day open rows inline in context and resets the clock on human edits', () => {
+    const old = sourceNote('- [ ] Old task', 'old', now - 4 * 86_400_000 - 1000)
     const recent = sourceNote('- [ ] Recent task', 'recent', now - 2 * 86_400_000)
-    const context = notesContext(`# Notes\n${old}\n${recent}`, now)
-    expect(context.startsWith('stale? Old task\n')).toBe(true)
-    expect(context).not.toContain('stale? Recent task')
-    expect(context).not.toContain('<!--')
+    const done = sourceNote('- [x] Done task', 'done', now - 9 * 86_400_000)
+    const context = notesContext(`# Notes\n${old}\n${recent}\n${done}`, now)
+    expect(context).toBe('# Notes\n- [ ] Old task (open 4d)\n- [ ] Recent task\n- [x] Done task')
     const [edited] = reconcileNotes([old.replace('Old task', 'Changed task')], [], { now, landed: new Map() })
-    expect(notesContext(edited!, now)).not.toContain('stale?')
+    expect(notesContext(edited!, now)).toBe('- [ ] Changed task')
   })
 
   it('recovers legacy identity only from a unique successful tool call around the exact write', () => {
