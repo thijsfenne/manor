@@ -1,4 +1,4 @@
-import type { DmFile, DmFileKind } from '@manor/contracts'
+import type { DeliveredFile, DmFile, DmFileKind, EventImage } from '@manor/contracts'
 
 /** The library's filter chips. Media is pictures and video; Files is everything else. */
 export const DM_FILE_FILTERS = [
@@ -56,4 +56,38 @@ export function dmFileReadsAs(file: DmFile): 'markdown' | 'text' | null {
   if (file.page === true || file.size > MAX_READ_BYTES) return null
   if (file.mime === 'text/markdown' || /\.(md|markdown)$/i.test(file.name)) return 'markdown'
   return TEXT_MIME.test(file.mime) ? 'text' : null
+}
+
+/** Delivered pictures the media route shows inline; any other delivered file, SVG included, keeps its row. */
+const PICTURE_MIMES = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp'])
+const MIME_BY_EXTENSION: Record<string, string> = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp', svg: 'image/svg+xml' }
+
+/**
+ * A turn's delivered files split for the transcript. A picture is drawn, not listed: one
+ * the turn's replies already show under the same name is left out, any other becomes a
+ * picture of its own. `rows` keeps everything else, and a picture whose bytes are gone.
+ */
+export function splitDeliveredFiles(files: readonly DeliveredFile[], shown: readonly EventImage[]): { rows: DeliveredFile[]; pictures: EventImage[] } {
+  const shownNames = new Set(shown.map((image) => image.name))
+  const rows: DeliveredFile[] = []
+  const pictures: EventImage[] = []
+  for (const file of files) {
+    if (file.src === undefined || !PICTURE_MIMES.has(file.mime)) rows.push(file)
+    else if (!shownNames.has(file.name)) pictures.push({ name: file.name, src: file.src })
+  }
+  return { rows, pictures }
+}
+
+/**
+ * A message's pictures as the file viewer's set, in their order. The size is unknown on
+ * the client and stays 0, which the viewer leaves unsaid.
+ */
+export function eventImageFiles(images: readonly EventImage[]): DmFile[] {
+  return images.map((image, index) => {
+    const mime = /^data:([^;,]+)/.exec(image.dataUrl ?? '')?.[1]
+      ?? MIME_BY_EXTENSION[/\.([a-z0-9]+)$/i.exec(image.name)?.[1]?.toLowerCase() ?? '']
+      ?? 'image/png'
+    const src = image.src ?? image.dataUrl
+    return { id: `picture:${index}`, name: image.name, mime, kind: 'image', size: 0, ts: 0, ...(src === undefined ? {} : { src }) }
+  })
 }

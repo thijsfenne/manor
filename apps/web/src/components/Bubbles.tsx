@@ -10,7 +10,9 @@ import { fileWriteGroups, type MessageQuoteSource, type PendingDocument } from '
 import { describeBytes, utf8Size } from '@manor/client-runtime/attachments'
 import type { BubbleTint } from '@manor/client-runtime/avatar-bubble'
 import { normalizeComposerLists } from '@manor/client-runtime/composer-formatting'
+import { eventImageFiles } from '@manor/client-runtime/dm-files'
 import { accentStyle } from '../accent'
+import { FileViewer } from './agents/FileViewer'
 import { Avatar } from './Avatar'
 import { FileMark } from './fileMark'
 import { Icon } from './Icon'
@@ -394,14 +396,17 @@ const FALLBACK_IMAGE_SIZE = { width: 320, height: 240 }
 /**
  * One picture in the thread. With a `gallery` it is one of the pictures the user sent:
  * a fixed 60px square, cropped to fill it, whose viewer steps through its siblings.
- * Without one it is an agent's picture, sized to its own pixels within the column.
+ * Without one it is an agent's picture, sized to its own pixels within the column,
+ * and a press asks `onOpen` for the file viewer.
  */
-function TranscriptImage({ image, frame = '', fit = 'object-cover', gallery, number, compact = false }: { image: EventImage; frame?: string; fit?: string; gallery?: { images: readonly GalleryImage[]; index: number }; number?: number; compact?: boolean }) {
+function TranscriptImage({ image, frame = '', fit = 'object-cover', gallery, number, compact = false, onOpen }: { image: EventImage; frame?: string; fit?: string; gallery?: { images: readonly GalleryImage[]; index: number }; number?: number; compact?: boolean; onOpen?: () => void }) {
   const [attempt, setAttempt] = useState(0)
   const [failed, setFailed] = useState(false)
   const source = eventImageSource(image)
   const src = attempt === 0 || image.src === undefined ? source : `${source}${source.includes('?') ? '&' : '?'}retry=${attempt}`
-  const size = image.width !== undefined && image.height !== undefined ? { width: image.width, height: image.height } : FALLBACK_IMAGE_SIZE
+  // A delivered picture carries no pixel size, so its frame takes the loaded picture's own.
+  const [loaded, setLoaded] = useState<{ width: number; height: number }>()
+  const size = image.width !== undefined && image.height !== undefined ? { width: image.width, height: image.height } : loaded ?? FALLBACK_IMAGE_SIZE
   // The pixel width is what a shrink-wrapped bubble sizes itself to; `max-w-full`
   // then fits it to the column, and the ratio gives the height before a byte loads.
   return (
@@ -420,6 +425,21 @@ function TranscriptImage({ image, frame = '', fit = 'object-cover', gallery, num
         >
           <Icon icon={RefreshIcon} size={16} />
           {gallery === undefined ? <span className="truncate">Couldn't load {image.name}. Retry</span> : <span className="sr-only">Couldn't load {image.name}. Retry</span>}
+        </button>
+      ) : onOpen !== undefined ? (
+        <button type="button" aria-label={`Open ${image.name}`} className="absolute inset-0 h-full w-full cursor-zoom-in border-0 bg-transparent p-0" onClick={onOpen}>
+          <img
+            src={src}
+            alt={image.name}
+            className={`block h-full w-full ${fit}`}
+            loading="lazy"
+            decoding="async"
+            onLoad={(event) => {
+              const { naturalWidth: width, naturalHeight: height } = event.currentTarget
+              if (image.width === undefined && width > 0 && height > 0) setLoaded({ width, height })
+            }}
+            onError={() => setFailed(true)}
+          />
         </button>
       ) : (
         <ZoomableImage
@@ -466,47 +486,59 @@ interface AgentBubbleProps {
  */
 function AgentBubbleView({ color, text, agents, images = [], live = false, bubble = false, quoteSources, quoteAgentId }: AgentBubbleProps) {
   const { plugins, components } = useAgentMentions(agents)
+  // The file viewer over this message's pictures only, opened at the one pressed.
+  const [viewing, setViewing] = useState<number | null>(null)
+  const said = quoteSources !== undefined && quoteSources.length > 0 ? quoteSources.some((source) => source.text.length > 0) : text.length > 0
+  // In a DM the pictures stand on the chat itself, above the bubble that holds the words.
+  const pictures = images.length > 0 ? (
+    <div className={`grid grid-cols-2 gap-1.5 ${said && !bubble ? 'mb-2' : ''}`}>
+      {images.map((image, index) => (
+        <TranscriptImage
+          key={`${image.name}-${index}`}
+          image={image}
+          frame="max-h-[36rem]"
+          fit="object-contain"
+          onOpen={() => setViewing(index)}
+        />
+      ))}
+    </div>
+  ) : null
   return (
-    <div className={bubble ? 'flex w-fit max-w-bubble min-w-0' : 'flex min-w-0'}>
+    <div className={bubble ? 'flex w-fit max-w-bubble min-w-0 flex-col gap-1.5' : 'flex min-w-0'}>
+      {bubble ? pictures : null}
+      {viewing === null ? null : (
+        <FileViewer files={eventImageFiles(images)} index={viewing} onIndex={setViewing} onClose={() => setViewing(null)} />
+      )}
       {/* The reading size is stated on the two message bodies rather than inherited
           from the page: everything else in the transcript (work lines, the routine
           event, timestamps) names its own smaller size, so a size on the column would
           be a size on nothing. `--msg-size` is the one thing the column does set,
           so the narrow side panel can read a step smaller than the stage. */}
-      <div
-        className={
-          bubble
-            ? `w-full min-w-0 bg-bubble text-[length:var(--msg-size,16px)] ${DM_BUBBLE}`
-            : 'w-full min-w-0 py-[3px] text-[length:var(--msg-size,16px)]'
-        }
-        style={accentStyle(color)}
-      >
-        {images.length > 0 ? (
-          <div className={`grid grid-cols-2 gap-1.5 ${text.length > 0 ? 'mb-2' : ''}`}>
-            {images.map((image, index) => (
-              <TranscriptImage
-                key={`${image.name}-${index}`}
-                image={image}
-                frame="max-h-[36rem]"
-                fit="object-contain"
-              />
-            ))}
-          </div>
-        ) : null}
-        {quoteSources !== undefined && quoteSources.length > 0 ? quoteSources.map((source, index) => (
-          <div
-            key={source.eventId}
-            data-quote-event-id={source.eventId}
-            data-quote-agent-id={quoteAgentId}
-            className={index === 0 ? 'outline-none focus-visible:ring-2 focus-visible:ring-control' : 'mt-2 outline-none focus-visible:ring-2 focus-visible:ring-control'}
-            tabIndex={-1}
-          >
-            <Markdown text={source.text} plugins={plugins} components={components} />
-          </div>
-        )) : text.length > 0 ? (
-          <Markdown text={text} plugins={plugins} components={components} reveal={live} stableBlocks />
-        ) : null}
-      </div>
+      {bubble && !said ? null : (
+        <div
+          className={
+            bubble
+              ? `w-full min-w-0 bg-bubble text-[length:var(--msg-size,16px)] ${DM_BUBBLE}`
+              : 'w-full min-w-0 py-[3px] text-[length:var(--msg-size,16px)]'
+          }
+          style={accentStyle(color)}
+        >
+          {bubble ? null : pictures}
+          {quoteSources !== undefined && quoteSources.length > 0 ? quoteSources.map((source, index) => (
+            <div
+              key={source.eventId}
+              data-quote-event-id={source.eventId}
+              data-quote-agent-id={quoteAgentId}
+              className={index === 0 ? 'outline-none focus-visible:ring-2 focus-visible:ring-control' : 'mt-2 outline-none focus-visible:ring-2 focus-visible:ring-control'}
+              tabIndex={-1}
+            >
+              <Markdown text={source.text} plugins={plugins} components={components} />
+            </div>
+          )) : text.length > 0 ? (
+            <Markdown text={text} plugins={plugins} components={components} reveal={live} stableBlocks />
+          ) : null}
+        </div>
+      )}
     </div>
   )
 }

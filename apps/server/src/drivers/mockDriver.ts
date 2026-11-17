@@ -360,7 +360,8 @@ function mockMemoryEdit(input: TurnInput): Extract<RuntimeEvent, { type: 'tool_u
  * after the result is published; "mock code edit: <line>" appends it to `mock-result.ts`
  * instead, a code change. Argus reading "mock review passed" in a turn that holds
  * `review_passed` calls it, the way a clean review ends. "mock deliver: <absolute path>"
- * hands that file over through the real `deliver_file` broker; a trailing "phone"
+ * hands that file over through the real `deliver_file` broker, several comma-separated
+ * paths one after another in the same turn; a trailing "phone"
  * asks for the phone viewport. "attach <name>,<name>" before the colon of "mock start
  * work" passes `attachments`, `images` standing for the turn's own pictures.
  */
@@ -465,15 +466,19 @@ function workScriptFor(input: TurnInput, request: typeof fetch): MockWorkStep | 
     return {
       tool: 'mcp__manor__deliver_file',
       run: async (signal) => {
-        const response = await request(deliverUrl, {
-          method: 'POST',
-          headers: { 'content-type': 'application/json', 'x-manor-user-input-capability': capability },
-          body: JSON.stringify({ path: delivery[1], ...(delivery[2] === undefined ? {} : { viewport: 'phone' }) }),
-          signal,
-        })
-        const body = await response.json().catch(() => undefined) as { error?: string; note?: string } | undefined
-        if (!response.ok) throw new Error(body?.error ?? `HTTP ${response.status}`)
-        return body?.note ?? 'Delivered.'
+        const notes: string[] = []
+        for (const file of delivery[1]!.split(',')) {
+          const response = await request(deliverUrl, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json', 'x-manor-user-input-capability': capability },
+            body: JSON.stringify({ path: file, ...(delivery[2] === undefined ? {} : { viewport: 'phone' }) }),
+            signal,
+          })
+          const body = await response.json().catch(() => undefined) as { error?: string; note?: string } | undefined
+          if (!response.ok) throw new Error(body?.error ?? `HTTP ${response.status}`)
+          notes.push(body?.note ?? 'Delivered.')
+        }
+        return notes.join('\n')
       },
     }
   }

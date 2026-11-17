@@ -15,7 +15,7 @@ import { FileThumb } from './FileThumb'
 import { MiddleCut } from '../MiddleCut'
 
 export interface FileViewerProps {
-  /** The library's current filter, newest first. May hold unavailable files (no src). */
+  /** The library's current filter, newest first, or one message's pictures. May hold unavailable files (no src). */
   files: readonly DmFile[]
   index: number
   onIndex: (index: number) => void
@@ -42,7 +42,7 @@ type PageKey = (typeof PAGE_KEYS)[number]
 const roundButton = 'grid h-9 w-9 flex-none cursor-pointer place-items-center rounded-full border-0 bg-on-media/10 text-on-media [font:inherit] hover:bg-on-media/15 disabled:cursor-default disabled:opacity-40 disabled:hover:bg-on-media/10'
 
 /**
- * A DM's file library over the whole window: the open file on a dark stage, its title
+ * A DM's file library, or one message's pictures, over the whole window: the open file on a dark stage, its title
  * and actions on top, a strip of every file in the current filter below. The stage is
  * dark in both themes, built from the media tokens and a dimmed backdrop rather than a
  * colour of its own. The parent mounts it on open, unmounts it on close and owns
@@ -376,7 +376,8 @@ function FileCard({ file, onDownload }: { file: DmFile; onDownload: () => void }
           <p className="m-0 text-[15px] font-medium" title={file.name}><MiddleCut text={file.name} className="justify-center" /></p>
           <p className="m-0 flex justify-center gap-2 text-meta text-on-media/60">
             <span>{typeLabel(file)}</span>
-            <span>{describeBytes(file.size)}</span>
+            {/* A message's picture has no known size. */}
+            {file.size > 0 ? <span>{describeBytes(file.size)}</span> : null}
           </p>
         </div>
         {file.src === undefined ? (

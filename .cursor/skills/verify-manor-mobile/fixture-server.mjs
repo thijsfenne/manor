@@ -307,6 +307,12 @@ const dmFiles = [
   { name: 'contract.pdf', mime: 'application/pdf', daysAgo: 20 },
 ].map((file, index) => dmFile(index + 1, file))
 
+/** A `deliver_file` result in Marlow's DM, reusing the bytes his library serves. */
+function delivered(id, ts, turnId, name) {
+  const file = dmFiles.find((entry) => entry.name === name)
+  return { id, ts, type: 'file_delivery', agentId: 'agent-marlow', turnId, file: { id: `${id}-doc`, name, mime: file.mime, size: file.size, src: file.src } }
+}
+
 // Pictures the `Schermafbeeldingen` reads link to, as the Mac links what a tool call read.
 // Picture 0 is the user's own attachment: its bubble shows it, and its read gets no link.
 const TRACE_PICTURES = ['icon-tinted', 'icon', 'splash-icon', 'favicon', 'icon-dark', 'icon-tinted']
@@ -776,6 +782,16 @@ const snapshots = {
       files: [{ name: 'notities.md', mime: 'text/markdown', content: '# Notities\n\nDatumlabels nakijken.\n' }] },
     { id: 'mc-image', ts: now - 30_000, type: 'user_message', mentions: [], text: 'Zo ziet [Image #1] er nu uit.',
       images: [{ name: evidence[0].name, src: evidence[0].src, width: evidence[0].width, height: evidence[0].height }] },
+    // Two turns that handed files over: two pictures, then a picture and a PDF. Pictures
+    // show as pictures without a row, and a press opens the viewer over that message's.
+    { id: 'wd-ask', ts: now - 25_000, type: 'user_message', text: 'Stuur de twee icoonvarianten.', mentions: [] },
+    { id: 'wd-say', ts: now - 25_000 + 1, type: 'agent_message', agentId: 'agent-marlow', turnId: 'turn-wd', text: 'Hier zijn ze, donker en getint.' },
+    ...['icon-dark.png', 'icon-tinted.png'].map((name, index) => delivered(`wd-f${index}`, now - 25_000 + 2 + index, 'turn-wd', name)),
+    { id: 'wd-result', ts: now - 25_000 + 5, type: 'turn_result', agentId: 'agent-marlow', turnId: 'turn-wd' },
+    { id: 'we-ask', ts: now - 20_000, type: 'user_message', text: 'En het splash-icoon met de planning?', mentions: [] },
+    { id: 'we-say', ts: now - 20_000 + 1, type: 'agent_message', agentId: 'agent-marlow', turnId: 'turn-we', text: 'Het icoon en de planning als PDF.' },
+    ...['splash-icon.png', 'planning.pdf'].map((name, index) => delivered(`we-f${index}`, now - 20_000 + 2 + index, 'turn-we', name)),
+    { id: 'we-result', ts: now - 20_000 + 5, type: 'turn_result', agentId: 'agent-marlow', turnId: 'turn-we' },
   ],
   'chat-background-wait': [
     { id: 'b1', ts: now - 60_000, type: 'user_message', text: 'Run background helpers, please.', mentions: [] },

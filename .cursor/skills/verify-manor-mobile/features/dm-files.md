@@ -25,6 +25,7 @@ Preconditions: `doctor` is green. The fixture answers `get_dm_files` with ten fi
 - **Unavailable.** `tap --name "contract.pdf"` opens the card with `This file is no longer available in Manor.`, both actions disabled and no `Download` in the header.
 - **Menu.** `long-press --name "icon.png"`, then `tap --name "Show in chat"` returns to the DM at that message.
 - **Empty.** Back to Agents, `tap --name "Sage.*"`, then the same door.
+- **Delivered pictures.** At the foot of Marlow's DM, two turns handed files over: two pictures without rows, then a picture and `planning.pdf`, which keeps its row. `tap --name "Open icon-dark.png"` opens the viewer over that message's pictures, `1 / 2`, with `Download`.
 
 ## Gotchas
 

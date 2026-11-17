@@ -22,8 +22,10 @@ import { colors, fonts, radius, spacing, squircle } from '@/theme'
  * The pictures on a message, in the transcript: the user's on their bubble, a persona's
  * under her reply. Same strip either way, so a picture reads the same whoever sent it.
  */
-export function Attachments({ images, files = [], documents = [], size = 120, numbered = false, alignEnd = false }: {
+export function Attachments({ images, files = [], documents = [], size = 120, numbered = false, alignEnd = false, onOpenImage }: {
   images: readonly EventImage[]
+  /** Opens a picture somewhere else than the gallery here, such as a persona's in the file viewer. */
+  onOpenImage?: (index: number) => void
   files?: readonly FileAttachment[]
   documents?: readonly (EventDocument | PendingDocument)[]
   size?: number
@@ -44,7 +46,7 @@ export function Attachments({ images, files = [], documents = [], size = 120, nu
               <AttachmentThumbnail
                 image={image}
                 key={`${image.name}:${index}`}
-                onOpen={() => setOpenImage(index)}
+                onOpen={() => (onOpenImage === undefined ? setOpenImage(index) : onOpenImage(index))}
                 size={size}
                 {...(numbered ? { number: index + 1 } : {})}
               />

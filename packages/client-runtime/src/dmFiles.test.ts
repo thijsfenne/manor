@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import type { DmFile } from '@manor/contracts'
-import { dmFileReadsAs, filterDmFiles, groupDmFiles } from './dmFiles'
+import type { DeliveredFile, DmFile } from '@manor/contracts'
+import { dmFileReadsAs, eventImageFiles, filterDmFiles, groupDmFiles, splitDeliveredFiles } from './dmFiles'
 
 const DAY = 24 * 60 * 60 * 1000
 const file = (name: string, kind: DmFile['kind'], mime: string, daysOld = 0, more: Partial<DmFile> = {}): DmFile =>
@@ -35,5 +35,33 @@ describe('a DM file library', () => {
     expect(dmFileReadsAs(file('page.html', 'file', 'text/html', 0, { page: true }))).toBeNull()
     expect(dmFileReadsAs(file('big.csv', 'file', 'text/csv', 0, { size: 2 * 1_024 * 1_024 }))).toBeNull()
     expect(dmFileReadsAs(files[2]!)).toBeNull()
+  })
+})
+
+describe('delivered files in the transcript', () => {
+  const delivered = (name: string, mime: string, gone = false): DeliveredFile =>
+    ({ id: name, name, mime, size: 10, ...(gone ? {} : { src: `/media/c/${name}/f0/sig` }) })
+
+  it('draws pictures instead of listing them, once, and keeps every other file a row', () => {
+    const { rows, pictures } = splitDeliveredFiles([
+      delivered('one.png', 'image/png'),
+      delivered('two.webp', 'image/webp'),
+      delivered('report.pdf', 'application/pdf'),
+      delivered('logo.svg', 'image/svg+xml'),
+      delivered('gone.png', 'image/png', true),
+    ], [{ name: 'one.png', src: '/media/c/m/0/sig' }])
+    expect(rows.map((file) => file.name)).toEqual(['report.pdf', 'logo.svg', 'gone.png'])
+    expect(pictures).toEqual([{ name: 'two.webp', src: '/media/c/two.webp/f0/sig' }])
+  })
+
+  it('opens a message\'s pictures as the viewer\'s files, in order', () => {
+    const files = eventImageFiles([
+      { name: 'a.JPG', src: '/media/c/m/0/sig' },
+      { name: 'b', dataUrl: 'data:image/webp;base64,AAAA' },
+    ])
+    expect(files.map(({ id, mime, kind, src }) => ({ id, mime, kind, src }))).toEqual([
+      { id: 'picture:0', mime: 'image/jpeg', kind: 'image', src: '/media/c/m/0/sig' },
+      { id: 'picture:1', mime: 'image/webp', kind: 'image', src: 'data:image/webp;base64,AAAA' },
+    ])
   })
 })

@@ -1,5 +1,6 @@
 import { createContext, Fragment, memo, useContext, useEffect, useLayoutEffect, useRef, useState, type MutableRefObject, type ReactNode } from 'react'
 import { dateDividers } from '@manor/client-runtime/date-dividers'
+import { splitDeliveredFiles } from '@manor/client-runtime/dm-files'
 import { historyStart, olderHistoryKey } from '@manor/client-runtime/history-window'
 import { quoteFromText } from '@manor/client-runtime/message-quotes'
 import type { WorkAcceptanceOptions } from '@manor/client-runtime/commands'
@@ -1303,6 +1304,9 @@ const TurnRow = memo(function TurnRow({
     <div className="flex min-h-8 items-center">{status}</div>
   ) : null
   const lastReply = [...standing].reverse().find((segment) => segment.kind === 'reply')
+  // A delivered picture is drawn rather than listed, and only once: most are already in the replies above.
+  const delivered = turn.files === undefined ? undefined
+    : splitDeliveredFiles(turn.files, standing.flatMap((segment) => (segment.kind === 'reply' ? segment.images : [])))
   const memoryChanges = bubbleReplies ? dmMemory : turn.memoryChanges
   // A finished DM turn that left nothing (a relay marker is its own row) keeps no
   // Worked for line either: it would hover over an empty gap between rows.
@@ -1368,7 +1372,10 @@ const TurnRow = memo(function TurnRow({
           />
         ),
       )}
-      {turn.files === undefined ? null : <DeliveredFiles files={turn.files} bubble={bubbleReplies} />}
+      {delivered === undefined || delivered.pictures.length === 0 ? null : (
+        <AgentBubble bubble={bubbleReplies} color={persona.color} text="" agents={agents} images={delivered.pictures} />
+      )}
+      {delivered === undefined ? null : <DeliveredFiles files={delivered.rows} bubble={bubbleReplies} />}
       {turn.connects === undefined ? null : <ConnectCards cards={turn.connects} bubble={bubbleReplies} />}
       {turn.sessionLinks === undefined ? null : (
         <div className="flex flex-wrap gap-1.5">

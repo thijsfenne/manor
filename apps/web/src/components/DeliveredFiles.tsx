@@ -27,7 +27,8 @@ import { MiddleCut } from './MiddleCut'
 const previewsInChat = (file: DeliveredFile) => file.mime === 'text/html' && file.src !== undefined
 
 /**
- * Files a persona handed over, under the answer of the turn that made them. An HTML
+ * Files a persona handed over, under the answer of the turn that made them; pictures
+ * are drawn as pictures instead (see `splitDeliveredFiles`) and never reach this. An HTML
  * page is drawn into the thread itself at the full column width, in a DM too; every
  * other file is a card with Open and Save, which a DM keeps within the reply bubble's
  * width. The Mac opens HTML and SVG in the chat's own Browser panel, other files as a

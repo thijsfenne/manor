@@ -33,6 +33,7 @@ import {
   type TurnRow,
 } from '@manor/client-runtime/state'
 import { changedFiles, changedTotals, turnChangedFiles, type ChangedFile } from '@manor/client-runtime/changed-files'
+import { eventImageFiles, splitDeliveredFiles } from '@manor/client-runtime/dm-files'
 import {
   currentLabel,
   elapsedLabel,
@@ -52,6 +53,7 @@ import { Gesture, GestureDetector } from 'react-native-gesture-handler'
 import Animated, { Easing, FadeIn, ReduceMotion, runOnJS, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated'
 
 import { Attachments, ImageViewer } from '@/components/Attachments'
+import { FileViewer } from '@/components/FileViewer'
 import { AgentStack } from '@/components/AgentStack'
 import { DiffSheet } from '@/components/DiffSheet'
 import { Blobatar } from '@/components/Blobatar'
@@ -251,6 +253,9 @@ export function Turn({
   ) : null
   // A DM turn that left nothing to sign keeps no status line either: it would stand over an empty gap.
   const signsBubble = standing.length > 0 || (turn.files?.length ?? 0) > 0 || (turn.connects?.length ?? 0) > 0
+  // A delivered picture is drawn rather than listed, and only once: most are already in the replies above.
+  const delivered = turn.files === undefined ? undefined
+    : splitDeliveredFiles(turn.files, standing.flatMap((segment) => (segment.kind === 'reply' ? segment.images : [])))
   return (
     <View style={styles.turn}>
       {bubbleReplies ? null : header}
@@ -310,7 +315,10 @@ export function Turn({
       {streaming.map((message) =>
         message.text.length === 0 ? null : <Reply agents={agents} bubble={bubbleReplies} key={`live:${message.messageId}`} links={links} text={message.text} />,
       )}
-      {turn.files === undefined ? null : <DeliveredFiles files={turn.files} />}
+      {delivered === undefined || delivered.pictures.length === 0 ? null : (
+        <Reply agents={agents} bubble={bubbleReplies} images={delivered.pictures} links={links} text="" />
+      )}
+      {delivered === undefined ? null : <DeliveredFiles files={delivered.rows} />}
       {turn.connects === undefined ? null : <ConnectCards cards={turn.connects} />}
       {turn.fileWrites === undefined || turn.fileWrites.length === 0 ? null : <FileWriteFootnote writes={turn.fileWrites} />}
       {plan.length === 0 ? null : (
@@ -1142,6 +1150,10 @@ function Reply({
     })
     .onFinalize(() => drag.set(withTiming(0, { duration: 160, easing: Easing.linear })))
   const swipeStyle = useAnimatedStyle(() => ({ transform: [{ translateX: drag.get() }] }))
+  // The file viewer over this message's pictures only, opened at the one pressed.
+  const [viewing, setViewing] = useState<number | null>(null)
+  const pictures = viewing === null ? [] : eventImageFiles(images)
+  const said = quoteSources !== undefined && quoteSources.length > 0 ? quoteSources.some((source) => source.text.length > 0) : text !== ''
 
   return (
     <View style={[styles.replySwipe, bubble && styles.replySwipeBubble]}>
@@ -1151,21 +1163,29 @@ function Reply({
         </View>
       )}
       <GestureDetector gesture={pan}>
-        <Animated.View style={[swipeStyle, styles.reply, bubble && styles.replyBubble]}>
-          {quoteSources !== undefined && quoteSources.length > 0 ? quoteSources.map((source) => (
-            <Pressable
-              accessibilityHint={onLongPressSource === undefined ? undefined : 'Press and hold for actions'}
-              delayLongPress={360}
-              disabled={onLongPressSource === undefined}
-              key={source.eventId}
-              onLongPress={onLongPressSource === undefined ? undefined : () => onLongPressSource({ ...source, ...(quoteAgentId === undefined ? {} : { agentId: quoteAgentId }) })}
-            >
-              <Markdown agents={agents} links={links} text={source.text} />
-            </Pressable>
-          )) : text === '' ? null : <Markdown agents={agents} links={links} text={text} />}
-            <Attachments images={images} />
+        <Animated.View style={[swipeStyle, styles.reply]}>
+          {/* In a DM only the words sit in the bubble; the pictures stand on the chat itself. */}
+          {said ? (
+            <View style={[styles.reply, bubble && styles.replyBubble]}>
+              {quoteSources !== undefined && quoteSources.length > 0 ? quoteSources.map((source) => (
+                <Pressable
+                  accessibilityHint={onLongPressSource === undefined ? undefined : 'Press and hold for actions'}
+                  delayLongPress={360}
+                  disabled={onLongPressSource === undefined}
+                  key={source.eventId}
+                  onLongPress={onLongPressSource === undefined ? undefined : () => onLongPressSource({ ...source, ...(quoteAgentId === undefined ? {} : { agentId: quoteAgentId }) })}
+                >
+                  <Markdown agents={agents} links={links} text={source.text} />
+                </Pressable>
+              )) : text === '' ? null : <Markdown agents={agents} links={links} text={text} />}
+            </View>
+          ) : null}
+          <Attachments images={images} onOpenImage={setViewing} />
         </Animated.View>
       </GestureDetector>
+      {viewing === null || pictures[viewing] === undefined ? null : (
+        <FileViewer agents={agents} files={pictures} initialId={pictures[viewing].id} onClose={() => setViewing(null)} />
+      )}
     </View>
   )
 }
@@ -1308,7 +1328,7 @@ const styles = StyleSheet.create({
   replySwipe: { position: 'relative', alignSelf: 'stretch' },
   replySwipeBubble: { maxWidth: '86%', alignSelf: 'flex-start' },
   replyCue: { position: 'absolute', top: 0, bottom: 0, left: spacing.md, justifyContent: 'center' },
-  replyBubble: { borderRadius: radius.composer, ...squircle, backgroundColor: colors.bubble, paddingHorizontal: spacing.md + 2, paddingVertical: spacing.sm + 1 },
+  replyBubble: { alignSelf: 'flex-start', borderRadius: radius.composer, ...squircle, backgroundColor: colors.bubble, paddingHorizontal: spacing.md + 2, paddingVertical: spacing.sm + 1 },
   messageFooter: { minHeight: 28, flexDirection: 'row', alignItems: 'center', gap: 2 },
   footerButton: { width: 28, height: 28, alignItems: 'center', justifyContent: 'center', borderRadius: radius.sm },
   footerButtonPressed: { backgroundColor: colors.surface2 },

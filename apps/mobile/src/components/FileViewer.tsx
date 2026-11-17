@@ -44,7 +44,7 @@ const STRIP_GAP = spacing.sm
 
 /**
  * Full-screen viewer for a DM's files. Swiping pages through `files` (the library's
- * current filter); the strip at the bottom jumps to one. Pictures
+ * current filter, or one message's pictures); the strip at the bottom jumps to one. Pictures
  * show in place, markdown and text are read into the page, anything else is a card
  * with Open and Download. The empty band under the strip is kept free for a message box.
  */
@@ -257,7 +257,8 @@ function FileCard({ file, uri, note }: { file: DmFile; uri: string | undefined; 
       <Text numberOfLines={2} style={styles.cardName}>{file.name}</Text>
       <View style={styles.cardFacts}>
         <Text style={styles.cardMeta}>{dmFileTypeLabel(file.kind)}</Text>
-        <Text style={styles.cardMeta}>{describeBytes(file.size)}</Text>
+        {/* A message's picture has no known size. */}
+        {file.size > 0 ? <Text style={styles.cardMeta}>{describeBytes(file.size)}</Text> : null}
       </View>
       {note === undefined ? null : <Text style={styles.cardMeta}>{note}</Text>}
       <View style={styles.cardActions}>

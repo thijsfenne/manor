@@ -32,7 +32,7 @@ Preconditions: a fresh spike (`launch --fresh`) and the sample files, `node .cur
 ## Gotchas
 
 - A DM that holds no message yet has no docked panel: the top bar button opens Settings → Agents, which has no Files row. Send one message first.
-- The mock driver delivers one file per message, and only from an absolute path.
+- The mock driver delivers only from an absolute path. `mock deliver: /a.png,/b.pdf` hands several over in one message: pictures show as pictures in the reply, and pressing one opens the viewer over that message's pictures.
 - `attach` reaches the first file input on the page, so keep one pane open.
 - The memory store keeps every file's bytes, so an unavailable row cannot be made here. `apps/server/test/dmFiles.test.ts` and `apps/web/test/fileViewer.test.tsx` cover it.
 - A menu or hover card left open covers the next click; `press --key Escape` first.
