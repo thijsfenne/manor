@@ -4,15 +4,13 @@ What changed for someone who uses Manor, newest first. A version is a tag on `ma
 
 ## Unreleased
 
-- An agent adds an event to your iCloud calendar without an approval card when Manor runs with full access. With Auto it goes through the same review as other connector writes, and with Confirm it asks as before, showing the event. A scheduled routine still cannot add an event.
-- The cards inside a turn, questions, permission requests, secret requests, connect cards and mail and Slack drafts, set their text at 14px in every column, so they sit quieter beside the reply. In a DM every card in the chat now runs as wide as a bubble may grow, so they line up with the replies.
-- Pictures an agent hands over show only as pictures, without a file row with Open and Save under them. Other files, such as a PDF or a spreadsheet, keep their row. Pressing an agent's picture opens the same viewer as a DM's Files, over just that message's pictures, with Download to save one. On the Mac and on the phone.
-- A chat's time lines stand only directly above a message. Lines between agents, such as 2 messages with an agent, and hidden or system rows no longer get a time of their own, so several times no longer stack on top of each other. The phone shows the same time lines in a DM as the Mac.
-
-- The name on a pinned agent stays centred under the face when its unread dot appears or goes. The dot now hangs beside the name, on the Mac and on the phone.
-
 ## 0.2.0, 2026-11-17
 
+- Pictures an agent hands over show only as pictures, without a file row with Open and Save under them. Other files, such as a PDF or a spreadsheet, keep their row. Pressing an agent's picture opens the same viewer as a DM's Files, over just that message's pictures, with Download to save one. On the Mac and on the phone.
+- The cards inside a turn, questions, permission requests, secret requests, connect cards and mail and Slack drafts, set their text at 14px in every column, so they sit quieter beside the reply. In a DM every card in the chat now runs as wide as a bubble may grow, so they line up with the replies.
+- The name on a pinned agent stays centred under the face when its unread dot appears or goes. The dot now hangs beside the name, on the Mac and on the phone.
+- An agent adds an event to your iCloud calendar without an approval card when Manor runs with full access. With Auto it goes through the same review as other connector writes, and with Confirm it asks as before, showing the event. A scheduled routine still cannot add an event.
+- A chat's time lines stand only directly above a message. Lines between agents, such as 2 messages with an agent, and hidden or system rows no longer get a time of their own, so several times no longer stack on top of each other. The phone shows the same time lines in a DM as the Mac.
 - Show source on a quote, and other jumps to a message, scroll only the conversation. With the chat already at its bottom, the whole window used to slide up and leave a dark band under the message field. The source message now also lights up briefly, as a search hit does.
 - The phone's Sessions screen drops its own search field; the Search tab finds every Session. The button at the bottom right now reads New session, in dark glass on the light theme and light glass on the dark theme.
 - The phone app opens on the Agents tab instead of Sessions. Sessions is one tap away in the tab bar.
