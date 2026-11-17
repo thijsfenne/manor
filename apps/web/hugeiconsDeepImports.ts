@@ -12,6 +12,11 @@ const BARREL_LINE = /export\s*\{([^}]*)\}\s*from\s*'\.\/([^']+)\.js'/g
  * icon. The barrel re-exports about 6,000 files, and Rollup loads every one before tree
  * shaking drops them, which was most of the modules a web build read. The bundle keeps
  * the same icons; only the files Rollup has to open change.
+ *
+ * Vitest gets the same rewrite. It loads a test file's dependencies afresh for every
+ * file, and the barrel alone took 1.4 s of a component test's 1.7 s import. The deep
+ * files are the ones the barrel re-exports, so each icon is the same object either way.
+ * The dev server keeps the barrel, which its dependency pre-bundling already merges.
  */
 export function hugeiconsDeepImports(root: string): Plugin {
   const require = createRequire(path.join(root, 'package.json'))
@@ -35,7 +40,7 @@ export function hugeiconsDeepImports(root: string): Plugin {
   return {
     name: 'manor:hugeicons-deep-imports',
     enforce: 'pre',
-    apply: 'build',
+    apply: (_, { command }) => command === 'build' || process.env.VITEST !== undefined,
     transform(code, id) {
       if (id.includes('/node_modules/') || !/\.[cm]?[jt]sx?$/.test(id) || !PACKAGES.some((pkg) => code.includes(pkg))) return null
       // Parsed, not matched: an import-shaped line inside a string stays a string.
