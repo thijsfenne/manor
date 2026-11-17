@@ -1,6 +1,7 @@
 import ArrowLeft01Icon from '@hugeicons/core-free-icons/ArrowLeft01Icon'
 import ArrowLeftRightIcon from '@hugeicons/core-free-icons/ArrowLeftRightIcon'
 import AtomicPowerIcon from '@hugeicons/core-free-icons/AtomicPowerIcon'
+import CheckmarkCircle02Icon from '@hugeicons/core-free-icons/CheckmarkCircle02Icon'
 import CheckListIcon from '@hugeicons/core-free-icons/CheckListIcon'
 import { projectIcon } from '@manor/client-runtime/project-icons'
 import { isHomeRoom, knownAgentIds, type SessionsDot } from '@manor/client-runtime/state'
@@ -57,6 +58,8 @@ interface ChatHeaderProps {
   sessionsDot?: SessionsDot | null
   /** A project thread's settings, from its pill: the Mac's Edit project. */
   onProject?: () => void
+  /** Settles an open Session, as the Mac's Settle; absent for a settled chat and anything that is not a Session. */
+  onSettle?: () => void
 }
 
 /**
@@ -74,7 +77,7 @@ function sessionsLabel(dot: SessionsDot | null): string {
   return base
 }
 
-export function ChatHeader({ title, subtitle, project, projectThread = false, role, driver, agentIds: participants, agents, pair, onBack, onAgents, onSubagents, subagentsRunning = 0, onSessions, sessionsDot = null, onProject }: ChatHeaderProps) {
+export function ChatHeader({ title, subtitle, project, projectThread = false, role, driver, agentIds: participants, agents, pair, onBack, onAgents, onSubagents, subagentsRunning = 0, onSessions, sessionsDot = null, onProject, onSettle }: ChatHeaderProps) {
   // Only personas who still exist get a face; a room of deleted ones shows the bot mark.
   const agentIds = knownAgentIds(agents, participants)
   const threadMark = projectThread && project !== undefined ? project : undefined
@@ -174,6 +177,7 @@ export function ChatHeader({ title, subtitle, project, projectThread = false, ro
             </GlassPressable>
           )}
           {subagents}
+          {onSettle === undefined ? null : <GlassIconButton accessibilityLabel={`Settle ${title}`} icon={CheckmarkCircle02Icon} onPress={onSettle} />}
         </GlassGroup>
       </View>
 

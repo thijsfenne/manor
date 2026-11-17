@@ -775,6 +775,7 @@ function ChatContent({ chatId }: { chatId: string | undefined }) {
         projectThread={projectThread}
         {...(sessionOverview === null || chatId === undefined ? {} : { onSessions: () => router.push({ pathname: '/sessions/[threadId]', params: { threadId: chatId } }), sessionsDot: sessionsMark })}
         {...(projectThread && project !== undefined ? { onProject: () => setSheet('settings') } : {})}
+        {...(chat?.kind === 'project' && !projectThread && chat.archivedAt === null && !sitsSettled(workspace, chat) ? { onSettle: () => setChatSettled(chat.id, true) } : {})}
         title={dmAgent?.name ?? pairTitle ?? (chat == null ? 'Chat' : withSessionTitle(chat).title)}
       />
 
