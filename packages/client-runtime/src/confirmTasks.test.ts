@@ -1,6 +1,6 @@
 import type { ConfirmRequest, ThreadEvent, WorkHandoff } from '@manor/contracts'
 import { describe, expect, it } from 'vitest'
-import { completionFor, confirmRequestOf, confirmTasks, confirmTitle, confirmWork, planRowKeys, planStanding, planTitle, type TaskLine } from './confirmTasks'
+import { completionFor, confirmRequestOf, confirmTasks, confirmTitle, confirmWork, foldsWhenDone, planRowKeys, planStanding, planTitle, type TaskLine } from './confirmTasks'
 import { projectWorkHandoffs, rowsOf } from './transcriptState'
 import { emptyThread } from './threadState'
 
@@ -172,6 +172,23 @@ describe('planStanding', () => {
   it('lets a blocked step outrank the rest and a compacting turn hold still', () => {
     expect(planStanding(lines('completed', 'blocked', 'pending')).mark).toBe('blocked')
     expect(planStanding(lines('completed', 'paused', 'pending')).mark).toBe('paused')
+  })
+})
+
+describe('foldsWhenDone', () => {
+  const lines = (...statuses: TaskLine['status'][]): TaskLine[] => statuses.map((status, index) => ({ text: `Step ${index}`, status }))
+
+  it('closes a card only when every line is done', () => {
+    expect(foldsWhenDone(lines('completed', 'completed'))).toBe(true)
+    expect(foldsWhenDone(lines('completed', 'in_progress'))).toBe(false)
+    expect(foldsWhenDone(lines('completed', 'pending'))).toBe(false)
+  })
+
+  it('keeps open a card that ended unfinished, blocked or compacting', () => {
+    expect(foldsWhenDone(lines('completed', 'skipped'))).toBe(false)
+    expect(foldsWhenDone(lines('completed', 'blocked'))).toBe(false)
+    expect(foldsWhenDone(lines('completed', 'paused'))).toBe(false)
+    expect(foldsWhenDone([])).toBe(false)
   })
 })
 

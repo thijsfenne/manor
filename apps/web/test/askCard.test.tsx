@@ -473,4 +473,20 @@ describe('TodoList', () => {
     toggleTaskFolded('fold-a')
     expect(card('fold-a')).toContain('aria-expanded="true"')
   })
+
+  it('renders a finished card closed, and lets the user open and close it by hand', () => {
+    const done = [{ text: 'A', status: 'completed' }, { text: 'B', status: 'completed' }] as const
+    const card = (key: string) => renderToStaticMarkup(<TodoList todos={done} title="T" foldKey={key} />)
+    expect(card('done-a')).toContain('aria-expanded="false"')
+    toggleTaskFolded('done-a', true)
+    expect(card('done-a')).toContain('aria-expanded="true"')
+    toggleTaskFolded('done-a', true)
+    expect(card('done-a')).toContain('aria-expanded="false"')
+    expect(card('done-b')).toContain('aria-expanded="false"')
+  })
+
+  it('keeps open a card that ended with steps not done', () => {
+    const half = [{ text: 'A', status: 'completed' }, { text: 'B', status: 'skipped' }] as const
+    expect(renderToStaticMarkup(<TodoList todos={half} title="T" foldKey="half-a" />)).toContain('aria-expanded="true"')
+  })
 })

@@ -4,6 +4,8 @@ What changed for someone who uses Manor, newest first. A version is a tag on `ma
 
 ## Unreleased
 
+- A tasks card whose tasks are all done shows closed, as just its header with the check, the heading and the count, on the Mac and on the phone. It folds shut when the last task is ticked, and the chevron opens it again. A card you opened or closed yourself keeps that while it stays on screen, and a card that ended with tasks not done stays open.
+
 ## 0.2.0, 2026-11-17
 
 - Pictures an agent hands over show only as pictures, without a file row with Open and Save under them. Other files, such as a PDF or a spreadsheet, keep their row. Pressing an agent's picture opens the same viewer as a DM's Files, over just that message's pictures, with Download to save one. On the Mac and on the phone.

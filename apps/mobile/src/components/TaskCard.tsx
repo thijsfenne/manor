@@ -6,7 +6,7 @@ import LoaderCircleIcon from '@hugeicons/core-free-icons/LoaderCircleIcon'
 import MinusSignCircleIcon from '@hugeicons/core-free-icons/MinusSignCircleIcon'
 import PauseCircleIcon from '@hugeicons/core-free-icons/PauseCircleIcon'
 import { HugeiconsIcon } from '@hugeicons/react-native'
-import { isTaskFolded, planRowKeys, planStanding, planTitle, subscribeTaskFolds, toggleTaskFolded, type TaskLine } from '@manor/client-runtime/state'
+import { foldsWhenDone, isTaskFolded, planRowKeys, planStanding, planTitle, subscribeTaskFolds, toggleTaskFolded, type TaskLine } from '@manor/client-runtime/state'
 import { useEffect, useId, useSyncExternalStore } from 'react'
 import { Pressable, StyleSheet, View } from 'react-native'
 import Animated, { Easing, FadeIn, FadeOut, LayoutAnimationConfig, LinearTransition, ReduceMotion, cancelAnimation, useAnimatedProps, useAnimatedStyle, useSharedValue, withRepeat, withTiming } from 'react-native-reanimated'
@@ -33,12 +33,13 @@ const SETTLE = LinearTransition.duration(220).easing(Easing.out(Easing.exp)).red
  * A tasks card, the Mac's TodoList: the latest plan a turn published, or the steps
  * Confirm asked for. The header names the whole task (`title` when the caller knows it,
  * as Confirm does, else read off the plan's own steps), wears one mark for the list and counts the finished lines;
- * pressing it folds the steps away. One line per task; only a finished one wears a solid glyph.
+ * pressing it folds the steps away. A finished card starts folded and folds when its last step is ticked; a choice the user made stays. One line per task; only a finished one wears a solid glyph.
  */
 export function TaskCard({ tasks, label = 'Tasks', title, foldKey }: { tasks: readonly TaskLine[]; label?: string; title?: string; foldKey?: string }) {
   const instance = useId()
   const key = foldKey ?? instance
-  const collapsed = useSyncExternalStore(subscribeTaskFolds, () => isTaskFolded(key))
+  const byDefault = foldsWhenDone(tasks)
+  const collapsed = useSyncExternalStore(subscribeTaskFolds, () => isTaskFolded(key, byDefault))
   if (tasks.length === 0) return null
   const standing = planStanding(tasks)
   const keys = planRowKeys(tasks)
@@ -54,7 +55,7 @@ export function TaskCard({ tasks, label = 'Tasks', title, foldKey }: { tasks: re
         accessibilityRole="button"
         accessibilityState={{ expanded: !collapsed }}
         hitSlop={{ top: 12, bottom: 12, left: 8, right: 8 }}
-        onPress={() => toggleTaskFolded(key)}
+        onPress={() => toggleTaskFolded(key, byDefault)}
         style={styles.header}
       >
         <View style={styles.mark}><HeaderMark standing={standing} /></View>

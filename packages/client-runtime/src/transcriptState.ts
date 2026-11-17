@@ -43,7 +43,7 @@ import { clockOf } from './usage'
 import { reuseRows } from './rowReuse'
 
 export type { PlanStanding, TaskLine } from './confirmTasks'
-export { planRowKeys, planStanding, planTitle } from './confirmTasks'
+export { foldsWhenDone, planRowKeys, planStanding, planTitle } from './confirmTasks'
 
 type UserEvent = Extract<ThreadEvent, { type: 'user_message' }>
 type AgentEvent = Extract<ThreadEvent, { type: 'agent_message' }>

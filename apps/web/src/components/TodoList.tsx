@@ -2,7 +2,7 @@ import { AlertCircleIcon, ArrowDown01Icon, DashedLineCircleIcon, LoaderCircleIco
 import { CheckmarkCircle02Icon as CheckmarkCircleSolidIcon } from '@manor/client-runtime/solid-icons'
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import { useId, useSyncExternalStore } from 'react'
-import { isTaskFolded, planRowKeys, planStanding, planTitle, subscribeTaskFolds, toggleTaskFolded, type PlanStanding, type TaskLine } from '../state'
+import { foldsWhenDone, isTaskFolded, planRowKeys, planStanding, planTitle, subscribeTaskFolds, toggleTaskFolded, type PlanStanding, type TaskLine } from '../state'
 import { DISCLOSURE, INSTANT, PLAN_FILL } from '../motion'
 import { Icon } from './Icon'
 
@@ -59,12 +59,14 @@ function PlanRing({ done, total, muted }: { done: number; total: number; muted: 
  * snapshot, not a log: a later update replaces what is here, and no lines draw nothing.
  * Its header names the whole task (`title` when the caller knows it, as Confirm does,
  * else read off the plan's own steps), wears one mark for the list and counts the finished lines; the chevron folds
- * the steps away. A revised plan folds its new steps in and its dropped ones out.
+ * the steps away. A finished card starts folded, and folds with the same motion the moment
+ * its last step is ticked; one the user opened or closed keeps that. A revised plan folds its new steps in and its dropped ones out.
  */
 export function TodoList({ todos, label, title, foldKey }: { todos: readonly TaskLine[]; label?: string; title?: string; foldKey?: string }) {
   const instance = useId()
   const key = foldKey ?? instance
-  const folded = () => isTaskFolded(key)
+  const byDefault = foldsWhenDone(todos)
+  const folded = () => isTaskFolded(key, byDefault)
   const collapsed = useSyncExternalStore(subscribeTaskFolds, folded, folded)
   const reduce = useReducedMotion() ?? false
   if (todos.length === 0) return null
@@ -78,7 +80,7 @@ export function TodoList({ todos, label, title, foldKey }: { todos: readonly Tas
         type="button"
         aria-expanded={!collapsed}
         aria-label={`${HEADER_SAID[standing.mark]}. ${heading}. ${standing.done} of ${standing.total} done`}
-        onClick={() => toggleTaskFolded(key)}
+        onClick={() => toggleTaskFolded(key, byDefault)}
         className="flex w-full cursor-pointer items-center gap-2 border-0 bg-transparent p-0 text-left text-[14px] text-text [font-family:inherit]"
       >
         <span className="flex h-[1lh] flex-none items-center" aria-hidden>

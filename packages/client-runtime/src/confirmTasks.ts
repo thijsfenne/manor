@@ -34,6 +34,13 @@ export function planStanding(tasks: readonly TaskLine[]): PlanStanding {
 }
 
 /**
+ * A finished card renders closed: only its header shows until the user opens it. Anything
+ * short of every line done (running, blocked, or ended with lines skipped) stays open so
+ * the open work stays in view.
+ */
+export const foldsWhenDone = (tasks: readonly TaskLine[]): boolean => tasks.length > 0 && planStanding(tasks).mark === 'done'
+
+/**
  * Opening words of a step that prepares or wraps up the work rather than doing it. A
  * plan title skips these, so "Read the card code" does not name a plan that rebuilds it.
  */
