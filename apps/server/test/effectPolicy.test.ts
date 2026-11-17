@@ -118,7 +118,7 @@ describe('browserEffect', () => {
     expect(browserEffect('browser_type')).toBe('confirm_write')
     expect(browserEffect('browser_click')).toBe('confirm_write')
   })
-  it('lets iCloud calendar reads pass and keeps create_event behind a human even on a trusted row', () => {
+  it('lets iCloud calendar reads pass and keeps create_event guarded but not human-only, even on a trusted row', () => {
     const calendar = server({
       name: 'icloud-calendar',
       effectPolicy: 'trusted',
@@ -127,6 +127,8 @@ describe('browserEffect', () => {
     expect(connectorEffect(calendar, 'list_events')).toBe('read')
     expect(connectorEffect(calendar, 'find_free_time')).toBe('read')
     expect(connectorEffect(calendar, 'create_event')).toBe('confirm_write')
+    expect(humanOnlyWrite('icloud-calendar', 'create_event')).toBe(false)
+    expect(humanOnlyWrite('browser', 'browser_fill_login')).toBe(true)
   })
   it('lets Apple Reminders reads and create pass, and keeps complete and delete behind a human on any row', () => {
     const tools = ['list_reminder_lists', 'list_reminders', 'create_reminder', 'complete_reminder', 'delete_reminder']

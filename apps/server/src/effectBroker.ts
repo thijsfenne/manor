@@ -2,7 +2,7 @@ import type { ReviewEffect } from './effectReviewer.js'
 import type { EffectRequest } from './effectCapability.js'
 import type { InteractionBroker } from './interactionBroker.js'
 import { CODEX_COMPUTER_MCP_NAME, COMPUTER_CALL_LIMIT, drivesDesktop } from './computerPolicy.js'
-import { humanOnlyChoices, humanOnlyQuestion, humanOnlyWrite } from './effectPolicy.js'
+import { approvalQuestion, humanOnlyChoices, humanOnlyWrite } from './effectPolicy.js'
 
 const APPROVAL_ID = 'allow_effect'
 const ALLOW_ONCE = 'Allow once'
@@ -52,19 +52,6 @@ export class EffectBroker {
     }
 
     const humanOnly = humanOnlyWrite(request.connector.name, request.tool)
-    let humanQuestion: string | undefined
-    if (humanOnly) {
-      try {
-        humanQuestion = humanOnlyQuestion(request.connector.name, request.tool, request.reviewArguments)
-      } catch (error: unknown) {
-        throw new EffectApprovalDeniedError(
-          `${request.connector.name}.${request.tool} was blocked before it ran: ${
-            error instanceof Error ? error.message : 'its arguments could not be shown for approval.'
-          }`,
-        )
-      }
-    }
-
     if (this.fullAccess && !humanOnly) return
 
     // The same script was already approved. Only a capability-validated empty
@@ -79,6 +66,16 @@ export class EffectBroker {
         throw new EffectApprovalDeniedError('The turn ended before the action was approved.')
       }
       if (allowed && !usage.denied) return
+    }
+    let previewQuestion: string | undefined
+    try {
+      previewQuestion = approvalQuestion(request.connector.name, request.tool, request.reviewArguments)
+    } catch (error: unknown) {
+      throw new EffectApprovalDeniedError(
+        `${request.connector.name}.${request.tool} was blocked before it ran: ${
+          error instanceof Error ? error.message : 'its arguments could not be shown for approval.'
+        }`,
+      )
     }
     const action = effectLabel(request)
     const choices = humanOnlyChoices(request.connector.name, request.tool)
@@ -98,7 +95,7 @@ export class EffectBroker {
       }, [{
         id: APPROVAL_ID,
         header: request.connector.name,
-        question: humanQuestion ?? (request.desktopLease === true
+        question: previewQuestion ?? (request.desktopLease === true
           ? 'Let this agent use your Mac for the rest of this turn? Press Escape to stop it.'
           : `${action} may change external state. Allow this call?`),
         optionsOnly: true,

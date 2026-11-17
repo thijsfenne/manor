@@ -9,6 +9,11 @@ import {
 import type { EffectRequest } from '../src/effectCapability.js'
 import { connectorEffect } from '../src/effectPolicy.js'
 
+const server = (name: string, tools: string[]) => ({
+  id: `mcp_${name}`, name, command: '/bin/true', args: [], envKeys: [], description: '',
+  writes: true, effectPolicy: 'confirm_writes' as const, readOnlyTools: [], schemaChars: 0, tools,
+})
+
 const request = (overrides: Partial<EffectRequest> = {}): EffectRequest => ({
   chatId: 'chat_1',
   agentId: 'sage',
@@ -269,19 +274,69 @@ describe('EffectBroker', () => {
     expect(review).toHaveBeenCalledOnce()
   })
 
-  it('always asks the user for an iCloud calendar create, showing the event, even in Full access and with Auto', async () => {
-    const ask = vi.fn().mockResolvedValue({ allow_effect: 'Allow once' })
-    const review = vi.fn().mockResolvedValue(true)
+  it('creates an iCloud calendar event without a card in an attended Full access turn, and blocks it unattended', async () => {
+    const ask = vi.fn()
+    const review = vi.fn()
     const broker = new EffectBroker({ request: ask }, review, true)
-    await broker.authorize(request({
+    const calendar = server('icloud-calendar', ['list_events', 'create_event'])
+    const event = { title: 'Etentje', calendar: 'Thuis', start: '2026-10-03T19:00', durationMinutes: 120 }
+    const create = (overrides: Partial<EffectRequest> = {}) => request({
+      connector: { id: calendar.id, name: calendar.name },
+      tool: 'create_event',
+      effect: connectorEffect(calendar, 'create_event', event),
+      reviewArguments: event,
+      ...overrides,
+    })
+    await broker.authorize(create())
+    expect(ask).not.toHaveBeenCalled()
+    expect(review).not.toHaveBeenCalled()
+    await expect(broker.authorize(create({ turnId: 'routine', canApprove: false })))
+      .rejects.toThrow(/unattended turn has no approval surface/)
+    // A row edited to trusted does not lift the unattended block.
+    const trusted = { ...calendar, effectPolicy: 'trusted' as const }
+    await expect(broker.authorize(create({ turnId: 'routine', canApprove: false, effect: connectorEffect(trusted, 'create_event', event) })))
+      .rejects.toBeInstanceOf(EffectApprovalDeniedError)
+    expect(ask).not.toHaveBeenCalled()
+  })
+
+  it('lets Auto approve an iCloud calendar create, and shows the event when it falls back to the card', async () => {
+    const ask = vi.fn().mockResolvedValue({ allow_effect: 'Allow once' })
+    const review = vi.fn().mockResolvedValueOnce(true).mockResolvedValue(false)
+    const broker = new EffectBroker({ request: ask }, review)
+    const create = request({
       connector: { id: 'mcp_cal', name: 'icloud-calendar' },
       tool: 'create_event',
       reviewArguments: { title: 'Etentje', calendar: 'Thuis', start: '2026-10-03T19:00', durationMinutes: 120 },
-    }))
-    expect(review).not.toHaveBeenCalled()
+    })
+    await broker.authorize(create)
+    expect(ask).not.toHaveBeenCalled()
+    await broker.authorize(create)
+    expect(review).toHaveBeenCalledTimes(2)
     expect(ask).toHaveBeenCalledOnce()
     expect(ask.mock.calls[0]?.[1][0].question)
       .toBe('Add “Etentje” to the iCloud calendar “Thuis” on Sat 3 Oct 2026, 19:00–21:00?')
+    expect(ask.mock.calls[0]?.[1][0].options[0].label).toBe('Allow once')
+  })
+
+  it('still asks for the human-only writes in Full access with Auto', async () => {
+    const ask = vi.fn().mockResolvedValue({ allow_effect: 'Allow once' })
+    const review = vi.fn().mockResolvedValue(true)
+    const broker = new EffectBroker({ request: ask }, review, true)
+    const target = { id: '0A1B2C3D-0000-0000-0000-000000000000', title: 'Melk', list: 'To do' }
+    await broker.authorize(request({ connector: { id: 'mcp_rem', name: 'apple-reminders' }, tool: 'complete_reminder', reviewArguments: target }))
+    await broker.authorize(request({ connector: { id: 'mcp_rem', name: 'apple-reminders' }, tool: 'delete_reminder', reviewArguments: target }))
+    ask.mockResolvedValueOnce({ allow_effect: 'Fill' })
+    await broker.authorize(request({
+      connector: { id: 'builtin_browser', name: 'browser' },
+      tool: 'browser_fill_login',
+      reviewArguments: { origin: 'https://github.com', username: 'me' },
+    }))
+    expect(review).not.toHaveBeenCalled()
+    expect(ask.mock.calls.map((call) => call[1][0].question)).toEqual([
+      'Mark the reminder “Melk” in the Reminders list “To do” as done?',
+      expect.stringContaining('Melk'),
+      'Sign in to github.com as me?',
+    ])
   })
 
   it('creates a reminder without a card, while complete still asks with its card', async () => {
@@ -317,7 +372,7 @@ describe('EffectBroker', () => {
 
   it('blocks a calendar create whose arguments cannot be shown, without asking', async () => {
     const ask = vi.fn()
-    const broker = new EffectBroker({ request: ask }, undefined, true)
+    const broker = new EffectBroker({ request: ask })
     await expect(broker.authorize(request({
       connector: { id: 'mcp_cal', name: 'icloud-calendar' },
       tool: 'create_event',

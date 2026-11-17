@@ -7,8 +7,8 @@ import { reconcileDerivedServer } from './mailRegistration.js'
 /**
  * The registry row for the iCloud calendar. A row rather than a built-in for the
  * same reason as mail: it is a credential, and which personas hold it is the user's
- * per-persona call. `confirm_writes` is belt and braces; `create_event` asks a human
- * through the broker's always-ask list whatever the row says.
+ * per-persona call. `confirm_writes` is belt and braces; `create_event` stays a guarded
+ * write whatever the row says, so an unattended turn never creates an event.
  */
 export function calendarMcpDraft(
   runtime: { execPath?: string; execArgv?: readonly string[]; entryPath?: string } = {},
@@ -18,7 +18,7 @@ export function calendarMcpDraft(
     command: runtime.execPath ?? process.execPath,
     args: builtInMcpArgs('calendar', runtime),
     envKeys: [...CALENDAR_ENV_KEYS, ...nodeRuntimeEnvKeys()],
-    description: 'Read the user’s iCloud calendars, find free time, and create events after their approval. Cannot edit or delete.',
+    description: 'Read the user’s iCloud calendars, find free time, and create events. Cannot edit or delete.',
     writes: true,
     effectPolicy: 'confirm_writes',
   }

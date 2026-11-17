@@ -53,12 +53,15 @@ export function derivedRuntimeUnchanged(existing: McpServerConfig, derived: McpS
 }
 
 /**
- * Whether a stored row still matches what this build derives. The env keys count as
- * much as the runtime: a key a newer build added only reaches the connector's process
- * once the row lists it, and a row saved before then would never gain it.
+ * Whether a stored row still matches what this build derives. The env keys and the
+ * description count as much as the runtime: a key a newer build added only reaches the
+ * connector's process once the row lists it, and agents read the description as what
+ * the connector does.
  */
 export function derivedRowCurrent(existing: McpServerConfig, derived: McpServerDraft): boolean {
-  return derivedRuntimeUnchanged(existing, derived) && derived.envKeys.every((key) => existing.envKeys.includes(key))
+  return derivedRuntimeUnchanged(existing, derived) &&
+    existing.description === derived.description &&
+    derived.envKeys.every((key) => existing.envKeys.includes(key))
 }
 
 /**

@@ -19,9 +19,10 @@ import { freeSlots, occurrencesInRange, parseRange, type Occurrence } from './ca
  * reached at its source. Four tools: list calendars, list events, find free time,
  * create an event. No update or delete, deliberately.
  *
- * `create_event` is gated outside this process. The effect broker always asks the user,
- * even in full-access mode, and renders the card from the same arguments with the
- * same parser (`calendarCreate.ts`), so what they approve is what gets written.
+ * `create_event` is gated outside this process. The effect broker blocks it in unattended
+ * turns and follows the effect mode in attended ones. When it asks, it renders the card
+ * from the same arguments with the same parser (`calendarCreate.ts`), so what the user
+ * approves is what gets written.
  */
 
 const SERVER_URL = 'https://caldav.icloud.com'
@@ -87,7 +88,7 @@ function tools(): JsonRecord[] {
       name: CALENDAR_CREATE_TOOL,
       description:
         'Create one event in one of the user’s iCloud calendars. Only after the user explicitly said yes to this exact event: ' +
-        'first tell them the title, day, time and calendar and wait for their yes. Manor then shows them an approval card ' +
+        'first tell them the title, day, time and calendar and wait for their yes. Manor may then show them an approval card ' +
         'with the same details; a denial means do not retry. Times are Europe/Amsterdam wall-clock time, no offsets. ' +
         'Timed: start YYYY-MM-DDTHH:MM plus end (same format) or durationMinutes. All-day: start YYYY-MM-DD and ' +
         `optionally end as the last day. ${RESERVED_RULE}`,

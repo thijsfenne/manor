@@ -4,6 +4,7 @@ What changed for someone who uses Manor, newest first. A version is a tag on `ma
 
 ## Unreleased
 
+- An agent adds an event to your iCloud calendar without an approval card when Manor runs with full access. With Auto it goes through the same review as other connector writes, and with Confirm it asks as before, showing the event. A scheduled routine still cannot add an event.
 - A chat's time lines stand only directly above a message. Lines between agents, such as 2 messages with an agent, and hidden or system rows no longer get a time of their own, so several times no longer stack on top of each other. The phone shows the same time lines in a DM as the Mac.
 
 ## 0.2.0, 2026-11-17

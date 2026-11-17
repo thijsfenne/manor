@@ -95,17 +95,19 @@ export interface HumanOnlyChoices {
   desktopOnly?: true
 }
 
-interface HumanOnlyCard {
+interface ApprovalCard {
   question: (arguments_: unknown) => string
   choices?: HumanOnlyChoices
+  /** Only the user may approve it, one call at a time: not full access, not the Auto reviewer. */
+  humanOnly?: true
 }
 
 /**
- * Writes that only the user may approve, one call at a time: not full-access mode, not
- * the Auto reviewer, not a row edited to trusted. Each entry renders its own card
- * from the call arguments, so they see what will happen rather than a tool name.
+ * Writes whose card Manor renders from the call arguments, so the user sees what will
+ * happen rather than a tool name. Every one stays a guarded write whatever its row says,
+ * so an unattended turn never runs it; a human-only one also skips full access and Auto.
  */
-const HUMAN_ONLY_WRITES = new Map<string, ReadonlyMap<string, HumanOnlyCard>>([
+const APPROVAL_CARDS = new Map<string, ReadonlyMap<string, ApprovalCard>>([
   [BUILT_IN_BROWSER_MCP_NAME, new Map([[BROWSER_FILL_LOGIN_TOOL, {
     question: (arguments_: unknown) => fillLoginQuestion(arguments_),
     choices: {
@@ -113,20 +115,22 @@ const HUMAN_ONLY_WRITES = new Map<string, ReadonlyMap<string, HumanOnlyCard>>([
       deny: { label: "Don't fill", description: 'Nothing is filled. The agent hears that you declined.' },
       desktopOnly: true,
     },
+    humanOnly: true,
   }]])],
+  // Attended turns follow the effect mode like any guarded write (the maintainer, 2026-11-17).
   [ICLOUD_CALENDAR_MCP_NAME, new Map([
     [CALENDAR_CREATE_TOOL, { question: (arguments_: unknown) => calendarCreateQuestion(parseCalendarCreate(arguments_)) }],
   ])],
-  [APPLE_REMINDERS_MCP_NAME, new Map([
+  [APPLE_REMINDERS_MCP_NAME, new Map<string, ApprovalCard>([
     [REMINDER_COMPLETE_TOOL, { question: (arguments_: unknown) =>
-      reminderCompleteQuestion(parseReminderTarget(arguments_, REMINDER_COMPLETE_TOOL)) }],
+      reminderCompleteQuestion(parseReminderTarget(arguments_, REMINDER_COMPLETE_TOOL)), humanOnly: true }],
     [REMINDER_DELETE_TOOL, { question: (arguments_: unknown) =>
-      reminderDeleteQuestion(parseReminderTarget(arguments_, REMINDER_DELETE_TOOL)) }],
+      reminderDeleteQuestion(parseReminderTarget(arguments_, REMINDER_DELETE_TOOL)), humanOnly: true }],
   ])],
 ])
 
 export function humanOnlyChoices(connector: string, tool: string): HumanOnlyChoices | undefined {
-  return HUMAN_ONLY_WRITES.get(connector)?.get(tool)?.choices
+  return APPROVAL_CARDS.get(connector)?.get(tool)?.choices
 }
 
 /** "Sign in to github.com as the user?", from the origin and username the desktop looked up. */
@@ -141,17 +145,16 @@ function fillLoginQuestion(arguments_: unknown): string {
 }
 
 export function humanOnlyWrite(connector: string, tool: string): boolean {
-  return HUMAN_ONLY_WRITES.get(connector)?.has(tool) ?? false
+  return APPROVAL_CARDS.get(connector)?.get(tool)?.humanOnly === true
 }
 
 /**
- * The approval question for a human-only write. Throws when the arguments cannot be
- * shown, and the broker blocks the call rather than ask about something unseen.
+ * The card question for a write Manor previews, or undefined for the generic card. Throws
+ * when the arguments cannot be shown, and the broker blocks the call rather than ask
+ * about something unseen.
  */
-export function humanOnlyQuestion(connector: string, tool: string, arguments_: unknown): string {
-  const card = HUMAN_ONLY_WRITES.get(connector)?.get(tool)
-  if (card === undefined) throw new Error(`${connector}.${tool} has no approval preview.`)
-  return card.question(arguments_)
+export function approvalQuestion(connector: string, tool: string, arguments_: unknown): string | undefined {
+  return APPROVAL_CARDS.get(connector)?.get(tool)?.question(arguments_)
 }
 
 /** Read exemptions are Manor code, never metadata asserted by an MCP server. */
@@ -168,7 +171,7 @@ export function connectorEffect(
   if (known && reviewedConnectorRead(server.name, tool)) return 'read'
   // Before the trust check: a row edited to trusted must not skip the desktop lease.
   if (drivesDesktop(server.name)) return 'confirm_write'
-  if (humanOnlyWrite(server.name, tool)) return 'confirm_write'
+  if (APPROVAL_CARDS.get(server.name)?.has(tool)) return 'confirm_write'
   // An unprobed name gets no exemption and no row trust either.
   if (REVIEWED_TRUSTED_WRITES.get(server.name)?.has(tool)) return known ? 'trusted_write' : 'confirm_write'
 

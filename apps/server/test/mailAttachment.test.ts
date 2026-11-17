@@ -53,6 +53,10 @@ describe('derivedRowCurrent', () => {
     expect(derivedRuntimeUnchanged(stale, derived)).toBe(true)
     expect(derivedRowCurrent(stale, derived)).toBe(false)
   })
+
+  it('rejects a row whose description an older build wrote', () => {
+    expect(derivedRowCurrent({ ...row, description: 'Create events after their approval.' }, derived)).toBe(false)
+  })
 })
 
 describe('reconcileMailServers', () => {
