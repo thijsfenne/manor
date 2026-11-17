@@ -154,13 +154,15 @@ describe('contextWindow', () => {
 })
 
 describe('Codex catalog', () => {
-  it('offers GPT-6.1 Sol and Terra without changing the default or existing pins', () => {
+  it('offers GPT-6.1 and 6.2 models without changing the default or existing pins', () => {
     expect(defaultModel('codex')).toBe('gpt-6-luna')
     expect(MODELS.codex.map((option) => option.value)).toEqual([
       'gpt-6-astra',
       'gpt-6-luna',
       'gpt-6.1-sol',
       'gpt-6.1-terra',
+      'gpt-6.2-astra',
+      'gpt-6.2-sol',
     ])
     expect(activeModel(agent('codex', 'gpt-6-luna'), { model: 'gpt-6-sol' })).toBe('gpt-6-sol')
     expect(driverForModel('gpt-6.1-sol')).toBe('codex')
@@ -169,6 +171,12 @@ describe('Codex catalog', () => {
     expect(driverForModel('gpt-6.1-terra')).toBe('codex')
     expect(modelLabel('codex', 'gpt-6.1-terra')).toBe('GPT-6.1 Terra')
     expect(contextWindow(agent('codex', 'gpt-6.1-terra'))).toBe(475_000)
+    expect(driverForModel('gpt-6.2-sol')).toBe('codex')
+    expect(modelLabel('codex', 'gpt-6.2-sol')).toBe('GPT-6.2 Sol')
+    expect(contextWindow(agent('codex', 'gpt-6.2-sol'))).toBe(475_000)
+    expect(driverForModel('gpt-6.2-astra')).toBe('codex')
+    expect(modelLabel('codex', 'gpt-6.2-astra')).toBe('GPT-6.2 Astra')
+    expect(contextWindow(agent('codex', 'gpt-6.2-astra'))).toBe(258_000)
   })
 })
 

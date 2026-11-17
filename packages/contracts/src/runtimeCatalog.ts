@@ -18,6 +18,8 @@ export const MODELS: Record<AgentConfig['driver'], Option<string>[]> = {
     { value: 'gpt-6-luna', label: 'GPT-6 Luna' },
     { value: 'gpt-6.1-sol', label: 'GPT-6.1 Sol' },
     { value: 'gpt-6.1-terra', label: 'GPT-6.1 Terra' },
+    { value: 'gpt-6.2-astra', label: 'GPT-6.2 Astra' },
+    { value: 'gpt-6.2-sol', label: 'GPT-6.2 Sol' },
   ],
   grok: [
     { value: 'grok-4.5', label: 'Grok 4.5' },

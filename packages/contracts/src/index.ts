@@ -405,6 +405,8 @@ const MODEL_CONTEXT_WINDOWS: Record<string, number> = {
   // so 272k models give 258k and GPT 6.1 Sol's 500k gives 475k, as its rollouts report.
   'gpt-6.1-sol': 475_000,
   'gpt-6.1-terra': 475_000,
+  'gpt-6.2-sol': 475_000,
+  'gpt-6.2-astra': 258_000,
   'gpt-6-sol': 258_000,
   'gpt-6-luna': 258_000,
   'gpt-5.6-terra': 258_000,
@@ -453,6 +455,8 @@ const MODEL_DRIVERS: Record<string, DriverName> = {
   'gpt-6-astra': 'codex',
   'gpt-6.1-sol': 'codex',
   'gpt-6.1-terra': 'codex',
+  'gpt-6.2-sol': 'codex',
+  'gpt-6.2-astra': 'codex',
   'gpt-6-sol': 'codex',
   'gpt-6-luna': 'codex',
   'gpt-5.6-terra': 'codex',
