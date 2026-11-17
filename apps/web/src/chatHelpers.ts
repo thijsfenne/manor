@@ -1,5 +1,5 @@
 import type { Chat } from '@manor/contracts'
-import { subagentSummaryOf, rowsOf, threadOf, type ThreadShape, type WorkspaceShape } from './state'
+import { isProjectThread, subagentSummaryOf, rowsOf, threadOf, type ThreadShape, type WorkspaceShape } from './state'
 import { shownSubagents } from './subagentLevels'
 import { chatSubagents, subagentStateOf } from './turnTrace'
 
@@ -8,10 +8,11 @@ import { chatSubagents, subagentStateOf } from './turnTrace'
  * would show has any (a leaf helper with none leaves the panel nothing to hold) and
  * whether any helper in this chat or the level on stage is working, which dots the door.
  * Booleans, so the rail keeps its identity while a reply streams. A DM lists none:
- * helpers are Session work.
+ * helpers are Session work. A project thread has none either (the narrow layout would
+ * otherwise show a door for them), so only Sessions carry the Agents door.
  */
 export function chatHelperFlags(workspace: WorkspaceShape, thread: ThreadShape, chat: Chat, path: readonly string[]) {
-  if (chat.kind === 'dm') return { hasHelpers: false, helpersRunning: false }
+  if (chat.kind === 'dm' || isProjectThread(workspace, chat.id)) return { hasHelpers: false, helpersRunning: false }
   const own = chatSubagents(rowsOf(thread, chat.kind))
   const { shown } = shownSubagents(chat.id, own, path, (childId) => chatSubagents(rowsOf(threadOf(workspace, childId))))
   const summary = (childId: string) => subagentSummaryOf(workspace, childId)

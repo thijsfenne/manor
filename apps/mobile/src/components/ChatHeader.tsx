@@ -47,7 +47,7 @@ interface ChatHeaderProps {
   onBack: () => void
   /** Absent in a view-only pair thread, where the faces identify speakers but expose no controls. */
   onAgents?: () => void
-  /** The subagents started here; absent until there is one, which drops the button with it. */
+  /** A Session's subagents; absent until there is one, which drops the button with it. DMs and project threads never pass it. */
   onSubagents?: () => void
   /** How many of them are working, as the dot on that button. */
   subagentsRunning?: number

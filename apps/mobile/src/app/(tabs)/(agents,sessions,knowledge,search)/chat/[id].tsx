@@ -767,7 +767,7 @@ function ChatContent({ chatId }: { chatId: string | undefined }) {
         {...(dmAgent !== undefined && !isAutoPending(dmAgent, dmOverride, hostAuto) ? { driver: effectiveDriver(dmAgent, dmOverride) } : {})}
         {...(sessionRuntime !== undefined && !isAutoPending(sessionRuntime, singleOverride, hostAuto) ? { driver: effectiveDriver(sessionRuntime, singleOverride) } : {})}
         {...(isPair || singleChat || chat?.kind === 'side' ? {} : { onAgents: () => setSheet('agents') })}
-        {...(subagents.length === 0 ? {} : { onSubagents: () => setSheet('subagents'), subagentsRunning })}
+        {...(chat?.kind === 'dm' || projectThread || subagents.length === 0 ? {} : { onSubagents: () => setSheet('subagents'), subagentsRunning })}
         onBack={() => (router.canGoBack() ? router.back() : router.replace('/'))}
         {...(dmAgent === undefined || dmAgent.role === '' ? {} : { role: dmAgent.role })}
         subtitle={subtitle}
