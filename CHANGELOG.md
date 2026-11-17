@@ -4,6 +4,7 @@ What changed for someone who uses Manor, newest first. A version is a tag on `ma
 
 ## Unreleased
 
+- Show source on a quote, and other jumps to a message, scroll only the conversation. With the chat already at its bottom, the whole window used to slide up and leave a dark band under the message field. The source message now also lights up briefly, as a search hit does.
 - The phone's Sessions screen drops its own search field; the Search tab finds every Session. The button at the bottom right now reads New session, in dark glass on the light theme and light glass on the dark theme.
 - The phone app opens on the Agents tab instead of Sessions. Sessions is one tap away in the tab bar.
 - Confirm on a Session that moved a file now also removes it from its old place. The commit used to add the file at its new path and leave the old copy behind, so a phone app built from such a commit could crash on launch.

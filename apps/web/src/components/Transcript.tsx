@@ -73,6 +73,7 @@ import { WorkHandoffCard } from './WorkHandoffCard'
 import { Markdown } from './Markdown'
 import { useAgentMentions } from './mentionMarkdown'
 import { useStableCallback } from '../useStableCallback'
+import { scrollWithin } from './scrollWithin'
 
 const NO_CONSULTATION_MARKERS: ReadonlyMap<string, readonly TurnConsultation[]> = new Map()
 const NO_EXCHANGES: ReadonlyMap<string, RelayExchange | null> = new Map()
@@ -572,12 +573,32 @@ export function Transcript({
     requestAnimationFrame(() => requestAnimationFrame(reveal))
   }
 
+  /** The running flash, ended by the next pick so its timer cannot cut the new flash short. */
+  const flash = useRef<{ target: HTMLElement; timer: number } | null>(null)
+  const endFlash = () => {
+    if (flash.current === null) return
+    window.clearTimeout(flash.current.timer)
+    flash.current.target.removeAttribute('data-search-hit')
+    flash.current = null
+  }
+  /** Washes the landed message for SEARCH_HIT_MS, restarting the wash when it is already running. */
+  const flashTarget = (target: HTMLElement) => {
+    endFlash()
+    void target.offsetWidth
+    target.setAttribute('data-search-hit', '')
+    flash.current = { target, timer: window.setTimeout(endFlash, SEARCH_HIT_MS) }
+  }
+  useEffect(() => endFlash, [])
+
   const openQuoteSource = (eventId: string) => {
     const selector = `[data-quote-event-id="${CSS.escape(eventId)}"]`
     const reveal = () => {
-      const source = scrollerRef.current?.querySelector<HTMLElement>(selector)
-      source?.scrollIntoView({ behavior: 'smooth', block: 'center' })
-      source?.focus({ preventScroll: true })
+      const scroller = scrollerRef.current
+      const source = scroller?.querySelector<HTMLElement>(selector)
+      if (scroller === null || source === null || source === undefined) return
+      scrollWithin(scroller, source, { block: 'center', behavior: 'smooth' })
+      source.focus({ preventScroll: true })
+      flashTarget(source)
     }
     const index = visibleRows.findIndex((row) => rowHasQuoteSource(row, eventId))
     showThenReveal(index, unfoldAt(index, (item) => rowHasQuoteSource(item, eventId)) ? () => requestAnimationFrame(() => requestAnimationFrame(reveal)) : reveal)
@@ -602,8 +623,9 @@ export function Transcript({
 
   const revealRow = (rowKey: string, focus?: string) => {
     const reveal = () => {
-      const row = scrollerRef.current?.querySelector<HTMLElement>(`[data-transcript-row="${CSS.escape(rowKey)}"]`)
-      if (row === null || row === undefined) return
+      const scroller = scrollerRef.current
+      const row = scroller?.querySelector<HTMLElement>(`[data-transcript-row="${CSS.escape(rowKey)}"]`)
+      if (scroller === null || row === null || row === undefined) return
       // The target's scroll margins stand for the header and the composer floating over
       // the thread, so it centres in the part that is actually visible.
       const target = row.querySelector<HTMLElement>('[data-reveal-target]') ?? row
@@ -611,7 +633,7 @@ export function Transcript({
       // Leaving the bottom on purpose: unpinned, a card that grows as it opens (Request
       // changes from the bar) is not pulled back down by the follow-the-latest observer.
       setPinned(false)
-      target.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'center' })
+      scrollWithin(scroller, target, { block: 'center', behavior: reduceMotion ? 'auto' : 'smooth' })
       const field = focus === undefined ? null : row.querySelector<HTMLElement>(focus)
       ;(field ?? target).focus({ preventScroll: true })
     }
@@ -627,15 +649,6 @@ export function Transcript({
   const revealedEvent = useRef<number | null>(null)
   // The turn whose folded work Open report opens, so a report written before the call shows.
   const [openTrace, setOpenTrace] = useState<{ key: string; id: number } | null>(null)
-  /** The running flash, ended by the next pick so its timer cannot cut the new flash short. */
-  const flash = useRef<{ target: HTMLElement; timer: number } | null>(null)
-  const endFlash = () => {
-    if (flash.current === null) return
-    window.clearTimeout(flash.current.timer)
-    flash.current.target.removeAttribute('data-search-hit')
-    flash.current = null
-  }
-  useEffect(() => endFlash, [])
   useEffect(() => {
     if (revealEvent === undefined || revealEvent === null || !hasSnapshot) return
     if (revealedEvent.current === revealEvent.id) return
@@ -661,16 +674,13 @@ export function Transcript({
       const target = eventId === undefined
         ? row?.querySelector<HTMLElement>('[data-reveal-target]') ?? row
         : scroller?.querySelector<HTMLElement>(`[data-quote-event-id="${CSS.escape(eventId)}"], [data-message-ids~="${CSS.escape(eventId)}"]`) ?? row
-      if (target === undefined || target === null) return
+      if (scroller === null || scroller === undefined || target === undefined || target === null) return
       setPinned(false)
       // Landed at once, like following a link: the chat just opened, and a smooth run
       // through a long thread would spend the flash before the message arrives. A
       // message taller than the view, such as a report, lands on its first line.
-      target.scrollIntoView({ block: scroller !== null && scroller !== undefined && target.offsetHeight > scroller.clientHeight ? 'start' : 'center' })
-      endFlash()
-      void target.offsetWidth
-      target.setAttribute('data-search-hit', '')
-      flash.current = { target, timer: window.setTimeout(endFlash, SEARCH_HIT_MS) }
+      scrollWithin(scroller, target, { block: target.offsetHeight > scroller.clientHeight ? 'start' : 'center' })
+      flashTarget(target)
     }
     // Two frames: the opening chat pins itself to the bottom first, then this lands.
     const settle = () => requestAnimationFrame(() => requestAnimationFrame(reveal))
