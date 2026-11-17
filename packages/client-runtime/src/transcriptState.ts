@@ -497,6 +497,12 @@ export const finishedSilent = (turn: TurnRow): boolean =>
   (turn.drafts ?? []).length === 0 &&
   (turn.files ?? []).length === 0
 
+/** A card a running DM turn shows before its reply is whole: a draft, a todo list, or a question already answered. */
+export const dmLiveCard = (segment: TurnSegment): boolean =>
+  segment.kind === 'draft'
+  || (segment.kind === 'todo' && segment.todos.length > 0)
+  || (segment.kind === 'ask' && segment.ask.answers !== undefined)
+
 /**
  * A finished turn whose only trace is a consultation. In a DM it draws nothing: no face
  * without words to sign, and its fold only opens from that face. Its relay marker says

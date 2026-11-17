@@ -1,4 +1,5 @@
 import { createContext, Fragment, memo, useContext, useEffect, useLayoutEffect, useRef, useState, type MutableRefObject, type ReactNode } from 'react'
+import { dateDividers } from '@manor/client-runtime/date-dividers'
 import { historyStart, olderHistoryKey } from '@manor/client-runtime/history-window'
 import { quoteFromText } from '@manor/client-runtime/message-quotes'
 import type { WorkAcceptanceOptions } from '@manor/client-runtime/commands'
@@ -10,6 +11,7 @@ import { turnChangedFiles } from '../changedFiles'
 import { useLiveThread } from '../liveThread'
 import {
   answerTextOf,
+  dmLiveCard,
   finishedSilent,
   goalReportEventId,
   onlyConsulted,
@@ -98,20 +100,6 @@ const BOTTOM_SLACK_PX = 48
 const JUMP_DURATION_MS = 200
 /** How long a message found from the palette stays marked; matches `search-hit` in styles.css. */
 const SEARCH_HIT_MS = 1500
-const DAY = new Intl.DateTimeFormat('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })
-const STAMP_TIME = new Intl.DateTimeFormat('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false })
-const STAMP_WEEKDAY = new Intl.DateTimeFormat('en-GB', { weekday: 'short' })
-const STAMP_DATE = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short' })
-const STAMP_DATE_YEAR = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
-/** A DM restamps after a pause this long, the way a chat app marks a new exchange. */
-const STAMP_GAP_MS = 60 * 60 * 1000
-
-function rowTime(row: Row): number | undefined {
-  if (row.kind === 'event') return row.event.ts
-  if (row.kind === 'turn') return row.startedAt
-  return undefined
-}
-
 const isUserBubbleRow = (row: Row | undefined): boolean =>
   row?.kind === 'pending' ||
   (row?.kind === 'event' && row.event.type === 'user_message' && row.event.source === undefined && row.confirmTasks === undefined && !isModelOnlyMessage(row.event))
@@ -138,43 +126,6 @@ function threadRhythm(row: Row, previous: Row | undefined, panel: boolean): stri
   const rhythm = threadSpacing(row, previous)
   if (rhythm === 'group') return panel ? ' -mt-4' : ' -mt-6'
   return rhythm === 'beat' ? ' mt-4' : ''
-}
-
-const dayKey = (at: Date) => `${at.getFullYear()}-${at.getMonth()}-${at.getDate()}`
-
-/** "Today 16:31", "Yesterday 09:12", "Mon 14:02", then the date. */
-function stampLabel(at: Date, now: Date): string {
-  const time = STAMP_TIME.format(at)
-  const days = Math.round((new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
-    - new Date(at.getFullYear(), at.getMonth(), at.getDate()).getTime()) / 86_400_000)
-  if (days === 0) return `Today ${time}`
-  if (days === 1) return `Yesterday ${time}`
-  if (days > 1 && days < 7) return `${STAMP_WEEKDAY.format(at)} ${time}`
-  return `${(at.getFullYear() === now.getFullYear() ? STAMP_DATE : STAMP_DATE_YEAR).format(at)} ${time}`
-}
-
-/**
- * The centred line above a row: each new day in a standing pair thread, and in a DM
- * the time whenever a new day or a pause of an hour starts a new exchange.
- */
-function dateLabelsFor(rows: readonly Row[], mode: 'off' | 'days' | 'gaps'): Array<string | undefined> {
-  if (mode === 'off') return rows.map(() => undefined)
-  const now = Date.now()
-  const labels: Array<string | undefined> = []
-  let previous: Date | undefined
-  for (const row of rows) {
-    const timestamp = rowTime(row)
-    if (timestamp === undefined) {
-      labels.push(undefined)
-      continue
-    }
-    const at = new Date(timestamp)
-    const newDay = previous === undefined || dayKey(previous) !== dayKey(at)
-    if (mode === 'days') labels.push(newDay ? DAY.format(at) : undefined)
-    else labels.push(newDay || at.getTime() - previous!.getTime() >= STAMP_GAP_MS ? stampLabel(at, new Date(now)) : undefined)
-    previous = at
-  }
-  return labels
 }
 
 function DateSeparator({ label }: { label: string }) {
@@ -409,7 +360,7 @@ export function Transcript({
   const inThread = threadProject !== undefined
   const start = historyStart(visibleRows, firstKey)
   const pageRows = visibleRows.slice(start)
-  const dateLabels = dateLabelsFor(pageRows, bubbleReplies ? 'gaps' : showDates ? 'days' : 'off')
+  const dateLabels = dateDividers(pageRows, bubbleReplies ? 'gaps' : showDates ? 'days' : 'off')
   const working = bubbleReplies ? dmWorking(rows, runningChatIds) : undefined
   const workingPersona = working === undefined
     ? undefined
@@ -1322,7 +1273,7 @@ const TurnRow = memo(function TurnRow({
   const dmBare = bubbleReplies && standing.length === 0 && (turn.files?.length ?? 0) === 0 && (turn.connects?.length ?? 0) === 0
     && turn.sessionLinks === undefined && turn.fileWrites === undefined
   if (dmBare && !running && (turn.note?.kind === 'error' || turn.note?.kind === 'aborted')) return null
-  if (dmBare && running && !turn.segments.some(liveCard)) return null
+  if (dmBare && running && !turn.segments.some(dmLiveCard)) return null
   // The status line rests itself once the turn is over: see `TurnStatus`.
   const header = bubbleReplies ? (
     // A finished DM turn has no face: the face lives only in the working indicator at
@@ -1460,12 +1411,6 @@ const TurnRow = memo(function TurnRow({
     </div>
   )
 })
-
-/** What a folded DM turn still shows while it runs: a card the user reads or acts on. */
-const liveCard = (segment: TurnRowState['segments'][number]): boolean =>
-  segment.kind === 'draft'
-  || (segment.kind === 'todo' && segment.todos.length > 0)
-  || (segment.kind === 'ask' && segment.ask.answers !== undefined)
 
 /** The compact entrance from a DM into the standing pairs a stacked marker names. */
 function ConsultedAgents({

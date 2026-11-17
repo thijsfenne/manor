@@ -736,6 +736,14 @@ const snapshots = {
       questions: EXPORT_QUESTIONS },
   ],
   'chat-dm-marlow': [
+    // A day ago, then hours of a relay line and a system line with no message between them:
+    // no time line of their own, one time line above the next bubble.
+    { id: 'y1', ts: now - 26 * 60 * 60_000, type: 'user_message', text: 'Wat staat er morgen op de planning?', mentions: [] },
+    { id: 'y2', ts: now - 26 * 60 * 60_000 + 1, type: 'agent_message', turnId: 'turn-y', agentId: 'agent-marlow', messageId: 'y-m', text: 'Twee afspraken en de release.' },
+    { id: 'y3', ts: now - 26 * 60 * 60_000 + 2, type: 'turn_result', turnId: 'turn-y', agentId: 'agent-marlow' },
+    { id: 'y-relay', ts: now - 24 * 60 * 60_000, type: 'agent_relay', agentId: 'agent-marlow', peerAgentId: 'agent-sage', pairChatId: 'pair-marlow-agent-sage',
+      turnId: 'turn-y-sage', relayId: 'relay-y', phase: 'received', preview: 'Even ter info.' },
+    note('y-note', 20 * 60, 'Marlow stopped.'),
     { id: 'p1', ts: now - 7 * 60_000, type: 'user_message', text: 'Zet de datumlabels en de release note klaar.', mentions: [] },
     note('p-handoff-labels', 6, 'Session proposed.', { workHandoffId: 'handoff-labels', workHandoffVersion: 1, workHandoffPhase: 'created' }),
     note('p-handoff-notes-v1', 5, 'Session proposed.', { workHandoffId: 'handoff-notes-v1', workHandoffVersion: 1, workHandoffPhase: 'created' }),

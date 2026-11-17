@@ -4,6 +4,8 @@ What changed for someone who uses Manor, newest first. A version is a tag on `ma
 
 ## Unreleased
 
+- A chat's time lines stand only directly above a message. Lines between agents, such as 2 messages with an agent, and hidden or system rows no longer get a time of their own, so several times no longer stack on top of each other. The phone shows the same time lines in a DM as the Mac.
+
 ## 0.2.0, 2026-11-17
 
 - Show source on a quote, and other jumps to a message, scroll only the conversation. With the chat already at its bottom, the whole window used to slide up and leave a dark band under the message field. The source message now also lights up briefly, as a search hit does.

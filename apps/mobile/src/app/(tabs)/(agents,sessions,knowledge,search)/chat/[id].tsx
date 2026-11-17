@@ -26,6 +26,7 @@ import type { ChangeableAnswer, OpenAsk, PendingDocument, QuietWorkspace, RelayE
 import { activityOf, chatOf, dmMemoryMarks, isHomeRoom, isProjectThread, roomOf, sitsSettled, messageBrief, projectSessionOverview, sessionsDot, openAsk, sessionLiveOf, threadQuestionIn, openSubagentQuestion, subagentSummaryOf, changeableAnswers, personaOf, projectWorkHandoffs, repoListingKey, rowHasQuoteSource, rowsOf, createRowMemory, createValueMemory, feedIndexOf, NO_OPEN_THREAD_BUNDLES, openThreadBundleAt, setThreadBundleOpen, threadBundleOpen, threadBundleOpenItems, threadStretch, onlyConsulted, runtimeStartedAgentIds, sessionReadyRow, sessionThreadOf, stackedConsultationMarkers, relayExchanges, relayMarkerAction, projectThreadFeed, threadQuestionAdvice, threadOf, withSessionTitle, threadSpacing, unannouncedConsultations, workCardInView, workDecisionOpen, type ScreenSpan } from '@manor/client-runtime/state'
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router'
 import { KeyboardAwareLegendList, useKeyboardChatComposerInset, useKeyboardScrollToEnd } from '@legendapp/list/keyboard'
+import { dateDividers } from '@manor/client-runtime/date-dividers'
 import { historyStart, olderHistoryKey } from '@manor/client-runtime/history-window'
 import { plainDraftText } from '@manor/client-runtime/plain-preview'
 import type { LegendListRef } from '@legendapp/list/react-native'
@@ -97,14 +98,6 @@ const JUMP_SPACE = 44
 
 /** One identity, so a chat that offers no skills does not re-render the composer. */
 const NO_SKILLS: SkillConfig[] = []
-const DAY = new Intl.DateTimeFormat('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })
-
-function rowTime(row: Row): number | undefined {
-  if (row.kind === 'event') return row.event.ts
-  if (row.kind === 'turn') return row.startedAt
-  return undefined
-}
-
 const isUserBubbleRow = (row: Row | undefined): boolean =>
   row?.kind === 'pending' ||
   (row?.kind === 'event' && row.event.type === 'user_message' && row.event.source === undefined && row.confirmTasks === undefined && !isModelOnlyMessage(row.event))
@@ -126,24 +119,6 @@ function threadOffset(row: Row, previous: Row | undefined): number | undefined {
   const spacingKind = threadSpacing(row, previous)
   if (spacingKind === 'group') return spacing.sm - spacing.xl
   return spacingKind === 'beat' ? spacing.lg : undefined
-}
-
-function dateLabelsFor(rows: readonly Row[], enabled: boolean): (string | undefined)[] {
-  if (!enabled) return rows.map(() => undefined)
-  const labels: (string | undefined)[] = []
-  let previous = ''
-  for (const row of rows) {
-    const timestamp = rowTime(row)
-    if (timestamp === undefined) {
-      labels.push(undefined)
-      continue
-    }
-    const at = new Date(timestamp)
-    const key = `${at.getFullYear()}-${at.getMonth()}-${at.getDate()}`
-    labels.push(key === previous ? undefined : DAY.format(at))
-    previous = key
-  }
-  return labels
 }
 
 const NO_CHANGEABLE: ReadonlyMap<string, ChangeableAnswer> = new Map()
@@ -1249,7 +1224,7 @@ function LiveTranscript({
   if (listKeys.rows !== pageRows) setListKeys({ rows: pageRows, carried: carryPendingKeys(listKeys.rows, pageRows, listKeys.carried) })
   const listKeyOf = useCallback((row: Row) => listKeys.carried.get(row.key) ?? row.key, [listKeys.carried])
   const stretch = useMemo(() => threadStretch(visibleRows), [visibleRows])
-  const dateLabels = useMemo(() => dateLabelsFor(pageRows, isPair), [isPair, pageRows])
+  const dateLabels = useMemo(() => dateDividers(pageRows, chatKind === 'dm' ? 'gaps' : isPair ? 'days' : 'off'), [chatKind, isPair, pageRows])
   const waitingOnByTurn = useMemo(() => {
     const waiting = new Map<string, string>()
     for (const row of rows) {

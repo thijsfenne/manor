@@ -19,6 +19,7 @@ import {
   answerTextOf,
   fileWriteGroups,
   finishedSilent,
+  dmLiveCard,
   personaOf,
   streamedMessages,
   type Persona,
@@ -405,15 +406,9 @@ export function dmTurnDrawsNothing(turn: TurnRow): boolean {
   // Partial text a stop or failure cut off stays out of a DM, as `standing` drops it.
   const standing = turn.tail.some((segment) => segment.kind !== 'reply' || segment.interrupted !== true)
   if (standing || (turn.files?.length ?? 0) > 0 || (turn.connects?.length ?? 0) > 0 || turn.fileWrites !== undefined) return false
-  if (turn.live?.state === 'running') return !turn.segments.some(liveCard)
+  if (turn.live?.state === 'running') return !turn.segments.some(dmLiveCard)
   return turn.note?.kind === 'error' || turn.note?.kind === 'aborted'
 }
-
-/** A card a running DM turn shows before its reply is whole: a draft, a todo list, or a question already answered. */
-const liveCard = (segment: TurnRow['segments'][number]): boolean =>
-  segment.kind === 'draft'
-  || (segment.kind === 'todo' && segment.todos.length > 0)
-  || (segment.kind === 'ask' && segment.ask.answers !== undefined)
 
 /** A compact, anchored menu into the standing pairs a stacked marker names. */
 export function ConsultedAgents({
