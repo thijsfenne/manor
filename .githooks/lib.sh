@@ -12,7 +12,12 @@
 # it went, so a crashed or killed run can never leave a lock behind.
 #
 # Everything a run writes lives in its run folder: the snapshot, and through TMPDIR
-# every temp folder a test forgets to remove. One rm at the end takes all of it.
+# every temp folder a test forgets to remove. One rm at the end takes all of it. Only
+# the node_modules pre-commit installs outlive a run that ended by itself. See there.
+#
+# The wait for the lock ends well before Manor gives up on a commit, after ten minutes
+# (commitFiles in apps/server/src/sessionGit.ts). A run that got the lock later than
+# that would be stopped in the middle of its tests, with nothing to show for the wait.
 
 hook_begin() {
   hook_name=$1
@@ -48,7 +53,7 @@ hook_lock() {
     return 0
   fi
   hook_lock_file=$(cd "$(git rev-parse --git-common-dir)" && pwd)/manor-hook.lock
-  hook_lock_wait=${MANOR_HOOK_LOCK_WAIT:-600}
+  hook_lock_wait=${MANOR_HOOK_LOCK_WAIT:-420}
   hook_waited=0
   exec 9>>"$hook_lock_file"
   until perl -e 'use Fcntl qw(:flock); open(my $lock, ">&=", 9) or exit 2; exit(flock($lock, LOCK_EX | LOCK_NB) ? 0 : 1)'; do

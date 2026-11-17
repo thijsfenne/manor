@@ -132,6 +132,31 @@ while read -r _ leftover; do test ! -e "$leftover"; done < "$record/log"
 test -z "$(ls "$TMPDIR/manor-hooks")"
 echo 'PASS: a finished run leaves nothing in the temp folder'
 
+# The installed node_modules wait in the shared git folder for the next run, of any
+# worktree, with no file of a commit beside them. That run takes them into its snapshot
+# and hands them back: a mark left in them returns, in a kept folder made anew.
+kept=$fixture/repo/.git/manor-hook-modules
+test -d "$kept/node_modules"
+test -z "$(find "$kept" -name node_modules -prune -o -type f -print)"
+: > "$kept/apps/probe/node_modules/mark"
+kept_before=$(ls -di "$kept")
+printf 'export default "again"\n' > "$fixture/first/apps/probe/own.js"
+git -C "$fixture/first" commit -qam Again > "$fixture/again.log" 2>&1 || { cat "$fixture/again.log" >&2; exit 1; }
+test -e "$kept/apps/probe/node_modules/mark"
+test "$(ls -di "$kept")" != "$kept_before"
+echo 'PASS: the next run reuses the installed node_modules'
+
+# A file a commit tracks under node_modules would stay with the kept ones, for a later
+# snapshot to read. Such a commit installs afresh and leaves the kept ones as they were.
+kept_before=$(ls -di "$kept")
+mkdir -p "$fixture/first/apps/probe/node_modules"
+printf 'export default "tracked"\n' > "$fixture/first/apps/probe/node_modules/tracked.js"
+git -C "$fixture/first" add -f apps/probe/node_modules/tracked.js
+git -C "$fixture/first" commit -qm Tracked > "$fixture/tracked.log" 2>&1 || { cat "$fixture/tracked.log" >&2; exit 1; }
+test "$(ls -di "$kept")" = "$kept_before"
+test -z "$(find "$kept" -name tracked.js)"
+echo 'PASS: a commit that tracks a file under node_modules shares none with other runs'
+
 # A run that is stopped halfway takes its tests and its folder with it, whether the
 # hook is asked to stop, the hook is killed outright, or git itself goes away.
 gone() {
@@ -160,6 +185,8 @@ for stop in 'TERM hook' 'KILL hook' 'TERM git'; do
   esac
   if wait "$git_pid"; then echo "FAIL: the commit went through although $stop stopped its tests" >&2; exit 1; fi
   gone "$stop"
+  # A stopped hook had the kept node_modules in its run folder, and they went with it.
+  case $stop in *hook) test ! -e "$kept" ;; esac
   rmdir "$record/running"
 done
 echo 'PASS: a stopped run stops its tests and removes its run folder'

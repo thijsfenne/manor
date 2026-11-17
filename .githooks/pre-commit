@@ -23,10 +23,23 @@ fi
 . "$hooks/lib.sh"
 hook_begin pre-commit
 
+# The installed node_modules of the last run, kept in the shared git folder so every
+# worktree of this clone reuses them. Only a rename moves them: a move across file
+# systems would copy over a gigabyte, and a copy can be cut off halfway.
+kept=$(cd "$(git rev-parse --git-common-dir)" && pwd)/manor-hook-modules
+hook_rename() { perl -e 'exit(rename($ARGV[0], $ARGV[1]) ? 0 : 1)' "$1" "$2" 2>/dev/null; }
+# A file the index tracks under node_modules would stay with the kept ones and show
+# up in the snapshot of a later commit, and a tracked entry of that name would not fit
+# over them. A commit that has either takes and keeps none.
+[ -z "$(git ls-files -- '*node_modules/*' '*node_modules' | head -n 1)" ] || kept=
+
 # Export the effective index while GIT_INDEX_FILE still points at commit --only's
 # temporary index. No stash, reset, shared worktree registration or live-file copy.
+# The kept folder holds node_modules folders and nothing else, so the snapshot starts
+# from it and still carries only the files of this index. From here on the run owns
+# them: a hook that is stopped takes them along, and the next one installs afresh.
 snapshot=$hook_dir/snapshot
-mkdir "$snapshot"
+[ -n "$kept" ] && hook_rename "$kept" "$snapshot" || mkdir "$snapshot"
 git checkout-index --all --prefix="$snapshot/"
 
 # A linked worktree hands the hook GIT_DIR, and every `git init` the tests run in a temp
@@ -40,15 +53,34 @@ cd "$snapshot"
 # install leaves every package outside that closure without node_modules, so a test
 # importing one by relative path fails on module resolution rather than on the commit.
 # apps/server's suites did exactly that until the dependency was declared; the full
-# install keeps the next undeclared import from reading as a broken commit. The cost
-# is a few seconds from a warm store, against a failure that looks like someone else's.
+# install keeps the next undeclared import from reading as a broken commit. On kept
+# node_modules it only checks them against the staged lockfile and repairs the
+# difference; from nothing it links the whole store, which takes ten seconds or more.
+# Kept node_modules that no longer fit, after a pnpm upgrade for one, are replaced
+# without the question pnpm would ask in a terminal.
 echo "pre-commit: testing the commit index in an isolated snapshot." >&2
-if ! hook_run pnpm install --offline --frozen-lockfile --ignore-scripts 1>&2; then
+if ! hook_run pnpm install --offline --frozen-lockfile --ignore-scripts --config.confirm-modules-purge=false 1>&2; then
   echo "pre-commit: snapshot install failed. Populate the pnpm store with pnpm install, or fix the staged lockfile, then retry." >&2
   exit 1
 fi
 
 # --stream prefixes every line with its package, also when only one runs, so Manor
 # can name the failing files. Output goes to stderr, where git sends hook output.
+# One suite at a time. Each one already puts a worker on every core, and side by side
+# on a busy machine they failed on timing in every measured run.
+status=0
 # shellcheck disable=SC2086
-hook_run pnpm --stream $filters test 1>&2
+hook_run pnpm --stream --workspace-concurrency=1 $filters test 1>&2 || status=$?
+
+# Hand the node_modules to the next run, whether the tests passed or not: a failed
+# commit is the one that comes back. They are gathered inside the run folder first,
+# so the kept folder appears in one rename or not at all. A package the index no
+# longer has leaves its node_modules behind, to go with the run folder.
+for package in . apps/* packages/*; do
+  if [ -n "$kept" ] && [ -f "$package/package.json" ] && [ -d "$package/node_modules" ]; then
+    mkdir -p "$hook_dir/modules/$package"
+    mv "$package/node_modules" "$hook_dir/modules/$package/node_modules"
+  fi
+done
+if [ -d "$hook_dir/modules" ]; then hook_rename "$hook_dir/modules" "$kept" || true; fi
+exit "$status"
