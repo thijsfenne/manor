@@ -12,6 +12,7 @@ import { useRef, useState, type ReactNode } from 'react'
 import { Keyboard, Linking, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native'
 import Animated, { Easing, FadeIn, FadeOut, LinearTransition, ReduceMotion } from 'react-native-reanimated'
 
+import { CardButton } from '@/components/CardButton'
 import { Sheet } from '@/components/Sheet'
 import { Text } from '@/components/Text'
 import { colors, fonts, radius, spacing, squircle, tracking } from '@/theme'
@@ -134,7 +135,7 @@ export function OutboundDraftBubble({ draft, connected = true, actions = {}, unf
         status={showHeaderStatus ? `${draftStatusLabel(draft)}${snoozedUntil}, ${draft.to}` : undefined}
         danger={open && draft.failure !== undefined}
         action={restorable ? (
-          <TextButton accessibilityLabel="Restore this draft" disabled={!connected} label="Restore" onPress={() => onRestore(draft.draftId)} />
+          <CardButton variant="quiet" accessibilityLabel="Restore this draft" disabled={!connected} label="Restore" onPress={() => onRestore(draft.draftId)} />
         ) : undefined}
       />
       {!expanded ? null : (
@@ -222,16 +223,16 @@ export function OutboundDraftBubble({ draft, connected = true, actions = {}, unf
               {threadVerbs ? (
                 <>
                   {onSnooze === undefined ? null : (
-                    <TextButton accessibilityLabel="Answer tomorrow" disabled={!connected} label="Later" onPress={() => onSnooze(draft.draftId, snoozeUntilTomorrow())} />
+                    <CardButton variant="quiet" accessibilityLabel="Answer tomorrow" disabled={!connected} label="Later" onPress={() => onSnooze(draft.draftId, snoozeUntilTomorrow())} />
                   )}
                   {onIgnore === undefined ? null : (
-                    <TextButton accessibilityLabel="Ignore this thread" disabled={!connected} label="Ignore" onPress={() => onIgnore(draft.draftId)} />
+                    <CardButton variant="quiet" accessibilityLabel="Ignore this thread" disabled={!connected} label="Ignore" onPress={() => onIgnore(draft.draftId)} />
                   )}
                 </>
               ) : onDiscard === undefined ? null : (
-                <TextButton accessibilityLabel="Discard draft" disabled={!connected} label="Discard" onPress={() => onDiscard(draft.draftId)} />
+                <CardButton variant="quiet" accessibilityLabel="Discard draft" disabled={!connected} label="Discard" onPress={() => onDiscard(draft.draftId)} />
               )}
-              <TextButton
+              <CardButton
                 accessibilityLabel="Send"
                 disabled={!canSubmit}
                 label="Send"
@@ -240,7 +241,7 @@ export function OutboundDraftBubble({ draft, connected = true, actions = {}, unf
                   if (gmail) onSubmit(draft.draftId, body, subjectEditable ? subject : undefined, editedRichText, cc)
                   else onSubmit(draft.draftId, body, undefined, editedRichText)
                 }}
-                primary
+                variant="primary"
               />
             </View>
           )}
@@ -414,35 +415,6 @@ function ThreadSheet({
   )
 }
 
-/** A text-only button; the primary one is the filled pill that sends. */
-function TextButton({
-  accessibilityLabel,
-  disabled = false,
-  label,
-  onPress,
-  primary = false,
-}: {
-  accessibilityLabel: string
-  disabled?: boolean
-  label: string
-  onPress: () => void
-  primary?: boolean
-}) {
-  return (
-    <Pressable
-      accessibilityLabel={accessibilityLabel}
-      accessibilityRole="button"
-      accessibilityState={{ disabled }}
-      disabled={disabled}
-      hitSlop={6}
-      onPress={onPress}
-      style={({ pressed }) => [styles.button, primary && styles.buttonPrimary, disabled && styles.disabled, pressed && styles.pressed]}
-    >
-      <Text style={[styles.buttonLabel, primary && styles.buttonLabelPrimary]}>{label}</Text>
-    </Pressable>
-  )
-}
-
 const styles = StyleSheet.create({
   card: { borderRadius: radius.lg, ...squircle, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.line, backgroundColor: colors.bubble },
   header: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingHorizontal: spacing.md, paddingVertical: spacing.md },
@@ -472,10 +444,6 @@ const styles = StyleSheet.create({
   bodyInput: { minHeight: 96, padding: 0, color: colors.text, fontFamily: fonts.sans, fontSize: 16, letterSpacing: tracking.body, lineHeight: 23, textAlignVertical: 'top' },
   body: { color: colors.text, fontFamily: fonts.sans, fontSize: 16, lineHeight: 23 },
   actions: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', flexWrap: 'wrap', gap: spacing.xs, marginTop: spacing.xs },
-  button: { minHeight: 36, justifyContent: 'center', borderRadius: radius.round, paddingHorizontal: spacing.md },
-  buttonPrimary: { backgroundColor: colors.text, paddingHorizontal: spacing.lg, marginLeft: spacing.xs },
-  buttonLabel: { color: colors.muted, fontFamily: fonts.sans, fontSize: 14, fontWeight: '500' },
-  buttonLabelPrimary: { color: colors.onPrimary },
   failure: { color: colors.danger, fontFamily: fonts.sans, fontSize: 13, lineHeight: 18 },
   note: { color: colors.dim, fontFamily: fonts.sans, fontSize: 13, lineHeight: 18 },
   sheetContent: { gap: spacing.md, paddingHorizontal: spacing.lg, paddingBottom: spacing.xl },

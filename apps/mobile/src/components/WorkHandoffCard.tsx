@@ -1,27 +1,25 @@
 import ArrowDown01Icon from '@hugeicons/core-free-icons/ArrowDown01Icon'
 import ArrowRight01Icon from '@hugeicons/core-free-icons/ArrowRight01Icon'
 import Attachment01Icon from '@hugeicons/core-free-icons/Attachment01Icon'
-import BotIcon from '@hugeicons/core-free-icons/BotIcon'
 import CellsIcon from '@hugeicons/core-free-icons/CellsIcon'
 import CheckmarkCircle02Icon from '@hugeicons/core-free-icons/CheckmarkCircle02Icon'
 import { HugeiconsIcon } from '@hugeicons/react-native'
-import { useContext, useState } from 'react'
+import { useContext, useEffect, useState } from 'react'
 import { Pressable, StyleSheet, View } from 'react-native'
-import Animated, { Easing, FadeIn, FadeOut, LinearTransition, ReduceMotion } from 'react-native-reanimated'
+import Animated, { Easing, FadeIn, FadeOut, LinearTransition, ReduceMotion, useAnimatedStyle, useReducedMotion, useSharedValue, withTiming } from 'react-native-reanimated'
 import { router } from 'expo-router'
-import { workReopenedLine, type AgentConfig, type ChatMode } from '@manor/contracts'
+import { workReopenedLine, type AgentConfig, type ChatMode, type SingleRuntime } from '@manor/contracts'
 import { projectIcon } from '@manor/client-runtime/project-icons'
-import { runtimeLabel, singleRuntimeVoice } from '@manor/client-runtime/runtime-choices'
-import { acceptWorkProposal, updateWorkProposal, workProposalAttachmentLine, workProposalChoices, workProposalMultipleBlock, workProposalReason } from '@manor/client-runtime/work-proposals'
+import { acceptWorkProposal, updateWorkProposal, workProposalAttachmentCount, workProposalMultipleBlock, workProposalRuntimeName } from '@manor/client-runtime/work-proposals'
 import { closedWorkHandoff, forwardedLine, threadWorkCard, workCardLine, workCardStatus, workByline, workResultWaits, type Row } from '@manor/client-runtime/state'
 import { modelLabel } from '@manor/client-runtime/runtimes'
 import { useWorkspaceActions } from '@/providers/WorkspaceProvider'
 import { useWorkProposal } from '@/lib/useWorkProposal'
 import { colors, fonts, radius, spacing, squircle } from '@/theme'
-import { AgentStack } from './AgentStack'
 import { bundleTile, InBundle } from './bundleTile'
+import { CardButton } from './CardButton'
 import { Checkbox } from './Checkbox'
-import { DisclosureChevron } from './DisclosureChevron'
+import { GlassSurface } from './GlassSurface'
 import { ProviderMark } from './ProviderMark'
 import { ProjectBadge } from './ProjectBadge'
 import { SegmentedControl } from './SegmentedControl'
@@ -55,7 +53,7 @@ export function WorkHandoffCard({ row, agents, onReject, onReveal, inThread = fa
   const setMode = (next: ChatMode) => updateWorkProposal(row.handoffId, { mode: next })
   const setIsolate = (next: boolean) => updateWorkProposal(row.handoffId, { isolate: next })
   const setEditedTask = (task: string | undefined) => updateWorkProposal(row.handoffId, { task })
-  const [optionsOpen, setOptionsOpen] = useState(false)
+  const [detailsOpen, setDetailsOpen] = useState(false)
   const [runtimeOpen, setRuntimeOpen] = useState(false)
   const [promptDraft, setPromptDraft] = useState<string | null>(null)
   const tile = useContext(InBundle)
@@ -71,8 +69,6 @@ export function WorkHandoffCard({ row, agents, onReject, onReveal, inThread = fa
     setMode(next)
     if (next === 'house') setRuntimeOpen(false)
   }
-  // The proposal names a concrete runtime, so host Auto never relabels it.
-  const runtimeName = runtimeLabel(singleRuntimeVoice(runtime), {}, false)
   const workChatId = row.workChatId
   const openSession = workChatId === null || (pending && row.status === 'Working')
     ? undefined
@@ -178,14 +174,11 @@ export function WorkHandoffCard({ row, agents, onReject, onReveal, inThread = fa
     : { single: false, lead: row.leadAgentName, starter: row.firstExecutorName })
   // Only a proposal whose session does not exist yet can still take an edit.
   const proposedTask = canAccept && workChatId === null ? row.task : undefined
-  const choices = canAccept ? workProposalChoices(row, proposal, agents) : []
-  const reason = canAccept ? workProposalReason(row, proposal) : undefined
   // `agents` is the whole household here, which is what the lead is checked against.
   const multipleBlock = canAccept ? workProposalMultipleBlock(row, agents) : undefined
-  // The model is named once, on Options; the summary stands alone under the title.
+  // The model is named once, on the runtime line; the summary stands alone under the title.
   // A result reads without it (2026-11-07): its lines and status say what matters.
-  const metaByline = (canAccept && singleMode) || report !== undefined ? undefined : byline
-  const attachmentLine = canAccept ? workProposalAttachmentLine(row) : undefined
+  const metaByline = canAccept || report !== undefined ? undefined : byline
   const head = (
     <View style={styles.workMain}>
       <View style={styles.workBody}>
@@ -206,12 +199,6 @@ export function WorkHandoffCard({ row, agents, onReject, onReveal, inThread = fa
           </View>
         )}
         {canAccept && goal !== undefined ? <ExpandableSummary text={goal} /> : null}
-        {attachmentLine === undefined ? null : (
-          <View style={styles.attachmentLine}>
-            <HugeiconsIcon color={colors.dim} icon={Attachment01Icon} size={13} strokeWidth={1.7} />
-            <Text numberOfLines={1} style={styles.attachmentText}>{attachmentLine}</Text>
-          </View>
-        )}
         {row.changedAfterReady === true
           ? <Text style={styles.reopened}>{workReopenedLine(singleMode ? undefined : row.leadAgentName)}</Text>
           : null}
@@ -220,7 +207,8 @@ export function WorkHandoffCard({ row, agents, onReject, onReveal, inThread = fa
   )
   return (
     <>
-      <View style={styles.workCard}>
+      {/* Glass outermost, never inside a Pressable or a fading parent, or it renders flat. */}
+      <GlassSurface radius={radius.panel} fallbackColor={colors.surface} style={styles.workCard}>
         {openSession === undefined ? head : (
           <Pressable
             accessibilityRole="button"
@@ -244,92 +232,28 @@ export function WorkHandoffCard({ row, agents, onReject, onReveal, inThread = fa
           </View>
         )}
         {canAccept ? (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityState={{ disabled: accepting, expanded: optionsOpen }}
+          <RuntimeBlock
+            open={detailsOpen}
+            onToggle={() => setDetailsOpen((value) => !value)}
             disabled={accepting}
-            hitSlop={10}
-            onPress={() => setOptionsOpen((value) => !value)}
-            style={({ pressed }) => [styles.optionsButton, pressed && styles.pressed]}
-          >
-            <Text style={[styles.workActionLabel, { color: colors.text }]}>Options</Text>
-            {/* Who runs it sits with the model it names, and follows the draft as Options changes. */}
-            {singleMode
-              ? <ProviderMark driver={singleDriver} size={13} />
-              : <AgentStack agentIds={[row.leadAgentId, ...row.supportingAgentIds]} agents={agents} size={14} footprint={18} />}
-            {choices.length === 0 ? null : <Text numberOfLines={1} style={[styles.workActionLabel, styles.optionsChoices]}>{choices.join(', ')}</Text>}
-            <DisclosureChevron open={optionsOpen}>
-              <HugeiconsIcon color={colors.dim} icon={ArrowDown01Icon} size={14} strokeWidth={1.7} />
-            </DisclosureChevron>
-          </Pressable>
-        ) : null}
-        {/* Open, the choices stand between Options and the verbs they change. */}
-        {canAccept && optionsOpen ? (
-          <Animated.View
-            entering={FadeIn.duration(200).reduceMotion(ReduceMotion.System)}
-            exiting={FadeOut.duration(140).reduceMotion(ReduceMotion.System)}
-            style={styles.optionsPanel}
-          >
-            <View style={styles.optionsRow}>
-              {/* Wrapped, so the track's own top alignment does not lift it off the line. */}
-              <View>
-                <SegmentedControl disabled={accepting} label="Chat mode" onChange={chooseMode} options={multipleBlock === undefined ? MODE_OPTIONS : SINGLE_ONLY_OPTIONS} value={mode} />
-              </View>
-              {mode === 'single' ? (
-                <Pressable
-                  accessibilityLabel={`Model, ${runtimeName}`}
-                  accessibilityRole="button"
-                  disabled={accepting}
-                  onPress={() => setRuntimeOpen(true)}
-                  style={({ pressed }) => [styles.optionsLink, styles.runtimeButton, accepting && styles.workDisabled, pressed && styles.pressed]}
-                >
-                  <HugeiconsIcon color={colors.muted} icon={BotIcon} size={17} strokeWidth={1.7} />
-                  <Text numberOfLines={1} style={styles.runtimeLabel}>{runtimeName}</Text>
-                  <HugeiconsIcon color={colors.dim} icon={ArrowRight01Icon} size={16} strokeWidth={1.7} />
-                </Pressable>
-              ) : null}
-              {proposedTask === undefined ? null : (
-                <Pressable
-                  accessibilityRole="button"
-                  disabled={accepting}
-                  onPress={() => setPromptDraft(editedTask ?? proposedTask)}
-                  style={({ pressed }) => [styles.optionsLink, pressed && styles.pressed]}
-                >
-                  <Text style={styles.openThreadLabel}>{editedTask === undefined ? 'View prompt' : 'Edited prompt'}</Text>
-                </Pressable>
-              )}
-            </View>
-            {multipleBlock === undefined ? null : <Text style={styles.reason}>{multipleBlock}</Text>}
-            {reason === undefined ? null : <Text numberOfLines={1} style={styles.reason}>{reason}</Text>}
-          </Animated.View>
+            runtime={singleMode ? runtime : undefined}
+            attachments={workProposalAttachmentCount(row)}
+            // A thread's card is always Single (2026-11-17); only a persona's card offers the mode.
+            {...(row.threadAuthored === true ? {} : { mode: { value: mode, block: multipleBlock, onChange: chooseMode } })}
+            onModel={() => setRuntimeOpen(true)}
+            {...(proposedTask === undefined ? {} : { prompt: { edited: editedTask !== undefined, onOpen: () => setPromptDraft(editedTask ?? proposedTask) } })}
+          />
         ) : null}
         {canAccept || canReject ? (
           <View style={styles.workActions}>
             {canAccept && row.worktreeAvailable ? <Checkbox label="Worktree" checked={isolate} disabled={accepting} onChange={setIsolate} compact /> : null}
-            {canReject ? (
-              <Pressable
-                accessibilityRole="button"
-                disabled={accepting}
-                onPress={() => { onReject(row.handoffId) }}
-                style={({ pressed }) => [styles.workAction, styles.workActionGhost, pressed && styles.pressed]}
-              >
-                <Text style={styles.workActionLabel}>Reject</Text>
-              </Pressable>
-            ) : null}
-            {canAccept ? (
-              <Pressable
-                accessibilityRole="button"
-                disabled={accepting}
-                onPress={accept}
-                style={({ pressed }) => [styles.workAction, { backgroundColor: colors.text }, accepting && styles.workDisabled, pressed && styles.pressed]}
-              >
-                <Text style={[styles.workActionLabel, { color: colors.onPrimary }]}>{accepting ? 'Accepting…' : 'Accept'}</Text>
-              </Pressable>
-            ) : null}
+            <View style={styles.grow} />
+            {canReject ? <CardButton label="Reject" variant="quiet" disabled={accepting} onPress={() => { onReject(row.handoffId) }} /> : null}
+            {canAccept ? <CardButton label={accepting ? 'Accepting…' : 'Accept'} variant="primary" disabled={accepting} busy={accepting} onPress={accept} /> : null}
           </View>
         ) : null}
         {error === null ? null : <Text accessibilityRole="alert" style={[styles.workError, { color: colors.danger }]}>{error}</Text>}
-      </View>
+      </GlassSurface>
       <SingleRuntimeSheet
         open={runtimeOpen}
         override={runtime}
@@ -371,6 +295,101 @@ export function WorkHandoffCard({ row, agents, onReject, onReveal, inThread = fa
   )
 }
 
+/**
+ * Who runs a proposal and what goes along, folded into one line under the summary:
+ * the model and effort, the attachment count and a chevron. Open, the same line stays
+ * where it was and heads a block on its own subtle fill, with a row for the model and
+ * one for the prompt (and the mode on a persona's card). The block bleeds into the
+ * card's padding by the inset it adds, so the header never shifts when it opens.
+ */
+function RuntimeBlock({ open, onToggle, disabled, runtime, attachments, mode, onModel, prompt }: {
+  open: boolean
+  onToggle: () => void
+  disabled: boolean
+  /** The Single runtime, or undefined while the card stands on Multiple. */
+  runtime: SingleRuntime | undefined
+  attachments: string | undefined
+  mode?: { value: ChatMode; block: string | undefined; onChange: (mode: ChatMode) => void }
+  onModel: () => void
+  prompt?: { edited: boolean; onOpen: () => void }
+}) {
+  const runtimeName = runtime === undefined ? 'Multiple' : workProposalRuntimeName(runtime)
+  const turn = useSharedValue(open ? 1 : 0)
+  const still = useReducedMotion()
+  useEffect(() => {
+    turn.set(still ? (open ? 1 : 0) : withTiming(open ? 1 : 0, { duration: 180, easing: Easing.out(Easing.cubic) }))
+  }, [open, turn, still])
+  const chevron = useAnimatedStyle(() => ({ transform: [{ rotate: `${turn.get() * 180}deg` }] }))
+  const count = attachments === undefined ? null : (
+    <View style={styles.count}>
+      <HugeiconsIcon color={colors.dim} icon={Attachment01Icon} size={13} strokeWidth={1.7} />
+      <Text numberOfLines={1} style={styles.countText}>{attachments}</Text>
+    </View>
+  )
+  return (
+    <View style={[styles.block, open && styles.blockOpen]}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`${runtimeName}${attachments === undefined ? '' : `, ${attachments}`}`}
+        accessibilityHint={open ? 'Hides the Session details' : 'Shows the model and the prompt'}
+        accessibilityState={{ expanded: open }}
+        onPress={onToggle}
+        style={({ pressed }) => [styles.blockHeader, pressed && styles.pressed]}
+      >
+        {runtime === undefined ? null : <ProviderMark driver={runtime.driver} size={13} />}
+        <Text numberOfLines={1} style={styles.blockName}>{runtimeName}</Text>
+        {count}
+        <View style={styles.grow} />
+        <Animated.View style={chevron}>
+          <HugeiconsIcon color={colors.dim} icon={ArrowDown01Icon} size={16} strokeWidth={1.7} />
+        </Animated.View>
+      </Pressable>
+      {open ? (
+        <Animated.View entering={FadeIn.duration(180).reduceMotion(ReduceMotion.System)} exiting={FadeOut.duration(120).reduceMotion(ReduceMotion.System)}>
+          {mode === undefined ? null : (
+            <View style={styles.blockRow}>
+              <Text style={styles.blockKey}>Mode</Text>
+              <View style={styles.blockValue}>
+                <SegmentedControl disabled={disabled} label="Chat mode" onChange={mode.onChange} options={mode.block === undefined ? MODE_OPTIONS : SINGLE_ONLY_OPTIONS} value={mode.value} />
+              </View>
+            </View>
+          )}
+          {mode?.block === undefined ? null : <Text style={styles.blockNote}>{mode.block}</Text>}
+          {runtime === undefined ? null : (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`Model, ${runtimeName}`}
+              disabled={disabled}
+              onPress={onModel}
+              style={({ pressed }) => [styles.blockRow, pressed && styles.pressed]}
+            >
+              <Text style={styles.blockKey}>Model</Text>
+              <Text numberOfLines={1} style={[styles.blockValue, styles.blockValueText]}>{runtimeName}</Text>
+              <HugeiconsIcon color={colors.dim} icon={ArrowRight01Icon} size={16} strokeWidth={1.7} />
+            </Pressable>
+          )}
+          {prompt === undefined ? null : (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`Prompt, ${prompt.edited ? 'Edited prompt' : 'View prompt'}${attachments === undefined ? '' : `, ${attachments}`}`}
+              disabled={disabled}
+              onPress={prompt.onOpen}
+              style={({ pressed }) => [styles.blockRow, pressed && styles.pressed]}
+            >
+              <Text style={styles.blockKey}>Prompt</Text>
+              <View style={styles.blockValue}>
+                <Text numberOfLines={1} style={[styles.blockValueText, styles.shrink]}>{prompt.edited ? 'Edited prompt' : 'View prompt'}</Text>
+                {count}
+              </View>
+              <HugeiconsIcon color={colors.dim} icon={ArrowRight01Icon} size={16} strokeWidth={1.7} />
+            </Pressable>
+          )}
+        </Animated.View>
+      ) : null}
+    </View>
+  )
+}
+
 const SUMMARY_LINES = 2
 
 /**
@@ -406,9 +425,9 @@ function ExpandableSummary({ text }: { text: string }) {
 
 const styles = StyleSheet.create({
   pressed: { opacity: 0.7 },
-  workCard: { gap: spacing.sm, borderRadius: radius.lg, ...squircle, backgroundColor: colors.surface, paddingHorizontal: spacing.md, paddingVertical: spacing.md },
+  grow: { flex: 1 },
+  workCard: { gap: spacing.md, padding: 14 },
   workMain: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.md },
-  workDisabled: { opacity: 0.7 },
   workBody: { flex: 1, minWidth: 0, gap: spacing.xs },
   workHead: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   titleLine: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'baseline', gap: 6 },
@@ -421,25 +440,27 @@ const styles = StyleSheet.create({
   // Laid out invisibly at the visible text's width, so the line count is real and not guessed.
   measure: { position: 'absolute', left: 0, right: 0, top: 0, opacity: 0 },
   showMore: { alignSelf: 'flex-start', marginTop: spacing.xs, color: colors.text, fontFamily: fonts.sans, fontSize: 13 },
-  optionsChoices: { flexShrink: 1, color: colors.muted, fontWeight: '400' },
-  reason: { flexShrink: 1, color: colors.dim, fontFamily: fonts.sans, fontSize: 12 },
-  attachmentLine: { marginTop: spacing.xs, flexDirection: 'row', alignItems: 'center', gap: 5 },
-  attachmentText: { flexShrink: 1, color: colors.dim, fontFamily: fonts.sans, fontSize: 12 },
   reopened: { color: colors.dim, fontFamily: fonts.sans, fontSize: 13, lineHeight: 18 },
-  resultIndent: { marginTop: spacing.sm },
-  // Options starts on the text's left edge, folded or open, with no fill of its own.
-  optionsButton: { alignSelf: 'flex-start', maxWidth: '100%', flexDirection: 'row', alignItems: 'center', gap: 6 },
-  optionsPanel: { gap: spacing.sm },
-  // The mode switch, the model and the prompt on one centred line, wrapping when the model runs long.
-  optionsRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', columnGap: spacing.lg, rowGap: spacing.sm },
-  optionsLink: { minHeight: 34, justifyContent: 'center' },
+  resultIndent: { marginTop: spacing.xs },
+  // Bleeds by its own inset, so the header line keeps its place folded and open; the
+  // corner is the card's less the 6pt gap left between the two edges.
+  block: { marginHorizontal: -spacing.sm, paddingHorizontal: spacing.sm, borderRadius: radius.panel - 6, ...squircle },
+  blockOpen: { backgroundColor: colors.chip },
+  blockHeader: { minHeight: 36, flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  blockName: { flexShrink: 1, color: colors.text, fontFamily: fonts.sans, fontSize: 13 },
+  count: { flexShrink: 1, flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
+  countText: { flexShrink: 1, color: colors.dim, fontFamily: fonts.sans, fontSize: 13 },
+  blockRow: { minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.line },
+  blockKey: { width: 56, color: colors.muted, fontFamily: fonts.sans, fontSize: 13 },
+  blockValue: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  blockValueText: { color: colors.text, fontFamily: fonts.sans, fontSize: 13 },
+  blockNote: { color: colors.dim, fontFamily: fonts.sans, fontSize: 12, paddingBottom: spacing.sm },
   doneRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, borderRadius: radius.sm, ...squircle, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.line, backgroundColor: colors.surface, paddingHorizontal: spacing.md, paddingVertical: spacing.sm },
   doneText: { flex: 1, color: colors.muted, fontFamily: fonts.sans, fontSize: 13 },
   doneTitle: { color: colors.text, fontWeight: '500' },
   tileTitle: { color: colors.text },
   tileMark: { width: 16, flexShrink: 0 },
   doneStatus: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  openThreadLabel: { color: colors.muted, fontFamily: fonts.sans, fontSize: 13, fontWeight: '500' },
   workError: { fontFamily: fonts.sans, fontSize: 13 },
   closedRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, borderRadius: radius.sm, ...squircle, borderWidth: StyleSheet.hairlineWidth, borderStyle: 'dashed', borderColor: colors.line, paddingHorizontal: spacing.md, paddingVertical: spacing.sm },
   closedTitle: { flex: 1, color: colors.muted, fontFamily: fonts.sans, fontSize: 13, textDecorationLine: 'line-through' },
@@ -450,12 +471,5 @@ const styles = StyleSheet.create({
   forwardedLine: { flexShrink: 1, maxWidth: '60%' },
   forwardedReady: { color: colors.warning, fontWeight: '500' },
   closedLabel: { color: colors.dim, fontFamily: fonts.sans, fontSize: 12 },
-  runtimeButton: { flexShrink: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 6 },
-  runtimeLabel: { flexShrink: 1, color: colors.muted, fontFamily: fonts.sans, fontSize: 13 },
-  // The geometry an outbound draft's verbs already use on this screen, so a card's
-  // buttons read the same wherever the transcript grows them.
-  workActions: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: spacing.sm },
-  workAction: { minHeight: 34, justifyContent: 'center', borderRadius: radius.sm, ...squircle, backgroundColor: colors.fill, paddingHorizontal: spacing.md },
-  workActionGhost: { backgroundColor: 'transparent', paddingHorizontal: spacing.sm },
-  workActionLabel: { color: colors.muted, fontFamily: fonts.sans, fontSize: 13, fontWeight: '500' },
+  workActions: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
 })

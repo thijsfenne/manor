@@ -55,13 +55,13 @@ export function setWorkChangesOpen(handoffId: string, open: boolean): void {
 }
 
 /**
- * The card's defaults with the user's edits on top. A project thread's card is Single on the
- * runtime it proposed; any other card is Multiple for a team and Single for one agent.
- * `household` is every agent, for the Multiple block; it defaults to `agents`.
+ * The card's defaults with the user's edits on top. A project thread's card is always Single
+ * (2026-11-17), on the runtime it proposed; any other card is Multiple for a team and Single
+ * for one agent. `household` is every agent, for the Multiple block; it defaults to `agents`.
  */
 export function workProposalDraft(row: WorkHandoffRow, agents: readonly AgentConfig[], changed = readWorkProposalEdits(row.handoffId), household: readonly AgentConfig[] = agents): WorkProposalDraft {
   const draft: WorkProposalDraft = {
-    mode: row.threadAuthored === true || row.supportingAgentIds.length === 0 ? 'single' : 'house',
+    mode: row.supportingAgentIds.length === 0 ? 'single' : 'house',
     runtime: row.proposedRuntime?.runtime ?? workSingleDefault(agents),
     isolate: true,
     accepting: false,
@@ -69,7 +69,15 @@ export function workProposalDraft(row: WorkHandoffRow, agents: readonly AgentCon
     ...changed,
   }
   // Multiple cannot start this card (its lead is gone, or nobody works in Sessions), so it stands on Single.
-  return workProposalMultipleBlock(row, household) === undefined ? draft : { ...draft, mode: 'single' }
+  return workProposalSingleOnly(row, household) ? { ...draft, mode: 'single' } : draft
+}
+
+/**
+ * True when the card offers no Single/Multiple choice: a project thread's card, which
+ * always starts Single, or one that Multiple cannot start.
+ */
+export function workProposalSingleOnly(row: Pick<WorkHandoffRow, 'leadAgentId' | 'threadAuthored'>, household: readonly AgentConfig[]): boolean {
+  return row.threadAuthored === true || workProposalMultipleBlock(row, household) !== undefined
 }
 
 /**
@@ -93,41 +101,21 @@ export function workProposalRuntimeName(runtime: SingleRuntime): string {
 }
 
 /**
- * What Options shows beside its name, muted: a Single card always names its model and
- * effort, as in "Options  Sonnet 5.5, High", changed or not. Multiple is named only
- * when the card did not open on it, and an edited prompt always. Worktree is not one:
- * its checkbox sits on the action row, in view.
- */
-export function workProposalChoices(row: WorkHandoffRow, draft: WorkProposalDraft, agents: readonly AgentConfig[]): string[] {
-  const choices: string[] = []
-  if (draft.mode === 'single') choices.push(workProposalRuntimeName(draft.runtime))
-  else if (workProposalDraft(row, agents, NO_EDITS).mode !== 'house') choices.push('Multiple')
-  if (draft.task !== undefined) choices.push('Edited prompt')
-  return choices
-}
-
-/**
- * Why the thread proposed its runtime, as in "small UI change". Shown inside the open
- * Options only while the card still stands on that runtime: once the user picks another,
- * the reason is about a choice the user did not make.
- */
-export function workProposalReason(row: WorkHandoffRow, draft: WorkProposalDraft): string | undefined {
-  const proposed = row.proposedRuntime
-  if (proposed === undefined || draft.mode !== 'single') return undefined
-  const { runtime } = proposed
-  if (draft.runtime.driver !== runtime.driver || draft.runtime.model !== runtime.model || draft.runtime.effort !== runtime.effort) return undefined
-  return proposed.reason
-}
-
-/**
  * What goes along with the kickoff, as in "2 attachments: mockup.html, screen.png".
  * Pictures alone are only counted, "3 images": a pasted image's name says nothing.
  */
 export function workProposalAttachmentLine(row: Pick<WorkHandoffRow, 'attachments' | 'attachmentsAllImages'>): string | undefined {
-  const names = row.attachments ?? []
-  if (names.length === 0) return undefined
-  if (row.attachmentsAllImages === true) return names.length === 1 ? '1 image' : `${names.length} images`
-  return `${names.length} ${names.length === 1 ? 'attachment' : 'attachments'}: ${names.join(', ')}`
+  const count = workProposalAttachmentCount(row)
+  if (count === undefined || row.attachmentsAllImages === true) return count
+  return `${count}: ${(row.attachments ?? []).join(', ')}`
+}
+
+/** The attachments counted without their names, as in "1 image" or "2 attachments", for the phone's runtime line. */
+export function workProposalAttachmentCount(row: Pick<WorkHandoffRow, 'attachments' | 'attachmentsAllImages'>): string | undefined {
+  const count = row.attachments?.length ?? 0
+  if (count === 0) return undefined
+  const noun = row.attachmentsAllImages === true ? 'image' : 'attachment'
+  return `${count} ${noun}${count === 1 ? '' : 's'}`
 }
 
 export function workProposalOptions(row: WorkHandoffRow, draft: WorkProposalDraft): WorkAcceptanceOptions {

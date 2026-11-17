@@ -6,8 +6,11 @@ import { acceptWorkProposal } from '@manor/client-runtime/work-proposals'
 import { WORK_RESULT_CONNECTION_LOST, openWorkDecisions, workConfirmTitle, workResultActionLabels, type Row, type WorkHandoffRow, type WorkResult } from '@manor/client-runtime/state'
 import { useWorkProposal } from '@/lib/useWorkProposal'
 import { useWorkspaceActions, useWorkspaceStatus } from '@/providers/WorkspaceProvider'
-import { colors, fonts, radius, spacing, squircle } from '@/theme'
+import { glassRise, glassSink } from '@/lib/glassMotion'
+import { colors, fonts, radius, spacing } from '@/theme'
+import { CardButton } from './CardButton'
 import { FadingScrollView } from './FadingScrollView'
+import { GlassSurface } from './GlassSurface'
 import { Text } from './Text'
 import { openWorkChangesFromBar, type RevealPlace } from './WorkResultBody'
 
@@ -35,10 +38,11 @@ export function WorkDecisionDock({ rows, inView, agents, onReject, onReveal }: {
   const open = inView === null ? [] : openWorkDecisions(rows, inView)
   if (open.length === 0) return null
   return (
-    <Animated.View entering={FADE_IN} exiting={FADE_OUT} style={styles.dock}>
-      {/* A solid card with a rim (2026-10-12): glass on the light canvas left
-          Accept and Confirm too faint to find. */}
-      <View style={styles.card}>
+    // Rises rather than fades: an opacity ancestor turns the glass flat for good.
+    <Animated.View entering={glassRise} exiting={glassSink} style={styles.dock}>
+      {/* Glass like the cards it pins (2026-11-17). Accept and Confirm keep a solid fill
+          on it, so they stay easy to find on the light canvas (too faint on 2026-10-12). */}
+      <GlassSurface radius={radius.panel} fallbackStyle={styles.fallback}>
         <FadingScrollView
           accessibilityLabel="Needs you"
           keyboardShouldPersistTaps="handled"
@@ -53,7 +57,7 @@ export function WorkDecisionDock({ rows, inView, agents, onReject, onReveal }: {
             </Animated.View>
           ))}
         </FadingScrollView>
-      </View>
+      </GlassSurface>
     </Animated.View>
   )
 }
@@ -171,27 +175,22 @@ function DecisionRow({ kind, row, error, onReveal, secondary, primary }: {
         </View>
         {error === null ? null : <Text accessibilityRole="alert" numberOfLines={1} style={styles.error}>{error}</Text>}
       </Pressable>
-      <Pressable
+      <CardButton
+        label={secondary.label}
+        variant="quiet"
         accessibilityLabel={`${secondary.label} ${row.title}`}
-        accessibilityRole="button"
-        accessibilityState={{ disabled: secondary.disabled }}
         disabled={secondary.disabled}
         onPress={secondary.onPress}
-        style={({ pressed }) => [styles.action, styles.secondary, secondary.disabled && styles.disabled, pressed && styles.pressed]}
-      >
-        <Text numberOfLines={1} style={styles.secondaryLabel}>{secondary.label}</Text>
-      </Pressable>
-      <Pressable
+      />
+      <CardButton
+        label={primary.label}
+        variant="primary"
         accessibilityLabel={`${primary.action} ${row.title}`}
         {...(primary.hint === undefined ? {} : { accessibilityHint: primary.hint })}
-        accessibilityRole="button"
-        accessibilityState={{ disabled: primary.disabled, busy: primary.busy }}
         disabled={primary.disabled}
+        busy={primary.busy}
         onPress={primary.onPress}
-        style={({ pressed }) => [styles.action, styles.primary, primary.disabled && styles.disabled, pressed && styles.pressed]}
-      >
-        <Text style={styles.primaryLabel}>{primary.label}</Text>
-      </Pressable>
+      />
     </View>
   )
 }
@@ -199,13 +198,8 @@ function DecisionRow({ kind, row, error, onReveal, secondary, primary }: {
 const styles = StyleSheet.create({
   // No margin: the footer's top padding is the gap to the composer.
   dock: { width: '100%' },
-  card: {
-    overflow: 'hidden',
-    borderRadius: radius.lg,
-    ...squircle,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.line,
-    backgroundColor: colors.raised,
+  // Where glass is missing: the solid raised card with a rim and a floating shadow.
+  fallback: {
     shadowColor: '#000000',
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.16,
@@ -219,13 +213,5 @@ const styles = StyleSheet.create({
   kind: { color: colors.dim, fontFamily: fonts.sans, fontSize: 12 },
   title: { flex: 1, color: colors.text, fontFamily: fonts.sans, fontSize: 15 },
   error: { color: colors.danger, fontFamily: fonts.sans, fontSize: 12 },
-  // The card's own verb geometry, so the two read as one control: a quiet ghost beside
-  // the filled primary.
-  action: { minHeight: 34, justifyContent: 'center', borderRadius: radius.sm, ...squircle },
-  secondary: { backgroundColor: 'transparent', paddingHorizontal: spacing.sm },
-  primary: { backgroundColor: colors.text, paddingHorizontal: spacing.md },
-  secondaryLabel: { color: colors.muted, fontFamily: fonts.sans, fontSize: 13, fontWeight: '500' },
-  primaryLabel: { color: colors.onPrimary, fontFamily: fonts.sans, fontSize: 13, fontWeight: '500' },
-  disabled: { opacity: 0.7 },
   pressed: { opacity: 0.7 },
 })

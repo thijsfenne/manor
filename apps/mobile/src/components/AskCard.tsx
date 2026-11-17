@@ -3,6 +3,7 @@ import type { OpenAsk } from '@manor/client-runtime/state'
 import { useMemo, useState } from 'react'
 import { Pressable, StyleSheet, TextInput, View } from 'react-native'
 
+import { CardButton } from '@/components/CardButton'
 import { FadingScrollView } from '@/components/FadingScrollView'
 import { Text } from '@/components/Text'
 import { colors, fonts, radius, spacing, squircle, tracking } from '@/theme'
@@ -82,9 +83,7 @@ export function AskCard({
       <View style={styles.cardHeader}>
         <Text style={styles.title}>{onCancel === undefined ? 'Your choice' : 'Change answer'}</Text>
         {onCancel === undefined && onStop === undefined ? null : (
-          <Pressable accessibilityRole="button" onPress={onCancel ?? onStop} style={({ pressed }) => [styles.stop, pressed && styles.pressed]}>
-            <Text style={onCancel === undefined ? styles.stopText : styles.cancelText}>{onCancel === undefined ? 'Stop' : 'Cancel'}</Text>
-          </Pressable>
+          <CardButton label={onCancel === undefined ? 'Stop' : 'Cancel'} onPress={() => (onCancel ?? onStop)?.()} variant="secondary" />
         )}
       </View>
       <FadingScrollView containerStyle={styles.scroll} contentContainerStyle={styles.questions} keyboardShouldPersistTaps="handled">
@@ -137,16 +136,14 @@ export function AskCard({
         })}
       </FadingScrollView>
       {macOnly ? <Text style={styles.macOnly}>This can only be approved on your Mac.</Text> : (
-        <Pressable
-          accessibilityRole="button"
+        <CardButton
           disabled={answers === null || sent}
+          label="Send"
           onPress={() => {
             if (answers !== null && !sent && onAnswer(answers) && onCancel !== undefined) setSent(true)
           }}
-          style={({ pressed }) => [styles.submit, (answers === null || sent) && styles.disabled, pressed && styles.pressed]}
-        >
-          <Text style={styles.submitText}>Send</Text>
-        </Pressable>
+          variant="primary"
+        />
       )}
     </View>
   )
@@ -156,9 +153,6 @@ const styles = StyleSheet.create({
   card: { maxHeight: 470, gap: spacing.md, borderRadius: radius.composer, ...squircle, backgroundColor: colors.raised, padding: spacing.lg },
   cardHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.md },
   title: { flex: 1, color: colors.text, fontFamily: fonts.sans, fontSize: 20, fontWeight: '500' },
-  stop: { minHeight: 38, justifyContent: 'center', paddingHorizontal: spacing.md, borderRadius: radius.sm, ...squircle, backgroundColor: colors.fill },
-  stopText: { color: colors.danger, fontFamily: fonts.sans, fontSize: 13, fontWeight: '500' },
-  cancelText: { color: colors.text, fontFamily: fonts.sans, fontSize: 13, fontWeight: '500' },
   // Shrinks between the header and the answer button when the questions run long.
   scroll: { flexShrink: 1 },
   questions: { gap: spacing.lg },
@@ -174,9 +168,6 @@ const styles = StyleSheet.create({
   optionLabelSelected: { color: colors.onPrimary },
   optionDescription: { color: colors.muted, fontFamily: fonts.sans, fontSize: 12, lineHeight: 17 },
   custom: { minHeight: 44, borderRadius: radius.md, ...squircle, backgroundColor: colors.surface, color: colors.text, fontFamily: fonts.sans, letterSpacing: tracking.small, paddingHorizontal: spacing.md },
-  submit: { minHeight: 48, alignItems: 'center', justifyContent: 'center', borderRadius: radius.md, ...squircle, backgroundColor: colors.text },
-  submitText: { color: colors.onPrimary, fontFamily: fonts.sans, fontSize: 15, fontWeight: '500' },
   macOnly: { color: colors.muted, fontFamily: fonts.sans, fontSize: 14, lineHeight: 20 },
-  disabled: { opacity: 0.4 },
   pressed: { opacity: 0.7 },
 })

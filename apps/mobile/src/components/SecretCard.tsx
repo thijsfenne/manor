@@ -1,8 +1,9 @@
 import { secretCardNote, type UserInputQuestion } from '@manor/contracts'
 import { useRef, useState } from 'react'
-import { Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native'
+import { ScrollView, StyleSheet, TextInput, View } from 'react-native'
 import { KeyboardController } from 'react-native-keyboard-controller'
 
+import { CardButton } from '@/components/CardButton'
 import { Text } from '@/components/Text'
 import { colors, fonts, radius, spacing, squircle, tracking } from '@/theme'
 
@@ -54,9 +55,7 @@ export function SecretCard({
           <Text style={styles.who}>{who} asks for a secret</Text>
           <Text style={styles.label}>{question.header}</Text>
         </View>
-        <Pressable accessibilityRole="button" onPress={onStop} style={({ pressed }) => [styles.stop, pressed && styles.pressed]}>
-          <Text style={styles.stopText}>Stop</Text>
-        </Pressable>
+        <CardButton label="Stop" onPress={() => onStop?.()} variant="secondary" />
       </View>
       <Text style={styles.reason}>{question.question}</Text>
       {destination.target === 'command' ? (
@@ -83,22 +82,15 @@ export function SecretCard({
       />
       {failed ? <Text style={styles.failed}>Could not send. Try again.</Text> : null}
       <View style={styles.actions}>
-        <Pressable
-          accessibilityRole="button"
-          disabled={sent}
-          onPress={() => void answer()}
-          style={({ pressed }) => [styles.decline, sent && styles.disabled, pressed && styles.pressed]}
-        >
-          <Text style={styles.declineText}>Decline</Text>
-        </Pressable>
-        <Pressable
-          accessibilityRole="button"
+        <CardButton disabled={sent} label="Decline" onPress={() => void answer()} style={styles.decline} variant="secondary" />
+        <CardButton
+          busy={sent}
           disabled={sent || value === ''}
+          label={sent ? 'Using it once' : 'Use once'}
           onPress={() => void answer(value)}
-          style={({ pressed }) => [styles.submit, (sent || value === '') && styles.disabled, pressed && styles.pressed]}
-        >
-          <Text style={styles.submitText}>{sent ? 'Using it once' : 'Use once'}</Text>
-        </Pressable>
+          style={styles.submit}
+          variant="primary"
+        />
       </View>
     </View>
   )
@@ -110,8 +102,6 @@ const styles = StyleSheet.create({
   heading: { flex: 1, gap: 2 },
   who: { color: colors.muted, fontFamily: fonts.sans, fontSize: 12, fontWeight: '500' },
   label: { color: colors.text, fontFamily: fonts.sans, fontSize: 20, fontWeight: '500' },
-  stop: { minHeight: 38, justifyContent: 'center', paddingHorizontal: spacing.md, borderRadius: radius.sm, ...squircle, backgroundColor: colors.fill },
-  stopText: { color: colors.danger, fontFamily: fonts.sans, fontSize: 13, fontWeight: '500' },
   reason: { color: colors.text, fontFamily: fonts.sans, fontSize: 16, lineHeight: 22 },
   command: { maxHeight: 96, borderRadius: radius.md, ...squircle, backgroundColor: colors.fill, padding: spacing.md },
   commandText: { color: colors.text, fontFamily: fonts.mono, fontSize: 12, lineHeight: 17 },
@@ -119,10 +109,6 @@ const styles = StyleSheet.create({
   field: { minHeight: 44, borderRadius: radius.md, ...squircle, backgroundColor: colors.fill, color: colors.text, fontFamily: fonts.sans, letterSpacing: tracking.small, paddingHorizontal: spacing.md },
   failed: { color: colors.danger, fontFamily: fonts.sans, fontSize: 14, lineHeight: 20 },
   actions: { flexDirection: 'row', gap: spacing.sm },
-  decline: { flex: 1, minHeight: 48, alignItems: 'center', justifyContent: 'center', borderRadius: radius.md, ...squircle, backgroundColor: colors.fill },
-  declineText: { color: colors.text, fontFamily: fonts.sans, fontSize: 15, fontWeight: '500' },
-  submit: { flex: 2, minHeight: 48, alignItems: 'center', justifyContent: 'center', borderRadius: radius.md, ...squircle, backgroundColor: colors.text },
-  submitText: { color: colors.onPrimary, fontFamily: fonts.sans, fontSize: 15, fontWeight: '500' },
-  disabled: { opacity: 0.4 },
-  pressed: { opacity: 0.7 },
+  decline: { flex: 1 },
+  submit: { flex: 2 },
 })

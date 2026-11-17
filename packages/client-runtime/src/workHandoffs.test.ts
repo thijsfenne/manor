@@ -2,7 +2,7 @@ import type { AgentConfig, Chat, Project, ServerMessage, ThreadEvent, WorkHandof
 import { describe, expect, it } from 'vitest'
 import { evidenceVisibleCount, firstSentence, goalReportEventId, messageBrief, rowsOf, threadWorkCard, workByline, openWorkDecisions, projectWorkHandoffs, sessionReadyRow, workCardInView, workCardLine, workBlockedReason, workCardStatus, workConfirmTitle, pickWorkChoice, workChangesAsked, workChoicePicked, workResultActionLabels, workResultChoiceList, workResultFiles, workResultLines, type Row, type WorkHandoffRow } from './transcriptState'
 import { emptyThread } from './threadState'
-import { acceptWorkProposal, updateWorkProposal, workProposalChoices, workProposalDraft, workProposalOptions, workProposalReason } from './workProposals'
+import { acceptWorkProposal, updateWorkProposal, workProposalDraft, workProposalOptions, workProposalSingleOnly } from './workProposals'
 import { createWorkspaceCommands } from './commands'
 import { emptyWorkspace, reduce } from './workspaceState'
 
@@ -341,20 +341,6 @@ describe('the shared Work handoff projection', () => {
     expect(firstSentence('Asked J. Smith first. Then shipped.')).toBe('Asked J. Smith first.')
   })
 
-  it('names on Options the Single model and effort, Multiple only when it differs, and an edited prompt', () => {
-    const projected = projectWorkHandoffs(rows, [{ ...handoff, workChatId: null }], [], [project], [lead, support])
-      .find((row): row is WorkHandoffRow => row.kind === 'work_handoff')!
-    const team = { ...projected, handoffId: 'team' }
-    const solo = { ...team, handoffId: 'solo', supportingAgentIds: [], supportingAgentNames: [], worktreeAvailable: true }
-    const choices = (row: WorkHandoffRow) => workProposalChoices(row, workProposalDraft(row, [lead]), [lead])
-    expect(choices(team)).toEqual([])
-    expect(choices(solo)).toEqual([expect.stringMatching(/, /)])
-    updateWorkProposal('team', { mode: 'single' })
-    expect(choices(team)).toEqual([expect.stringMatching(/, /)])
-    updateWorkProposal('solo', { mode: 'house', task: 'Edited.' })
-    expect(choices(solo)).toEqual(['Multiple', 'Edited prompt'])
-  })
-
   it('ticks Worktree by default and unticking sends the Session to the shared checkout', () => {
     const base = projectWorkHandoffs(rows, [{ ...handoff, workChatId: null }], [], [project], [lead, support])
       .find((row): row is WorkHandoffRow => row.kind === 'work_handoff')!
@@ -387,28 +373,26 @@ describe('the shared Work handoff projection', () => {
     const claudeCos: AgentConfig = { ...lead, id: 'cos', isCos: true, driver: 'claude', model: 'claude-fable-5-2', effort: 'medium' }
     const codexCos: AgentConfig = { ...claudeCos, driver: 'codex', model: 'gpt-6-luna' }
     expect(workProposalDraft(solo, [claudeCos]).runtime).toEqual({ driver: 'claude', model: 'claude-opus-5-5', effort: 'high' })
-    expect(workProposalChoices(solo, workProposalDraft(solo, [claudeCos]), [claudeCos])).toEqual(['Opus 5.5, High'])
     expect(workProposalDraft(solo, [codexCos]).runtime).toEqual({ driver: 'codex', model: 'gpt-6-luna', effort: 'medium' })
     updateWorkProposal('cos-default', { runtime: { driver: 'claude', model: 'claude-sonnet-5-5', effort: 'high' } })
     expect(workProposalDraft(solo, [claudeCos]).runtime.model).toBe('claude-sonnet-5-5')
-    expect(workProposalChoices(solo, workProposalDraft(solo, [claudeCos]), [claudeCos])).toEqual(['Sonnet 5.5, High'])
   })
 
-  it('opens a thread card in Single on its proposed runtime, with the reason until the user picks another', () => {
+  it('keeps a thread card Single on its proposed runtime, whatever mode an old draft holds, and accepts it as Single', async () => {
     const proposedRuntime = { runtime: { driver: 'claude', model: 'claude-sonnet-5-5', effort: 'high' } as const, reason: 'small UI change' }
-    const row = { ...projectWorkHandoffs(rows, [{ ...handoff, workChatId: null, authorAgentId: '__single__', proposedRuntime }], [], [project], [lead, support])
+    const sessionLead = { ...lead, placement: 'session' as const }
+    const row = { ...projectWorkHandoffs(rows, [{ ...handoff, workChatId: null, authorAgentId: '__single__', proposedRuntime }], [], [project], [sessionLead, support])
       .find((candidate): candidate is WorkHandoffRow => candidate.kind === 'work_handoff')!, handoffId: 'thread-card' }
     expect(row).toMatchObject({ threadAuthored: true, proposedRuntime })
-    // A starting team does not turn a thread card into Multiple.
+    // A starting team and a lead who could run Multiple do not turn a thread card into Multiple.
     expect(row.supportingAgentIds.length).toBeGreaterThan(0)
-    const draft = workProposalDraft(row, [lead])
-    expect(draft).toMatchObject({ mode: 'single', runtime: proposedRuntime.runtime })
-    expect(workProposalReason(row, draft)).toBe('small UI change')
-    expect(workProposalChoices(row, draft, [lead])).toEqual(['Sonnet 5.5, High'])
-    updateWorkProposal('thread-card', { runtime: { driver: 'claude', model: 'claude-opus-5-5', effort: 'high' } })
-    const overridden = workProposalDraft(row, [lead])
-    expect(workProposalReason(row, overridden)).toBeUndefined()
-    expect(workProposalChoices(row, overridden, [lead])).toEqual(['Opus 5.5, High'])
+    expect(workProposalSingleOnly(row, [sessionLead])).toBe(true)
+    expect(workProposalDraft(row, [sessionLead])).toMatchObject({ mode: 'single', runtime: proposedRuntime.runtime })
+    updateWorkProposal('thread-card', { mode: 'house', runtime: { driver: 'claude', model: 'claude-opus-5-5', effort: 'high' } })
+    expect(workProposalDraft(row, [sessionLead])).toMatchObject({ mode: 'single', runtime: { model: 'claude-opus-5-5' } })
+    const sent: unknown[] = []
+    await acceptWorkProposal(row, [sessionLead], (_, options) => { sent.push(options) })
+    expect(sent).toEqual([{ mode: 'single', runtime: { driver: 'claude', model: 'claude-opus-5-5', effort: 'high' } }])
   })
 
   it('accepts a proposal with what was chosen on its card, once, from either surface', async () => {

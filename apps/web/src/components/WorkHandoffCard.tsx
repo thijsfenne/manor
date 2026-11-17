@@ -1,8 +1,8 @@
-import { useContext, useEffect, useLayoutEffect, useRef, useState, type MouseEvent, type ReactNode } from 'react'
-import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
+import { useContext, useEffect, useLayoutEffect, useRef, useState, type MouseEvent } from 'react'
+import { motion, useReducedMotion } from 'motion/react'
 import type { WorkAcceptanceOptions } from '@manor/client-runtime/commands'
 import { Attachment01Icon, CellsIcon, CheckmarkCircle02Icon } from '@hugeicons/core-free-icons'
-import { acceptWorkProposal, updateWorkProposal, workProposalAttachmentLine, workProposalChoices, workProposalMultipleBlock, workProposalReason } from '@manor/client-runtime/work-proposals'
+import { acceptWorkProposal, updateWorkProposal, workProposalAttachmentLine, workProposalMultipleBlock } from '@manor/client-runtime/work-proposals'
 import { SingleRuntimeSchema, workReopenedLine, type AgentConfig } from '@manor/contracts'
 import { closedWorkHandoff, forwardedLine, threadWorkCard, workCardLine, workCardStatus, workDecisionOpen, workByline, workResultWaits, type ThreadWorkCard, type WorkHandoffRow, type WorkStatus } from '../state'
 import { modelLabel } from '../runtimes'
@@ -12,7 +12,6 @@ import { useWorkProposal } from '../useWorkProposal'
 import { AgentStack } from './inbox/AgentStack'
 import { Icon } from './Icon'
 import { NewChatModeControl } from './NewChatModeControl'
-import { ProviderMark } from './ProviderMark'
 import { SingleRuntimeControl } from './SingleRuntimeControl'
 import { Badge } from './ui/Badge'
 import { Button } from './ui/Button'
@@ -27,8 +26,8 @@ import { WORK_STATUS_TONE, WorkCardStatusLabel, WorkResultBody, WorkStatusLabel,
 const CONTROLS = 'button, a, input, textarea, select, label, [role="menu"], [role="listbox"], [role="dialog"]'
 
 /**
- * An assignment's one element in the DM that briefed it. A proposal carries Options,
- * Reject and Accept; once accepted the card is its state (Working, Ready, Committing…)
+ * An assignment's one element in the DM that briefed it. A proposal carries its model,
+ * the prompt, Worktree, Reject and Accept on one row; once accepted the card is its state (Working, Ready, Committing…)
  * and a press on it opens the Session; once done it folds to one line.
  */
 export function WorkHandoffCard({
@@ -72,7 +71,6 @@ export function WorkHandoffCard({
   const tile = useContext(InBundle)
   const { mode, runtime, isolate, accepting, error } = proposal
   const editedTask = proposal.task
-  const [optionsOpen, setOptionsOpen] = useState(false)
   const [promptOpen, setPromptOpen] = useState(false)
   // False until the card has shown once, so only a later change of shape fades.
   const settledRef = useRef(false)
@@ -173,10 +171,10 @@ export function WorkHandoffCard({
       : { single: false, lead: row.leadAgentName, starter: row.firstExecutorName })
     // Only a proposal whose session does not exist yet can still take an edit.
     const proposedTask = canAccept && sessionId === null ? row.task : undefined
-    const choices = canAccept ? workProposalChoices(row, proposal, agents) : []
-    const reason = canAccept ? workProposalReason(row, proposal) : undefined
     const multipleBlock = canAccept ? workProposalMultipleBlock(row, identityAgents) : undefined
-    // The model is named once, on Options; the summary stands alone under the title.
+    // A thread's card is always Single (2026-11-17), so only a persona's card offers the mode.
+    const modeChoice = canAccept && row.threadAuthored !== true
+    // The model is named once, on its button; the summary stands alone under the title.
     // A result reads without it (2026-11-07): its lines and status say what matters.
     const summary = canAccept ? row.summary ?? row.task : undefined
     const metaByline = (canAccept && singleMode) || report !== undefined ? undefined : byline
@@ -263,52 +261,11 @@ export function WorkHandoffCard({
           </span>
         </div>
         {canAccept || canReject ? (
-          <div className="flex flex-col">
-            <div className="flex flex-wrap items-center gap-2">
-              {canAccept ? (
-                <Button
-                  size="compact"
-                  variant={optionsOpen ? 'secondary' : 'ghost'}
-                  disabled={accepting}
-                  aria-expanded={optionsOpen}
-                  aria-controls={`${controlsId}-options`}
-                  onClick={() => setOptionsOpen((value) => !value)}
-                  className="min-w-0 max-w-full truncate text-text"
-                >
-                  Options
-                  {/* Who runs it sits with the model it names, and follows the draft as Options changes. */}
-                  <span className="ml-2 inline-flex min-w-0 items-center gap-1.5 align-middle font-normal text-muted">
-                    {singleMode
-                      ? <ProviderMark driver={singleDriver} size={14} />
-                      : <AgentStack agentIds={[row.leadAgentId, ...row.supportingAgentIds]} agents={identityAgents} footprint={18} size={14} />}
-                    {choices.length === 0 ? null : (
-                      <span className="flex min-w-0 items-center gap-2">
-                        {choices.map((choice) => <span key={choice} className="min-w-0 truncate">{choice}</span>)}
-                      </span>
-                    )}
-                  </span>
-                </Button>
-              ) : null}
-              <span className="ml-auto flex items-center gap-2">
-                {canAccept && row.worktreeAvailable ? (
-                  <label className="flex items-center gap-2 pr-1 text-[13px] text-muted">
-                    <Checkbox checked={isolate} disabled={accepting} onChange={(next) => updateWorkProposal(row.handoffId, { isolate: next })} />Worktree
-                  </label>
-                ) : null}
-                {canReject ? (
-                  <Button size="compact" variant="ghost" disabled={accepting} onClick={() => { onReject?.(row.handoffId) }}>
-                    Reject
-                  </Button>
-                ) : null}
-                {canAccept ? (
-                  <Button size="compact" variant="primary" disabled={accepting} onClick={accept}>
-                    {accepting ? 'Accepting…' : 'Accept'}
-                  </Button>
-                ) : null}
-              </span>
-            </div>
-            {canAccept ? (
-              <OptionsPanel id={`${controlsId}-options`} open={optionsOpen}>
+          // One row: who runs it and the prompt on the left, the verbs on the right. A pane
+          // too narrow for both drops the verbs to a second line, still on the right.
+          <div className="flex flex-wrap items-center gap-2">
+            {modeChoice ? (
+              <>
                 <NewChatModeControl
                   mode={mode}
                   disabled={accepting}
@@ -318,26 +275,44 @@ export function WorkHandoffCard({
                   onChange={(next) => updateWorkProposal(row.handoffId, { mode: next })}
                 />
                 {multipleBlock === undefined ? null : <span className="min-w-0 text-[12px] text-dim">{multipleBlock}</span>}
-                {mode === 'single' ? (
-                  <SingleRuntimeControl
-                    override={runtime}
-                    fallback={runtime}
-                    allowAuto={false}
-                    disabled={accepting}
-                    onChange={(next) => {
-                      const parsed = SingleRuntimeSchema.safeParse(next)
-                      if (parsed.success) updateWorkProposal(row.handoffId, { runtime: parsed.data })
-                    }}
-                  />
-                ) : null}
-                {reason === undefined ? null : <span className="min-w-[5rem] flex-1 truncate text-[12px] text-dim" title={reason}>{reason}</span>}
-                {proposedTask === undefined ? null : (
-                  <Button size="compact" variant="ghost" disabled={accepting} onClick={() => setPromptOpen(true)} className="ml-auto">
-                    {editedTask === undefined ? 'View prompt' : 'Edited prompt'}
-                  </Button>
-                )}
-              </OptionsPanel>
+              </>
             ) : null}
+            {canAccept && singleMode ? (
+              <SingleRuntimeControl
+                override={runtime}
+                fallback={runtime}
+                allowAuto={false}
+                disabled={accepting}
+                onChange={(next) => {
+                  const parsed = SingleRuntimeSchema.safeParse(next)
+                  if (parsed.success) updateWorkProposal(row.handoffId, { runtime: parsed.data })
+                }}
+              />
+            ) : canAccept ? (
+              <AgentStack agentIds={[row.leadAgentId, ...row.supportingAgentIds]} agents={identityAgents} footprint={18} size={14} />
+            ) : null}
+            {proposedTask === undefined ? null : (
+              <Button size="compact" variant="ghost" disabled={accepting} onClick={() => setPromptOpen(true)} className="text-muted">
+                {editedTask === undefined ? 'View prompt' : 'Edited prompt'}
+              </Button>
+            )}
+            <span className="ml-auto flex items-center gap-2">
+              {canAccept && row.worktreeAvailable ? (
+                <label className="flex items-center gap-2 pr-1 text-[13px] text-muted">
+                  <Checkbox checked={isolate} disabled={accepting} onChange={(next) => updateWorkProposal(row.handoffId, { isolate: next })} />Worktree
+                </label>
+              ) : null}
+              {canReject ? (
+                <Button size="compact" variant="ghost" disabled={accepting} onClick={() => { onReject?.(row.handoffId) }}>
+                  Reject
+                </Button>
+              ) : null}
+              {canAccept ? (
+                <Button size="compact" variant="primary" disabled={accepting} onClick={accept}>
+                  {accepting ? 'Accepting…' : 'Accept'}
+                </Button>
+              ) : null}
+            </span>
           </div>
         ) : null}
         {error === null ? null : <p role="alert" className="m-0 text-[13px] text-danger">{error}</p>}
@@ -402,36 +377,6 @@ function ExpandableSummary({ text, title }: { text: string; title?: string | und
         </button>
       )}
     </>
-  )
-}
-
-/**
- * Mode, model, worktree and the prompt, folded under Options. Clipped only while it
- * moves, so the model menu that hangs above its trigger is never cut off.
- */
-function OptionsPanel({ id, open, children }: { id: string; open: boolean; children: ReactNode }) {
-  const reduce = useReducedMotion() ?? false
-  const [moving, setMoving] = useState(false)
-  return (
-    <AnimatePresence initial={false}>
-      {open ? (
-        <motion.div
-          key="options"
-          id={id}
-          role="group"
-          aria-label="Session options"
-          initial={reduce ? { opacity: 0 } : { height: 0, opacity: 0 }}
-          animate={reduce ? { opacity: 1 } : { height: 'auto', opacity: 1 }}
-          exit={reduce ? { opacity: 0 } : { height: 0, opacity: 0 }}
-          transition={DISCLOSURE}
-          onAnimationStart={() => setMoving(true)}
-          onAnimationComplete={() => setMoving(false)}
-          style={{ overflow: moving ? 'hidden' : 'visible' }}
-        >
-          <div className="flex flex-wrap items-center gap-2 pt-2">{children}</div>
-        </motion.div>
-      ) : null}
-    </AnimatePresence>
   )
 }
 

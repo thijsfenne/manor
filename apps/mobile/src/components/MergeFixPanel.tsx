@@ -1,8 +1,9 @@
 import { useRef, useState } from 'react'
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native'
+import { ScrollView, StyleSheet, View } from 'react-native'
 import { mergeFixLines, workMergeFix, type WorkResult } from '@manor/client-runtime/state'
 import { useWorkspaceActions, useWorkspaceStatus } from '@/providers/WorkspaceProvider'
 import { colors, fonts, radius, spacing, squircle } from '@/theme'
+import { CardButton } from './CardButton'
 import { Text } from './Text'
 
 const LINE_COLOR = { add: colors.ok, remove: colors.danger, meta: colors.dim, context: colors.muted } as const
@@ -53,19 +54,15 @@ export function MergeFixPanel({ result, onOpenSession }: { result: WorkResult; o
       </ScrollView>
       <View style={styles.actions}>
         {onOpenSession === undefined ? null : (
-          <Pressable accessibilityRole="button" onPress={onOpenSession} style={({ pressed }) => [styles.action, styles.ghost, styles.leading, pressed && styles.pressed]}>
-            <Text style={styles.actionLabel}>Open Session</Text>
-          </Pressable>
+          <CardButton label="Open Session" onPress={onOpenSession} style={styles.leading} variant="quiet" />
         )}
-        <Pressable
-          accessibilityRole="button"
-          accessibilityState={{ disabled: busy || !connected }}
+        <CardButton
+          busy={busy}
           disabled={busy || !connected}
+          label={busy ? 'Approving…' : 'Approve fix and merge'}
           onPress={() => void approve()}
-          style={({ pressed }) => [styles.action, styles.primary, (busy || !connected) && styles.disabled, pressed && styles.pressed]}
-        >
-          <Text style={[styles.actionLabel, { color: colors.onPrimary }]}>{busy ? 'Approving…' : 'Approve fix and merge'}</Text>
-        </Pressable>
+          variant="primary"
+        />
       </View>
       {error === null ? null : <Text accessibilityRole="alert" style={styles.error}>{error}</Text>}
     </View>
@@ -79,11 +76,5 @@ const styles = StyleSheet.create({
   line: { fontFamily: fonts.mono, fontSize: 12, lineHeight: 18 },
   actions: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: spacing.sm, justifyContent: 'flex-end' },
   leading: { marginRight: 'auto' },
-  action: { minHeight: 34, justifyContent: 'center', borderRadius: radius.sm, ...squircle, backgroundColor: colors.fill, paddingHorizontal: spacing.md },
-  ghost: { backgroundColor: 'transparent', paddingHorizontal: spacing.sm },
-  primary: { backgroundColor: colors.text },
-  actionLabel: { color: colors.muted, fontFamily: fonts.sans, fontSize: 13, fontWeight: '500' },
-  pressed: { opacity: 0.7 },
-  disabled: { opacity: 0.6 },
   error: { color: colors.danger, fontFamily: fonts.sans, fontSize: 13 },
 })

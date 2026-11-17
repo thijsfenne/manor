@@ -12,6 +12,7 @@ import { WORK_RESULT_CONNECTION_LOST, evidenceThumbnailRatio, workBlockedReason,
 import { useWorkspaceActions, useWorkspaceStatus } from '@/providers/WorkspaceProvider'
 import { colors, fonts, radius, spacing, squircle } from '@/theme'
 import { AttachmentThumbnail, ImageViewer } from './Attachments'
+import { CardButton } from './CardButton'
 import { MergeFixPanel } from './MergeFixPanel'
 import { Text } from './Text'
 
@@ -293,21 +294,17 @@ export function WorkResultBody({ result, onShowCard, blocked = false, sessionSet
             {refused === undefined ? null : <Text numberOfLines={2} style={styles.refused}>{refused}</Text>}
           </View>
           {onOpenSession === undefined ? null : (
-            <Pressable accessibilityRole="button" onPress={onOpenSession} style={({ pressed }) => [styles.action, styles.ghost, pressed && styles.pressed]}>
-              <Text style={styles.actionLabel}>Open Session</Text>
-            </Pressable>
+            <CardButton label="Open Session" onPress={onOpenSession} variant="quiet" />
           )}
           {canRetry ? (
-            <Pressable
-              accessibilityRole="button"
+            <CardButton
               accessibilityHint="Runs the commit again under your Confirm"
-              accessibilityState={{ disabled: busy || !connected }}
+              busy={busy}
               disabled={busy || !connected}
+              label={busy ? 'Retrying…' : 'Retry'}
               onPress={() => void run(() => retryWorkResult(result.handoffId))}
-              style={({ pressed }) => [styles.action, styles.primary, (busy || !connected) && styles.disabled, pressed && styles.pressed]}
-            >
-              <Text style={[styles.actionLabel, { color: colors.onPrimary }]}>{busy ? 'Retrying…' : 'Retry'}</Text>
-            </Pressable>
+              variant="primary"
+            />
           ) : null}
         </View>
       )}
@@ -322,22 +319,22 @@ export function WorkResultBody({ result, onShowCard, blocked = false, sessionSet
             {open && !writing ? (
               <>
                 {openReport === undefined ? null : (
-                  <Pressable accessibilityRole="button" onPress={openReport} style={({ pressed }) => [styles.action, styles.ghost, styles.leading, pressed && styles.pressed]}>
-                    <Text style={styles.actionLabel}>Open report</Text>
-                  </Pressable>
+                  <CardButton label="Open report" onPress={openReport} style={styles.leading} variant="quiet" />
                 )}
-                <Pressable accessibilityRole="button" disabled={busy || !connected} onPress={() => { setError(null); setWriting(true) }} style={({ pressed }) => [styles.action, styles.ghost, pressed && styles.pressed]}>
-                  <Text style={styles.actionLabel}>{labels.secondary}</Text>
-                </Pressable>
-                <Pressable
-                  accessibilityRole="button"
-                  {...(confirmHint === undefined ? {} : { accessibilityHint: confirmHint })}
+                <CardButton
                   disabled={busy || !connected}
+                  label={labels.secondary}
+                  onPress={() => { setError(null); setWriting(true) }}
+                  variant="secondary"
+                />
+                <CardButton
+                  {...(confirmHint === undefined ? {} : { accessibilityHint: confirmHint })}
+                  busy={busy}
+                  disabled={busy || !connected}
+                  label={busy ? labels.pending : labels.primary}
                   onPress={() => void run(() => acceptWorkResult(result.handoffId, result.mergeInto, result.version))}
-                  style={({ pressed }) => [styles.action, styles.primary, (busy || !connected) && styles.disabled, pressed && styles.pressed]}
-                >
-                  <Text style={[styles.actionLabel, { color: colors.onPrimary }]}>{busy ? labels.pending : labels.primary}</Text>
-                </Pressable>
+                  variant="primary"
+                />
               </>
             ) : null}
           </View>
@@ -363,18 +360,14 @@ export function WorkResultBody({ result, onShowCard, blocked = false, sessionSet
             value={feedback}
           />
           <View style={[styles.actions, styles.end]}>
-            <Pressable accessibilityRole="button" disabled={busy} onPress={() => setWriting(false)} style={({ pressed }) => [styles.action, styles.ghost, pressed && styles.pressed]}>
-              <Text style={styles.actionLabel}>Cancel</Text>
-            </Pressable>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityState={{ disabled: busy || !connected || text === '' }}
+            <CardButton disabled={busy} label="Cancel" onPress={() => setWriting(false)} variant="quiet" />
+            <CardButton
+              busy={busy}
               disabled={busy || !connected || text === ''}
+              label={busy ? 'Sending…' : 'Send to Session'}
               onPress={() => void run(() => reviseWorkResult(result.handoffId, result.version, text), () => settleWorkChanges(handoffId, text))}
-              style={({ pressed }) => [styles.action, styles.primary, (busy || !connected || text === '') && styles.disabled, pressed && styles.pressed]}
-            >
-              <Text style={[styles.actionLabel, { color: colors.onPrimary }]}>{busy ? 'Sending…' : 'Send to Session'}</Text>
-            </Pressable>
+              variant="primary"
+            />
           </View>
         </View>
       ) : null}
@@ -420,9 +413,5 @@ const styles = StyleSheet.create({
   input: { minHeight: 88, borderRadius: radius.md, ...squircle, backgroundColor: colors.fill, padding: spacing.md, color: colors.text, fontFamily: fonts.sans, fontSize: 15, lineHeight: 21 },
   actions: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: spacing.sm },
   end: { justifyContent: 'flex-end' },
-  action: { minHeight: 34, justifyContent: 'center', borderRadius: radius.sm, ...squircle, backgroundColor: colors.fill, paddingHorizontal: spacing.md },
-  ghost: { backgroundColor: 'transparent', paddingHorizontal: spacing.sm },
-  primary: { backgroundColor: colors.text },
-  actionLabel: { color: colors.muted, fontFamily: fonts.sans, fontSize: 13, fontWeight: '500' },
   error: { color: colors.danger, fontFamily: fonts.sans, fontSize: 13 },
 })

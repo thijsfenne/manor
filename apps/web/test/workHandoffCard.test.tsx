@@ -93,15 +93,15 @@ describe('Work handoff card verbs', () => {
     expect(markup).toContain('mockup.html')
   })
 
-  it('keeps mode, model and the prompt behind one Options button, and shows Worktree ticked on the action row, so the card shows Options, Worktree, Reject and Accept', () => {
-    const proposal = renderToStaticMarkup(<Transcript rows={[{ ...card('Working'), task: 'Do it.' }]} agents={[sage]} skills={[]} hasSnapshot
+  it('puts the model, View prompt, Worktree, Reject and Accept on one row, with no Options fold and no mode on a thread card', () => {
+    const proposal = renderToStaticMarkup(<Transcript rows={[{ ...card('Working'), task: 'Do it.', threadAuthored: true }]} agents={[sage]} skills={[]} hasSnapshot
       onAcceptWork={() => undefined} onRejectWork={() => undefined} />)
 
-    expect(proposal).toMatch(/aria-expanded="false"[^>]*aria-controls="work-handoff-handoff_1-options"[^>]*>Options</)
-    expect(proposal.match(/<button/g)).toHaveLength(3)
+    expect(proposal).not.toContain('>Options<')
     expect(proposal).not.toContain('mode-single')
-    expect(proposal).toMatch(/<input[^>]*checked=""[^>]*>[\s\S]*Worktree[\s\S]*>Reject</)
-    expect(proposal).not.toContain('View prompt')
+    expect(proposal).not.toContain('Multiple')
+    // The model button opens the runtime picker itself, and View prompt sits right after it.
+    expect(proposal).toMatch(/aria-haspopup="menu"[^>]*aria-label="Change model and reasoning, [^"]+"[\s\S]*>View prompt<[\s\S]*<input[^>]*checked=""[^>]*>[\s\S]*Worktree[\s\S]*>Reject<[\s\S]*>Accept</)
     expect(proposal).not.toContain('awaits acceptance')
   })
 
@@ -265,7 +265,7 @@ describe('Work handoff card verbs', () => {
       ...card('Working'), workChatId: 'work_1', acceptedAt: 123, mode: 'single', singleDriver: 'codex', singleModel: 'gpt-6-luna', firstExecutorName: 'Smith',
     }]} agents={[sage]} skills={[]} hasSnapshot onAcceptWork={() => undefined} />)
 
-    expect(pending).toContain(`>${modelLabel(NEW_SINGLE_CHAT_DEFAULT.driver, NEW_SINGLE_CHAT_DEFAULT.model)}, High<`)
+    expect(pending).toContain(`aria-label="Change model and reasoning, ${modelLabel(NEW_SINGLE_CHAT_DEFAULT.driver, NEW_SINGLE_CHAT_DEFAULT.model)} High"`)
     expect(pending).not.toContain('led by')
     expect(pending).not.toContain('Smith starts')
     expect(pending).not.toContain('data-agent-layout="cluster"')
@@ -293,7 +293,7 @@ describe('Work handoff card verbs', () => {
         onRejectWork={() => undefined}
       />,
     )
-    expect(working).toContain('>Options<')
+    expect(working).toContain('aria-haspopup="menu"')
     expect(working).toContain(' checked=')
     expect(working).not.toContain('Working')
     expect(working).toContain('bg-primary')
@@ -390,7 +390,7 @@ describe('a Session card in its project thread', () => {
     const proposal = render({ ...card('Working'), task: 'Keep the tabs a DM opened.' })
     expect(proposal).toContain('>Accept<')
     expect(proposal).toContain('>Keep the tabs a DM opened.<')
-    expect(proposal).toContain('>Opus 5.5, High<')
+    expect(proposal).toContain('aria-label="Change model and reasoning, Opus 5.5 High"')
     expect(proposal).not.toContain('led by')
     expect(proposal).not.toContain('>Manor<')
     const accepted = { ...card('Working'), workChatId: 'work_1', acceptedAt: 2, worktreeBranch: 'manor/tabs' }
@@ -519,51 +519,51 @@ describe('the two result cards (2026-10-14)', () => {
   })
 })
 
-describe('a thread proposal nobody leads', () => {
+describe('the mode on a proposal', () => {
   const textOf = (node: ReactTestInstance): string =>
     node.children.map((child) => typeof child === 'string' ? child : textOf(child)).join('')
-  /** Opens Options on the card and returns its Multiple segment and the visible text. */
-  const openOptions = (row: WorkHandoffRow, household: AgentConfig[]) => {
+  /** Renders the card and returns its Multiple segment, if any, and the visible text. */
+  const mount = (row: WorkHandoffRow, household: AgentConfig[]) => {
     let tree!: ReactTestRenderer
     act(() => {
       tree = create(<WorkHandoffCard row={row} agents={[]} identityAgents={household} onReveal={() => undefined}
         onAccept={() => undefined} onReject={() => undefined} inThread />)
     })
-    const options = tree.root.findAll((node) => node.type === 'button' && textOf(node).startsWith('Options'))[0]!
-    act(() => { options.props.onClick() })
-    const multiple = tree.root.find((node) => node.type === 'button' && textOf(node) === 'Multiple')
-    return { multiple, text: textOf(tree.root) }
+    const segment = (label: string) => tree.root.findAll((node) => node.type === 'button' && textOf(node) === label)[0]
+    return { multiple: segment('Multiple'), single: segment('Single'), text: textOf(tree.root) }
   }
-  const leadless: WorkHandoffRow = { ...card('Working'), handoffId: 'handoff_leadless', leadAgentId: '', leadAgentName: '', firstExecutorName: '', threadAuthored: true }
+  const leadless: WorkHandoffRow = { ...card('Working'), handoffId: 'handoff_leadless', leadAgentId: '', leadAgentName: '', firstExecutorName: '' }
 
-  it('disables Multiple and says to add a session agent when the install has none', () => {
-    const { multiple, text } = openOptions(leadless, [{ ...sage, placement: 'chat' }])
-    expect(multiple.props.disabled).toBe(true)
+  it('offers no mode on a thread card, even one a Session persona leads', () => {
+    for (const row of [{ ...leadless, threadAuthored: true as const }, { ...card('Working'), handoffId: 'handoff_led', threadAuthored: true as const }]) {
+      const { multiple, single, text } = mount(row, [{ ...sage, placement: 'session' }])
+      expect(multiple).toBeUndefined()
+      expect(single).toBeUndefined()
+      expect(text).not.toContain('session agent')
+    }
+  })
+
+  it('disables Multiple on a persona card and says to add a session agent when the install has none', () => {
+    const { multiple, text } = mount(leadless, [{ ...sage, placement: 'chat' }])
+    expect(multiple?.props.disabled).toBe(true)
     expect(text).toContain('Add a session agent to run Multiple')
   })
 
   it('disables Multiple with its reason when Session personas exist but none leads the card', () => {
-    const { multiple, text } = openOptions({ ...leadless, handoffId: 'handoff_unled' }, [{ ...sage, id: 'pilot', name: 'Pilot', placement: 'session' }])
-    expect(multiple.props.disabled).toBe(true)
+    const { multiple, text } = mount({ ...leadless, handoffId: 'handoff_unled' }, [{ ...sage, id: 'pilot', name: 'Pilot', placement: 'session' }])
+    expect(multiple?.props.disabled).toBe(true)
     expect(text).toContain('No Session persona leads this proposal, so it runs as Single')
   })
 
   it('starts a team card on Single when its lead is gone', () => {
     const team: WorkHandoffRow = { ...card('Working'), handoffId: 'handoff_gone', leadAgentId: 'deleted', leadAgentName: 'Gone', supportingAgentIds: ['pilot'], supportingAgentNames: ['Pilot'] }
-    let tree!: ReactTestRenderer
-    act(() => {
-      tree = create(<WorkHandoffCard row={team} agents={[]} identityAgents={[{ ...sage, id: 'pilot', name: 'Pilot', placement: 'session' }]}
-        onReveal={() => undefined} onAccept={() => undefined} onReject={() => undefined} />)
-    })
-    const options = tree.root.findAll((node) => node.type === 'button' && textOf(node).startsWith('Options'))[0]!
-    act(() => { options.props.onClick() })
-    const single = tree.root.find((node) => node.type === 'button' && textOf(node) === 'Single')
-    expect(single.props['aria-selected']).toBe(true)
+    const { single } = mount(team, [{ ...sage, id: 'pilot', name: 'Pilot', placement: 'session' }])
+    expect(single?.props['aria-selected']).toBe(true)
   })
 
-  it('keeps Multiple open on a card a Session persona leads', () => {
-    const { multiple, text } = openOptions({ ...card('Working'), handoffId: 'handoff_led', threadAuthored: true }, [{ ...sage, placement: 'session' }])
-    expect(multiple.props.disabled).toBe(false)
+  it('keeps Multiple open on a persona card a Session persona leads', () => {
+    const { multiple, text } = mount({ ...card('Working'), handoffId: 'handoff_persona' }, [{ ...sage, placement: 'session' }])
+    expect(multiple?.props.disabled).toBe(false)
     expect(text).not.toContain('session agent')
   })
 })

@@ -391,7 +391,8 @@ directory.workHandoffs.push(...proposals, replaced)
 const notesSession = (id, title, minutesAgo, extra = {}) => ({
   id, sourceChatId: 'chat-thread-notes', sourceTurnId: `turn-${id}`, workChatId: `chat-${id}`,
   projectId: 'project-notes', projectName: 'Notities', title, task: `${title}.`,
-  authorAgentId: 'agent-wren', leadAgentId: 'agent-wren', leadAgentName: 'Wren',
+  // A project thread writes its cards as the Single voice, which keeps them Single only.
+  authorAgentId: '__single__', leadAgentId: 'agent-wren', leadAgentName: 'Wren',
   supportingAgentIds: [], supportingAgentNames: [], state: 'active', result: null, resultAt: null,
   version: 1, createdAt: now - minutesAgo * 60_000, acceptedAt: now - minutesAgo * 60_000 + 10_000, ...extra,
 })
@@ -940,7 +941,8 @@ snapshots['chat-notes-pdf'] = (() => {
 // Session question, its answer, the wake labels, a report, a settled note) stay in the
 // transcript but never on screen. What shows is the user, the thread's replies and the cards:
 // an Accept card and two Confirmed rows that follow each other, then their next message.
-projects.push({ id: 'project-stilte', name: 'Stilte', icon: 'book', color: '#7A9CC6', repoPaths: [], threadChatId: 'chat-thread-stilte' })
+// A linked folder, so the Stilte proposal shows its Worktree checkbox beside Reject.
+projects.push({ id: 'project-stilte', name: 'Stilte', icon: 'book', color: '#7A9CC6', repoPaths: ['/tmp/manor-mobile-verify/Stilte'], threadChatId: 'chat-thread-stilte' })
 directory.chats.push(chat({ id: 'chat-secret-token', projectId: 'project-manor', title: 'Token nodig', preview: 'Deploy de site.', minutesAgo: 2 }))
 directory.chats.push({ ...chat({ id: 'chat-thread-stilte', projectId: 'project-stilte', title: 'Stilte', preview: 'Staat klaar.', minutesAgo: 1 }), mode: 'single' })
 const stilteSession = (id, title, minutesAgo, extra = {}) => notesSession(id, title, minutesAgo, {
@@ -954,7 +956,8 @@ const confirmed = (id, title, minutesAgo, result) => stilteSession(id, title, mi
 const stilteSessions = [
   confirmed('stilte-export', 'Exportknop toevoegen', 30, 'De exportknop werkt.'),
   confirmed('stilte-colour', 'Kleurkiezer bouwen', 25, 'De kleurkiezer werkt.'),
-  stilteSession('stilte-tidy', 'Instellingen opruimen', 8, { workChatId: null, acceptedAt: null }),
+  // One pasted picture goes along, which the card counts on its runtime line.
+  stilteSession('stilte-tidy', 'Instellingen opruimen', 8, { workChatId: null, acceptedAt: null, attachments: [{ name: 'pasted-image.jpg', kind: 'image', chatId: 'chat-thread-stilte', eventId: 'sx-u1', index: 0 }] }),
 ]
 directory.workHandoffs.push(...stilteSessions)
 for (const session of stilteSessions.slice(0, 2)) {
