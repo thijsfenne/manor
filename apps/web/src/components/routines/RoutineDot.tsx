@@ -11,7 +11,7 @@ export function RoutineDot({ running, waiting, failed }: { running: boolean; wai
       aria-label={label}
       title={shown ? label : undefined}
       role={shown ? 'img' : undefined}
-      className={`h-1.5 w-1.5 flex-none rounded-full border duration-200 ease-out motion-safe:transition-[background-color,border-color] ${
+      className={`h-1.5 w-1.5 flex-none rounded-full border duration-200 ease-fade motion-safe:transition-[background-color,border-color] ${
         running
           ? 'border-busy bg-busy'
           : failed !== null

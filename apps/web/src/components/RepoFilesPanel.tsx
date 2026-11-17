@@ -391,7 +391,7 @@ export function RepoFilesPanel({
       revealed={revealed}
       style={{ '--files-width': `${width}px`, '--files-tree-width': `${FILES_TREE_WIDTH}px` } as CSSProperties}
       data-open={overlay ? revealed : undefined}
-      className={`grid min-h-0 grid-rows-[auto_minmax(0,1fr)] ease-out ${DOCK_PANEL_SHELL} ${dockPanelLayoutClass(
+      className={`grid min-h-0 grid-rows-[auto_minmax(0,1fr)] ease-arrive ${DOCK_PANEL_SHELL} ${dockPanelLayoutClass(
         'w-[calc(var(--files-width)-8px)]',
         expanded,
         overlay,

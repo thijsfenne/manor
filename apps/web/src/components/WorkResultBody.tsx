@@ -37,11 +37,15 @@ export const WORK_STATUS_TONE: Record<WorkStatus['tone'], string> = {
   busy: 'text-busy', ready: 'text-text', ok: 'text-ok', warn: 'text-warn', waiting: 'text-warn', dim: 'text-dim',
 }
 
-/** The dot or check in front of a state word; a landed commit gets the check. */
+/**
+ * The dot or check in front of a state word; a landed commit gets the check. Still,
+ * also while busy: the word beside it already says Working, and a loop on every card
+ * would be one more thing moving for a fact nobody needs repeated.
+ */
 export function WorkStatusMark({ status }: { status: WorkStatus }) {
   if (status.tone === 'ok' && status.text !== 'Settled') return <Icon icon={CheckmarkCircle02Icon} size={13} />
   if (status.tone === 'dim') return null
-  return <span aria-hidden className={`size-1.5 rounded-full bg-current${status.tone === 'busy' ? ' animate-pulse' : ''}`} />
+  return <span aria-hidden className="size-1.5 rounded-full bg-current" />
 }
 
 /**

@@ -35,7 +35,7 @@ export function CompleteRing({ reminder, list, size = 18, disabled = false, onTo
     >
       <span
         aria-hidden="true"
-        className="grid place-items-center rounded-full border-[1.5px] duration-150 ease-out motion-safe:transition-[background-color,border-color]"
+        className="grid place-items-center rounded-full border-[1.5px] duration-150 ease-fade motion-safe:transition-[background-color,border-color]"
         style={{
           width: size,
           height: size,
@@ -48,7 +48,7 @@ export function CompleteRing({ reminder, list, size = 18, disabled = false, onTo
         ) : (
           // The fill a hover promises, in the list's colour, so the act reads before the click.
           <span
-            className="h-[calc(100%-6px)] w-[calc(100%-6px)] rounded-full opacity-0 duration-150 ease-out group-hover/ring:opacity-40 group-focus-visible/ring:opacity-40 motion-safe:transition-opacity"
+            className="h-[calc(100%-6px)] w-[calc(100%-6px)] rounded-full opacity-0 duration-150 ease-fade group-hover/ring:opacity-40 group-focus-visible/ring:opacity-40 motion-safe:transition-opacity"
             style={{ background: color }}
           />
         )}

@@ -1122,7 +1122,7 @@ button {
    nothing when Auto turns on, so the Auto strip moves into that space. */
 :root {
   --resize-dur: 300ms;
-  --resize-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --resize-ease: var(--ease-arrive);
 }
 
 .t-resize {

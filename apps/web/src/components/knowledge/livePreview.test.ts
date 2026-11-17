@@ -1,11 +1,15 @@
-import { syntaxTree } from '@codemirror/language'
+import { ensureSyntaxTree, syntaxTree } from '@codemirror/language'
 import { EditorState } from '@codemirror/state'
 import { EditorView } from '@codemirror/view'
 import { describe, expect, it } from 'vitest'
 import { livePreviewDecorationSet, livePreviewExtensions } from './livePreview'
 
+// A fresh state parses for 20ms, which a loaded suite can run out, leaving a tree that
+// stops partway. Finish the parse, then take one empty update so the state holds it.
 function note(doc: string) {
-  return EditorState.create({ doc, extensions: livePreviewExtensions() })
+  const state = EditorState.create({ doc, extensions: livePreviewExtensions() })
+  ensureSyntaxTree(state, state.doc.length, 5000)
+  return state.update({}).state
 }
 
 function widgetNames(state: EditorState, editingLines: number[] = []) {

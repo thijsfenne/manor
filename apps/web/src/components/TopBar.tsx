@@ -122,14 +122,14 @@ export function TopBar({ leadWidth, railWidth, animate, split, status, covered, 
   useEffect(() => setHadSplit(split !== null), [split !== null])
   const splitAnimates = split?.animate === true && hadSplit
   // The sidebar's slide and the split's own, each on the curve of the content it mirrors.
-  const leadMotion = animate ? 'motion-safe:[transition:width_200ms_var(--ease-out)]' : ''
+  const leadMotion = animate ? 'motion-safe:[transition:width_200ms_var(--ease-arrive)]' : ''
   const firstMotion = animate
     ? splitAnimates
-      ? 'motion-safe:[transition:padding-left_200ms_var(--ease-out),flex-basis_280ms_var(--ease-arrive)]'
-      : 'motion-safe:[transition:padding-left_200ms_var(--ease-out)]'
+      ? 'motion-safe:[transition:padding-left_200ms_var(--ease-arrive),flex-basis_280ms_var(--ease-arrive)]'
+      : 'motion-safe:[transition:padding-left_200ms_var(--ease-arrive)]'
     : splitAnimates ? 'motion-safe:[transition:flex-basis_280ms_var(--ease-arrive)]' : ''
   const secondMotion = splitAnimates ? 'motion-safe:[transition:flex-basis_280ms_var(--ease-arrive)]' : ''
-  const lineMotion = animate ? 'motion-safe:[transition:left_200ms_var(--ease-out)]' : ''
+  const lineMotion = animate ? 'motion-safe:[transition:left_200ms_var(--ease-arrive)]' : ''
   const coveredProps = covered ? { inert: '' } : {}
   const connection = status === 'live' ? null : (
     <span data-top-bar-status="" className="order-2 ml-auto flex-none pl-1 text-meta font-medium text-dim">

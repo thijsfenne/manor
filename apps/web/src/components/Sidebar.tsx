@@ -364,7 +364,7 @@ function SidebarNav({
       // On the desktop the panel is the inset's middle step, and its edge against the
       // stage is the frame's own colour.
       className={`absolute inset-y-0 left-0 z-10 flex border-r ${mobile ? 'border-line bg-surface' : 'sidebar-surface border-frame bg-sidebar'} ${
-        motion === 'instant' ? '' : `ease-out motion-safe:transition-[translate,visibility] ${motion === 'peek' ? 'duration-100' : 'duration-200'}`
+        motion === 'instant' ? '' : `ease-arrive motion-safe:transition-[translate,visibility] ${motion === 'peek' ? 'duration-100' : 'duration-200'}`
       } ${open ? 'visible translate-x-0' : rest ? '!hidden' : 'invisible -translate-x-full'}`}
       style={{ width }}
       aria-label={title === null ? 'Workspace navigation' : `${title} navigation`}

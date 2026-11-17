@@ -14,6 +14,7 @@ import type { DeliveredFile } from '@manor/contracts'
 import { describeBytes } from '@manor/client-runtime/attachments'
 import { requestPageSelection } from '../browserPageSelection'
 import { desktopFiles } from '../desktopBrowser'
+import { DISCLOSURE } from '../motion'
 import { BROWSER_EXPANDED_KEY, expandPanel } from '../useFilesPanel'
 import { useLinkChatId, useOpenWebsite, usePicksPageContext } from './ExternalLink'
 import { FileMark } from './fileMark'
@@ -331,7 +332,7 @@ function FittedFrame({ url, title, theme, pageWidth, framed }: {
       className="relative min-w-0 overflow-hidden"
       initial={false}
       animate={{ height: drawn }}
-      transition={reduceMotion ? { duration: 0 } : { duration: 0.32, ease: [0.32, 0.72, 0, 1] }}
+      transition={reduceMotion ? { duration: 0 } : DISCLOSURE}
     >
       {available === 0 ? null : (
         <div

@@ -122,7 +122,7 @@ function PaneHeader(props: WorkspaceHeaderProps) {
       // the panel open it is the sidebar's own header that meets the traffic lights, and
       // this header starts well to their right. Transitioned at the panel's own duration
       // so the breadcrumb slides with it instead of jumping when it leaves.
-      className={`flex min-h-[54px] min-w-0 gap-3 ${overlay ? '' : 'bg-gradient-to-b from-bg via-bg/90 to-transparent '}duration-200 ease-out motion-safe:transition-[padding-left] ${
+      className={`flex min-h-[54px] min-w-0 gap-3 ${overlay ? '' : 'bg-gradient-to-b from-bg via-bg/90 to-transparent '}duration-200 ease-arrive motion-safe:transition-[padding-left] ${
         phoneBack
           ? 'items-center px-[max(12px,env(safe-area-inset-left))] py-2 pr-[max(12px,env(safe-area-inset-right))] pt-[max(8px,env(safe-area-inset-top))]'
           : sidebarCollapsed

@@ -407,7 +407,7 @@ function BrowserPlace({
       {/* The session beside the page. It keeps its own session id, apart from the open chat.
           Hiding narrows the track while the column keeps its width, so it slides out
           rather than squeezing, and goes invisible (unfocusable) once it has left. */}
-      <div className={`relative grid min-h-0 min-w-0 overflow-hidden ${sessionPane.resizing ? '' : 'duration-200 ease-out motion-safe:transition-[width]'}`}
+      <div className={`relative grid min-h-0 min-w-0 overflow-hidden ${sessionPane.resizing ? '' : 'duration-200 ease-arrive motion-safe:transition-[width]'}`}
         style={{ width: hidden ? 0 : sessionPane.width }}
         aria-hidden={hidden}>
       <div className="relative grid h-full min-h-0"

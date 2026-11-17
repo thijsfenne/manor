@@ -9,12 +9,6 @@ export const EASE_OUT = [0.16, 1, 0.3, 1] as const
 export const INSTANT: Transition = { duration: 0 }
 
 /**
- * Browser tabs stepping aside for the one being dragged over them. Unhurried and on
- * the travel curve, so a neighbour visibly slides into the gap instead of jumping.
- */
-export const TAB_REORDER: Transition = { duration: 0.28, ease: [0.4, 0, 0.2, 1] }
-
-/**
  * A dropped board column easing the last stretch into its slot. A bounce, not a curve,
  * because Motion's drag settles with inertia: firm enough to arrive with its neighbours,
  * damped enough never to overshoot the slot.
@@ -28,11 +22,12 @@ export const COLUMN_SETTLE = { bounceStiffness: 500, bounceDamping: 45 } as cons
  */
 export const LATE_MARK: Transition = { duration: 0.36, ease: EASE_OUT }
 
-/** The active surface travelling between labels in a segmented control. */
-export const SEGMENTED_SLIDE: Transition = {
-  duration: 0.25,
-  ease: [0.22, 1, 0.36, 1],
-}
+/**
+ * The active surface travelling between labels in a segmented control, and the
+ * selection fill between sidebar and rail rows. Quick, because it answers a click
+ * made many times a day: the fill is home before the next one lands.
+ */
+export const SEGMENTED_SLIDE: Transition = { duration: 0.18, ease: EASE_OUT }
 
 /**
  * A few controls folding open under the button that holds them (a proposal's Options).
@@ -40,6 +35,8 @@ export const SEGMENTED_SLIDE: Transition = {
  * never show half-clipped.
  */
 export const DISCLOSURE: Transition = { duration: 0.22, ease: EASE_OUT, opacity: { duration: 0.16 } }
+/** The same controls folding shut: the 160ms the CSS `.fold` leaves in. */
+export const DISCLOSURE_OUT: Transition = { duration: 0.16, ease: 'easeIn', opacity: { duration: 0.12 } }
 
 /**
  * A Session's card in its project thread trading one shape for the next (proposal, one
@@ -96,6 +93,12 @@ export const POPOVER_TRAVEL = 12
  */
 export const EASE_TRAVEL = [0.4, 0, 0.2, 1] as const
 
+/**
+ * Browser tabs stepping aside for the one being dragged over them. Unhurried and on
+ * the travel curve, so a neighbour visibly slides into the gap instead of jumping.
+ */
+export const TAB_REORDER: Transition = { duration: 0.28, ease: EASE_TRAVEL }
+
 export const POPOVER_IN: Transition = { duration: 0.2, ease: EASE_TRAVEL, opacity: { duration: 0.09 } }
 export const POPOVER_OUT: Transition = { duration: 0.15, ease: 'easeIn', opacity: { duration: 0.12 } }
 
@@ -112,9 +115,9 @@ export const ICON_SWAP_REST = { opacity: 1, scale: 1, filter: 'blur(0px)' }
  * A status label whose words change while you are reading them. `transitions.dev`'s
  * text swap (04-text-states-swap) at its own tuning: the old line leaves upward under
  * blur and the new one arrives from below, 150ms each way. The blur is what keeps two
- * short words from reading as a jump cut.
+ * short words from reading as a jump cut. Four pixels is a travel, so it rides the travel curve.
  */
-export const TEXT_SWAP: Transition = { duration: 0.15, ease: 'easeInOut' }
+export const TEXT_SWAP: Transition = { duration: 0.15, ease: EASE_TRAVEL }
 export const TEXT_SWAP_BELOW = { opacity: 0, y: 4, filter: 'blur(2px)' }
 export const TEXT_SWAP_REST = { opacity: 1, y: 0, filter: 'blur(0px)' }
 export const TEXT_SWAP_ABOVE = { opacity: 0, y: -4, filter: 'blur(2px)' }

@@ -122,7 +122,7 @@ export function ReminderBoard({
   /** What a column is whether or not it moves: its drop zone for cards. */
   const columnShell = (column: ReminderColumn) => ({
     'aria-label': column.title,
-    className: `flex max-h-full w-[288px] flex-none flex-col rounded-2xl duration-150 ease-out motion-safe:transition-colors ${
+    className: `flex max-h-full w-[288px] flex-none flex-col rounded-2xl duration-150 ease-fade motion-safe:transition-colors ${
       dropsInto(column.sectionId) && over === column.key ? 'bg-user-bg' : 'bg-surface'
     }`,
     onDragOver: (event: DragEvent) => {

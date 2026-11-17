@@ -118,7 +118,7 @@ function UsageRing({ provider, left, heat }: { provider: ProviderUsage['provider
         <circle className="stroke-line" cx={centre} cy={centre} r={RING_RADIUS} fill="none" strokeWidth={RING_STROKE} />
         {fraction > 0 ? (
           <circle
-            className={`${heatStroke(heat)} transition-[stroke-dasharray] duration-700 ease-out motion-reduce:transition-none`}
+            className={`${heatStroke(heat)} transition-[stroke-dasharray] duration-[400ms] ease-arrive motion-reduce:transition-none`}
             cx={centre}
             cy={centre}
             r={RING_RADIUS}

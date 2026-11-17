@@ -36,6 +36,11 @@ interface DialogProps {
   inset?: 'default' | 'wide'
   /** Extra classes on the card. Width, padding and overflow belong to the caller. */
   className?: string
+  /**
+   * No arrival. For a palette opened from the keyboard many times a day, where the
+   * first typed letter must not land on a card still settling.
+   */
+  still?: boolean
   /** Extra key handling after Escape (and the trap, when it is on) have had their say. */
   onKeyDown?: (event: KeyboardEvent<HTMLDivElement>) => void
   children: ReactNode
@@ -55,6 +60,7 @@ export function Dialog({
   scrimClassName = '',
   inset = 'default',
   className = '',
+  still = false,
   onKeyDown,
   children,
 }: DialogProps) {
@@ -111,13 +117,13 @@ export function Dialog({
 
   return createPortal(
     <div
-      className={`modal-scrim-in fixed inset-0 z-20 bg-scrim ${INSET[inset]} ${scrimClassName}`}
+      className={`${still ? '' : 'modal-scrim-in '}fixed inset-0 z-20 bg-scrim ${INSET[inset]} ${scrimClassName}`}
       onMouseDown={handleBackdrop}
     >
       <div
         ref={cardRef}
         data-modal-scroll
-        className={`modal-card-in w-full rounded-xl border border-line bg-surface outline-none ${className}`}
+        className={`${still ? '' : 'modal-card-in '}w-full rounded-xl border border-line bg-surface outline-none ${className}`}
         role="dialog"
         aria-modal="true"
         aria-label={label}

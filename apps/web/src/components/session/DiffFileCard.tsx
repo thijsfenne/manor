@@ -125,7 +125,7 @@ export const DiffFileCard = memo(function DiffFileCard({
           onClick={() => onToggle(file.key)}
           className="grid h-7 w-7 flex-none cursor-pointer place-items-center rounded-button-sm border-0 bg-transparent text-muted hover:bg-icon-fill hover:text-text"
         >
-          <Icon icon={ArrowDown01Icon} size={13} className={`duration-200 ease-out motion-safe:transition-transform ${collapsed ? '-rotate-90' : ''}`} />
+          <Icon icon={ArrowDown01Icon} size={13} className={`duration-200 ease-arrive motion-safe:transition-transform ${collapsed ? '-rotate-90' : ''}`} />
         </button>
         {menu === null ? null : <ContextMenu x={menu.x} y={menu.y} items={items} onClose={() => setMenu(null)} />}
       </div>

@@ -765,7 +765,7 @@ function Workspace({
           reflowing it — and the chat always lands in the second track, never in
           this one when the sidebar is away. */}
       <div
-        className={`h-full bg-bg ${sidebarResizing || motion === 'instant' ? '' : 'duration-200 ease-out motion-safe:transition-[width]'}`}
+        className={`h-full bg-bg ${sidebarResizing || motion === 'instant' ? '' : 'duration-200 ease-arrive motion-safe:transition-[width]'}`}
         style={{ width: sidebarCollapsed || sidebarOverlay || focusMode ? 0 : sidebarWidth }}
       />
 

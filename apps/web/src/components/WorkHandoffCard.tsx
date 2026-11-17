@@ -20,6 +20,7 @@ import { Checkbox } from './ui/Checkbox'
 import { SIDE_SURFACE } from './ui/dockPanel'
 import { BUNDLE_TILE, BUNDLE_TILE_HOVER, InBundle } from './bundleTile'
 import { WorkPromptDialog } from './WorkPromptDialog'
+import { RowArrivalsContext } from './rowArrivals'
 import { WORK_STATUS_TONE, WorkCardStatusLabel, WorkResultBody, WorkStatusLabel, WorkStatusMark, type WorkResultActions } from './WorkResultBody'
 
 /** A press on one of these inside a card is that control's, not "open the Session". */
@@ -76,6 +77,10 @@ export function WorkHandoffCard({
   // False until the card has shown once, so only a later change of shape fades.
   const settledRef = useRef(false)
   useEffect(() => { settledRef.current = true }, [])
+  // A card that turns up while the thread is open fades in where it lands, the way it
+  // fades into each next shape. One that was already there on open is simply there.
+  const arrivals = useContext(RowArrivalsContext)
+  const [arrived] = useState(() => arrivals !== null && arrivals.current.ready && !arrivals.current.known.has(row.key))
   const pending = row.acceptedAt === null
   const canAccept = pending && row.status === 'Working' && onAccept !== undefined
   const canReject = pending && row.status === 'Working' && onReject !== undefined
@@ -145,8 +150,15 @@ export function WorkHandoffCard({
   if (shape !== null) {
     // A new shape fades in where the old one stood; the first one is simply there.
     return (
-      <motion.div key={shape.shape} initial={settledRef.current ? { opacity: 0 } : false} animate={{ opacity: 1 }} transition={CARD_RESHAPE}>
+      <motion.div key={shape.shape} initial={settledRef.current || arrived ? { opacity: 0 } : false} animate={{ opacity: 1 }} transition={CARD_RESHAPE}>
         {content ?? fullCard()}
+      </motion.div>
+    )
+  }
+  if (arrived) {
+    return (
+      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={CARD_RESHAPE}>
+        {fullCard()}
       </motion.div>
     )
   }

@@ -316,7 +316,7 @@ function FolderRow({
       aria-level={row.depth + 1}
       data-tree-path={row.node.path}
       tabIndex={tabStop ? 0 : -1}
-      className={`relative flex w-full min-w-0 cursor-pointer items-center gap-1.5 rounded-md border-0 pr-2 text-left font-medium duration-150 ease-out motion-safe:transition-colors ${
+      className={`relative flex w-full min-w-0 cursor-pointer items-center gap-1.5 rounded-md border-0 pr-2 text-left font-medium duration-150 ease-fade motion-safe:transition-colors ${
         target ? 'bg-user-bg text-text' : 'bg-transparent text-muted hover:bg-tree-hover hover:text-text'
       } ${drag?.source === row.node.path ? 'opacity-50' : ''} ${ROW}`}
       style={{ paddingLeft: 4 + row.depth * 16 }}

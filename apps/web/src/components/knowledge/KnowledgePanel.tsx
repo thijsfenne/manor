@@ -857,7 +857,7 @@ export function KnowledgePanel({
         revealed={revealed}
         style={{ '--knowledge-width': `${dock.width}px`, '--knowledge-tree-width': `${FILES_TREE_WIDTH}px` } as CSSProperties}
         data-open={dock.overlay ? dock.revealed : undefined}
-        className={`grid min-h-0 grid-rows-[auto_minmax(0,1fr)] ease-out ${DOCK_PANEL_SHELL} ${dockPanelLayoutClass(
+        className={`grid min-h-0 grid-rows-[auto_minmax(0,1fr)] ease-arrive ${DOCK_PANEL_SHELL} ${dockPanelLayoutClass(
           'w-[calc(var(--knowledge-width)-8px)]',
           dock.expanded,
           dock.overlay,

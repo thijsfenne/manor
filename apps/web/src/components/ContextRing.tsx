@@ -146,7 +146,7 @@ export function Ring({ fraction, warns, reported = true }: { fraction: number; w
           fill="none"
           strokeWidth={2.5}
           strokeLinecap="round"
-          className={`${warns ? 'stroke-warn-fill' : 'stroke-muted'} transition-[stroke-dasharray] duration-500 ease-out motion-reduce:transition-none`}
+          className={`${warns ? 'stroke-warn-fill' : 'stroke-muted'} transition-[stroke-dasharray] duration-[400ms] ease-arrive motion-reduce:transition-none`}
           strokeDasharray={`${CIRCUMFERENCE * fraction} ${CIRCUMFERENCE}`}
         />
       ) : null}

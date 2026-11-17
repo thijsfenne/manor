@@ -122,11 +122,11 @@ export function chatRailItems(
 export const offersSideChat = (items: readonly Pick<RailItem, 'id'>[]) => items.some((item) => item.id === 'side')
 
 /**
- * The pulse that says work is going on behind a door. The pulse is `animate-pulse`
- * under `motion-safe`, so reduced motion leaves a still dot.
+ * The dot that says work is going on behind a door. Still: the busy tone carries it,
+ * and an endless loop on the rail costs energy for as long as the work runs.
  */
 function BusyDot({ className = '' }: { className?: string }) {
-  return <span aria-hidden="true" className={`pointer-events-none size-[7px] rounded-full bg-busy ring-2 ring-bg motion-safe:animate-pulse ${className}`} />
+  return <span aria-hidden="true" className={`pointer-events-none size-[7px] rounded-full bg-busy ring-2 ring-bg ${className}`} />
 }
 
 /** A door and the gap after it. */

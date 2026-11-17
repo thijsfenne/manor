@@ -1,21 +1,11 @@
 import { useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
-import { motion, useReducedMotion } from 'motion/react'
 import { CheckmarkCircle02Icon, FolderOffIcon, HelpCircleIcon, Loading03Icon } from '@hugeicons/core-free-icons'
 import type { AgentConfig } from '@manor/contracts'
-import { EASE_OUT, INSTANT } from '../motion'
 import { projectIcon } from '../projectAppearance'
 import type { SwitcherItem, SwitcherStanding } from '../useChatSwitcher'
 import { Icon } from './Icon'
 import { AgentStack } from './inbox/AgentStack'
-import { SelectionMarker } from './ui/SelectionMarker'
-
-/**
- * The highlight's own marker group. A layoutId may be mounted once at a time, so
- * the strip never shares one with a sidebar row, the two would otherwise try to
- * wear one fill while the strip floats over a list that has its own selection.
- */
-const SWITCHER_MARKER = 'chat-switcher'
 
 /**
  * The badge on the tile's face, the sidebar's Waiting / Working / Done words as
@@ -61,7 +51,6 @@ export function ChatSwitcher({
   onCancel,
 }: ChatSwitcherProps) {
   const panelRef = useRef<HTMLDivElement>(null)
-  const reduceMotion = useReducedMotion() ?? false
   // Mounted only while the strip is up, so mounting is the registration.
 
   useEffect(() => {
@@ -75,13 +64,12 @@ export function ChatSwitcher({
 
   return createPortal(
     <div className="pointer-events-none fixed inset-0 z-30 grid place-items-center p-8">
-      <motion.div
+      {/* Keyboard-driven and pressed in bursts, so nothing here moves: the strip is up at
+          once and the highlight lands on the tile the key just reached, never behind it. */}
+      <div
         ref={panelRef}
         role="dialog"
         aria-label="Switch chat"
-        initial={reduceMotion ? false : { opacity: 0, scale: 0.96 }}
-        animate={{ opacity: 1, scale: 1 }}
-        transition={reduceMotion ? INSTANT : { duration: 0.12, ease: EASE_OUT }}
         className="pointer-events-auto flex max-w-full items-start gap-1 overflow-x-auto rounded-2xl border border-line surface-floating p-2 shadow-menu"
       >
         {items.map((item) => (
@@ -95,7 +83,7 @@ export function ChatSwitcher({
             className="relative flex h-[104px] w-[104px] flex-none cursor-pointer flex-col items-center justify-center gap-1.5 rounded-xl border-0 bg-transparent px-2 py-1.5 [font:inherit]"
           >
             {item.chatId === highlightId ? (
-              <SelectionMarker layoutId={SWITCHER_MARKER} className="rounded-xl" />
+              <span aria-hidden className="pointer-events-none absolute inset-0 rounded-xl bg-user-bg" />
             ) : null}
             <span className="relative grid h-11 w-11 flex-none place-items-center">
               {item.project === null ? (
@@ -129,7 +117,7 @@ export function ChatSwitcher({
             )}
           </button>
         ))}
-      </motion.div>
+      </div>
     </div>,
     document.body,
   )

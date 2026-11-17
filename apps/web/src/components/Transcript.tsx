@@ -62,7 +62,10 @@ import { BOUNDS_ATTRIBUTE, MessageActions, MessageFooter } from './MessageFooter
 import { TodoList } from './TodoList'
 import { PinnedPlan, PlanDockProvider, usePlanDock } from './PinnedPlan'
 import { useTopBarSlot } from './TopBar'
-import { TurnActivity } from './TurnActivity'
+import { TurnActivity, type FoldToggle } from './TurnActivity'
+import { RowArrivalsContext, type RowArrivals } from './rowArrivals'
+import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
+import { INSTANT, POPOVER_CLOSING_SCALE, POPOVER_IN, POPOVER_OUT, POPOVER_PRE_SCALE } from '../motion'
 import { AgentStack } from './inbox/AgentStack'
 import { Avatar } from './Avatar'
 import { Popover } from './ui/Popover'
@@ -360,6 +363,11 @@ export function Transcript({
     heldRef.current = held
   }, [held])
   const [firstKey, setFirstKey] = useState<string>()
+  const arrivals = useRef<RowArrivals>({ ready: false, known: new Set() })
+  useEffect(() => {
+    if (!hasSnapshot) return
+    arrivals.current = { ready: true, known: new Set(rows.map((row) => row.key)) }
+  }, [rows, hasSnapshot])
   const [quoteAction, setQuoteAction] = useState<{ quote: MessageQuote; left: number; top: number } | null>(null)
   const prependAnchor = useRef<{ element: Element; top: number } | null>(null)
   // The memoised rows get handlers that keep one identity while the props behind them change.
@@ -816,6 +824,7 @@ export function Transcript({
 
   return (
     <TranscriptHeld.Provider value={held}>
+    <RowArrivalsContext.Provider value={arrivals}>
     <SubagentLaunchesContext.Provider value={subagentLaunches}>
     <AnswerChange.Provider value={answerChange ?? null}>
     <PlanDockProvider value={planDock}>
@@ -914,27 +923,47 @@ export function Transcript({
               })}
         />
       )}
-      {atBottom ? null : (
-        <button
+      <JumpToLatest shown={!atBottom} panel={variant === 'panel'} onJump={jumpToLatest} />
+    </div>
+    </PlanDockProvider>
+    </AnswerChange.Provider>
+    </SubagentLaunchesContext.Provider>
+    </RowArrivalsContext.Provider>
+    </TranscriptHeld.Provider>
+  )
+}
+
+/**
+ * The pill that appears once the reader has scrolled up. It rises out of the edge it
+ * sits on and sinks back into it, because it turns up on its own while the eye is on
+ * the thread, and a pill that blinks in reads as something that went wrong.
+ */
+function JumpToLatest({ shown, panel, onJump }: { shown: boolean; panel: boolean; onJump: () => void }) {
+  const reduce = useReducedMotion() ?? false
+  return (
+    <AnimatePresence initial={false}>
+      {shown ? (
+        <motion.button
+          key="jump"
           type="button"
           data-jump-latest=""
           // The stage footer floats over the thread. Clear its measured height and keep
           // the original gap above it; a panel has no footer and keeps its ordinary inset.
           // A Session's pinned tasks card can stand in its way: `--plan-dock` is where that card's
           // top edge is (0 when it is not in the way), and follows it as it folds or grows.
-          className={`absolute left-1/2 z-[4] -translate-x-1/2 cursor-pointer rounded-full border border-line bg-raised h-7 px-3 text-[12px] text-text shadow-pill ${
-            variant === 'panel' ? 'bottom-8' : 'bottom-[max(calc(var(--composer-dock,0px)+var(--work-dock,0px)+2rem),calc(var(--plan-dock,0px)+1rem))]'
+          className={`absolute left-1/2 z-[4] -translate-x-1/2 origin-bottom cursor-pointer rounded-full border border-line bg-raised h-7 px-3 text-[12px] text-text shadow-pill ${
+            panel ? 'bottom-8' : 'bottom-[max(calc(var(--composer-dock,0px)+var(--work-dock,0px)+2rem),calc(var(--plan-dock,0px)+1rem))]'
           }`}
-          onClick={jumpToLatest}
+          initial={reduce ? { opacity: 0 } : { opacity: 0, y: 8, scale: POPOVER_PRE_SCALE }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          exit={reduce ? { opacity: 0, transition: INSTANT } : { opacity: 0, y: 4, scale: POPOVER_CLOSING_SCALE, transition: POPOVER_OUT }}
+          transition={reduce ? INSTANT : POPOVER_IN}
+          onClick={onJump}
         >
           Jump to latest
-        </button>
-      )}
-    </div>
-    </PlanDockProvider>
-    </AnswerChange.Provider>
-    </SubagentLaunchesContext.Provider>
-    </TranscriptHeld.Provider>
+        </motion.button>
+      ) : null}
+    </AnimatePresence>
   )
 }
 
@@ -1240,6 +1269,8 @@ const TurnRow = memo(function TurnRow({
   // A DM never shows it live: the bubble is the conversation, the trace is evidence
   // asked for afterwards. Both fold shut again when the turn settles.
   const [open, setOpen] = useState(bubbleReplies ? false : running)
+  const [foldToggle, setFoldToggle] = useState<FoldToggle | undefined>(undefined)
+  const activityRoot = useRef<HTMLDivElement>(null)
   const held = useContext(TranscriptHeld)
   const wasRunning = useRef(running)
   useEffect(() => {
@@ -1272,7 +1303,11 @@ const TurnRow = memo(function TurnRow({
     <TurnStatus
       turn={traced}
       open={open}
-      onToggle={() => setOpen((value) => !value)}
+      onToggle={() => {
+        const from = activityRoot.current?.offsetHeight ?? 0
+        setFoldToggle((last) => ({ id: (last?.id ?? 0) + 1, from, opens: !open }))
+        setOpen(!open)
+      }}
       standalone={!showSpeaker || bubbleReplies || threadProject !== undefined}
       dm={bubbleReplies}
       thread={threadProject !== undefined}
@@ -1330,6 +1365,8 @@ const TurnRow = memo(function TurnRow({
           persona={persona}
           agents={agents}
           open={open}
+          {...(foldToggle === undefined ? {} : { foldToggle })}
+          rootRef={activityRoot}
           connected={connected}
           {...(draftActions === undefined ? {} : { draftActions })}
           {...(onOpenSubagents === undefined ? {} : { onOpenSubagents })}

@@ -245,6 +245,7 @@ export function SearchDialog({
   return (
     <Dialog
       label="Search"
+      still
       onClose={onClose}
       onKeyDown={handleKeyDown}
       scrimClassName="flex justify-center pt-[14vh]"

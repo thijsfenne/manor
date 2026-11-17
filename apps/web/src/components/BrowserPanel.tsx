@@ -582,7 +582,7 @@ export function BrowserPanel({
       ref={panelRef}
       style={stage ? undefined : { '--browser-width': `${width}px` } as CSSProperties}
       data-open={overlay ? revealed : undefined}
-      className={`grid min-h-0 grid-rows-[auto_minmax(0,1fr)] ease-out ${stage
+      className={`grid min-h-0 grid-rows-[auto_minmax(0,1fr)] ease-arrive ${stage
         ? `${STAGE_PANEL_SHELL} min-w-0`
         : `${DOCK_PANEL_SHELL} ${browserPanelLayoutClass(expanded, overlay)}`}`}
     >

@@ -81,7 +81,7 @@ export function CheckboxBox({
       // A tickbox keeps the ring rather than lifting a border, which is the rule
       // for anything nothing is typed into. It is drawn in styles.css, because the
       // ring belongs to the transparent input next door and has to be moved here.
-      className={`checkbox-box pointer-events-none flex flex-none items-center justify-center rounded-sm border duration-150 ease-out peer-disabled:opacity-45 motion-safe:transition-colors ${boxClass[size]} ${
+      className={`checkbox-box pointer-events-none flex flex-none items-center justify-center rounded-sm border duration-150 ease-fade peer-disabled:opacity-45 motion-safe:transition-colors ${boxClass[size]} ${
         checked ? 'border-primary bg-primary' : 'border-line bg-surface-2'
       } ${className}`}
     >

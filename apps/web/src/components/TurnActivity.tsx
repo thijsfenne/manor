@@ -10,10 +10,10 @@ import {
   Wrench01Icon,
 } from '@hugeicons/core-free-icons'
 import { ROUTINE_LATE_AFTER_MS, type AgentConfig, type FileEdit } from '@manor/contracts'
-import { useLayoutEffect, useRef, useState, type ReactNode } from 'react'
-import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
+import { useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from 'react'
+import { AnimatePresence, animate, motion, useReducedMotion } from 'motion/react'
 import { accentStyle } from '../accent'
-import { INSTANT, TEXT_SWAP, TEXT_SWAP_ABOVE, TEXT_SWAP_BELOW, TEXT_SWAP_REST } from '../motion'
+import { DISCLOSURE, DISCLOSURE_OUT, INSTANT, TEXT_SWAP, TEXT_SWAP_ABOVE, TEXT_SWAP_BELOW, TEXT_SWAP_REST } from '../motion'
 import {
   type Persona,
   type ReasoningStep,
@@ -52,6 +52,13 @@ interface TurnActivityProps {
   persona: Persona
   /** Outer turn fold. Bundles keep their own independent disclosure state inside. */
   open: boolean
+  /**
+   * The user's last click on the fold, with the list's height just before it. Only a
+   * click animates: a turn folding itself when it starts or settles changes at once.
+   */
+  foldToggle?: FoldToggle
+  /** The list's own element, which the owner measures when the user clicks the fold. */
+  rootRef?: RefObject<HTMLDivElement>
   /** Passed straight through to the replies folded in here, which mention like any other. */
   agents: readonly AgentConfig[]
   connected?: boolean
@@ -69,6 +76,30 @@ interface TurnActivityProps {
   renderUser?: (row: Extract<Row, { kind: 'event' }>) => ReactNode
 }
 
+export interface FoldToggle {
+  id: number
+  /** The list's height in px before the click; 0 when nothing was drawn. */
+  from: number
+  /** Whether the click opened the fold. */
+  opens: boolean
+}
+
+/**
+ * The gap the turn's column puts beside this list, and on which side. A list that
+ * mounts or unmounts brings that gap with it, so the fold folds it too.
+ */
+function columnGap(node: HTMLElement): { side: 'marginTop' | 'marginBottom'; px: number } | undefined {
+  let item = node
+  while (item.parentElement !== null && getComputedStyle(item.parentElement).display === 'contents') item = item.parentElement
+  const column = item.parentElement
+  if (column === null) return undefined
+  const px = Number.parseFloat(getComputedStyle(column).rowGap) || 0
+  if (px === 0) return undefined
+  if (item.previousElementSibling !== null) return { side: 'marginTop', px }
+  if (item.nextElementSibling !== null) return { side: 'marginBottom', px }
+  return undefined
+}
+
 /**
  * The icon says what kind of step it was, not whether it worked. A column of
  * identical checkmarks is unreadable at twenty steps, and success is already the
@@ -83,10 +114,14 @@ function toolIcon(tool: string) {
 }
 
 export function TurnActivity({
-  turn, persona, agents, open, connected = true, draftActions, onOpenSubagents, waitingOnAgent = false, bubble = false, renderUser,
+  turn, persona, agents, open: foldOpen, foldToggle, rootRef, connected = true, draftActions, onOpenSubagents, waitingOnAgent = false,
+  bubble = false, renderUser,
 }: TurnActivityProps) {
   const running = turn.live?.state === 'running'
   const reduce = useReducedMotion() ?? false
+  const ownRoot = useRef<HTMLDivElement>(null)
+  const root = rootRef ?? ownRoot
+  const [playedFold, setPlayedFold] = useState(foldToggle?.id)
   const shown = shownSegments(turn.segments)
   const visible = shown.filter((segment) => {
     if (segment.kind === 'ask') return segment.ask.answers !== undefined || !running
@@ -101,12 +136,18 @@ export function TurnActivity({
   // The user's steering messages are their own words, not work: they stay in order even
   // in a closed fold, and so does a reply still streaming in beside them.
   const directory = useSubagentDirectory()
-  const displayed = open
-    ? blocks
-    : blocks.filter((segment) => segment.kind === 'ask' || segment.kind === 'todo' || segment.kind === 'draft'
-      || segment.kind === 'user'
-      || (running && segment.kind === 'reply' && segment.live === true)
-      || (!bubble && segment.kind === 'subagents' && (running || segment.agents.some((step) => subagentStepState(step, running, directory) === 'running'))))
+  const folded = blocks.filter((segment) => segment.kind === 'ask' || segment.kind === 'todo' || segment.kind === 'draft'
+    || segment.kind === 'user'
+    || (running && segment.kind === 'reply' && segment.live === true)
+    || (!bubble && segment.kind === 'subagents' && (running || segment.agents.some((step) => subagentStepState(step, running, directory) === 'running'))))
+  // A click still folding. Closing onto nothing keeps the open rows until the fold is
+  // shut, so they fold away instead of vanishing and taking the height with them.
+  const pendingFold = foldToggle !== undefined && foldToggle.id !== playedFold
+  // A turn opening or closing itself mid-fold wins: the fold settles where the turn put it.
+  const folding = pendingFold && !reduce && foldOpen === foldToggle.opens
+  const closingAway = folding && !foldToggle.opens && !foldOpen && folded.length === 0
+  const open = foldOpen || closingAway
+  const displayed = open ? blocks : folded
   const tailBlock = blocks.at(-1)
   const active = activeCall(turn, blocks)
   // Narration with nothing after it yet: the next step has not surfaced, so the turn
@@ -131,10 +172,56 @@ export function TurnActivity({
   const compactRecord = open && isSettledCompactNote(turn.note) ? turn.note : undefined
   // Manor's bookkeeping about this turn: there for whoever opens the trace, nowhere else.
   const traceNotes = open ? turn.traceNotes ?? [] : []
+
+  // The list eases from the height it had before the click to the one it has now, and
+  // what sits under it slides along. Mounting or unmounting, it fades and takes its gap.
+  useLayoutEffect(() => {
+    if (!pendingFold) return undefined
+    const settle = () => setPlayedFold(foldToggle.id)
+    if (!folding) {
+      settle()
+      return undefined
+    }
+    const node = root.current
+    if (node === null) {
+      settle()
+      return undefined
+    }
+    const to = closingAway ? 0 : node.offsetHeight
+    if (to === foldToggle.from) {
+      settle()
+      return undefined
+    }
+    const gap = foldToggle.from === 0 || to === 0 ? columnGap(node) : undefined
+    const fade = gap === undefined ? {} : { opacity: foldToggle.from === 0 ? [0, 1] : [1, 0] }
+    const margin = gap === undefined ? {} : { [gap.side]: foldToggle.from === 0 ? [-gap.px, 0] : [0, -gap.px] }
+    node.style.overflow = 'hidden'
+    const controls = animate(
+      node,
+      { height: [foldToggle.from, to], ...fade, ...margin },
+      foldToggle.opens ? DISCLOSURE : DISCLOSURE_OUT,
+    )
+    let done = false
+    void controls.then(() => {
+      done = true
+      settle()
+    })
+    return () => {
+      controls.stop()
+      // Interrupted by the next click, or finished: the list goes back to its own height.
+      // A list that closed onto nothing is about to unmount and keeps its folded style.
+      if (done && to === 0) return
+      node.style.removeProperty('height')
+      node.style.removeProperty('opacity')
+      node.style.removeProperty('overflow')
+      if (gap !== undefined) node.style.removeProperty(gap.side === 'marginTop' ? 'margin-top' : 'margin-bottom')
+    }
+  }, [pendingFold, folding, foldToggle, closingAway, root])
+
   if (displayed.length === 0 && compactRecord === undefined && traceNotes.length === 0 && !compacting) return null
 
   return (
-    <div className="flex w-full min-w-0 flex-col gap-1.5" style={accentStyle(persona.color)}>
+    <div ref={root} className="flex w-full min-w-0 flex-col gap-1.5" style={accentStyle(persona.color)}>
       {/* Narration is the boundary. Every uninterrupted run between two things the
           agent said becomes one capped accordion: closed it is one useful line,
           opened it is the complete scrollable record. */}
@@ -282,19 +369,32 @@ function WorkRun({ steps, edits, breaks, activeTool }: { steps: TurnStep[]; edit
         </button>
         <Thumbnails images={stepImages(steps)} />
       </div>
-      {open ? (
-        <ActivityScroll revision={`${String(steps.length)}:${String(edits.length)}`} followEnd={current !== undefined}>
-          {edits.length === 0 ? null : (
-            <li className="min-w-0">
-              <EditGroup edits={edits} unfolded />
-            </li>
-          )}
-          {rows}
-          {current === undefined || currentIsInRows ? null : (
-            <ToolRow key={`active:${current.key}`} step={current} active />
-          )}
-        </ActivityScroll>
-      ) : null}
+      {/* The rows fold out of the line that holds them, so the bubbles under it slide
+          instead of jumping by the list's height. */}
+      <AnimatePresence initial={false}>
+        {open ? (
+          <motion.div
+            key="rows"
+            className="overflow-hidden"
+            initial={reduce ? false : { height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={reduce ? { opacity: 0, transition: INSTANT } : { height: 0, opacity: 0, transition: DISCLOSURE_OUT }}
+            transition={reduce ? INSTANT : DISCLOSURE}
+          >
+            <ActivityScroll revision={`${String(steps.length)}:${String(edits.length)}`} followEnd={current !== undefined}>
+              {edits.length === 0 ? null : (
+                <li className="min-w-0">
+                  <EditGroup edits={edits} unfolded />
+                </li>
+              )}
+              {rows}
+              {current === undefined || currentIsInRows ? null : (
+                <ToolRow key={`active:${current.key}`} step={current} active />
+              )}
+            </ActivityScroll>
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
     </li>
   )
 }

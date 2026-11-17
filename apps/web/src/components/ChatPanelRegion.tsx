@@ -733,7 +733,7 @@ export function ChatPanelRegion({
   return (
     <div
       data-chat-panel-region=""
-      className={`grid min-h-0 min-w-0 w-[var(--region-width)] grid-rows-[minmax(0,1fr)] ease-out ${
+      className={`grid min-h-0 min-w-0 w-[var(--region-width)] grid-rows-[minmax(0,1fr)] ease-arrive ${
         // A drag has to keep up with the pointer, so the width follows it directly,
         // and a chat switch is not a movement at all: no class on that render means
         // the new width is simply the width it opens at.

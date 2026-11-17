@@ -2,7 +2,7 @@ import { useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import type { IconSvgElement } from '@hugeicons/react'
 import { motion, useReducedMotion } from 'motion/react'
-import { EASE_OUT, INSTANT } from '../../motion'
+import { INSTANT, POPOVER_IN, POPOVER_PRE_SCALE } from '../../motion'
 import { Tick02Icon } from '@hugeicons/core-free-icons'
 import { Icon } from '../Icon'
 import { useDismiss } from './useDismiss'
@@ -64,10 +64,12 @@ export function ContextMenu({ x, y, items, onClose }: ContextMenuProps) {
       ref={menuRef}
       // Never taller than the window less its inset on both sides; a long list scrolls.
       className="fixed z-40 max-h-[calc(100dvh-16px)] min-w-[184px] overflow-y-auto overscroll-contain rounded-lg border border-line surface-floating p-1 shadow-menu"
-      style={{ left: position.x, top: position.y, transformOrigin: 'top left' }}
-      initial={reduce ? { opacity: 0 } : { opacity: 0, scale: 0.96, y: -4 }}
-      animate={{ opacity: 1, scale: 1, y: 0 }}
-      transition={reduce ? INSTANT : { duration: 0.18, ease: EASE_OUT }}
+      // It grows out of the pointer, wherever keeping it on screen put the pointer on the
+      // card. No travel: it opens at the click, there is no trigger edge to come from.
+      style={{ left: position.x, top: position.y, transformOrigin: `${String(x - position.x)}px ${String(y - position.y)}px` }}
+      initial={reduce ? { opacity: 0 } : { opacity: 0, scale: POPOVER_PRE_SCALE }}
+      animate={{ opacity: 1, scale: 1 }}
+      transition={reduce ? INSTANT : POPOVER_IN}
       role="menu"
       onPointerDown={(event) => event.stopPropagation()}
       onContextMenu={(event) => event.preventDefault()}

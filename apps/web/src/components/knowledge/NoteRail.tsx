@@ -326,7 +326,7 @@ export function NoteRail({
       </div>
 
       <div
-        className={`min-h-0 min-w-0 rounded-lg duration-150 ease-out motion-safe:transition-colors ${variant === 'sidebar' ? '' : 'overflow-y-auto px-2 py-2'} ${dropTarget === '' ? 'bg-user-bg/50' : ''}`}
+        className={`min-h-0 min-w-0 rounded-lg duration-150 ease-fade motion-safe:transition-colors ${variant === 'sidebar' ? '' : 'overflow-y-auto px-2 py-2'} ${dropTarget === '' ? 'bg-user-bg/50' : ''}`}
         onDragOver={(event) => {
           if (!ours(event)) return
           // Over a note row the drop means nothing: only folders and the empty area take it.
