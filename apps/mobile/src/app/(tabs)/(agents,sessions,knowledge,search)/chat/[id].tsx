@@ -870,6 +870,28 @@ function ChatContent({ chatId }: { chatId: string | undefined }) {
         {/* The padding sits inside the measured view, so the list's bottom inset counts the
             gap above the tab bar, and outside the scrim, which keeps the screen's width. */}
         <Animated.View pointerEvents="box-none" style={footerPadding}>
+        {/* One row above the Session bar: the changes pill in its centre, the jump at its
+            right edge. The pill stands for as long as the chat has written anything, so it
+            belongs in the footer's own height, where the list's bottom inset accounts for it.
+            The jump floats, because it comes and goes with the scroll and nothing should
+            shift under a thumb when it does; without the pill it rests just above the bar. */}
+        <View pointerEvents="box-none">
+          {showAggregateChanges ? (
+            <Animated.View entering={glassRise} exiting={glassSink} style={styles.pill}>
+              <EditsPill files={chatChanges} onPress={() => setAllEditsOpen(true)} />
+            </Animated.View>
+          ) : null}
+          {showJump ? (
+            <Animated.View entering={glassRise} exiting={glassSink} style={styles.jump}>
+              <GlassIconButton
+                accessibilityLabel="Jump to latest"
+                icon={ArrowDown01Icon}
+                onPress={jumpToLatest}
+                size={36}
+              />
+            </Animated.View>
+          ) : null}
+        </View>
         {/* The Session bar stands in the footer (2026-10-12), so the list's bottom
             inset counts it and no message ever sits behind Accept or Confirm. */}
         <View
@@ -900,26 +922,6 @@ function ChatContent({ chatId }: { chatId: string | undefined }) {
             />
           )}
         </View>
-        {/* The jump floats, because it comes and goes with the scroll and nothing
-            should shift under a thumb when it does. The pill below it does not: it
-            stands for as long as the chat has written anything, so it belongs in the
-            footer's own height, where the list's bottom inset accounts for it and the
-            last message rests above it instead of behind it. */}
-        {showJump ? (
-          <Animated.View entering={glassRise} exiting={glassSink} style={styles.jump}>
-            <GlassIconButton
-              accessibilityLabel="Jump to latest"
-              icon={ArrowDown01Icon}
-              onPress={jumpToLatest}
-              size={36}
-            />
-          </Animated.View>
-        ) : null}
-        {showAggregateChanges ? (
-          <Animated.View entering={glassRise} exiting={glassSink} style={styles.pill}>
-            <EditsPill files={chatChanges} onPress={() => setAllEditsOpen(true)} />
-          </Animated.View>
-        ) : null}
         <View style={styles.footerInner}>
           {isPair || sessionDmAgent !== undefined ? (
             <View style={styles.pairFooter}>
@@ -1880,8 +1882,10 @@ const styles = StyleSheet.create({
   relayExcerptOpen: { flexShrink: 1, textAlign: 'center' },
   error: { color: colors.danger },
   footer: { position: 'absolute', right: 0, bottom: 0, left: 0 },
-  jump: { position: 'absolute', top: -JUMP_SPACE, right: 0, left: 0, zIndex: 1, alignItems: 'center' },
-  pill: { alignItems: 'center', paddingTop: spacing.md, paddingBottom: spacing.xs },
+  // Bottom-anchored, so it keeps its place whether the pill beside it shows or not; 2pt
+  // under the pill's gap centres the 36pt button on the pill.
+  jump: { position: 'absolute', right: 0, bottom: spacing.sm - 2, zIndex: 1 },
+  pill: { alignItems: 'center', paddingTop: spacing.sm, paddingBottom: spacing.sm },
   // Above the floating jump: the composer's plus and `@`/`$` menus rise over it.
   footerInner: { zIndex: 2, paddingTop: spacing.md },
   pairFooter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.md },

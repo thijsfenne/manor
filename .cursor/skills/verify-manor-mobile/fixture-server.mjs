@@ -913,6 +913,29 @@ const snapshots = {
   ],
 }
 
+// The Ready PDF Session changed three files and wrote enough to scroll, so its footer shows
+// the changes pill and the jump in one row above the result card.
+snapshots['chat-notes-pdf'] = (() => {
+  const turnId = 'turn-pdf'
+  const agentId = 'agent-wren'
+  const ts = now - 10 * 60_000
+  const edit = (id, file, before, after, index) => [
+    { id: `${id}-u`, ts: ts + index * 2, type: 'tool_use', turnId, agentId, toolCallId: id, tool: 'Edit', detail: file,
+      edits: [{ path: `/tmp/manor-mobile-verify/Notities/${file}`, panelPath: file, offset: { before: 10, after: 10 }, before, after }] },
+    { id: `${id}-r`, ts: ts + index * 2 + 1, type: 'tool_result', turnId, agentId, toolCallId: id, outcome: 'success' },
+  ]
+  const paragraph = 'Every page now renders through the same layout pass as the screen, so headings, lists and tables keep their spacing in the file.'
+  return [
+    { id: 'pdf-u', ts: ts - 60_000, type: 'user_message', text: 'Ship the PDF export.', mentions: [] },
+    ...edit('pdf-e1', 'src/export/pdf.ts', 'export function toPdf() {\n  return null\n}\n', 'export function toPdf(chat: Chat) {\n  return renderPages(chat)\n}\n', 0),
+    ...edit('pdf-e2', 'src/export/pages.ts', 'const PAGE = 800\n', 'const PAGE = 842\nconst MARGIN = 48\n', 1),
+    ...edit('pdf-e3', 'src/export/menu.ts', "items: ['Markdown']\n", "items: ['Markdown', 'PDF']\n", 2),
+    { id: 'pdf-m', ts: ts + 10, type: 'agent_message', turnId, agentId, messageId: 'pdf-m1',
+      text: Array.from({ length: 6 }, (_, index) => `${index + 1}. ${paragraph}`).join('\n\n') },
+    { id: 'pdf-end', ts: ts + 11, type: 'turn_result', turnId, agentId },
+  ]
+})()
+
 // A quiet project thread (2026-10-12): the notes Manor writes between messages (a relayed
 // Session question, its answer, the wake labels, a report, a settled note) stay in the
 // transcript but never on screen. What shows is the user, the thread's replies and the cards:
