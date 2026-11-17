@@ -4,7 +4,7 @@ import { AlertCircleIcon, CheckmarkCircle02Icon, Tick02Icon } from '@hugeicons/c
 import { readWorkChanges, subscribeWorkChanges, writeWorkChanges } from '@manor/client-runtime/work-changes'
 import { readWorkChangesOpen, setWorkChangesOpen, subscribeWorkProposals } from '@manor/client-runtime/work-proposals'
 import type { GoalChoice } from '@manor/contracts'
-import { WORK_RESULT_CONNECTION_LOST, evidenceThumbnailRatio, evidenceVisibleCount, workBlockedReason, workCardStatus, workConfirmTitle, pickWorkChoice, workChoicePicked, workResultActionLabels, workResultChoiceList, workResultFiles, workResultLines, type WorkHandoffRow, type WorkResult, type WorkStatus } from '../state'
+import { WORK_RESULT_CONNECTION_LOST, evidenceThumbnailRatio, evidenceVisibleCount, workBlockedReason, workCardStatus, workConfirmTitle, pickWorkChoice, workChangesAsked, workChoicePicked, workResultActionLabels, workResultChoiceList, workResultFiles, workResultLines, type WorkHandoffRow, type WorkResult, type WorkStatus } from '../state'
 import { TEXT_SWAP, TEXT_SWAP_ABOVE, TEXT_SWAP_BELOW, TEXT_SWAP_REST } from '../motion'
 import { useRequest, type RequestEvents } from '../useRequest'
 import { sendWorkChanges } from '../workChanges'
@@ -109,7 +109,8 @@ function ResultLines({ result, settled }: { result: WorkResult; settled: boolean
  * The decisions a report leaves to the user, under a divider: each choice's plain question
  * on up to two lines (its title on one line for an older report) and its options as small
  * grey buttons, the picked one in a blue wash. A press writes `Title: option` into Follow up,
- * which opens, so several picks go to the Session as one message.
+ * which opens, so several picks go to the Session as one message. Follow up stays closed
+ * while it holds only picks of a choice's `noChange` option, so Confirm stays in reach.
  */
 function YourCall({ result, picked, disabled, onPick }: {
   result: WorkResult
@@ -137,7 +138,7 @@ function YourCall({ result, picked, disabled, onPick }: {
                   label={option}
                   on={on}
                   disabled={disabled}
-                  hint={`${recommended ? 'Recommended. ' : ''}Adds this answer to your Follow up message.`}
+                  hint={`${recommended ? 'Recommended. ' : ''}${option === choice.noChange ? 'Needs no change, so you can confirm right away.' : 'Adds this answer to your Follow up message.'}`}
                   onToggle={() => onPick(choice, option)}
                 />
               )
@@ -329,8 +330,9 @@ export function WorkResultBody({
   const picked = useSyncExternalStore(subscribeWorkChanges, () => readWorkChanges(handoffId), () => readWorkChanges(handoffId))
   const pick = (choice: GoalChoice, option: string) => {
     setError(null)
-    writeWorkChanges(handoffId, pickWorkChoice(readWorkChanges(handoffId), choice, option))
-    setWriting(true)
+    const next = pickWorkChoice(readWorkChanges(handoffId), choice, option)
+    writeWorkChanges(handoffId, next)
+    setWriting(workChangesAsked(next, result.choices))
   }
   const actionRow = open && !writing
   // The file count stays while the user writes changes or a commit is blocked: that is when the diff matters.

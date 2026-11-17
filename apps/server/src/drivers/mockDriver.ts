@@ -350,7 +350,8 @@ function mockMemoryEdit(input: TurnInput): Extract<RuntimeEvent, { type: 'tool_u
  * and "commit: <subject> // <body>" the commit message Confirm commits a worktree Session with.
  * "mock report: …" reports the same way without writing the file, a result with nothing
  * to commit; "choices: <title> {<question>} = <option> / <option>*; …" after either adds the
- * choices it leaves open, the braced question optional, a trailing * on the recommended option.
+ * choices it leaves open, the braced question optional, a trailing * on the recommended option
+ * and a trailing ~ on the option that needs no change.
  * In a worktree Session Manor commits that file itself at Confirm and merges it. A commit
  * request that does reach the lead (a shared checkout, a commit Git refused, or Retry)
  * commits that file on the Session's branch and skips a commit already made, unless the
@@ -419,8 +420,13 @@ function workScriptFor(input: TurnInput, request: typeof fetch): MockWorkStep | 
       const [, title, question] = /^([^{]*?)\s*(?:\{([^}]+)\})?$/.exec(head ?? '') ?? []
       if (!title || !options) return []
       const listed = options.split('/').map((option) => option.trim()).filter(Boolean)
-      const recommended = listed.find((option) => option.endsWith('*'))?.slice(0, -1).trim()
-      return [{ title, ...(question === undefined ? {} : { question: question.trim() }), options: listed.map((option) => option.replace(/\*$/, '').trim()), ...(recommended === undefined ? {} : { recommended }) }]
+      const marked = (mark: string) => listed.find((option) => /[*~]+$/.exec(option)?.[0].includes(mark))?.replace(/[*~]+$/, '').trim()
+      const recommended = marked('*')
+      const noChange = marked('~')
+      return [{
+        title, ...(question === undefined ? {} : { question: question.trim() }), options: listed.map((option) => option.replace(/[*~]+$/, '').trim()),
+        ...(recommended === undefined ? {} : { recommended }), ...(noChange === undefined ? {} : { noChange }),
+      }]
     })
     const writesFile = goal[1]!.toLowerCase() === 'goal'
     const result = goal[2]!.replace(/\b(shots|choices|steps|commit|points):.*$/i, '').trim()

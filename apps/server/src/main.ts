@@ -2231,7 +2231,7 @@ async function handleGoalClaimsRequest(
       const commit = report.error.issues.some((issue) => issue.path[0] === 'commit')
       const points = report.error.issues.some((issue) => issue.path[0] === 'points')
       json(response, 422, { error: choices
-        ? `choices takes at most ${MAX_GOAL_CHOICES} of { title, question, options, recommended }: a short title, one plain question of at most ${GOAL_CHOICE_QUESTION_MAX} characters, two to four short options and an optional recommendation.`
+        ? `choices takes at most ${MAX_GOAL_CHOICES} of { title, question, options, recommended, noChange }: a short title, one plain question of at most ${GOAL_CHOICE_QUESTION_MAX} characters, two to four short options, an optional recommendation and the optional option that needs no change.`
         : points
           ? `points takes one to ${MAX_GOAL_POINTS} short lines of at most ${GOAL_POINT_MAX} characters each.`
           : commit

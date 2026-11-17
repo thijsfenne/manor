@@ -8,7 +8,7 @@ import Animated, { FadeIn } from 'react-native-reanimated'
 import { WORK_CHANGES_LIMIT, readWorkChanges, settleWorkChanges, subscribeWorkChanges, writeWorkChanges } from '@manor/client-runtime/work-changes'
 import { readWorkChangesOpen, setWorkChangesOpen, subscribeWorkProposals } from '@manor/client-runtime/work-proposals'
 import type { GoalChoice } from '@manor/contracts'
-import { WORK_RESULT_CONNECTION_LOST, evidenceThumbnailRatio, workBlockedReason, workCardStatus, workConfirmTitle, pickWorkChoice, workChoicePicked, workResultActionLabels, workResultChoiceList, workResultFiles, workResultLines, type WorkHandoffRow, type WorkResult, type WorkStatus } from '@manor/client-runtime/state'
+import { WORK_RESULT_CONNECTION_LOST, evidenceThumbnailRatio, workBlockedReason, workCardStatus, workConfirmTitle, pickWorkChoice, workChangesAsked, workChoicePicked, workResultActionLabels, workResultChoiceList, workResultFiles, workResultLines, type WorkHandoffRow, type WorkResult, type WorkStatus } from '@manor/client-runtime/state'
 import { useWorkspaceActions, useWorkspaceStatus } from '@/providers/WorkspaceProvider'
 import { colors, fonts, radius, spacing, squircle } from '@/theme'
 import { AttachmentThumbnail, ImageViewer } from './Attachments'
@@ -68,7 +68,8 @@ function ResultLines({ result, settled }: { result: WorkResult; settled: boolean
  * The decisions a report leaves to the user, under a divider: each choice's plain question
  * on up to two lines (its title on one line for an older report) and its options as small
  * grey buttons, the picked one in a blue wash. A tap writes `Title: option` into Follow up,
- * which opens, so several picks go to the Session as one message.
+ * which opens, so several picks go to the Session as one message. Follow up stays closed
+ * while it holds only picks of a choice's `noChange` option, so Confirm stays in reach.
  */
 function YourCall({ result, picked, disabled, onPick }: {
   result: WorkResult
@@ -92,7 +93,7 @@ function YourCall({ result, picked, disabled, onPick }: {
                   key={option}
                   accessibilityRole="button"
                   accessibilityLabel={recommended ? `${option}, recommended` : option}
-                  accessibilityHint="Adds this answer to your Follow up message"
+                  accessibilityHint={option === choice.noChange ? 'Needs no change, so you can confirm right away' : 'Adds this answer to your Follow up message'}
                   accessibilityState={{ disabled, selected: on }}
                   disabled={disabled}
                   onPress={() => onPick(choice, option)}
@@ -276,8 +277,9 @@ export function WorkResultBody({ result, onShowCard, blocked = false, sessionSet
   const files = workResultFiles(result)
   const pick = (choice: GoalChoice, option: string) => {
     setError(null)
-    writeWorkChanges(handoffId, pickWorkChoice(readWorkChanges(handoffId), choice, option))
-    setWriting(true)
+    const next = pickWorkChoice(readWorkChanges(handoffId), choice, option)
+    writeWorkChanges(handoffId, next)
+    setWriting(workChangesAsked(next, result.choices))
   }
 
   return (

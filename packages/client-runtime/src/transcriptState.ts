@@ -1840,6 +1840,18 @@ export const workChoicePicked = (text: string, title: string, option: string): b
   text.split('\n').includes(workChoiceLine(title, option))
 
 /**
+ * Whether the Follow up text asks the Session for a change: any line beyond a pick of a
+ * choice's `noChange` option. After a pick the card opens Follow up only when it does,
+ * so a no-change pick leaves Confirm in place. A line another choice also writes as a
+ * change counts as a change.
+ */
+export function workChangesAsked(text: string, choices: readonly Pick<GoalChoice, 'title' | 'options' | 'noChange'>[] = []): boolean {
+  const changes = new Set(choices.flatMap((choice) => choice.options.filter((option) => option !== choice.noChange).map((option) => workChoiceLine(choice.title, option))))
+  const kept = new Set(choices.flatMap((choice) => choice.noChange === undefined ? [] : [workChoiceLine(choice.title, choice.noChange)]).filter((line) => !changes.has(line)))
+  return text.split('\n').some((line) => line.trim() !== '' && !kept.has(line))
+}
+
+/**
  * A result that waits on the user right now: open, and its Session finished. A Session the user
  * sent a new instruction keeps its result open, but reads Working, or Waiting while it
  * asks the user something, until it ends.

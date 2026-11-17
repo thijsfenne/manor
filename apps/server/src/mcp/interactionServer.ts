@@ -309,6 +309,7 @@ const goalTool = {
                 question: { type: 'string', minLength: 1, maxLength: GOAL_CHOICE_QUESTION_MAX, description: 'What the card shows: at most two short plain sentences in the conversation language with what is going on and what the user decides, such as "A phone check whose folder was deleted keeps blocking its ports for a day. Should Manor clean those up on its own?" No internal terms such as checkout, fixture or module.' },
                 options: { type: 'array', minItems: 2, maxItems: 4, items: { type: 'string', minLength: 1, maxLength: 80 }, description: 'Each option says in a few plain words what happens, such as "Clean them up on its own" or "Leave them for a day".' },
                 recommended: { type: 'string', minLength: 1, maxLength: 80, description: 'The option you recommend, written exactly as in options.' },
+                noChange: { type: 'string', minLength: 1, maxLength: 80, description: 'The option that needs no change from you, such as keeping things as they are, written exactly as in options. Picking it lets the user confirm right away; any other option comes back to you as a change request. Omit when every option asks for a change.' },
               },
               required: ['title', 'question', 'options'],
               additionalProperties: false,

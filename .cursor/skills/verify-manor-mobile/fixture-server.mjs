@@ -327,6 +327,11 @@ const handoff = {
   version: 4, createdAt: now - 600_000, acceptedAt: now - 590_000, goalReachedAt: now - 60_000,
   goalReport: {
     result: 'Export now names the file after the chat title.', limitations: 'There is no test for an empty chat yet.',
+    // A pick of `noChange` keeps Confirm on the card; the other options open Follow up.
+    choices: [
+      { title: 'Empty chats', question: 'An empty chat exports as an empty file. Should that stay?', options: ['Skip empty chats', 'Keep it as is'], recommended: 'Keep it as is', noChange: 'Keep it as is' },
+      { title: 'File name', question: 'Should the file name also carry the date?', options: ['Add the date', 'Title only'] },
+    ],
     evidence: evidence.map(({ bytes, ...item }) => item),
   },
   goalCompletion: { status: 'ready', operation: 'commit', repos: [] },

@@ -1,6 +1,6 @@
 import type { AgentConfig, Chat, Project, ServerMessage, ThreadEvent, WorkHandoff } from '@manor/contracts'
 import { describe, expect, it } from 'vitest'
-import { evidenceVisibleCount, firstSentence, goalReportEventId, messageBrief, rowsOf, threadWorkCard, workByline, openWorkDecisions, projectWorkHandoffs, sessionReadyRow, workCardInView, workCardLine, workBlockedReason, workCardStatus, workConfirmTitle, pickWorkChoice, workChoicePicked, workResultActionLabels, workResultChoiceList, workResultFiles, workResultLines, type Row, type WorkHandoffRow } from './transcriptState'
+import { evidenceVisibleCount, firstSentence, goalReportEventId, messageBrief, rowsOf, threadWorkCard, workByline, openWorkDecisions, projectWorkHandoffs, sessionReadyRow, workCardInView, workCardLine, workBlockedReason, workCardStatus, workConfirmTitle, pickWorkChoice, workChangesAsked, workChoicePicked, workResultActionLabels, workResultChoiceList, workResultFiles, workResultLines, type Row, type WorkHandoffRow } from './transcriptState'
 import { emptyThread } from './threadState'
 import { acceptWorkProposal, updateWorkProposal, workProposalChoices, workProposalDraft, workProposalOptions, workProposalReason } from './workProposals'
 import { createWorkspaceCommands } from './commands'
@@ -499,6 +499,21 @@ describe('a result card that tells the truth (2026-10-14)', () => {
     expect(changed).toBe('Theme: keep contrast high.\nHeight: fixed\nTheme: none')
     expect(workChoicePicked(changed, 'Theme', 'none')).toBe(true)
     expect(workChoicePicked(changed, 'Theme', 'fixed palette')).toBe(false)
+  })
+
+  it('opens Follow up for a pick that asks a change, and leaves Confirm for a pick that needs none', () => {
+    const cleanup = { title: 'Stale checks', options: ['Clean up on its own', 'Leave them'], noChange: 'Leave them' }
+    const height = { title: 'Height', options: ['fixed', 'fit'] }
+    const choices = [cleanup, height]
+    const kept = pickWorkChoice('', cleanup, 'Leave them')
+    expect(workChangesAsked(kept, choices)).toBe(false)
+    expect(workChangesAsked(pickWorkChoice(kept, cleanup, 'Clean up on its own'), choices)).toBe(true)
+    expect(workChangesAsked(pickWorkChoice(kept, height, 'fit'), choices)).toBe(true)
+    expect(workChangesAsked(`Also rename it.\n${kept}`, choices)).toBe(true)
+    expect(workChangesAsked(pickWorkChoice('', height, 'fixed'), [height])).toBe(true)
+    expect(workChangesAsked(kept)).toBe(true)
+    const twin = { title: 'Stale checks', options: ['Leave them', 'Remove them'], noChange: 'Remove them' }
+    expect(workChangesAsked(kept, [cleanup, twin])).toBe(true)
   })
 
   it('reads Closed after Close on a report, on the card and in the project thread', () => {

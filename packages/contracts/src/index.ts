@@ -2433,6 +2433,9 @@ export const GOAL_POINT_MAX = 100
  * the lead recommends. The card shows the first `GOAL_CHOICES_SHOWN`. `question` (2026-11-16)
  * says in plain words what is going on and what the user decides; the card shows it in
  * place of `title`, which stays the short key Follow up writes as `Title: option`.
+ * `noChange` (2026-11-17) names the option that asks the Session for nothing, such as
+ * keeping things as they are: picking it leaves Confirm on the card, while any other
+ * option opens Follow up as a change request.
  */
 export const GOAL_CHOICE_QUESTION_MAX = 160
 export const GoalChoiceSchema = z.object({
@@ -2440,6 +2443,7 @@ export const GoalChoiceSchema = z.object({
   question: z.string().trim().min(1).max(GOAL_CHOICE_QUESTION_MAX).optional(),
   options: z.array(z.string().trim().min(1).max(80)).min(2).max(4),
   recommended: z.string().trim().min(1).max(80).optional(),
+  noChange: z.string().trim().min(1).max(80).optional(),
 })
 export type GoalChoice = z.infer<typeof GoalChoiceSchema>
 export const MAX_GOAL_CHOICES = 10

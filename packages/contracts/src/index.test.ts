@@ -273,6 +273,7 @@ test('a choice may carry a plain question, and a choice without one parses as be
   const question = 'A phone check whose folder was deleted keeps its ports for a day. Should Manor clean those up on its own?'
   assert.equal(GoalReportSchema.parse({ result: 'Done.', choices: [{ ...choice, question }] }).choices?.[0]?.question, question)
   assert.equal(GoalReportSchema.safeParse({ result: 'Done.', choices: [{ ...choice, question: 'x'.repeat(GOAL_CHOICE_QUESTION_MAX + 1) }] }).success, false)
+  assert.equal(GoalReportSchema.parse({ result: 'Done.', choices: [{ ...choice, noChange: 'Leave them' }] }).choices?.[0]?.noChange, 'Leave them')
 })
 
 test('a question counts as skipped only when every line of its answer is the skip line', () => {
