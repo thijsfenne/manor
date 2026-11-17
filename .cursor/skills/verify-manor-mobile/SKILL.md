@@ -216,4 +216,6 @@ Environment: set the same variables on `launch` and on every later command of th
 | `MANOR_MOBILE_VERIFY_SIMULATOR=<device name>` | Simulator to prefer |
 | `MANOR_MOBILE_VERIFY_AUTH=on` | Keep the auth gate, to prove `Welcome home` itself |
 | `MANOR_MOBILE_VERIFY_EVIDENCE=1..5` | Screenshots on the Ready `Export a chat as Markdown` result (default 3), for the thumbnail row. The fixture reads it at start, so `cleanup` and `launch` to change it |
+| `MANOR_MOBILE_VERIFY_DATA=worst` | Same house with worst-case strings for UI stress (long, one-character, CJK, emoji, unbreakable-compound and empty names, titles, previews, paths, mail and file names) and extra rows: 30 more Manor Sessions, more changed files, a long MCP server and skill. Set on `launch`; the fixture reads it at start, so `cleanup` and `launch` to change it |
+| `MANOR_MOBILE_VERIFY_DATA=empty` | A house with no projects, chats, agents, routines, DM files, plugins or skills, so the empty states render. Set on `launch` like `worst`; unset keeps the default house |
 | `MANOR_MOBILE_VERIFY_BUNDLE_TIMEOUT_MS` / `MANOR_MOBILE_VERIFY_RENDER_TIMEOUT_MS` | Wait budgets, 240000 / 180000 |

@@ -989,7 +989,7 @@ function ChatContent({ chatId }: { chatId: string | undefined }) {
                 if (activeTurn !== null) stopTurn(activeTurn.turnId)
                 else if (waiting) stopBackground(chatId)
               }}
-              placeholder={status !== 'live' ? 'Manor is offline' : projectThread ? (project === undefined || project.name === '' ? 'Reply…' : `Reply to ${project.name}…`) : 'Ask anything…'}
+              placeholder={status !== 'live' ? 'Manor is offline' : projectThread ? 'Reply…' : 'Ask anything…'}
               {...(replyTo === undefined
                 ? {}
                 : {

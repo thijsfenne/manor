@@ -52,7 +52,7 @@ describe('the workspace header', () => {
     expect(html).not.toContain('cursor-zoom-in')
   })
 
-  it('shows only name and role for a DM and leaves the role badge its full width', () => {
+  it('shows only name and role for a DM, sharing the room evenly', () => {
     const html = renderToStaticMarkup(
       <WorkspaceHeader
         title="Smith"
@@ -66,8 +66,8 @@ describe('the workspace header', () => {
     expect(html).toContain('Development and architecture')
     // The composer owns the DM's runtime; the header repeats none of it.
     expect(html).not.toContain('text-meta text-dim')
-    // A role cut to "E…" names nobody, so the badge keeps its size and the name yields.
-    expect(html).not.toContain('max-w-[45%]')
+    // Name and role grow evenly up to their own width: a short one is never cut, two long ones split the room.
+    expect(html).toContain('auto-cols-[minmax(0,max-content)] grid-flow-col')
   })
 
   it('keeps an ordinary chat title unchanged', () => {

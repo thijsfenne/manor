@@ -150,7 +150,7 @@ function FileRow({ file, onOpen, onLongPress }: { file: DmFile; onOpen: () => vo
           <Image accessibilityIgnoresInvertColors contentFit="cover" source={{ uri: picture }} style={StyleSheet.absoluteFill} />
         )}
       </View>
-      <Text numberOfLines={1} style={styles.name}>{file.name}</Text>
+      <Text ellipsizeMode="middle" numberOfLines={1} style={styles.name}>{file.name}</Text>
       <Text style={styles.age}>{available ? relativeTime(file.ts) : 'Unavailable'}</Text>
     </Pressable>
   )

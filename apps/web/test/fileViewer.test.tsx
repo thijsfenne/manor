@@ -46,7 +46,7 @@ afterEach(() => {
 describe('FileViewer', () => {
   it('captions the open file with its name and position', () => {
     open(1)
-    const captions = viewer.root.findAll((node) => node.type === 'p' && node.findAllByType('span').map(text).join(' | ') === 'notes.zip | 2 / 3')
+    const captions = viewer.root.findAll((node) => node.type === 'p' && node.children.map((child) => typeof child === 'string' ? child : text(child)).join(' | ') === 'notes.zip | 2 / 3')
     expect(captions).toHaveLength(1)
   })
 

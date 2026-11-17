@@ -140,7 +140,7 @@ export function ChatHeader({ title, subtitle, project, projectThread = false, ro
                 <Text numberOfLines={1} style={styles.title}>{member.name}</Text>
               </View>
             ))}
-            {project === undefined ? null : <ProjectBadge name={project.name} icon={project.icon} color={project.color} noProject={isHomeRoom(project.id)} />}
+            {project === undefined ? null : <ProjectBadge name={project.name} icon={project.icon} color={project.color} noProject={isHomeRoom(project.id)} style={styles.projectBadge} />}
             {role === undefined ? null : <RoleBadge label={role} />}
           </View>
           <View style={styles.under}>
@@ -198,6 +198,8 @@ const styles = StyleSheet.create({
   titles: { flex: 1, minWidth: 0, gap: 3 },
   identity: { minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   pairMember: { flexShrink: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  // Under half the row, as on the desktop: a long project name leaves the title readable.
+  projectBadge: { maxWidth: '45%' },
   title: { flexShrink: 1, color: colors.text, fontFamily: fonts.sans, fontSize: 17, fontWeight: '500', letterSpacing: -0.2 },
   under: { minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 5 },
   subtitle: { flexShrink: 1, color: colors.muted, fontFamily: fonts.sans, fontSize: 13 },

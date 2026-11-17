@@ -46,6 +46,7 @@ import { Icon } from './Icon'
 import { SubagentRows } from './SubagentRows'
 import { useSubagentDirectory } from '../subagentContext'
 import { TodoList } from './TodoList'
+import { MiddleCut } from './MiddleCut'
 
 interface TurnActivityProps {
   turn: TurnRow
@@ -549,7 +550,7 @@ function GroupRow({ group, current }: { group: Extract<TraceRow, { kind: 'group'
           <span className={`mt-[4px] shrink-0 ${live === undefined ? 'text-dim' : 'text-[var(--accent-fg)]'}`}>
             <Icon icon={toolIcon(group.steps[0]!.tool)} size={14} />
           </span>
-          <span className="min-w-0 truncate">{label}</span>
+          <MiddleCut text={label} />
           {group.family === 'same' ? <span className="shrink-0 text-dim">×{group.steps.length}</span> : null}
           <RowChevron open={open} />
         </button>
@@ -599,7 +600,7 @@ function ToolRow({ step, active }: { step: ToolStep; active: boolean }) {
       <span className={`mt-[4px] shrink-0 ${current ? 'text-[var(--accent-fg)]' : 'text-dim'}`}>
         <Icon icon={statusIcon} size={14} />
       </span>
-      <span className="min-w-0 truncate">{label}</span>
+      <MiddleCut text={label} />
     </>
   )
   return (

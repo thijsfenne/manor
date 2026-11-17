@@ -2,7 +2,7 @@ import { draftBlocks, draftDocument } from '@manor/client-runtime/slack-draft-fo
 import { SlackDraftEditor, SlackDraftPreview } from './SlackDraftEditor'
 import { outboundDraftRevision, readOutboundDraftEdit, writeOutboundDraftEdit, type OutboundDraftEdit } from '@manor/client-runtime/outbound-draft-edits'
 import { Mail01Icon, SlackIcon, UnfoldMoreIcon } from '@hugeicons/core-free-icons'
-import { useState, type ReactNode } from 'react'
+import { useState, type KeyboardEvent, type ReactNode } from 'react'
 import type { OutboundDraftThread, SlackRichText } from '@manor/contracts'
 import { slackRichTextFallback, SlackRichTextSchema, isOutboundSlackChannelId, OUTBOUND_DRAFT_BODY_MAX, OUTBOUND_DRAFT_SUBJECT_MAX, OUTBOUND_DRAFT_TO_MAX } from '@manor/contracts'
 import { draftSettled, draftShown, draftStatus, draftStatusLabel, snoozeUntilTomorrow, type DraftRecord, type WorkspaceState } from '../state'
@@ -52,6 +52,18 @@ const untilLabel = (ms: number) =>
 const BODY_TEXT = 'text-[length:var(--msg-size,16px)] leading-[1.5] text-text'
 /** A field that reads as plain text: no box, no handle, it grows with what is typed. */
 const PLAIN_FIELD = 'w-full min-w-0 border-0 bg-transparent p-0 text-text [font:inherit] outline-none placeholder:text-dim'
+/** A subject or address list is one line of text that wraps to show all of it, never a scroll. */
+const ONE_LINE_WRAPPED = 'block resize-none break-words [field-sizing:content]'
+
+/** Enter in a one-line field does nothing, as in a plain input. */
+function keepOneLine(event: KeyboardEvent<HTMLTextAreaElement>) {
+  if (event.key === 'Enter' && !event.nativeEvent.isComposing) event.preventDefault()
+}
+
+/** A pasted line break becomes a space, so the value stays one line. */
+function oneLine(value: string): string {
+  return value.replace(/\r?\n/g, ' ')
+}
 
 /**
  * One outbound message, Gmail or Slack, inside the turn that wrote it. Open, it is the
@@ -151,13 +163,15 @@ export function OutboundDraftBubble({
             )}
             {draft.channel === 'gmail' ? (
               subjectEditable ? (
-                <input
+                <textarea
                   aria-label="Draft subject"
                   placeholder="Subject"
-                  className={`${PLAIN_FIELD} mb-1 font-medium text-[length:var(--msg-size,16px)]`}
+                  rows={1}
+                  className={`${PLAIN_FIELD} ${ONE_LINE_WRAPPED} mb-1 font-medium text-[length:var(--msg-size,16px)]`}
                   maxLength={OUTBOUND_DRAFT_SUBJECT_MAX}
                   value={subject}
-                  onChange={(event) => setEdit({ subject: event.target.value })}
+                  onKeyDown={keepOneLine}
+                  onChange={(event) => setEdit({ subject: oneLine(event.target.value) })}
                 />
               ) : shownSubject.length > 0 ? (
                 <p className="m-0 mb-1 font-medium text-[length:var(--msg-size,16px)] text-text">{shownSubject}</p>
@@ -168,13 +182,15 @@ export function OutboundDraftBubble({
               <Field label="To">{draft.to}</Field>
               {draft.channel !== 'gmail' ? null : open ? (
                 <Field label="Cc">
-                  <input
+                  <textarea
                     aria-label="Draft Cc"
                     placeholder="Add Cc"
-                    className={PLAIN_FIELD}
+                    rows={1}
+                    className={`${PLAIN_FIELD} ${ONE_LINE_WRAPPED}`}
                     maxLength={OUTBOUND_DRAFT_TO_MAX}
                     value={cc}
-                    onChange={(event) => setEdit({ cc: event.target.value })}
+                    onKeyDown={keepOneLine}
+                    onChange={(event) => setEdit({ cc: oneLine(event.target.value) })}
                   />
                 </Field>
               ) : shownCc.length > 0 ? <Field label="Cc">{shownCc}</Field> : null}
@@ -306,7 +322,7 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="flex min-w-0 items-baseline gap-2 border-b border-line py-2.5">
       <dt className="shrink-0 text-muted">{label}</dt>
-      <dd className="m-0 min-w-0 flex-1 truncate text-text">{children}</dd>
+      <dd className="m-0 min-w-0 flex-1 break-words text-text">{children}</dd>
     </div>
   )
 }

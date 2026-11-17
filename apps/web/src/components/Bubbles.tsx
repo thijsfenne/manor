@@ -22,6 +22,7 @@ import { NoteQuoteContextChip, QuoteBlock } from './QuoteContextChip'
 import { useAgentMentions, useMessageChips } from './mentionMarkdown'
 import { ImageNumberBadge } from './MentionText'
 import { ZoomableImage, type GalleryImage } from './ui/ZoomableImage'
+import { MiddleCut } from './MiddleCut'
 
 /**
  * One turn, signed once, and what that turn is doing.
@@ -233,7 +234,7 @@ function FileChip({ file }: { file: FileAttachment }) {
   return (
     <span className="flex max-w-full items-center gap-1.5 rounded-chip border border-line bg-raised px-2 py-1 text-[12px] text-text" title={file.name}>
       <FileMark path={file.name} size={13} className="flex-none" />
-      <span className="min-w-0 truncate">{file.name}</span>
+      <MiddleCut text={file.name} />
       <span className="flex-none text-meta text-dim">{describeBytes(utf8Size(file.content))}</span>
     </span>
   )
@@ -292,7 +293,7 @@ function DocumentChip({ document }: { document: EventDocument | PendingDocument 
   const content = (
     <>
       <FileMark path={document.name} size={13} />
-      <span className="min-w-0 truncate">{document.name}</span>
+      <MiddleCut text={document.name} />
       <span className={`flex-none text-meta ${incomplete ? 'text-warn' : 'text-dim'}`}>{label}</span>
     </>
   )

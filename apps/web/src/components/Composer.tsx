@@ -53,6 +53,7 @@ import { Popover } from './ui/Popover'
 import { useDismiss } from './ui/useDismiss'
 import { ZoomableImage } from './ui/ZoomableImage'
 import { useHostAuto } from '../useHostAuto'
+import { MiddleCut } from './MiddleCut'
 
 const MAX_TEXTAREA_PX = 200
 /** A one-row card is a pill. `rounded-full` is also what opts a corner out of the squircle. */
@@ -1347,7 +1348,7 @@ export function Composer({ agents, commandContext, household, overrides = NO_OVE
                 >
                   {image === undefined ? null : <img src={image.dataUrl} alt="" className="h-5 w-5 flex-none rounded-xs object-cover" />}
                   <span className="flex-none">Image #{row.number}</span>
-                  <span className={`min-w-0 flex-1 truncate text-meta ${secondary}`}>{image?.name}</span>
+                  <MiddleCut text={image?.name ?? ''} className={`flex-1 text-meta ${secondary}`} />
                   <span className={`font-mono text-meta ${secondary}`}>#{row.number}</span>
                 </button>
               </li>
@@ -1494,7 +1495,7 @@ export function Composer({ agents, commandContext, household, overrides = NO_OVE
                   title={`${chip.name}, ${describeBytes(chip.size)}`}
                 >
                   <FileMark path={chip.name} size={13} />
-                  <span className="min-w-0 flex-1 truncate">{chip.name}</span>
+                  <MiddleCut text={chip.name} className="flex-1" />
                   <span className="flex-none text-meta text-dim">{describeBytes(chip.size)}</span>
                   <button
                     type="button"

@@ -21,6 +21,7 @@ import { FileMark } from './fileMark'
 import { Icon } from './Icon'
 import { Dialog } from './ui/Dialog'
 import { IconButton } from './ui/IconButton'
+import { MiddleCut } from './MiddleCut'
 
 /** An HTML file the chat draws live, from the server's sandboxed `?view=1` page. */
 const previewsInChat = (file: DeliveredFile) => file.mime === 'text/html' && file.src !== undefined
@@ -77,7 +78,7 @@ function DeliveredFileRow({ file, bubble }: { file: DeliveredFile; bubble: boole
       <div className="min-w-0 overflow-hidden rounded-xl border border-line bg-composer-tray">
         <div className="flex min-w-0 items-center gap-2 px-2.5 py-1.5 text-[12px]">
           <FileMark path={file.name} size={16} />
-          <span className="min-w-0 flex-1 truncate text-text" title={file.name}>{file.name}</span>
+          <MiddleCut text={file.name} className="flex-1 text-text" />
           <span className="flex-none text-meta text-dim">{describeBytes(file.size)}</span>
           {bridge === undefined ? (
             <>
@@ -379,7 +380,7 @@ function ZoomedPage({ name, url, pageWidth, theme, canSelect, onSelect, onOpen, 
   return (
     <Dialog label={`${name}, zoomed`} trapFocus onClose={onClose} inset="wide" scrimClassName="grid place-items-center" className="flex h-full max-h-[calc(100dvh-8rem)] max-w-[1400px] flex-col overflow-hidden shadow-popover">
       <div className="flex min-w-0 flex-none items-center gap-1 border-b border-line py-1 pr-1 pl-3">
-        <span className="min-w-0 flex-1 truncate text-[13px] text-text">{name}</span>
+        <MiddleCut text={name} className="flex-1 text-[13px] text-text" />
         <IconButton icon={MinusSignIcon} label="Zoom out" disabled={step === 0} onClick={() => setStep(step - 1)} />
         <button
           type="button"

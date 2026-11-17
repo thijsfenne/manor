@@ -235,8 +235,12 @@ function Crumb({
   // The chip belongs to a Session. One without a project, in the home room, wears none.
   const noProject = project !== undefined && isHomeRoom(project.id)
   const chipTitle = project === undefined ? '' : projectTitle(project)
+  // The chip takes under half the row, as a role badge does in the inbox, and the title
+  // the rest: with a long title and a long project name both stay readable and neither
+  // runs under the panel doors.
+  const withChip = project !== undefined && !noProject && persona === undefined && (pairPersonas === undefined || pairPersonas.length === 0)
   const projectBadge = project === undefined ? null : (
-    <ProjectBadge name={project.name} icon={project.icon} color={project.color} className="shrink-0" />
+    <ProjectBadge name={project.name} icon={project.icon} color={project.color} />
   )
 
   return (
@@ -326,12 +330,12 @@ function Crumb({
       {persona === undefined && (pairPersonas === undefined || pairPersonas.length === 0) ? (
         <span className={`min-w-0 truncate text-[14px] font-semibold tracking-[-0.01em] ${titleTone}`}>{title}</span>
       ) : null}
-      {project === undefined || noProject || persona !== undefined || (pairPersonas !== undefined && pairPersonas.length > 0) ? null : (
-        <span className="flex flex-none items-center whitespace-nowrap" title={chipTitle}>
+      {withChip ? (
+        <span className="flex max-w-[45%] shrink-0 items-center whitespace-nowrap" title={chipTitle}>
           {onEditProject === undefined ? projectBadge : (
             <button
               type="button"
-              className="pointer-events-auto flex cursor-pointer items-center rounded-chip border-0 bg-transparent p-0 [font:inherit] hover:brightness-95"
+              className="pointer-events-auto flex min-w-0 cursor-pointer items-center rounded-chip border-0 bg-transparent p-0 [font:inherit] hover:brightness-95"
               title={`${chipTitle}\nEdit project`}
               aria-label="Edit project"
               onClick={onEditProject}
@@ -340,7 +344,7 @@ function Crumb({
             </button>
           )}
         </span>
-      )}
+      ) : null}
       {accessory === undefined ? null : (
         <div className={accessoryGrow ? 'ml-1 min-w-0 flex-1' : 'ml-1 flex-none'}>{accessory}</div>
       )}
@@ -351,15 +355,18 @@ function Crumb({
 /**
  * Who the DM is with: her name with the same quiet role badge as the inbox beside it.
  * No model line under it: the composer is the one place a DM's runtime is shown and
- * changed, and a second read-out here was a third value to keep in step. The badge
- * never shrinks, because a role cut to "E…" names nobody; the name gives way instead.
+ * changed, and a second read-out here was a third value to keep in step. Name and role
+ * share the room as two grid tracks that grow evenly up to their own width: a short one
+ * is never cut, and two long ones get half each, so a long role neither hides the name
+ * nor runs under the panel doors. A percentage cap would not do here, because the label
+ * sizes to its own content.
  */
 function PersonaLabel({ persona, tone }: { persona: AgentConfig; tone: string }) {
   return (
-    <span className="flex min-w-0 max-w-full items-center gap-1.5 leading-none">
-      <span className={`min-w-0 shrink truncate text-[14px] font-semibold tracking-[-0.01em] ${tone}`}>{persona.name}</span>
+    <span className="grid min-w-0 max-w-full auto-cols-[minmax(0,max-content)] grid-flow-col items-center gap-1.5 leading-none">
+      <span className={`min-w-0 truncate text-[14px] font-semibold tracking-[-0.01em] ${tone}`}>{persona.name}</span>
       {persona.role === '' ? null : (
-        <span className="flex-none">
+        <span className="flex min-w-0">
           <RoleBadge label={persona.role} />
         </span>
       )}

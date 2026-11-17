@@ -1245,6 +1245,271 @@ const listings = new Map([
   ],
 ])
 
+// ───────────────────────────────────────────────────────────────────────────────────────
+// DATA VARIANTS (MANOR_MOBILE_VERIFY_DATA) — the only place the fixture's data is varied.
+//   unset  the house above, untouched.
+//   worst  the same house with worst-case strings (long, one-character, CJK, emoji, empty,
+//          unbreakable compounds, newlines) plus extra rows for long lists and counts.
+//   empty  no projects, chats, agents, routines, DM files, plugins or skills: empty states.
+// Record ids never change, so transcripts, reactions and handles keep working. Everything
+// is applied in place to the data built above, before the server starts, and what it sends
+// still passes `ServerMessageSchema.parse` in `send()`.
+// ───────────────────────────────────────────────────────────────────────────────────────
+const DATA_VARIANT = process.env.MANOR_MOBILE_VERIFY_DATA ?? ''
+if (!['', 'worst', 'empty'].includes(DATA_VARIANT)) {
+  console.error(`MANOR_MOBILE_VERIFY_DATA must be unset, "worst" or "empty", not "${DATA_VARIANT}".`)
+  process.exit(1)
+}
+
+/** Rewrites every string below `node` in place (keeps object identity; skips getters such as `runningTurns`). */
+function mapStrings(node, rewrite) {
+  if (Array.isArray(node)) {
+    node.forEach((item, index) => {
+      if (typeof item === 'string') node[index] = rewrite(item)
+      else mapStrings(item, rewrite)
+    })
+  } else if (node !== null && typeof node === 'object') {
+    for (const key of Object.keys(node)) {
+      if (Object.getOwnPropertyDescriptor(node, key).get !== undefined) continue
+      if (typeof node[key] === 'string') node[key] = rewrite(node[key])
+      else mapStrings(node[key], rewrite)
+    }
+  }
+}
+
+function applyEmptyData() {
+  projects.length = 0
+  directory.chats.length = 0
+  directory.workHandoffs.length = 0
+  directory.subagents = []
+  directory.backgroundChatIds = []
+  directory.awaitingInput = {}
+  for (const chatId of Object.keys(snapshots)) delete snapshots[chatId]
+  for (const chatId of Object.keys(activeTurns)) delete activeTurns[chatId]
+  dmFiles.length = 0
+  roster.agents.length = 0
+  routines.routines.length = 0
+  plugins.servers.servers.length = 0
+  plugins.skills.skills.length = 0
+  plugins.suggestions.suggestions.length = 0
+}
+
+function applyWorstData() {
+  const A = {
+    marlow: { name: 'Aleksandra Wiśniewska-Kowalczyk', role: 'Senior Product Design Engineer, Platform Infrastructure' },
+    sage: { name: 'J', role: '' },
+    smith: { name: '王秀英' },
+    wren: { name: 'Arbeidsongeschiktheidsverzekeringsadviseur' },
+  }
+  const P = {
+    manor: 'Klanttevredenheidsonderzoeksresultatenrapportage 2026',
+    notes: 'X',
+    stilte: 'Verbouwing benedenwoning, keuken en badkamer (fase 2 van 3, inclusief meerwerk)',
+  }
+  const T = {
+    long: 'Exporteer het volledige gesprek als Markdown met alle bijlagen, screenshots en de toolactiviteit voor het klantarchief',
+    one: 'A',
+    url: 'https://example.com/workspaces/acme/projects/q3-launch/docs/9f8e7d6c5b4a?tab=comments&filter=unresolved',
+    compound: 'Hypotheekrenteaftrekberekeningsspreadsheet',
+    cjk: '季度报告审核',
+    emoji: 'Release 🚀 notes',
+  }
+  const LONG_REASON = 'Needs deep reasoning across the migration history, the review findings and the three earlier attempts that failed'
+  const LONG_TO = 'bartholomew.fitzgerald@regional-logistics-holdings.example.com'
+  const LONG_CC = 'charlotte.vandenbroek-oosterhuis@regional-logistics-holdings.example.com, maximiliaan.de-wit-van-der-heijden@meridian-logistics-international.example.org, annelies.vermeulen-jansen@kantoor-inrichting-groothandel.example.net'
+  const LONG_SUBJECT = 'Re: Re: Fwd: Offerte verbouwing keuken en badkamer benedenwoning — aangepaste planning, meerwerk en de definitieve materiaalkeuze'
+  const LONG_PATH_ROOT = '/Users/aleksandra.wisniewska-kowalczyk/Ontwikkeling/klanttevredenheidsonderzoek'
+  const LONG_QUOTE = [
+    'Dank voor je bericht. Hierbij de samenvatting van de afspraken zoals we die donderdag hebben besproken: de keuken wordt in week 38 geplaatst, de badkamer volgt direct daarna, en het meerwerk aan de leidingen en de elektra wordt apart gefactureerd zodra de definitieve materiaalkeuze door beide partijen is goedgekeurd.',
+    'Let op: de levertijd van het werkblad is nog niet bevestigd. Als die langer dan vier weken blijkt te zijn, schuift de oplevering van fase 2 op naar eind oktober, en moeten we met de aannemer opnieuw naar de planning van fase 3 kijken, inclusief de verbouwing van de bijkeuken en de nieuwe vloer in de gang.',
+    'Verder heb ik drie open punten genoteerd: de afvoer van de oude keukenkastjes, de afspraak met de gemeente over de omgevingsvergunning voor de dakkapel, en de vraag of de klant de vloerverwarming ook in de badkamer wil laten aanleggen. Laat me weten welke van deze punten voor vrijdag duidelijk moeten zijn, dan zet ik ze bovenaan de lijst voor het overleg.',
+  ].join('\n\n')
+
+  const chatById = (id) => directory.chats.find((candidate) => candidate.id === id)
+  const events = (chatId) => snapshots[chatId]
+  const eventById = (chatId, id) => events(chatId).find((event) => event.id === id)
+  /** Replaces a phrase wherever the house names it (titles, task text, notes, previews), so a renamed Session reads the same everywhere. */
+  const rename = (from, to) => {
+    const rewrite = (text) => text.split(from).join(to)
+    mapStrings(directory.chats, rewrite)
+    mapStrings(directory.workHandoffs, rewrite)
+    mapStrings(snapshots, rewrite)
+  }
+
+  // Agent names: wherever a text names a persona (notes, previews, DM and pair titles, handoff lead names, routine owner).
+  const agentNames = { Marlow: A.marlow.name, Sage: A.sage.name, Smith: A.smith.name, Wren: A.wren.name }
+  const nameAgents = (text) => text.replace(/\b(Marlow|Sage|Smith|Wren)\b/g, (name) => agentNames[name])
+  for (const data of [directory.chats, directory.workHandoffs, directory.subagents, snapshots, roster, routines, plugins]) mapStrings(data, nameAgents)
+  const agent = (id) => roster.agents.find((candidate) => candidate.id === `agent-${id}`)
+  for (const id of Object.keys(A)) Object.assign(agent(id), A[id])
+
+  // Projects. The project thread's chat is titled like its project; `Punt` stays.
+  const projectNames = { 'project-manor': P.manor, 'project-notes': P.notes, 'project-stilte': P.stilte }
+  for (const project of projects) if (projectNames[project.id] !== undefined) project.name = projectNames[project.id]
+  for (const handoffRecord of directory.workHandoffs) if (projectNames[handoffRecord.projectId] !== undefined) handoffRecord.projectName = projectNames[handoffRecord.projectId]
+  chatById('chat-thread-manor').title = P.manor
+  chatById('chat-thread-notes').title = P.notes
+  chatById('chat-thread-stilte').title = P.stilte
+  eventById('chat-thread-session', 'ts1').workProjectName = P.manor
+  eventById('chat-thread-manor', 'th-write').text = `${P.manor} saved 1 line to notes.md: Export is in progress.`
+  eventById('chat-thread-stilte', 'sx-n1').text = nameProject(eventById('chat-thread-stilte', 'sx-n1').text, 'Stilte', P.stilte)
+  eventById('chat-thread-stilte', 'sx-q1').text = nameProject(eventById('chat-thread-stilte', 'sx-q1').text, 'Stilte', P.stilte)
+  function nameProject(text, from, to) { return text.replace(`asks ${from}:`, `asks ${to}:`).replace(`${from} saved`, `${to} saved`) }
+
+  // Chat titles, spread over the first rows of each list. Session titles follow into their handoffs and notes.
+  chatById('chat-trace-images').title = T.long
+  chatById('chat-inline-steer').title = T.one
+  chatById('chat-tasks-card').title = T.url
+  chatById('chat-mobile-inbox').title = T.compound
+  chatById('chat-settled-pwa').title = T.cjk
+  rename('Export a chat as Markdown', T.emoji)
+  rename('Weekmenu', 'Weekmenu voor het hele gezin, inclusief boodschappenlijst, allergieën en de kookplanning voor het weekend')
+  rename('Write the release notes', 'Q')
+
+  // Previews: long and multi-sentence, one with a newline, one empty.
+  chatById('chat-mobile-inbox').lastMessagePreview = 'De mobiele inbox toont nu alle ongelezen berichten van de afgelopen week, gegroepeerd per project. Daarna heb ik de lege toestand nagelopen, de laadindicator vervangen en de sorteervolgorde vergeleken met de desktopversie. Er staan nog twee open vragen over meldingen en over archiveren; die wil ik met je doornemen voordat ik verder ga.'
+  chatById('chat-trace-images').lastMessagePreview = 'De schermen kloppen.\nDe vier afgeronde schermen zijn vergeleken met het werkscherm en komen overeen op marges, kleur en afkapping.'
+  chatById('chat-live-session').lastMessagePreview = ''
+  chatById('chat-dm-smith').lastMessagePreview = 'I went through the export flow end to end. The file name now follows the chat title, long titles are cut at 120 characters, and an empty chat still exports an empty file. One thing is left: the share sheet on older phones ignores the suggested name, so please check that on the oldest device you have before we merge.'
+  chatById('chat-dm-marlow').lastMessagePreview = 'Ik heb het overleg met de klant voorbereid: de agenda staat klaar, de offerte is nagelopen en de drie openstaande vragen over de planning staan bovenaan. Zeg maar of ik ook de conceptmail moet klaarzetten.'
+  chatById('chat-diff-files').lastMessagePreview = 'Zeven bestanden aangepast.\nDe voorbeeldweergave van bijlagen, de diff-sheet en de pad-normalisatie zijn bijgewerkt en de tests draaien groen.'
+
+  // Proposals and handoffs: long titles and task text, supporting agents with the long names, a long runtime reason.
+  const proposalText = {
+    'handoff-labels': ['Datumlabels in transcript, zijbalk en sessie-overzicht corrigeren rond middernacht, bij zomertijd en in andere tijdzones',
+      'De datumlabels in het transcript, de leeftijden in de zijbalk en de rijen in het Session-overzicht lopen rond middernacht en bij de overgang naar zomertijd een uur uit de pas. Zorg dat elke plek dezelfde regels volgt, voeg een test toe voor de randgevallen en controleer het resultaat op de telefoon en op de desktop.'],
+    'handoff-notes': ['Release note opstellen met de changelog, de bekende beperkingen en de migratiestappen voor bestaande installaties',
+      'Schrijf de release note voor versie 0.9: neem de changelog van de afgelopen twee weken over, noem de bekende beperkingen zonder ze te bagatelliseren en beschrijf stap voor stap hoe bestaande installaties migreren. Houd de toon neutraal en laat de samenvatting bovenaan binnen vijf regels passen.'],
+    'handoff-notes-v1': ['Release note opstellen met de changelog en de bekende beperkingen',
+      'Schrijf de release note voor versie 0.9 met de changelog van de afgelopen twee weken en de bekende beperkingen. Houd de samenvatting bovenaan binnen vijf regels.'],
+  }
+  const supporting = {
+    'handoff-labels': [['agent-sage', A.sage.name], ['agent-wren', A.wren.name]],
+    'handoff-notes': [['agent-smith', A.smith.name], ['agent-wren', A.wren.name]],
+    'handoff-notes-v1': [['agent-smith', A.smith.name], ['agent-wren', A.wren.name]],
+  }
+  for (const record of proposals.concat(replaced)) {
+    const [title, task] = proposalText[record.id]
+    Object.assign(record, {
+      title, task,
+      supportingAgentIds: supporting[record.id].map(([id]) => id),
+      supportingAgentNames: supporting[record.id].map(([, name]) => name),
+      proposedRuntime: { runtime: { driver: 'claude', model: 'claude-opus-5-5', effort: 'high' }, reason: LONG_REASON },
+    })
+  }
+  eventById('chat-dm-marlow', 'p-handoff-notes-v1-settled').text = `Session proposal “${proposalText['handoff-notes-v1'][0]}” was replaced by v2.`
+  const tidyTitle = 'Instellingen opruimen: kopieerbare teksten, lege toestanden en de volgorde van de secties in het scherm Instellingen'
+  const tidyTask = 'Loop alle schermen onder Instellingen langs. Maak de teksten kopieerbaar, geef elke lege toestand een korte uitleg met een duidelijke vervolgactie en zet de secties in dezelfde volgorde als op de desktop. Laat bestaande voorkeuren ongemoeid.'
+  for (const record of directory.workHandoffs.filter((candidate) => candidate.id === 'notes-tidy' || candidate.id === 'stilte-tidy')) Object.assign(record, { title: tidyTitle, task: tidyTask })
+
+  // DM files: same mime and bytes per row, other names.
+  const fileNames = {
+    'dm-file-1': 'IMG_20250914_183022_HDR_portrait_edited_edited.png',
+    'dm-file-2': 'verzekeringsvoorwaardenoverzicht-arbeidsongeschiktheid-2026-definitief.md',
+    'dm-file-5': 'Q3 Board Deck — FINAL (revised) v12 [approved by legal].pdf',
+    'dm-file-7': 'a.csv',
+  }
+  for (const file of dmFiles) if (fileNames[file.id] !== undefined) file.name = fileNames[file.id]
+  eventById('chat-dm-marlow', 'mc-reply').files[0].name = fileNames['dm-file-2']
+  eventById('chat-dm-marlow', 'mc-image').images[0].name = fileNames['dm-file-1']
+
+  // Quote chips: the reply row's quote gets long, and one user message carries a long inline quote.
+  eventById('chat-dm-marlow', 'mc-reply').replyTo.text = LONG_QUOTE
+  events('chat-dm-marlow').push({
+    id: 'mq-u', ts: now - 20_000, type: 'user_message', mentions: [],
+    text: 'Kun je dit voor de klant terugbrengen tot vijf regels?',
+    quotes: [{ kind: 'message', eventId: 'p3', agentId: 'agent-marlow', text: LONG_QUOTE }],
+  })
+
+  // Changed files: long paths, plus three more files so the pill and sheet count past four.
+  const root = `${LONG_PATH_ROOT}/apps/mobile/src/components/conversation/attachments`
+  const longPaths = new Map([
+    ['/tmp/manor-mobile-verify/Manor/apps/mobile/src/components/DiffSheet.tsx', [`${root}/AttachmentPreviewSheetWithAccessibilityLabels.tsx`, 'apps/mobile/src/components/conversation/attachments/AttachmentPreviewSheetWithAccessibilityLabels.tsx']],
+    ['/Users/sam/.manor/scratch/example-briefs/research/slices/desktop-workspace-and-persistent-agents/common-instructions.txt', [`${LONG_PATH_ROOT}/.manor/scratch/klanttevredenheidsonderzoek-resultatenrapportage-2026/research/slices/desktop-workspace-and-persistent-agents/common-instructions-for-every-research-slice-reader.txt`]],
+    ['/tmp/manor-mobile-verify/Manor/apps/mobile/src/components/OldDiffRows.tsx', [`${root}/DeprecatedLegacyDiffRowsWithoutVirtualization.tsx`, 'apps/mobile/src/components/conversation/attachments/DeprecatedLegacyDiffRowsWithoutVirtualization.tsx']],
+    ['/tmp/manor-mobile-verify/Manor/packages/client-runtime/src/changedFiles.ts', [`${LONG_PATH_ROOT}/packages/client-runtime/src/changedFiles/normalizeAbsolutePathsAcrossWorkspaceRoots.ts`, 'packages/client-runtime/src/changedFiles/normalizeAbsolutePathsAcrossWorkspaceRoots.ts']],
+  ])
+  for (const event of events('chat-diff-files')) {
+    if (event.type !== 'tool_use') continue
+    const [path, panelPath] = longPaths.get(event.edits[0].path)
+    for (const edit of event.edits) {
+      edit.path = path
+      if (panelPath !== undefined) edit.panelPath = panelPath
+    }
+    event.detail = path
+  }
+  const diffTs = eventById('chat-diff-files', 'df1').ts
+  const extraFiles = [
+    { id: 'df-x1', path: `${root}/__tests__/AttachmentPreviewSheetWithAccessibilityLabels.snapshot.test.tsx`, panelPath: 'apps/mobile/src/components/conversation/attachments/__tests__/AttachmentPreviewSheetWithAccessibilityLabels.snapshot.test.tsx' },
+    { id: 'df-x2', path: '/tmp/manor-mobile-verify/Manor/a.ts', panelPath: 'a.ts' },
+    { id: 'df-x3', path: '/tmp/manor-mobile-verify/Manor/package.json', panelPath: 'package.json' },
+  ]
+  const diffIndex = events('chat-diff-files').findIndex((event) => event.id === 'df1')
+  events('chat-diff-files').splice(diffIndex, 0, ...extraFiles.flatMap((file, index) => {
+    const edit = { path: file.path, panelPath: file.panelPath, offset: { before: 3, after: 3 }, before: 'export const ready = false\n', after: 'export const ready = true\n' }
+    return [
+      { id: `${file.id}-u`, ts: diffTs - 900 + index * 2, type: 'tool_use', turnId: 'turn-diff', agentId: '__single__', toolCallId: file.id, tool: 'Edit', detail: file.path, edits: [edit] },
+      { id: `${file.id}-r`, ts: diffTs - 900 + index * 2 + 1, type: 'tool_result', turnId: 'turn-diff', agentId: '__single__', toolCallId: file.id, outcome: 'success' },
+    ]
+  }))
+  eventById('chat-diff-files', 'df1').text = 'Zeven bestanden aangepast.'
+
+  // Trace thumbnails: long picture file names in the read rows and on the user's own picture.
+  const shotName = (text) => text
+    .replace(/shot-(\d)\.png/g, (_, index) => `2026-11-16-klanttevredenheidsonderzoek-resultatenrapportage-dashboard-donkere-modus-grote-tekst-iphone-17-pro-max-${index}.png`)
+    .replace('ti-u2-0.png', 'Schermafbeelding 2026-11-16 om 09.41.27 (2) klantportaal offerte definitief kopie.png')
+    .replace('scherm.png', 'Schermafbeelding 2026-11-16 om 09.41.27 (2) klantportaal offerte definitief kopie.png')
+  mapStrings(snapshots['chat-trace-images'], shotName)
+
+  // Mail cards: the long recipient, a cc of three long addresses, the long subject, in the folds too.
+  for (const event of events('chat-mail-drafts')) {
+    if (event.type === 'outbound_draft' || event.type === 'outbound_draft_closed') {
+      event.to = LONG_TO
+      event.subject = LONG_SUBJECT
+      if (event.cc !== undefined) event.cc = LONG_CC
+    } else if (typeof event.text === 'string') event.text = event.text.split('info@example.com').join(LONG_TO)
+  }
+
+  // Plugins: a long MCP server and a long skill (used exactly once, so "1 use" shows), and a long routine name.
+  plugins.servers.servers.unshift({
+    id: 'mcp-klantportaal', name: 'Klantportaal-Integratie (productie, alleen-lezen)', url: 'https://mcp.example.com/klantportaal/productie',
+    description: 'Leest klantdossiers, offertes, facturen en de volledige correspondentiegeschiedenis uit het klantportaal van de productieomgeving. Alleen-lezen: er wordt nooit iets aangemaakt, gewijzigd of verwijderd, en elke aanroep wordt gelogd voor de auditdienst.',
+    tools: ['zoek_klantdossier_op_postcode_en_huisnummer', 'lees_offerte_met_alle_revisies', 'lijst_openstaande_facturen'],
+  })
+  plugins.skills.skills.unshift({
+    id: 'gespreksverslag', name: 'Hypotheekadvies-gespreksverslag omzetten naar klantbrief (inclusief juridische controle en samenvatting)',
+    description: 'Zet het verslag van een adviesgesprek om in een duidelijke klantbrief, controleert de verplichte vermeldingen en eindigt met een samenvatting van drie regels voor het dossier.',
+    instructions: '# Gespreksverslag', sources: ['claude', 'codex'], usageCount: 1,
+  })
+  routines.routines[0].name = 'Ochtendbriefing met agenda, open mails en de reminders van vandaag'
+
+  // Counts: thirty more plain Sessions in the project, so lists run long and "N more" rows appear.
+  const extraTitles = [
+    'Offerte benedenwoning nalopen', 'Inbox opruimen', 'Review van de migratie naar Expo 56', 'Q4 planning', 'Fix: lege staat bij zoeken',
+    'Waarom crasht de upload op iOS 17?', 'Changelog 0.9', 'Onboarding teksten herschrijven', 'Notificaties groeperen per project', 'Dark mode contrast',
+    'VPN-verbinding stabiliseren', 'Reminders synchroniseren', 'Feedback van de pilotgebruikers', 'Sprint retro voorbereiden', 'Factuur 2026-0418 controleren',
+    'Spacing in de tabbalk', 'Agent geheugen opschonen', 'Bestandsbrowser sorteren op datum', 'Exportknop voor PDF', 'Privacyverklaring bijwerken',
+    'Offerte voor de website van de bakker', 'Taalkeuze in instellingen', 'Slack-draft met bijlage', 'Mijn week in vogelvlucht', 'Dubbele meldingen uitzoeken',
+    'Prototype voor de agenda-widget', 'Testplan voor release', 'Beheerders uitnodigen', 'Kleurenpalet checken', 'Laatste puntjes op de i',
+  ]
+  const extraReplies = ['Staat klaar.', 'Ik heb het nagelopen en het klopt.', 'Dit wacht nog op jouw akkoord.', 'Klaar. De tests draaien groen.', 'Ik kom hier morgen op terug.']
+  extraTitles.forEach((title, index) => {
+    const id = `chat-extra-${String(index + 1).padStart(2, '0')}`
+    const minutesAgo = 12 + index * index * 11 + index * 90
+    const preview = extraReplies[index % extraReplies.length]
+    directory.chats.push(chat({ id, projectId: 'project-manor', title, preview, minutesAgo, settledMinutesAgo: index % 3 === 0 ? minutesAgo - 1 : null }))
+    const ts = now - minutesAgo * 60_000
+    snapshots[id] = [
+      { id: `${id}-u`, ts, type: 'user_message', text: title, mentions: [] },
+      { id: `${id}-a`, ts: ts + 1_000, type: 'agent_message', turnId: `turn-${id}`, agentId: '__single__', messageId: `${id}-m`, text: preview },
+      { id: `${id}-r`, ts: ts + 1_001, type: 'turn_result', turnId: `turn-${id}`, agentId: '__single__' },
+    ]
+  })
+}
+
+if (DATA_VARIANT === 'worst') applyWorstData()
+if (DATA_VARIANT === 'empty') applyEmptyData()
+
 function send(socket, message) {
   socket.send(JSON.stringify(ServerMessageSchema.parse(message)))
 }

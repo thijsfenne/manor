@@ -146,7 +146,9 @@ export function OutboundDraftBubble({ draft, connected = true, actions = {}, unf
             <TextInput
               accessibilityLabel="Draft subject"
               maxLength={OUTBOUND_DRAFT_SUBJECT_MAX}
-              onChangeText={(value) => setEdit({ subject: value })}
+              multiline
+              submitBehavior="blurAndSubmit"
+              onChangeText={(value) => setEdit({ subject: oneLine(value) })}
               placeholder="Subject"
               placeholderTextColor={colors.dim}
               style={styles.subjectInput}
@@ -156,14 +158,16 @@ export function OutboundDraftBubble({ draft, connected = true, actions = {}, unf
             <Text style={styles.subject}>{shownSubject}</Text>
           ) : null}
           <View style={styles.fields}>
-            {gmail ? <Field label="From"><Text numberOfLines={1} style={styles.fieldValue}>{draft.from ?? 'Personal Gmail'}</Text></Field> : null}
-            <Field label="To"><Text numberOfLines={1} style={styles.fieldValue}>{draft.to}</Text></Field>
+            {gmail ? <Field label="From"><Text style={styles.fieldValue}>{draft.from ?? 'Personal Gmail'}</Text></Field> : null}
+            <Field label="To"><Text style={styles.fieldValue}>{draft.to}</Text></Field>
             {!gmail ? null : open ? (
               <Field label="Cc">
                 <TextInput
                   accessibilityLabel="Draft Cc"
                   maxLength={OUTBOUND_DRAFT_TO_MAX}
-                  onChangeText={(value) => setEdit({ cc: value })}
+                  multiline
+                  submitBehavior="blurAndSubmit"
+                  onChangeText={(value) => setEdit({ cc: oneLine(value) })}
                   placeholder="Add Cc"
                   placeholderTextColor={colors.dim}
                   style={[styles.fieldValue, styles.fieldInput]}
@@ -171,7 +175,7 @@ export function OutboundDraftBubble({ draft, connected = true, actions = {}, unf
                 />
               </Field>
             ) : shownCc.length > 0 ? (
-              <Field label="Cc"><Text numberOfLines={1} style={styles.fieldValue}>{shownCc}</Text></Field>
+              <Field label="Cc"><Text style={styles.fieldValue}>{shownCc}</Text></Field>
             ) : null}
           </View>
           {draft.channel === 'slack' && open ? (
@@ -296,6 +300,11 @@ function CardHeader({ channel, expanded, onToggle, status, danger, action }: {
 }
 
 /** One header line of the mail, label muted, divided from the next by a hairline. */
+/** A subject or address list wraps to show all of it; a pasted line break becomes a space. */
+function oneLine(value: string): string {
+  return value.replace(/\r?\n/g, ' ')
+}
+
 function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
     <View style={styles.field}>
@@ -445,7 +454,7 @@ const styles = StyleSheet.create({
   headerToggle: { marginLeft: 'auto', width: 28, height: 28, alignItems: 'center', justifyContent: 'center' },
   content: { gap: spacing.sm, paddingHorizontal: spacing.lg, paddingBottom: spacing.lg },
   fields: { marginBottom: spacing.xs },
-  field: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.line, paddingVertical: 10 },
+  field: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.line, paddingVertical: 10 },
   fieldLabel: { width: 44, color: colors.muted, fontFamily: fonts.sans, fontSize: 15 },
   fieldBody: { flex: 1, minWidth: 0 },
   fieldValue: { color: colors.text, fontFamily: fonts.sans, fontSize: 15 },

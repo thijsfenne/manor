@@ -667,7 +667,7 @@ function ComposerEditorInner({ value, caret, agents, skills, allowBrowser, allow
         )}
         // Absolute sits on the padding box, so the placeholder starts below the scroller's
         // reach into the card, on the line the first word is typed on.
-        placeholder={<div className={`pointer-events-none absolute inset-x-0 top-[var(--composer-reach,0px)] bottom-0 text-dim ${inset} [font-family:inherit]`}>{placeholder}</div>}
+        placeholder={<div className={`pointer-events-none absolute inset-x-0 top-[var(--composer-reach,0px)] bottom-0 truncate text-dim ${inset} [font-family:inherit]`}>{placeholder}</div>}
         ErrorBoundary={LexicalErrorBoundary}
       />
       <OnChangePlugin onChange={handleChange} />

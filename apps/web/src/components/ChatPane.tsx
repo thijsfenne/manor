@@ -533,7 +533,7 @@ export function ChatPane({
       {...(chat.kind === 'group' ? { memberIds: chat.memberIds } : {})}
       recipientsUnknown={runningTurnIds.length > 0 || thread.pending.length > 0}
       {...(steeredAgent === undefined ? {} : { steeredAgent })}
-      {...(projectThread ? { placeholder: project === undefined || project.name === '' ? 'Reply…' : `Reply to ${project.name}…` }
+      {...(projectThread ? { placeholder: 'Reply…' }
         : dmAgent === undefined ? {} : { placeholder: `Message ${dmAgent.name}` })}
       oneRow={dmAgent !== undefined}
       touchMode={phone}

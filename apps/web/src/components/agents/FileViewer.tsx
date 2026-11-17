@@ -12,6 +12,7 @@ import { FileMark } from '../fileMark'
 import { Icon } from '../Icon'
 import { Markdown } from '../Markdown'
 import { FileThumb } from './FileThumb'
+import { MiddleCut } from '../MiddleCut'
 
 export interface FileViewerProps {
   /** The library's current filter, newest first. May hold unavailable files (no src). */
@@ -140,8 +141,8 @@ export function FileViewer({ files, index, onIndex, onClose }: FileViewerProps) 
     >
       <header className="relative flex h-19 flex-none items-center justify-center px-40">
         {file === undefined ? null : (
-          <h2 className="m-0 min-w-0 max-w-full truncate rounded-full bg-on-media/10 px-3.5 py-1.5 text-[13px] font-medium" title={file.name}>
-            {file.name}
+          <h2 className="m-0 min-w-0 max-w-full rounded-full bg-on-media/10 px-3.5 py-1.5 text-[13px] font-medium" title={file.name}>
+            <MiddleCut text={file.name} />
           </h2>
         )}
         <div className="absolute top-5 right-5 flex items-center gap-2">
@@ -184,7 +185,7 @@ export function FileViewer({ files, index, onIndex, onClose }: FileViewerProps) 
 
       {file === undefined ? null : (
         <p className="m-0 flex flex-none justify-center gap-2.5 px-6 pt-3 text-[13px] text-on-media/70">
-          <span className="min-w-0 truncate">{file.name}</span>
+          <MiddleCut text={file.name} />
           <span className="flex-none tabular-nums text-on-media/50">{`${at + 1} / ${count}`}</span>
         </p>
       )}
@@ -372,7 +373,7 @@ function FileCard({ file, onDownload }: { file: DmFile; onDownload: () => void }
       <div className="flex w-full max-w-80 flex-col items-center gap-3 rounded-2xl bg-on-media/10 px-6 py-8 text-center">
         <FileMark path={file.name} size={40} />
         <div className="flex max-w-full min-w-0 flex-col gap-1">
-          <p className="m-0 truncate text-[15px] font-medium" title={file.name}>{file.name}</p>
+          <p className="m-0 text-[15px] font-medium" title={file.name}><MiddleCut text={file.name} className="justify-center" /></p>
           <p className="m-0 flex justify-center gap-2 text-meta text-on-media/60">
             <span>{typeLabel(file)}</span>
             <span>{describeBytes(file.size)}</span>

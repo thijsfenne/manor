@@ -761,7 +761,7 @@ export function Composer({
             {textFiles.map((file, index) => (
               <Animated.View entering={FadeIn.duration(140).reduceMotion(ReduceMotion.System)} exiting={FadeOut.duration(100).reduceMotion(ReduceMotion.System)} key={`${file.name}:${index}`} style={styles.chip}>
                 <HugeiconsIcon color={colors.muted} icon={File01Icon} size={13} strokeWidth={1.7} />
-                <Text numberOfLines={1} style={styles.chipName}>{file.name}</Text>
+                <Text ellipsizeMode="middle" numberOfLines={1} style={styles.chipName}>{file.name}</Text>
                 <Text style={styles.chipSize}>{describeBytes(isDocumentUpload(file) ? base64Bytes(file.data) : utf8Size(file.content))}</Text>
                 <Pressable
                   accessibilityLabel={`Remove ${file.name}`}

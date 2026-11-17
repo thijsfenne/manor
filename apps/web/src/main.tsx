@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 import { App } from './App'
 import { ShellBoundary } from './components/RecoveryBoundary'
 import { desktopTitleBarIsInset, listenDesktopZoom } from './desktopBrowser'
+import { installOverflowTitles } from './overflowTitles'
 import './styles.css'
 
 // Set before the first paint, so the corner the traffic lights land in is already
@@ -11,6 +12,8 @@ if (desktopTitleBarIsInset()) {
   document.documentElement.dataset.titlebar = 'inset'
   listenDesktopZoom()
 }
+
+installOverflowTitles(document)
 
 const host = document.getElementById('root')
 if (!host) throw new Error('manor: #root is missing from index.html')

@@ -58,7 +58,7 @@ function DeliveredFileRow({ file }: { file: DeliveredFile }) {
       <View style={styles.card}>
         <HugeiconsIcon color={colors.muted} icon={File01Icon} size={16} strokeWidth={1.7} />
         <View style={styles.label}>
-          <Text numberOfLines={1} style={styles.name}>{file.name}</Text>
+          <Text ellipsizeMode="middle" numberOfLines={1} style={styles.name}>{file.name}</Text>
           <Text style={styles.size}>{describeBytes(file.size)}</Text>
         </View>
         <Action busy={busy === 'open'} disabled={src === undefined || busy !== null} icon={SquareArrowUpRightIcon} label="Open" onPress={() => void run('open')} />

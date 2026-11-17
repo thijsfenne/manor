@@ -26,6 +26,7 @@ import { Menu, MenuItem, useMenu } from '../ui/Menu'
 import { SegmentedControl } from '../ui/SegmentedControl'
 import { useHoverCard } from '../ui/useHoverCard'
 import { FileThumb } from './FileThumb'
+import { MiddleCut } from '../MiddleCut'
 
 // The viewer brings the PDF reader with it, which a page that only lists must not pay for.
 const FileViewer = lazy(() => import('./FileViewer').then((module) => ({ default: module.FileViewer })))
@@ -187,7 +188,7 @@ function FileRow({ file, now, author, onOpen, onDownload, onShowInChat }: {
         }}
       >
         <FileThumb file={file} glyph={13} className="h-5 w-5 rounded-[5px] border border-line" />
-        <span className={`min-w-0 flex-1 truncate ${gone ? 'text-dim' : 'text-text'}`}>{file.name}</span>
+        <MiddleCut text={file.name} className={`flex-1 ${gone ? 'text-dim' : 'text-text'}`} />
       </button>
       {gone
         ? <span className="flex-none px-1 text-meta text-dim">Unavailable</span>

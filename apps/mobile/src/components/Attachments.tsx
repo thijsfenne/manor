@@ -56,7 +56,7 @@ export function Attachments({ images, files = [], documents = [], size = 120, nu
         {files.map((file, index) => (
           <View key={`${file.name}:${index}`} style={[styles.file, tint && { backgroundColor: tint.chip }]}>
             <HugeiconsIcon color={tint?.ink ?? colors.muted} icon={File01Icon} size={13} strokeWidth={1.7} />
-            <Text numberOfLines={1} style={[styles.fileName, tint && { color: tint.ink }]}>{file.name}</Text>
+            <Text ellipsizeMode="middle" numberOfLines={1} style={[styles.fileName, tint && { color: tint.ink }]}>{file.name}</Text>
             <Text style={[styles.fileSize, tint && { color: tint.ink }]}>{describeBytes(utf8Size(file.content))}</Text>
           </View>
         ))}
@@ -92,7 +92,7 @@ function DocumentChip({ document }: { document: EventDocument | PendingDocument 
   const content = (
     <>
       <HugeiconsIcon color={tint?.ink ?? colors.muted} icon={File01Icon} size={13} strokeWidth={1.7} />
-      <Text numberOfLines={1} style={[styles.fileName, tint && { color: tint.ink }]}>{document.name}</Text>
+      <Text ellipsizeMode="middle" numberOfLines={1} style={[styles.fileName, tint && { color: tint.ink }]}>{document.name}</Text>
       <Text style={[styles.fileSize, incomplete && styles.fileWarning, tint && { color: tint.ink }]}>{documentLabel(document)}</Text>
     </>
   )
