@@ -155,9 +155,11 @@ export class SqliteTranscript {
       limit: options.limit,
     })
     // FTS picks the excerpt around the matched words; its markers are stripped because
-    // the client marks words itself, the same way for every kind of result.
+    // the client marks words itself, the same way for every kind of result. The cast is
+    // needed: node:sqlite binds a number as REAL, and FTS5 then ignores the rowid and
+    // answers with its first match, so every hit would show the same excerpt.
     const excerpt = this.db.prepare(`SELECT snippet(message_search, 1, '', '', '…', 16) AS text
-      FROM message_search WHERE message_search MATCH ? AND rowid = ?`)
+      FROM message_search WHERE message_search MATCH ? AND rowid = CAST(? AS INTEGER)`)
     return rows.map((row) => {
       const agentId = row.agent_id
       return {

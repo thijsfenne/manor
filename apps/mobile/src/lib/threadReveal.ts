@@ -18,9 +18,9 @@ export function takeThreadReveal(threadId: string): string | null {
 }
 
 /**
- * Show in chat on a DM's Files screen: the transcript event the file came with. The
- * screen leaves it here and goes back; the chat takes it on focus and scrolls to the
- * row holding that event, when that row is loaded.
+ * Show in chat on a DM's Files screen, or a message picked in Search: the transcript
+ * event to land on. The screen leaves it here and goes back or opens the chat; the chat
+ * takes it on focus and scrolls to the row holding that event once its thread holds it.
  */
 let pendingEvent: { chatId: string; eventId: string } | null = null
 

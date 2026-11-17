@@ -46,6 +46,8 @@ export const colors = {
   // cannot be mixed at use time.
   diffAdded: adaptive('rgba(5, 107, 75, 0.15)', 'rgba(16, 185, 129, 0.15)'),
   diffRemoved: adaptive('rgba(176, 44, 36, 0.15)', 'rgba(235, 87, 87, 0.15)'),
+  // The Mac's `--color-find`, its caution fill at 24%: the wash on a message a jump lands on.
+  find: adaptive('rgba(181, 136, 0, 0.24)', 'rgba(242, 201, 76, 0.24)'),
   onPrimary: adaptive('#ffffff', '#08090a'),
   onLight: adaptive('#16181b', '#16181b'),
   lightControl: adaptive('#ffffff', '#ffffff'),

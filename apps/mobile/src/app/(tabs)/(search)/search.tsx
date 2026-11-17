@@ -19,6 +19,7 @@ import { KeyboardFooter } from '@/components/KeyboardFooter'
 import { SectionScaffold } from '@/components/SectionScaffold'
 import { Text } from '@/components/Text'
 import { useTabReset } from '@/lib/tabNavigation'
+import { leaveEventReveal } from '@/lib/threadReveal'
 import { relativeTime } from '@/lib/time'
 import { useWorkspace } from '@/providers/WorkspaceProvider'
 import { colors, fonts, radius, spacing, squircle, tracking } from '@/theme'
@@ -40,8 +41,8 @@ const KIND = {
 /**
  * The phone's search, on the Mac palette's rule and in its one ranked list: chat titles
  * matched here from the lists the phone already holds, message content and note bodies
- * searched on the Mac. Reminders stay on the Mac. A chat or a message opens its chat on
- * this tab's stack; a note opens in place, and back returns to the results.
+ * searched on the Mac. Reminders stay on the Mac. A chat opens on this tab's stack, a
+ * message opens its chat at that message; a note opens in place, and back returns to the results.
  */
 export default function SearchScreen() {
   const { workspace, status, openChat, readVaultFile, search } = useWorkspace()
@@ -138,6 +139,8 @@ export default function SearchScreen() {
     if (result.kind === 'note') {
       setNote(result.path)
     } else if (result.kind !== 'reminder') {
+      // A message hit lands on that message once the chat holds it.
+      if (result.kind === 'message') leaveEventReveal(result.chatId, result.eventId)
       openChat(result.chatId)
       router.push({ pathname: '/chat/[id]', params: { id: result.chatId } })
     }

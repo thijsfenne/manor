@@ -57,6 +57,7 @@ import { Markdown, type MarkdownLinks, type RepoLinks } from '@/components/Markd
 import { AgentRuntimeSheet, RuntimeSheet, SingleRuntimeSheet } from '@/components/RuntimeSheet'
 import { ReplyContextChip } from '@/components/ReplyContextChip'
 import { NoteQuoteContextChip, QuoteBlock } from '@/components/QuoteContextChip'
+import { LANDING_WASH_MS, LandedMessageContext, LandingWash, type LandedMessage } from '@/components/LandingWash'
 import { QuoteRefSheet } from '@/components/QuoteRefSheet'
 import { QuoteSelectionSheet, type QuoteSelectionSource } from '@/components/QuoteSelectionSheet'
 import type { DraftActions } from '@/components/OutboundDraftBubble'
@@ -519,11 +520,11 @@ function ChatContent({ chatId }: { chatId: string | undefined }) {
   // Scrolls to the row that draws a target. A target folded into a bundle opens it first;
   // the scroll then waits for it to draw and lands on the bundle's top, its items below.
   // `holds` picks the item inside a bundle the jump lands on; its line opens too.
-  const scrollToHolder = useCallback((holder: Row, holds: ((item: Row) => boolean) | undefined, position: { viewPosition: number; viewOffset?: number }) => {
+  const scrollToHolder = useCallback((holder: Row, holds: ((item: Row) => boolean) | undefined, position: { viewPosition: number; viewOffset?: number }, animated = true) => {
     const unfold = holder.kind === 'thread_bundle' && holds !== undefined
     if (unfold) setOpenBundles((current) => openThreadBundleAt(current, stretchRef.current, holder, holds))
     const place = unfold ? { viewPosition: 0 } : position
-    const scroll = (index: number) => void listRef.current?.scrollToIndex({ animated: true, index, ...place })
+    const scroll = (index: number) => void listRef.current?.scrollToIndex({ animated, index, ...place })
     const later = (index: number) => requestAnimationFrame(() => unfold ? requestAnimationFrame(() => scroll(index)) : scroll(index))
     const visibleAt = pageRows.findIndex((row) => row.key === holder.key)
     if (visibleAt >= 0) {
@@ -535,9 +536,21 @@ function ChatContent({ chatId }: { chatId: string | undefined }) {
     later(0)
   }, [pageRows])
 
-  const openQuoteSource = useCallback((eventId: string) => {
+  // The message a jump landed on, washed for a moment so the eye finds it.
+  const [landed, setLanded] = useState<{ eventId: string; id: number } | null>(null)
+  const landings = useRef(0)
+  useEffect(() => {
+    if (landed === null) return undefined
+    const timer = setTimeout(() => setLanded(null), LANDING_WASH_MS)
+    return () => clearTimeout(timer)
+  }, [landed])
+
+  const openQuoteSource = useCallback((eventId: string, animated = true) => {
     const holder = visibleRows.find((row) => rowHasQuoteSource(row, eventId))
-    if (holder !== undefined) scrollToHolder(holder, (item) => rowHasQuoteSource(item, eventId), { viewPosition: 0.5 })
+    if (holder === undefined) return
+    scrollToHolder(holder, (item) => rowHasQuoteSource(item, eventId), { viewPosition: 0.5 }, animated)
+    landings.current += 1
+    setLanded({ eventId, id: landings.current })
   }, [scrollToHolder, visibleRows])
 
   // The same call for the memoized rows: `visibleRows` is new on every event in the thread.
@@ -566,12 +579,31 @@ function ChatContent({ chatId }: { chatId: string | undefined }) {
     if (rowKey !== null) requestAnimationFrame(() => revealRowRef.current(rowKey))
   }, [projectThread, chatId]))
 
-  // Show in chat from a DM's Files lands on the row holding that event; a row that is
-  // not loaded leaves the transcript where it is.
+  // Show in chat from a DM's Files, or a message picked in Search, lands on the row
+  // holding that event at once, like following a link. A chat that just opened waits
+  // until its thread holds the event; leaving the chat first drops the jump.
+  const eventReveal = useRef<string | null>(null)
+  const revealHeldEvent = useCallback(() => {
+    const eventId = eventReveal.current
+    if (eventId === null || !visibleRows.some((row) => rowHasQuoteSource(row, eventId))) return
+    eventReveal.current = null
+    requestAnimationFrame(() => openQuoteSourceRef.current(eventId, false))
+  }, [visibleRows])
+  const revealHeldEventRef = useRef(revealHeldEvent)
+  useEffect(() => {
+    revealHeldEventRef.current = revealHeldEvent
+    revealHeldEvent()
+  }, [revealHeldEvent])
   useFocusEffect(useCallback(() => {
     if (chatId === undefined) return
     const eventId = takeEventReveal(chatId)
-    if (eventId !== null) requestAnimationFrame(() => openQuoteSourceRef.current(eventId))
+    if (eventId !== null) {
+      eventReveal.current = eventId
+      revealHeldEventRef.current()
+    }
+    return () => {
+      eventReveal.current = null
+    }
   }, [chatId]))
 
   // The open Session cards the thread shows right now, which the bar leaves out. Null
@@ -619,6 +651,18 @@ function ChatContent({ chatId }: { chatId: string | undefined }) {
     const frame = requestAnimationFrame(measureWorkCards)
     return () => cancelAnimationFrame(frame)
   }, [measureWorkCards])
+  // The jump centres the row that holds a landed message; in a turn taller than the
+  // screen the message itself can still sit out of view, so its top comes under the header.
+  const onLanded = useCallback((view: View) => {
+    void Promise.all([measureInWindow(view), measureInWindow(footerRef.current)]).then(([message, footer]) => {
+      const state = listRef.current?.getState()
+      if (message === undefined || state === undefined) return
+      const floor = headerFloor + spacing.lg
+      if (message.top >= floor && message.bottom <= (footer?.top ?? Number.POSITIVE_INFINITY)) return
+      void listRef.current?.scrollToOffset({ animated: true, offset: Math.max(0, state.scroll + message.top - floor) })
+    })
+  }, [headerFloor])
+  const landedMessage = useMemo<LandedMessage | null>(() => landed === null ? null : { ...landed, onLanded }, [landed, onLanded])
 
   const submit = (text: string, images: ImageAttachment[], textFiles: StagedFile[]) => {
     const placed = placeQuotesAfterText({ text, ...(quote === undefined ? {} : { quote }) })
@@ -731,6 +775,7 @@ function ChatContent({ chatId }: { chatId: string | undefined }) {
     <AnswerChange.Provider value={answerChange}>
     <TranscriptCovered.Provider value={covered}>
     <View style={styles.screen}>
+      <LandedMessageContext.Provider value={landedMessage}>
       <LiveTranscript
         chatId={chatId}
         listRef={listRef}
@@ -759,6 +804,7 @@ function ChatContent({ chatId }: { chatId: string | undefined }) {
         onReply={chooseReply}
         onQuoteSource={quoteSource}
       />
+      </LandedMessageContext.Provider>
 
       <ChatHeader
         agentIds={chat?.kind === 'pair' ? chat.memberIds : chat?.agentIds ?? []}
@@ -1754,6 +1800,7 @@ function Bubble({ text, images, agents, files = [], documents = [], replyTo, quo
       <Attachments alignEnd images={images} numbered={numbered} />
       {hasBubble ? (
         <View style={[styles.userBubble, tint && { backgroundColor: tint.fill }]}>
+          {sourceEventId === undefined ? null : <LandingWash eventId={sourceEventId} style={styles.userBubbleWash} />}
           {quote === undefined ? null : <QuoteBlock agents={agents} quote={quote} showAuthor={quoteAuthors} {...(onOpenQuoteSource === undefined ? {} : { onOpen: () => onOpenQuoteSource(quote.eventId) })} />}
           {noteQuote === undefined ? null : <NoteQuoteContextChip quote={noteQuote} />}
           {replyTo === undefined ? null : <ReplyContextChip name={agents.find((agent) => agent.id === replyTo.agentId)?.name ?? replyTo.agentId} reply={replyTo} />}
@@ -1809,6 +1856,7 @@ const styles = StyleSheet.create({
   emptyCopy: { color: colors.muted, fontFamily: fonts.sans, fontSize: 15 },
   userMessage: { maxWidth: '86%', alignSelf: 'flex-end', alignItems: 'flex-end', gap: spacing.xs + 2 },
   userBubble: { maxWidth: '100%', gap: spacing.sm, borderRadius: radius.composer, ...squircle, backgroundColor: colors.userBubble, paddingHorizontal: spacing.md + 2, paddingVertical: spacing.sm + 1 },
+  userBubbleWash: { borderRadius: radius.composer, ...squircle },
   pending: { opacity: 0.55 },
   note: { color: colors.muted, fontFamily: fonts.sans, fontSize: 13, lineHeight: 19, textAlign: 'center' },
   noteWithAction: { alignItems: 'center', gap: 2 },

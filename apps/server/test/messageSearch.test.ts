@@ -68,6 +68,8 @@ describe('message search', () => {
       [scattered.id, other.id, false],
       [newest.id, long.id, false],
     ])
+    // Each hit's excerpt comes from its own message.
+    expect(hits.map((hit) => hit.snippet)).toEqual(['the release notes are ready', 'notes first, then the release', 'release day, notes later'])
     expect(await store.searchMessages('release notes', options([long.id, other.id], 1))).toHaveLength(1)
   })
 

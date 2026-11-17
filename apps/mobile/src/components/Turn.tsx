@@ -58,6 +58,7 @@ import { AgentStack } from '@/components/AgentStack'
 import { DiffSheet } from '@/components/DiffSheet'
 import { Blobatar } from '@/components/Blobatar'
 import { useFaceState } from '@/lib/useFaceState'
+import { LandedMessageContext, LandingWash } from '@/components/LandingWash'
 import { Markdown, type MarkdownLinks } from '@/components/Markdown'
 import { MemoryChangesSheet, hasMemoryChanges, memoryChangesLabel } from '@/components/MemoryChangesSheet'
 import { MemoryTraceSheet } from '@/components/MemoryTraceSheet'
@@ -155,6 +156,14 @@ export function Turn({
   // Work keeps the live stream open. A DM never shows it live: the trace is evidence asked for afterwards.
   const quiet = threadProject !== undefined
   const [open, setOpen] = useState(bubbleReplies || quiet ? false : running)
+  // A jump that lands on narration folded into this turn's work opens the fold, once per jump.
+  const landed = useContext(LandedMessageContext)
+  const [openedFor, setOpenedFor] = useState<number | null>(null)
+  if (landed !== null && landed.id !== openedFor
+    && turn.segments.some((segment) => segment.kind === 'reply' && segment.quoteSources.some((source) => source.eventId === landed.eventId))) {
+    setOpenedFor(landed.id)
+    setOpen(true)
+  }
   const [actionSource, setActionSource] = useState<QuoteSelectionSource | null>(null)
   const [copied, setCopied] = useState(false)
   const [memoryOpen, setMemoryOpen] = useState(false)
@@ -821,7 +830,7 @@ function Segment({
     case 'user':
       return renderUser === undefined ? null : <>{renderUser(segment.row)}</>
     case 'reply':
-      return <Reply agents={agents} images={segment.images} text={segment.text} />
+      return <Reply agents={agents} images={segment.images} quoteSources={segment.quoteSources} text={segment.text} />
     case 'ask':
       return <AskAnswers answers={segment.ask.answers} questions={segment.ask.questions} />
     case 'todo':
@@ -1175,6 +1184,7 @@ function Reply({
                   key={source.eventId}
                   onLongPress={onLongPressSource === undefined ? undefined : () => onLongPressSource({ ...source, ...(quoteAgentId === undefined ? {} : { agentId: quoteAgentId }) })}
                 >
+                  <LandingWash eventId={source.eventId} style={styles.replyWash} />
                   <Markdown agents={agents} links={links} text={source.text} />
                 </Pressable>
               )) : text === '' ? null : <Markdown agents={agents} links={links} text={text} />}
@@ -1328,6 +1338,8 @@ const styles = StyleSheet.create({
   replySwipe: { position: 'relative', alignSelf: 'stretch' },
   replySwipeBubble: { maxWidth: '86%', alignSelf: 'flex-start' },
   replyCue: { position: 'absolute', top: 0, bottom: 0, left: spacing.md, justifyContent: 'center' },
+  // Around the words, short of a bubble's padding so it stays inside the bubble.
+  replyWash: { top: -spacing.xs, right: -spacing.sm, bottom: -spacing.xs, left: -spacing.sm, borderRadius: radius.md, ...squircle },
   replyBubble: { alignSelf: 'flex-start', borderRadius: radius.composer, ...squircle, backgroundColor: colors.bubble, paddingHorizontal: spacing.md + 2, paddingVertical: spacing.sm + 1 },
   messageFooter: { minHeight: 28, flexDirection: 'row', alignItems: 'center', gap: 2 },
   footerButton: { width: 28, height: 28, alignItems: 'center', justifyContent: 'center', borderRadius: radius.sm },

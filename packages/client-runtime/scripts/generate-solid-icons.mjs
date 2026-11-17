@@ -29,6 +29,9 @@ const RECIPES = {
   Brain02Icon: { append: { 0: 'V21.9948H4.22222Z' }, roles: { 1: 'cut' } },
   // Two pages that share the spine; without a gap the pair fills into one slab.
   BookOpen01Icon: { extraCuts: [{ d: 'M12 5.5V20.5', width: 1.1 }] },
+  // A lens filled to the rim reads as a blot. The ring stays, the lens fills inside it,
+  // and a gap of one line weight runs evenly between them.
+  Search01Icon: { extraCuts: [{ d: 'M17.5 11A6.5 6.5 0 1 1 4.5 11A6.5 6.5 0 1 1 17.5 11Z', width: 1.5 }] },
 }
 
 /** The line weight of the set, which the cut-outs keep. */
