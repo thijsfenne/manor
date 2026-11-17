@@ -23,9 +23,9 @@ import { chatFallbackTargets, composerRecipients, composerShowsRecipients, reply
 import { chatChangedFiles, resolveMarkdownRepoLink } from '@manor/client-runtime/changed-files'
 import { defaultSingleRuntime, effectiveDriver, isAutoPending, readSingleRuntime, runtimeLabel, runtimeParts, singleRuntimeVoice } from '@manor/client-runtime/runtime-choices'
 import type { ChangeableAnswer, OpenAsk, PendingDocument, QuietWorkspace, RelayExchange, Row, SessionLink, ThreadShape, TurnConsultation, TurnRow, UnannouncedConsultation } from '@manor/client-runtime/state'
-import { activityOf, chatOf, dmMemoryMarks, isHomeRoom, isProjectThread, roomOf, sitsSettled, messageBrief, projectSessionOverview, sessionsDot, openAsk, sessionLiveOf, threadQuestionIn, openSubagentQuestion, subagentSummaryOf, changeableAnswers, personaOf, projectWorkHandoffs, repoListingKey, rowHasQuoteSource, rowsOf, createRowMemory, createValueMemory, feedIndexOf, NO_OPEN_THREAD_BUNDLES, openThreadBundleAt, setThreadBundleOpen, threadBundleOpen, threadBundleOpenItems, threadStretch, onlyConsulted, runtimeStartedAgentIds, sessionReadyRow, sessionThreadOf, stackedConsultationMarkers, relayExchanges, relayMarkerAction, projectThreadFeed, threadQuestionAdvice, threadOf, withSessionTitle, threadSpacing, unannouncedConsultations, workCardInView, workDecisionOpen, type ScreenSpan } from '@manor/client-runtime/state'
+import { activityOf, chatOf, dmMemoryMarks, isHomeRoom, isProjectThread, roomOf, sitsSettled, messageBrief, projectSessionOverview, sessionsDot, openAsk, sessionLiveOf, threadQuestionIn, openSubagentQuestion, subagentSummaryOf, changeableAnswers, personaOf, projectWorkHandoffs, repoListingKey, rowHasQuoteSource, rowsOf, createRowMemory, createValueMemory, feedIndexOf, NO_OPEN_THREAD_BUNDLES, openThreadBundleAt, setThreadBundleOpen, threadBundleOpen, threadBundleOpenItems, threadStretch, onlyConsulted, runtimeStartedAgentIds, sessionReadyRow, sessionThreadOf, stackedConsultationMarkers, relayExchanges, relayMarkerAction, projectThreadFeed, threadQuestionAdvice, threadOf, withSessionTitle, threadSpacing, unannouncedConsultations, workDecisionOpen, type ScreenSpan } from '@manor/client-runtime/state'
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router'
-import { KeyboardAwareLegendList, useKeyboardChatComposerInset, useKeyboardScrollToEnd } from '@legendapp/list/keyboard'
+import { KeyboardAwareLegendList, useKeyboardScrollToEnd } from '@legendapp/list/keyboard'
 import { dateDividers } from '@manor/client-runtime/date-dividers'
 import { historyStart, olderHistoryKey } from '@manor/client-runtime/history-window'
 import { plainDraftText } from '@manor/client-runtime/plain-preview'
@@ -33,13 +33,14 @@ import type { LegendListRef } from '@legendapp/list/react-native'
 import { memo, useCallback, useContext, useEffect, useMemo, useRef, useState, type RefObject } from 'react'
 import { Platform, Pressable, StyleSheet, View, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native'
 import { useKeyboardState } from 'react-native-keyboard-controller'
-import Animated from 'react-native-reanimated'
+import Animated, { useSharedValue, type SharedValue } from 'react-native-reanimated'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { AskCard } from '@/components/AskCard'
 import { SecretCard } from '@/components/SecretCard'
 import { DmWorkingIndicator } from '@/components/DmWorkingIndicator'
 import { carryPendingKeys } from '@/lib/listKeys'
+import { cardsShownInThread, workCardOut } from '@/lib/workDock'
 import { Attachments, ImageViewer } from '@/components/Attachments'
 import { AuthGate } from '@/components/AuthGate'
 import { Blobatar } from '@/components/Blobatar'
@@ -187,7 +188,11 @@ function ChatContent({ chatId }: { chatId: string | undefined }) {
   // composer: with the keyboard down, up, or mid-flight. The keyboard controller
   // drives both natively along the keyboard's own curve, nothing scrolls from JS.
   const keyboardUp = useKeyboardState((state) => state.isVisible)
-  const { contentInsetEndAdjustment, onComposerLayout } = useKeyboardChatComposerInset(listRef, footerRef, ESTIMATED_FOOTER)
+  // The keyboard view adds this to the keyboard's height and reports the sum to the list
+  // as its bottom inset. It must be the only one reporting: the footer's height alone, as
+  // the list's own composer hook reports it, is a keyboard short while the keys are up,
+  // and the list then pins its end that far too high on every footer change.
+  const contentInsetEndAdjustment = useSharedValue(ESTIMATED_FOOTER)
   const { freeze, scrollMessageToEnd } = useKeyboardScrollToEnd({ listRef })
   // The tab bar under the composer, which the keyboard covers; the footer sinks by
   // that much when the keys are up, and the list is told the same distance.
@@ -606,12 +611,11 @@ function ChatContent({ chatId }: { chatId: string | undefined }) {
     }
   }, [chatId]))
 
-  // The open Session cards the thread shows right now, which the bar leaves out. Null
-  // until this chat has measured, so the bar never shows rows it will drop. Measured
-  // against the part of the screen between the header and the bar or composer, both of
-  // which float over the list; rows the list has not rendered count as out of view.
-  const [cardsInView, setCardsInView] = useState<{ chatId: string | undefined; keys: ReadonlySet<string> } | null>(null)
-  const workCardsInView = cardsInView !== null && cardsInView.chatId === chatId ? cardsInView.keys : null
+  // The open Session cards measured out of view, which the bar lists. Null until this
+  // chat has measured, so the bar never shows rows it will drop. Measured against the
+  // part of the screen between the header and the bar or composer, both of which float
+  // over the list; rows the list has not rendered count as out of view.
+  const [cardsOut, setCardsOut] = useState<{ chatId: string | undefined; keys: ReadonlySet<string> } | null>(null)
   const workDockRef = useRef<View>(null)
   const measureRound = useRef(0)
   const workDockHeight = useRef(-1)
@@ -619,12 +623,18 @@ function ChatContent({ chatId }: { chatId: string | undefined }) {
     () => pageRows.flatMap((row) => row.kind === 'work_handoff' && workDecisionOpen(row) ? [row.key] : []),
     [pageRows],
   )
+  const workCardsInView = useMemo(
+    () => cardsOut !== null && cardsOut.chatId === chatId ? cardsShownInThread(openCardKeys, cardsOut.keys) : null,
+    [cardsOut, chatId, openCardKeys],
+  )
   const headerFloor = insets.top + CHAT_HEADER_HEIGHT
-  const measureWorkCards = useCallback(() => {
+  // Settling is the measurement in the frame after the rows changed, before the list has
+  // pinned its end; every other measurement takes the cards where they are.
+  const measureWorkCards = useCallback((settling = false) => {
     const round = (measureRound.current += 1)
     const report = (keys: ReadonlySet<string>) => {
       if (round !== measureRound.current) return
-      setCardsInView((current) => current !== null && current.chatId === chatId && sameKeys(current.keys, keys) ? current : { chatId, keys })
+      setCardsOut((current) => current !== null && current.chatId === chatId && sameKeys(current.keys, keys) ? current : { chatId, keys })
     }
     const state = listRef.current?.getState()
     if (openCardKeys.length === 0 || state === undefined) {
@@ -640,15 +650,14 @@ function ChatContent({ chatId }: { chatId: string | undefined }) {
     ]).then(([floor, ...cards]) => {
       if (floor === undefined) return
       const view = { top: headerFloor, bottom: floor.top }
-      report(new Set(openCardKeys.filter((_, index) => {
-        const card = cards[index]
-        return card !== undefined && workCardInView(card, view)
-      })))
+      // Read when the measurement lands, which is when the cards were placed.
+      const settlingAtEnd = settling && listRef.current?.getState().isWithinMaintainScrollAtEndThreshold === true
+      report(new Set(openCardKeys.filter((_, index) => workCardOut(cards[index], view, settlingAtEnd))))
     })
   }, [chatId, headerFloor, openCardKeys])
   useEffect(() => {
     // After the list has laid the new rows out.
-    const frame = requestAnimationFrame(measureWorkCards)
+    const frame = requestAnimationFrame(() => measureWorkCards(true))
     return () => cancelAnimationFrame(frame)
   }, [measureWorkCards])
   // The jump centres the row that holds a landed message; in a turn taller than the
@@ -860,7 +869,7 @@ function ChatContent({ chatId }: { chatId: string | undefined }) {
           const closing = height < footerHeight && !showJump && pageRows.length > 0
           if (closing) freeze.set(true)
           setFooterHeight(height)
-          onComposerLayout(event)
+          contentInsetEndAdjustment.set(height)
           if (closing) void scrollMessageToEnd({ animated: false, closeKeyboard: false })
         }}
         pointerEvents="box-none"
@@ -1230,7 +1239,7 @@ interface LiveTranscriptProps {
   userBubbleTint: BubbleTint | undefined
   topInset: number
   keyboardSink: number
-  contentInsetEndAdjustment: ReturnType<typeof useKeyboardChatComposerInset>['contentInsetEndAdjustment']
+  contentInsetEndAdjustment: SharedValue<number>
   freeze: ReturnType<typeof useKeyboardScrollToEnd>['freeze']
   onScroll: (event: NativeSyntheticEvent<NativeScrollEvent>) => void
   onOpenAgentRelay: (chatId: string) => void

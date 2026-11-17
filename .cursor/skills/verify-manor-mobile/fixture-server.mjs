@@ -1105,7 +1105,32 @@ function reply(chatId, agentId, text, images = [], quotes = []) {
     broadcast({ type: 'turn_state', chatId, turnId, agentId, state: 'done' })
     dispatch('completed')
   })
+  // A reply in the Stilte thread proposes a Session, the way a real thread does, so a card
+  // arrives while the user sits at the bottom. `kill -HUP` moves it on (see below).
+  if (chatId === 'chat-thread-stilte') at(15_000, () => proposeLive(id, record))
 }
+
+// Sessions the Stilte thread proposed during this run, newest last.
+const liveProposals = []
+function proposeLive(id, record) {
+  const session = stilteSession(`stilte-live-${id}`, 'Datumlabels nalopen', 0, { workChatId: null, acceptedAt: null, createdAt: Date.now() })
+  liveProposals.push(session)
+  directory.workHandoffs.push(session)
+  broadcast(directory)
+  record(note(`${id}-proposed`, 0, 'Session proposed.', { ts: Date.now(), workHandoffId: session.id, workHandoffVersion: 1, workHandoffPhase: 'created' }))
+}
+// The newest accepted live Session reports a result, so its card turns into a Ready card.
+process.on('SIGHUP', () => {
+  const session = liveProposals.findLast((record) => record.acceptedAt !== null && record.goalReachedAt === undefined)
+  if (session === undefined) return
+  session.goalReachedAt = Date.now()
+  session.goalReport = { result: 'De datumlabels kloppen rond middernacht.' }
+  session.goalCompletion = { status: 'ready', operation: 'commit', repos: [] }
+  broadcast(directory)
+  const event = note(`${session.id}-ready`, 0, 'De datumlabels kloppen rond middernacht.', { ts: Date.now(), workHandoffId: session.id, workHandoffVersion: 2 })
+  snapshots['chat-thread-stilte'] = [...snapshots['chat-thread-stilte'], event]
+  broadcast({ type: 'event', chatId: 'chat-thread-stilte', event })
+})
 
 
 // Turns in flight when a chat opens, the way a reconnecting phone receives them.
@@ -1753,6 +1778,20 @@ server.on('connection', (socket) => {
       broadcast(directory)
       return
     }
+    // Confirm on a Session the Stilte thread proposed during this run.
+    const liveResult = message.type === 'confirm_work_goal' ? liveProposals.find((record) => record.id === message.handoffId) : undefined
+    if (liveResult !== undefined) {
+      liveResult.goalConfirmedAt = Date.now()
+      liveResult.goalCompletion = { status: 'pending', operation: 'commit', repos: [] }
+      broadcast(directory)
+      if (message.requestId) send(socket, { type: 'ack', requestId: message.requestId })
+      setTimeout(() => {
+        liveResult.state = 'settled'
+        liveResult.goalCompletion = { status: 'complete', operation: 'commit', repos: [], completedAt: Date.now() }
+        broadcast(directory)
+      }, 3_000)
+      return
+    }
     // Accept on the result card: a stale version is refused, the current one goes
     // pending and lands as committed three seconds later, as the server would observe.
     if (message.type === 'confirm_work_goal' && message.handoffId === handoff.id) {
@@ -1771,7 +1810,7 @@ server.on('connection', (socket) => {
       return
     }
     const proposed = message.type === 'accept_work_handoff'
-      ? [...proposals, ...notesSessions].find((record) => record.id === message.handoffId && record.acceptedAt === null)
+      ? [...proposals, ...notesSessions, ...stilteSessions, ...liveProposals].find((record) => record.id === message.handoffId && record.acceptedAt === null)
       : undefined
     if (proposed !== undefined) {
       const workChatId = `chat-${proposed.id}`
