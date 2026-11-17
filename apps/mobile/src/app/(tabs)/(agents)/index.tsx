@@ -173,10 +173,12 @@ function HeadCard({ row, agent, compact, disabled, onPress }: { row: ChatListRow
         sidebarWorking={busy(row)}
       />
       <View style={styles.chiefNameRow}>
-        <Text numberOfLines={1} style={styles.chiefName}>{agent.name}</Text>
-        {row.waiting || row.running || row.unread ? (
-          <View style={[styles.activityDot, row.waiting ? styles.waitingDot : styles.busyDot]} />
-        ) : null}
+        <View style={styles.chiefNameInner}>
+          <Text numberOfLines={1} style={styles.chiefName}>{agent.name}</Text>
+          {row.waiting || row.running || row.unread ? (
+            <View style={[styles.activityDot, row.waiting ? styles.waitingDot : styles.busyDot]} />
+          ) : null}
+        </View>
       </View>
       {/* Her role under her name, as the Mac's chief wears it. Her fixed place says she
           is the way in, not what she does, and every other row in the list says both. */}
@@ -272,10 +274,12 @@ const styles = StyleSheet.create({
   heads: { flexDirection: 'row', justifyContent: 'center', gap: spacing.sm },
   chiefCompact: { flex: 1, minWidth: 0, alignSelf: 'auto' },
   chiefPressed: { opacity: 0.68 },
-  chiefNameRow: { maxWidth: 240, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 },
+  // The dot hangs outside the name's flow so the name stays centred; the padding is its room on both sides.
+  chiefNameRow: { maxWidth: 240, flexDirection: 'row', justifyContent: 'center', paddingHorizontal: 14 },
+  chiefNameInner: { flexShrink: 1, minWidth: 0, justifyContent: 'center' },
   chiefRole: { maxWidth: 240, marginTop: 4, flexDirection: 'row', justifyContent: 'center' },
   chiefName: { flexShrink: 1, color: colors.muted, fontFamily: fonts.sans, fontSize: 18, fontWeight: '500' },
-  activityDot: { width: 8, height: 8, borderRadius: radius.round },
+  activityDot: { position: 'absolute', left: '100%', top: '50%', marginLeft: 6, marginTop: -4, width: 8, height: 8, borderRadius: radius.round },
   busyDot: { backgroundColor: colors.busy },
   waitingDot: { backgroundColor: colors.warning },
   row: { minHeight: 68, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, borderRadius: radius.md, ...squircle, marginBottom: spacing.sm, paddingHorizontal: spacing.xs, paddingVertical: spacing.sm },

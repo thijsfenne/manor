@@ -305,11 +305,18 @@ function HeadCard({
         ) : null}
         <Avatar name={agent.name} color={agent.color} src={agent.avatar} shape={agent.avatarShape} tone={agent.avatarTone} size={compact ? PINNED_FACE_SIZE : CHIEF_FACE_SIZE} center sidebarWorking={row.running && !row.waiting} />
         <span className="flex max-w-full min-w-0 flex-col items-center gap-1">
-          <span className="flex max-w-full min-w-0 items-center gap-1.5">
-            <span className="min-w-0 truncate text-[15px] font-medium text-text">{agent.name}</span>
-            {row.running && !row.waiting ? null : (
-              <Standing waiting={row.waiting} unread={row.unread} running={row.running} lastMessageAt={null} now={0} />
-            )}
+          {/* The mark hangs beside the name instead of in its flow, so the name stays centred
+              under the face when it comes and goes. The padding is its room on both sides,
+              which keeps a long name truncating short of it. */}
+          <span className={`flex max-w-full min-w-0 justify-center ${row.waiting ? 'px-[3.375rem]' : 'px-[1.375rem]'}`}>
+            <span className="relative flex min-w-0">
+              <span className="min-w-0 truncate text-[15px] font-medium text-text">{agent.name}</span>
+              {row.running && !row.waiting ? null : (
+                <span className="absolute left-full top-1/2 ml-1.5 flex -translate-y-1/2">
+                  <Standing waiting={row.waiting} unread={row.unread} running={row.running} lastMessageAt={null} now={0} />
+                </span>
+              )}
+            </span>
           </span>
           {agent.role || agent.isCos ? <RoleBadge label={agent.role || 'Chief of staff'} /> : null}
         </span>

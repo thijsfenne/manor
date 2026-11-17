@@ -7,6 +7,8 @@ What changed for someone who uses Manor, newest first. A version is a tag on `ma
 - An agent adds an event to your iCloud calendar without an approval card when Manor runs with full access. With Auto it goes through the same review as other connector writes, and with Confirm it asks as before, showing the event. A scheduled routine still cannot add an event.
 - A chat's time lines stand only directly above a message. Lines between agents, such as 2 messages with an agent, and hidden or system rows no longer get a time of their own, so several times no longer stack on top of each other. The phone shows the same time lines in a DM as the Mac.
 
+- The name on a pinned agent stays centred under the face when its unread dot appears or goes. The dot now hangs beside the name, on the Mac and on the phone.
+
 ## 0.2.0, 2026-11-17
 
 - Show source on a quote, and other jumps to a message, scroll only the conversation. With the chat already at its bottom, the whole window used to slide up and leave a dark band under the message field. The source message now also lights up briefly, as a search hit does.
