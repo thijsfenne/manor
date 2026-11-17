@@ -107,15 +107,20 @@ it.each(LAUNCHES)('starts as an empty house, keeps strangers out, and answers on
   expect(await knock(port)).toEqual({ refused: 401 })
   expect(await knock(port, 'x'.repeat(43))).toEqual({ refused: 401 })
 
-  const door = await knock(port, readFileSync(path.join(dataDir, 'local-access-token'), 'utf8').trim())
-  if (!('socket' in door)) throw new Error(`The local access token was refused with ${door.refused}`)
+  // Listened to from the moment it exists, not from 'open'. The server sends its first
+  // frames right behind the handshake, and on a busy runner both land in one read. `ws`
+  // then emits those frames before an awaited 'open' could attach a listener, and the
+  // empty roster this test answers is gone.
+  const socket = new WebSocket(`ws://127.0.0.1:${port}/ws?token=${readFileSync(path.join(dataDir, 'local-access-token'), 'utf8').trim()}`)
   // The house starts empty. The onboarding's two moves, creating an agent and opening
   // its DM with a first message, are what a new user's first minute comes down to.
   const reply = await new Promise<string>((resolve, reject) => {
     const timer = setTimeout(() => reject(new Error(`No reply to the first message:\n${log}`)), 15_000)
+    socket.once('unexpected-response', (_request, response) => reject(new Error(`The local access token was refused with ${response.statusCode}`)))
+    socket.once('error', reject)
     let asked = false
     let greeted = false
-    door.socket.on('message', (raw) => {
+    socket.on('message', (raw) => {
       const frame = JSON.parse(String(raw)) as { type: string; agents?: { id: string }[]; projects?: unknown[]; homeFolders?: string[]; chats?: unknown[]; event?: { type: string; agentId?: string } }
       // No project is made for the user. A session without one works in the home room,
       // whose folder is the memory folder, told to the client as a host fact.
@@ -130,7 +135,7 @@ it.each(LAUNCHES)('starts as an empty house, keeps strangers out, and answers on
       }
       if (frame.type === 'roster' && frame.agents?.length === 0 && !asked) {
         asked = true
-        door.socket.send(JSON.stringify({
+        socket.send(JSON.stringify({
           type: 'save_agent',
           requestId: 'first-agent',
           agent: { name: 'Marlow', color: '#8B7EC8', character: 'You are Marlow.', driver: 'claude', allowedTools: [], mcpServers: [], memoryScope: false, isCos: true },
@@ -139,7 +144,7 @@ it.each(LAUNCHES)('starts as an empty house, keeps strangers out, and answers on
       const created = frame.type === 'roster' ? frame.agents?.[0]?.id : undefined
       if (created !== undefined && !greeted) {
         greeted = true
-        door.socket.send(JSON.stringify({ type: 'create_chat', kind: 'dm', memberIds: [created], openingMessage: { text: 'Hello house' } }))
+        socket.send(JSON.stringify({ type: 'create_chat', kind: 'dm', memberIds: [created], openingMessage: { text: 'Hello house' } }))
       }
       if (frame.type === 'event' && frame.event?.type === 'agent_message' && frame.event.agentId !== undefined) {
         clearTimeout(timer)
@@ -147,6 +152,6 @@ it.each(LAUNCHES)('starts as an empty house, keeps strangers out, and answers on
       }
     })
   })
-  door.socket.close()
+  socket.close()
   expect(reply).not.toBe('')
 }, 60_000)
