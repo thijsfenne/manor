@@ -87,6 +87,7 @@ export function WorkspaceNavRail({
       pins={railFaces}
       stageAgentId={stageAgentId}
       providerUsage={workspace.providerUsage}
+      providerConnections={workspace.providerConnections}
       usageActive={usageActive}
       providerUpdates={providerUpdates}
       onUpdateProviders={manor.updateProviders}

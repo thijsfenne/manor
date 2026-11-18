@@ -18,7 +18,7 @@ import {
   Globe02Icon as Globe02SolidIcon,
   PuzzleIcon as PuzzleSolidIcon,
 } from '@manor/client-runtime/solid-icons'
-import type { AgentConfig, ProviderUpdate, ProviderUsage } from '@manor/contracts'
+import type { AgentConfig, ProviderConnection, ProviderUpdate, ProviderUsage } from '@manor/contracts'
 import type { NavDestination } from '../navDestination'
 import type { ThemeChoice } from '../useTheme'
 import { INSTANT, SEGMENTED_SLIDE } from '../motion'
@@ -102,6 +102,8 @@ interface NavRailProps {
   /** The persona whose DM is on the stage; her face wears the edge pill, Agents keeps the fill. */
   stageAgentId: string | null
   providerUsage: ProviderUsage[]
+  /** Provider sign-in rows; the Usage dialog leaves out a provider that is not connected. */
+  providerConnections: readonly ProviderConnection[]
   usageActive: boolean
   /** Provider CLI updates the toast is not showing; the door hides while there are none. */
   providerUpdates?: ProviderUpdate[]
@@ -137,6 +139,7 @@ function NavRailDoors({
   pins,
   stageAgentId,
   providerUsage,
+  providerConnections,
   usageActive,
   providerUpdates = [],
   onUpdateProviders,
@@ -291,7 +294,7 @@ function NavRailDoors({
         {mobile || providerUpdates.length === 0 || onUpdateProviders === undefined ? null : (
           <ProviderUpdateRailButton entries={providerUpdates} onUpdate={onUpdateProviders} />
         )}
-        <UsagePanel perProvider={providerUsage} onOpenDetails={onOpenUsage} active={usageActive} />
+        <UsagePanel perProvider={providerUsage} connections={providerConnections} onOpenDetails={onOpenUsage} active={usageActive} />
         <AccountPopover
           name={profile.name}
           photo={profile.photo}

@@ -4,7 +4,6 @@ import {
   STALE_AFTER_MS,
   byCardOrder,
   clockOf,
-  elapsedShare,
   paceOf,
   remainingPercent,
   resetsIn,
@@ -13,6 +12,7 @@ import {
 import { ChartDecreaseIcon, ChartIncreaseIcon, DashboardSpeed01Icon } from '@hugeicons/core-free-icons'
 import { Icon } from '../Icon'
 import { ProviderMark } from '../ProviderMark'
+import { PaceMark, paceMarkPercent } from './PaceMark'
 import { UsageHint } from './UsageHint'
 import { PROVIDER_PRESENTATION } from './usageProviders'
 
@@ -100,8 +100,7 @@ function LimitCard({ provider, window, now }: { provider: ProviderUsage['provide
  */
 function WindowBar({ color, window, now }: { color: string; window: UsageWindow; now: number }) {
   const remaining = remainingPercent(window)
-  const elapsed = elapsedShare(window, now)
-  const timeLeft = elapsed === null ? null : Math.round((1 - elapsed) * 100)
+  const timeLeft = paceMarkPercent(window, now)
   const reset = resetsIn(window, now)
   const summary = `${window.label}: ${String(remaining)}% left${
     timeLeft === null ? '' : `, ${String(timeLeft)}% of the window left`
@@ -133,13 +132,7 @@ function WindowBar({ color, window, now }: { color: string; window: UsageWindow;
           style={{ width: `${String(remaining)}%`, backgroundColor: color }}
         />
       ) : null}
-      {timeLeft === null ? null : (
-        <span
-          aria-hidden
-          className="absolute inset-y-0.5 w-px -translate-x-1/2 bg-muted"
-          style={{ left: `${String(timeLeft)}%` }}
-        />
-      )}
+      <PaceMark at={timeLeft} className="inset-y-0.5 bg-muted" />
     </UsageHint>
   )
 }

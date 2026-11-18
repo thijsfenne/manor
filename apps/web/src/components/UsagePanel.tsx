@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { ArrowRight01Icon, DashboardSpeed02Icon } from '@hugeicons/core-free-icons'
-import type { ProviderUsage, UsageWindow } from '@manor/contracts'
+import type { ProviderConnection, ProviderUsage, UsageWindow } from '@manor/contracts'
 import {
   STALE_AFTER_MS,
   WINDOW_DETAILS,
@@ -15,6 +15,9 @@ import {
 import { Icon } from './Icon'
 import { Modal } from './Modal'
 import { ProviderMark } from './ProviderMark'
+import { usableProviders } from './onboarding/firstAgent'
+import { PaceMark, paceMarkPercent } from './usage/PaceMark'
+import { useMinuteClock } from '../useMinuteClock'
 
 /**
  * How much of each subscription is left, for the whole house, as the sidebar's
@@ -32,6 +35,8 @@ const heatBar = (heat: Heat) => (heat === 'critical' ? 'bg-danger' : heat === 'w
 
 interface UsagePanelProps {
   perProvider: readonly ProviderUsage[]
+  /** The provider sign-in rows; the dialog leaves out a provider that is not connected. */
+  connections: readonly ProviderConnection[]
   /** Opens the Usage view in the main window and closes the dialog behind it. */
   onOpenDetails: () => void
   /** True while that view is the one on screen, so the row reads as the current place. */
@@ -58,7 +63,7 @@ const heatStroke = (heat: Heat) => (heat === 'critical' ? 'stroke-danger' : heat
  * with every window they report do not fit beside a rail, and a popover that
  * outgrows the screen is a modal that has not admitted it yet.
  */
-export function UsagePanel({ perProvider, onOpenDetails, active = false, now = Date.now }: UsagePanelProps) {
+export function UsagePanel({ perProvider, connections, onOpenDetails, active = false, now = Date.now }: UsagePanelProps) {
   const [open, setOpen] = useState(false)
 
   const rings = [...perProvider].sort(byCardOrder).flatMap((usage) => {
@@ -69,7 +74,6 @@ export function UsagePanel({ perProvider, onOpenDetails, active = false, now = D
     .map((ring) => `${ring.provider.charAt(0).toUpperCase()}${ring.provider.slice(1)} ${String(ring.left)}% left`)
     .join(', ')
   const label = rings.length === 0 ? 'Usage' : `Usage, ${reading}`
-  const at = now()
 
   return (
     <div className="relative">
@@ -93,9 +97,10 @@ export function UsagePanel({ perProvider, onOpenDetails, active = false, now = D
 
       {open ? (
         <Modal title="Usage" width="wide" onClose={() => setOpen(false)}>
-          <UsageDialogContent
+          <LiveUsageDialog
             perProvider={perProvider}
-            now={at}
+            connections={connections}
+            now={now}
             onOpenDetails={() => {
               setOpen(false)
               onOpenDetails()
@@ -136,6 +141,28 @@ function UsageRing({ provider, left, heat }: { provider: ProviderUsage['provider
   )
 }
 
+/** Reset labels and pace marks move with the clock while the dialog stays open. */
+function LiveUsageDialog({ now, ...props }: Omit<Parameters<typeof UsageDialogContent>[0], 'now'> & { now: () => number }) {
+  useMinuteClock()
+  return <UsageDialogContent {...props} now={now()} />
+}
+
+/**
+ * The readings worth a card: a provider whose sign-in row says it is missing or
+ * signed out has nothing to show. One with no row yet, or one that did not say
+ * whether it is signed in, keeps its card, the same benefit of the doubt the
+ * first-run screen gives it.
+ */
+function connectedUsage(
+  perProvider: readonly ProviderUsage[],
+  connections: readonly ProviderConnection[],
+): ProviderUsage[] {
+  const usable = new Set(usableProviders(connections))
+  return perProvider.filter(
+    (usage) => usable.has(usage.provider) || !connections.some((row) => row.provider === usage.provider),
+  )
+}
+
 /**
  * The dialog's body, separate from the shell so the cards are testable without a
  * DOM: the shell portals to the body, which the server renderer in the tests does
@@ -143,20 +170,23 @@ function UsageRing({ provider, left, heat }: { provider: ProviderUsage['provider
  */
 export function UsageDialogContent({
   perProvider,
+  connections,
   now,
   onOpenDetails,
 }: {
   perProvider: readonly ProviderUsage[]
+  connections: readonly ProviderConnection[]
   now: number
   onOpenDetails: () => void
 }) {
+  const shown = connectedUsage(perProvider, connections)
   return (
     <>
-      {perProvider.length === 0 ? (
-        <p className="m-0 text-[14px] text-dim">No provider is reporting usage.</p>
+      {shown.length === 0 ? (
+        <p className="m-0 text-[14px] text-dim">No connected provider is reporting usage.</p>
       ) : (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          {[...perProvider].sort(byCardOrder).map((usage) => (
+          {shown.sort(byCardOrder).map((usage) => (
             <ProviderCard key={usage.provider} usage={usage} now={now} />
           ))}
         </div>
@@ -225,12 +255,14 @@ function LimitRow({ limit, now, detail }: { limit: UsageWindow; now: number; det
           {remainingPercent(limit)}% left
         </span>
       </div>
-      <div className="mt-2 h-[5px] overflow-hidden rounded-full bg-line">
+      <div className="relative mt-2 h-[5px] rounded-full bg-line">
         <div
           className={`h-full rounded-full ${heatBar(heat)}`}
           // What is left, as on the Usage view's Limits tab: a full bar is a fresh plan.
           style={{ width: `${String(remainingPercent(limit))}%` }}
         />
+        {/* The text tone, where the Limits tab uses muted: here the fill is muted itself. */}
+        <PaceMark at={paceMarkPercent(limit, now)} className="-inset-y-0.5 bg-text" />
       </div>
       {detail === undefined ? null : <p className="m-0 mt-1.5 text-meta text-dim">{detail}</p>}
     </div>

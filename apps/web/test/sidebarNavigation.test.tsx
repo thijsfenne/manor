@@ -74,6 +74,7 @@ const renderRail = (extra: Partial<ComponentProps<typeof NavRail>> = {}) =>
       pins={[]}
       stageAgentId={null}
       providerUsage={[]}
+      providerConnections={[]}
       usageActive={false}
       theme={{ choice: 'dark', set: () => {} }}
       profile={{ name: 'Sam Example', photo: './images/sam.webp' }}
@@ -247,6 +248,7 @@ function renderRailNode() {
       pins={[]}
       stageAgentId={null}
       providerUsage={[]}
+      providerConnections={[]}
       usageActive={false}
       theme={{ choice: 'dark', set: () => {} }}
       profile={{ name: 'Sam Example', photo: './images/sam.webp' }}
