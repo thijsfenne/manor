@@ -39,11 +39,14 @@ export function SettingsPage({
 /** A small header over related rows, with the way back to the defaults where they exist. */
 export function SettingsGroup({
   title,
+  note,
   onRestore,
   restoreDisabled = false,
   children,
 }: {
   title: string
+  /** A short state beside the header, such as why the rows below cannot run now. */
+  note?: string
   onRestore?: () => void
   /** Already at the defaults, so the act would change nothing. */
   restoreDisabled?: boolean
@@ -54,6 +57,7 @@ export function SettingsGroup({
     <section className="flex flex-col" aria-labelledby={titleId}>
       <div className="flex min-h-6 items-center justify-between gap-4 pb-1">
         <h2 id={titleId} className="m-0 text-meta font-medium text-dim">{title}</h2>
+        {note === undefined ? null : <span className="min-w-0 truncate text-meta text-dim">{note}</span>}
         {onRestore === undefined ? null : (
           <button
             type="button"

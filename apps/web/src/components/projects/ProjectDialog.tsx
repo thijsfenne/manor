@@ -12,8 +12,9 @@ import {
   type ProjectIcon,
   type ProjectMemoryScope,
 } from '@manor/contracts'
-import { readSingleRuntime } from '../../runtimeChoices'
-import { MODELS, PROVIDERS, defaultModel, effortsFor } from '../../runtimes'
+import { hasModelOn, modelOptionsFor, readSingleRuntime, runtimeOn } from '../../runtimeChoices'
+import { MODELS, PROVIDERS, effortsFor, landingModel } from '../../runtimes'
+import { useOffModels } from '../../useOffModels'
 import type { DirBrowse, Notice } from '../../state'
 import { desktopChooseFolder } from '../../desktopBrowser'
 import { ConfirmStrip, DeleteButton } from '../Confirm'
@@ -199,7 +200,8 @@ export function ProjectDialog({
 
   // What the new project's thread starts on. An effort the picked model does not offer
   // falls back to High, the rule the server holds too.
-  const thread = readSingleRuntime(draft.threadRuntime, NEW_SINGLE_CHAT_DEFAULT)
+  const off = useOffModels()
+  const thread = readSingleRuntime(draft.threadRuntime, runtimeOn(NEW_SINGLE_CHAT_DEFAULT, off))
   const setThread = (driver: SingleDriver, model: string, effort: Effort) => {
     const offered = effortsFor(driver, model)
     onDraft({ ...draft, threadRuntime: { driver, model, effort: offered.some((option) => option.value === effort) ? effort : offered.find((option) => option.value === 'high')?.value ?? offered[0]?.value ?? effort } })
@@ -291,10 +293,10 @@ export function ProjectDialog({
               <Select
                 label="Provider"
                 value={thread.driver}
-                options={THREAD_PROVIDERS}
+                options={THREAD_PROVIDERS.filter((option) => option.value === thread.driver || hasModelOn(option.value, off))}
                 disabled={busy}
                 onChange={(driver) => {
-                  const model = MODELS[driver].some((option) => option.value === thread.model) ? thread.model : defaultModel(driver) ?? MODELS[driver][0]?.value ?? ''
+                  const model = MODELS[driver].some((option) => option.value === thread.model) ? thread.model : landingModel(driver, off) ?? MODELS[driver][0]?.value ?? ''
                   setThread(driver, model, thread.effort)
                 }}
               />
@@ -303,7 +305,7 @@ export function ProjectDialog({
               <Select
                 label="Model"
                 value={thread.model}
-                options={MODELS[thread.driver]}
+                options={modelOptionsFor(thread.driver, off, thread.model)}
                 disabled={busy}
                 onChange={(model) => setThread(thread.driver, model, thread.effort)}
               />

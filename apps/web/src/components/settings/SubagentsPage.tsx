@@ -15,6 +15,7 @@ import { RequestNotice } from '../ui/RequestNotice'
 import { Select } from '../ui/Select'
 import { Switch } from '../ui/Switch'
 import { SettingsGroup, SettingsPage, SettingsRow } from './SettingsLayout'
+import { useOffModels } from '../../useOffModels'
 
 const policyKey = (policy: SubagentPolicy) => JSON.stringify(policy)
 
@@ -37,6 +38,7 @@ export function SubagentsPage({ policy, notice, onRequest, onSave, onDismissNoti
 }) {
   const [draft, setDraft] = useState(policy)
   const [offline, setOffline] = useState(false)
+  const off = useOffModels()
   // Saves still on their way back. Their echoes are this page's own picks arriving in
   // order and must not pull the switches back a step; anything else is another window.
   const inFlight = useRef<string[]>([])
@@ -88,7 +90,7 @@ export function SubagentsPage({ policy, notice, onRequest, onSave, onDismissNoti
   }
   const setProvider = (driver: DriverName, on: boolean) => {
     const next = new Set(models)
-    for (const option of MODELS[driver]) {
+    for (const option of MODELS[driver].filter((entry) => !off.includes(entry.value))) {
       if (on) next.add(option.value)
       else next.delete(option.value)
     }
@@ -96,8 +98,11 @@ export function SubagentsPage({ policy, notice, onRequest, onSave, onDismissNoti
   }
   // Checked against the persona-free set, which is what every agent without her own
   // narrowing gets; an empty answer means every delegation is refused.
-  const usable = subagentChoices({ ...draft, personas: {} }, '').length > 0
-  const narrower = narrowerModels(draft.models, draft.efforts)
+  const usable = subagentChoices({ ...draft, personas: {} }, '', off).length > 0
+  // An allowed model turned off in Settings, Models stays in the saved list, hidden, and
+  // comes back allowed when it is turned on again.
+  const onModels = draft.models.filter((model) => !off.includes(model))
+  const narrower = narrowerModels(onModels, draft.efforts)
 
   return (
     <SettingsPage
@@ -112,7 +117,8 @@ export function SubagentsPage({ policy, notice, onRequest, onSave, onDismissNoti
         <div className="flex flex-col gap-3 py-3">
           <span className="text-[14px] font-medium text-text">Models</span>
           {SUBAGENT_DRIVERS.map((driver) => {
-            const own = MODELS[driver]
+            const own = MODELS[driver].filter((option) => !off.includes(option.value))
+            if (own.length === 0) return null
             const allOn = own.every((option) => models.has(option.value))
             return (
               <PillGroup
@@ -138,7 +144,7 @@ export function SubagentsPage({ policy, notice, onRequest, onSave, onDismissNoti
               levels than the list allows, and a model with none left is refused. */}
           {!usable ? (
             <p className="m-0 text-label text-danger" role="status">
-              {draft.models.length === 0
+              {onModels.length === 0
                 ? 'No models selected, so every subagent request is refused.'
                 : draft.efforts.length === 0
                   ? 'No effort levels selected, so every subagent request is refused.'

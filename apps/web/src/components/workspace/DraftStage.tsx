@@ -1,6 +1,7 @@
 import { stageCommandContext } from '@manor/client-runtime/chat-commands'
 import { useEffect, useMemo, type ComponentProps } from 'react'
-import { NEW_SINGLE_CHAT_DEFAULT, SINGLE_CHAT_VOICE, type AgentConfig } from '@manor/contracts'
+import { NEW_SINGLE_CHAT_DEFAULT, SINGLE_CHAT_VOICE, runtimeOn, type AgentConfig } from '@manor/contracts'
+import { useOffModels } from '../../useOffModels'
 import { Avatar } from '../Avatar'
 import { CheckoutRow, type CheckoutStatus } from '../CheckoutRow'
 import { Composer } from '../Composer'
@@ -64,6 +65,8 @@ export function DraftStage({
   onNewSessionAgent: () => void
 }) {
   const hostAuto = useHostAuto()
+  // A new chat never opens on a model turned off in Settings.
+  const singleDefault = runtimeOn(NEW_SINGLE_CHAT_DEFAULT, useOffModels())
   const { workspace, status } = manor
   const { draftBoxRef, creating, draftProjectId, draftAgentId, submitDraft, draftOverride, setDraftMode,
     setDraftSingleRuntime, setDraftProject, setDraftCheckout } = dialogs
@@ -277,7 +280,7 @@ export function DraftStage({
                       setDraftSingleRuntime(
                         checked
                           ? withAuto(draft.overrides[SINGLE_CHAT_VOICE.id] ?? {}, true)
-                          : NEW_SINGLE_CHAT_DEFAULT,
+                          : singleDefault,
                       )
                       return
                     }
@@ -294,7 +297,7 @@ export function DraftStage({
             draftMode === 'single' ? (
               <SingleRuntimeControl
                 override={draft.overrides[SINGLE_CHAT_VOICE.id] ?? {}}
-                fallback={NEW_SINGLE_CHAT_DEFAULT}
+                fallback={singleDefault}
                 allowAuto={false}
                 disabled={status !== 'live' || draft.submitting}
                 onChange={setDraftSingleRuntime}

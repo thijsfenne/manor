@@ -1,4 +1,5 @@
 import { EFFORTS, modelLabel, workSingleDefault, type AgentConfig, type ChatMode, type SingleRuntime } from '@manor/contracts'
+import { readOffModels } from './runtimeChoices'
 import type { WorkAcceptanceOptions } from './commands'
 import type { WorkHandoffRow } from './transcriptState'
 
@@ -59,10 +60,10 @@ export function setWorkChangesOpen(handoffId: string, open: boolean): void {
  * (2026-11-17), on the runtime it proposed; any other card is Multiple for a team and Single
  * for one agent. `household` is every agent, for the Multiple block; it defaults to `agents`.
  */
-export function workProposalDraft(row: WorkHandoffRow, agents: readonly AgentConfig[], changed = readWorkProposalEdits(row.handoffId), household: readonly AgentConfig[] = agents): WorkProposalDraft {
+export function workProposalDraft(row: WorkHandoffRow, agents: readonly AgentConfig[], changed = readWorkProposalEdits(row.handoffId), household: readonly AgentConfig[] = agents, off: readonly string[] = readOffModels()): WorkProposalDraft {
   const draft: WorkProposalDraft = {
     mode: row.supportingAgentIds.length === 0 ? 'single' : 'house',
-    runtime: row.proposedRuntime?.runtime ?? workSingleDefault(agents),
+    runtime: row.proposedRuntime?.runtime ?? workSingleDefault(agents, off),
     isolate: true,
     accepting: false,
     error: null,

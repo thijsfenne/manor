@@ -4,6 +4,7 @@ import { Cancel01Icon, LockIcon } from '@hugeicons/core-free-icons'
 import {
   SINGLE_CHAT_VOICE,
   isSoloRoom,
+  runtimeOn,
   type AgentConfig,
   type Chat,
   type ChatOverride,
@@ -68,6 +69,7 @@ import { RightRail, type RailItem } from './RightRail'
 import type { PanelLayout, RightPanelId } from '../useRightPanel'
 import { WorkspaceHeader } from './WorkspaceHeader'
 import { useHostAuto } from '../useHostAuto'
+import { useOffModels } from '../useOffModels'
 
 const NO_AGENTS: AgentConfig[] = []
 const NO_IDS: string[] = []
@@ -387,6 +389,7 @@ export function ChatPane({
   // The word for this room in its own notes: a Session is a piece of work, the thread is the project's standing chat.
   const chatNoun = projectThread ? 'project thread' : chat.kind === 'project' ? 'Session' : 'chat'
   const singleDefault = defaultSingleRuntime(workspace.agents)
+  const offModels = useOffModels()
   const openSingleOverride = thread.overrides[SINGLE_CHAT_VOICE.id] ?? NO_OVERRIDE
   // Changes only with a new server reading, never with the text streaming beside it.
   const liveContext = liveSessionContext(thread.liveTurns)
@@ -487,7 +490,7 @@ export function ChatPane({
               onChange: (checked: boolean) =>
                 setChatOverride(
                   SINGLE_CHAT_VOICE.id,
-                  checked ? withAuto(openSingleOverride, true) : singleDefault,
+                  checked ? withAuto(openSingleOverride, true) : runtimeOn(singleDefault, offModels),
                   chat.id,
                 ),
             },

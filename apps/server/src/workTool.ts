@@ -38,7 +38,7 @@ export interface WorkToolContext {
  * fields come together; anything outside the runtime catalog is refused with the valid
  * list, so the author can correct the call instead of guessing.
  */
-export function proposedRuntime(input: WorkToolInput): { runtime: SingleRuntime; reason: string } | undefined {
+export function proposedRuntime(input: WorkToolInput, off: readonly string[] = []): { runtime: SingleRuntime; reason: string } | undefined {
   const { provider, model, effort, runtimeReason } = input
   if (provider === undefined && model === undefined && effort === undefined && runtimeReason === undefined) return undefined
   if (provider === undefined || model === undefined || effort === undefined || runtimeReason === undefined) {
@@ -49,6 +49,10 @@ export function proposedRuntime(input: WorkToolInput): { runtime: SingleRuntime;
   const models = MODELS[driver].map((option) => option.value)
   if (!models.includes(model)) {
     throw new Error(`Unknown ${driver} model ${JSON.stringify(model)}. Valid ${driver} models: ${models.join(', ')}.`)
+  }
+  if (off.includes(model)) {
+    const on = models.filter((value) => !off.includes(value))
+    throw new Error(`${model} is turned off in Settings, Models. ${on.length === 0 ? `Every ${driver} model is off; pick another provider.` : `Models still on for ${driver}: ${on.join(', ')}.`}`)
   }
   const efforts = effortsFor(driver, model).map((option) => option.value)
   const level = EFFORTS.find((option) => option.value === effort)?.value

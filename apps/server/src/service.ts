@@ -9,6 +9,7 @@ import {
   DEFAULT_USER_PROFILE,
   DEFAULT_HOUSE_SETTINGS,
   HouseSettingsSchema,
+  everyModelOff,
   daysToMs,
   type HouseSettings,
   SubagentPolicySchema,
@@ -381,6 +382,7 @@ export class ManorService {
         return line
       },
       subagentPolicy: () => this.subagentPolicy,
+      offModels: () => this.settings.disabledModels,
       ...(options.subagentMcp === undefined ? {} : { subagentMcp: options.subagentMcp }),
       ...(options.routineMcp === undefined ? {} : { routineMcp: options.routineMcp }),
       ...(options.workMcp === undefined ? {} : { workMcp: options.workMcp }),
@@ -450,6 +452,7 @@ export class ManorService {
       prepareCheckout: (chatId, checkout, accept) => this.projectModule.prepareWorkCheckout(chatId, checkout, accept),
       releaseWorktrees: (chatId) => this.projectModule.releaseMergedWorktrees(chatId),
       broadcastDirectory: () => this.projectModule.broadcast(),
+      offModels: () => this.settings.disabledModels,
       ...(options.writeCommitMessage === undefined ? {} : { writeCommitMessage: options.writeCommitMessage }),
       ...(options.generateWorkOutcome === undefined ? {} : { generateOutcome: options.generateWorkOutcome }),
       projectThreads: {
@@ -461,6 +464,7 @@ export class ManorService {
     })
     this.projectThreads = new ProjectThreads({
       store: options.store,
+      offModels: () => this.settings.disabledModels,
       structuredRoot: options.structuredMemoryRoot,
       agentName: (agentId) => agentId === SINGLE_CHAT_VOICE.id
         ? PROJECT_THREAD_WRITER
@@ -504,6 +508,7 @@ export class ManorService {
       onCommitted: () => void this.workModule.recheckBlocked().catch(() => undefined),
     })
     this.projectModule = new ProjectModule({
+      offModels: () => this.settings.disabledModels,
       ...(options.externalFiles === undefined ? {} : { externalFiles: options.externalFiles }),
       ...(options.structuredMemoryRoot === undefined ? {} : { structuredMemoryRoot: options.structuredMemoryRoot }),
       store: options.store,
@@ -782,7 +787,7 @@ export class ManorService {
   subagentCatalog(agentId: string): SubagentToolCatalog {
     const policy = this.subagentPolicy
     return {
-      models: subagentChoices(policy, agentId).map(({ driver, model, label, efforts }) => ({ model, label, provider: driver, efforts })),
+      models: subagentChoices(policy, agentId, this.settings.disabledModels).map(({ driver, model, label, efforts }) => ({ model, label, provider: driver, efforts })),
       maxConcurrent: policy.maxConcurrent,
     }
   }
@@ -1018,6 +1023,10 @@ export class ManorService {
         const checked = HouseSettingsSchema.safeParse(message.settings)
         if (!checked.success) {
           reply({ type: 'notice', kind: 'error', text: checked.error.issues[0]?.message ?? 'invalid settings' })
+          return
+        }
+        if (everyModelOff(checked.data.disabledModels)) {
+          reply({ type: 'notice', kind: 'error', text: 'At least one model stays on.' })
           return
         }
         this.settings = await store.saveHouseSettings(checked.data)

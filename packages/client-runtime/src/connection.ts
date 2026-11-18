@@ -1,5 +1,5 @@
 import { observeOutboundDraftEdits } from './outboundDraftEdits'
-import { setHostAuto } from './runtimeChoices'
+import { setHostAuto, setOffModels } from './runtimeChoices'
 import {
   ServerMessageSchema,
   ThreadEventSchema,
@@ -116,6 +116,7 @@ export function parseServerMessage(raw: string): ServerMessage | null {
   if (parsed.success) {
     // Here, because web and phone both read every frame through this one function.
     if (parsed.data.type === 'host_capabilities') setHostAuto(parsed.data.auto !== false)
+    if (parsed.data.type === 'house_settings') setOffModels(parsed.data.settings.disabledModels)
     return parsed.data
   }
   if (!isRecord(json) || json.type !== 'snapshot' || !Array.isArray(json.events)) return null

@@ -1170,11 +1170,14 @@ export class TurnRunner {
         // A user pick during the wait wins. Auto never overwrites that newer pin.
         const superseded = latest?.auto === false || latest?.driver !== locked.driver || latest?.model !== locked.model ||
           latest?.effort !== locked.effort || latest?.speed !== locked.speed
+        // A rule naming a model turned off in Settings falls through like any other
+        // unusable pick: the chat keeps the runtime it was locked on.
         const reason = state.aborted || chat.discarded ? 'stopped'
           : superseded ? 'manual_override'
           : alreadySpoke ? 'already_started'
           : selected === undefined ? 'selector_unavailable'
-          : 'reason' in selected ? selected.reason : undefined
+          : 'reason' in selected ? selected.reason
+          : this.options.offModels?.().includes(selected.runtime.model) === true ? 'model_off' : undefined
         if (reason === undefined && selected !== undefined && 'runtime' in selected) {
           const next = { ...locked, ...selected.runtime }
           if (!supportsFastMode(next.driver, next.model)) delete next.speed

@@ -99,6 +99,7 @@ interface Harness {
 interface HarnessOptions {
   onStoredMessageSettled?: OrchestratorOptions['onStoredMessageSettled']
   selectAutoRuntime?: OrchestratorOptions['selectAutoRuntime']
+  offModels?: OrchestratorOptions['offModels']
   builtInMcp?: OrchestratorOptions['builtInMcp']
   browserTargetContext?: OrchestratorOptions['browserTargetContext']
   computerTargetReady?: OrchestratorOptions['computerTargetReady']
@@ -212,6 +213,7 @@ async function harness(driver: Driver, options: HarnessOptions = {}): Promise<Ha
     ...(options.advanceChatSummary === undefined ? {} : { advanceChatSummary: options.advanceChatSummary }),
     ...(options.generateMemoryTrace === undefined ? {} : { generateMemoryTrace: options.generateMemoryTrace }),
     ...(options.selectAutoRuntime === undefined ? {} : { selectAutoRuntime: options.selectAutoRuntime }),
+    ...(options.offModels === undefined ? {} : { offModels: options.offModels }),
     ...(options.memoryRoots === undefined ? {} : { memoryRoots: options.memoryRoots }),
     ...(options.structuredMemoryRoot === undefined ? {} : { structuredMemoryRoot: options.structuredMemoryRoot }),
     ...(options.rankStructuredMemory === undefined ? {} : { rankStructuredMemory: options.rankStructuredMemory }),
@@ -5546,6 +5548,20 @@ describe('Orchestrator, chat overrides', () => {
     expect(seen).toHaveLength(1)
     expect(select).not.toHaveBeenCalled()
     expect((await orchestrator.overrides(dm.id)).sage).toEqual({ auto: true })
+  })
+
+  it('falls through when the Auto rule names a model turned off in Settings', async () => {
+    const select = vi.fn<NonNullable<OrchestratorOptions['selectAutoRuntime']>>()
+      .mockResolvedValue({ runtime: { driver: 'claude', model: 'claude-fable-5-2', effort: 'high' }, category: 'hardest', confidence: 0.9 })
+    const seen: TurnInput[] = []
+    const { orchestrator, chatId } = await harness(recording(createMockDriver({ deltaDelayMs: 0 }), seen),
+      { selectAutoRuntime: select, offModels: () => ['claude-fable-5-2'] })
+    await orchestrator.setOverride(chatId, 'sage', { driver: 'codex', model: 'gpt-6-luna', auto: true })
+    await orchestrator.submitUserMessage(chatId, '@Sage design the backend')
+    expect(select).toHaveBeenCalledOnce()
+    expect(seen[0]?.agent).toMatchObject({ driver: 'codex', model: 'gpt-6-luna' })
+    expect((await orchestrator.overrides(chatId)).sage).toMatchObject({ driver: 'codex', model: 'gpt-6-luna', autoResolved: true })
+    expect(JSON.parse(vi.mocked(console.info).mock.calls[0]![1])).toMatchObject({ outcome: 'fallback', reason: 'model_off' })
   })
 
   it('switches provider once with Auto, removes unsupported speed and reuses the pin after restart', async () => {

@@ -11,7 +11,7 @@ const OFFLINE = 'Nothing was sent, the connection is down. Try again once it is 
 const NEVER = 'never'
 
 /** The settings counted in days; the folders and the note AI live on the Memory page. */
-type DaysKey = Exclude<keyof HouseSettings, 'memoryDir' | 'knowledgeDir' | 'noteAiModel' | 'noteAiEffort'>
+type DaysKey = Exclude<keyof HouseSettings, 'memoryDir' | 'knowledgeDir' | 'noteAiModel' | 'noteAiEffort' | 'disabledModels'>
 
 /** The day counts each row offers. A value saved outside these still shows as itself. */
 const CHOICES: Record<DaysKey, readonly number[]> = {

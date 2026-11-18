@@ -5,6 +5,7 @@ import { ALL_EFFORTS, ALL_MODELS, SUBAGENT_DRIVERS, inOrder, providerLabel } fro
 import { formFieldClass, formHintClass, formLabelClass } from '../ui/FormField'
 import { Pill, PillGroup } from '../ui/Pill'
 import { Switch } from '../ui/Switch'
+import { useOffModels } from '../../useOffModels'
 
 /** One persona's narrowing: absent means she uses the global lists as they stand. */
 export type PersonaSubagents = SubagentPolicy['personas'][string] | undefined
@@ -28,6 +29,7 @@ export function SubagentsSection({ agentId, driver, policy, own, onChange }: {
   onChange: (own: PersonaSubagents) => void
 }) {
   const hintId = useId()
+  const off = useOffModels()
   const restricted = own !== undefined
 
   if (!DELEGATING_DRIVERS.has(driver)) {
@@ -64,7 +66,7 @@ export function SubagentsSection({ agentId, driver, policy, own, onChange }: {
     else next.add(effort)
     onChange({ ...own, efforts: inOrder(ALL_EFFORTS, next) })
   }
-  const choices = subagentChoices({ ...policy, personas: own === undefined ? {} : { [agentId]: own } }, agentId).length
+  const choices = subagentChoices({ ...policy, personas: own === undefined ? {} : { [agentId]: own } }, agentId, off).length
 
   return (
     <section className={formFieldClass} aria-label="Subagents">
@@ -86,9 +88,10 @@ export function SubagentsSection({ agentId, driver, policy, own, onChange }: {
 
       {!restricted ? null : (
         <div className="flex flex-col gap-3">
-          {SUBAGENT_DRIVERS.map((provider) => (
+          {/* A model turned off in Settings, Models is not offered at all. */}
+          {SUBAGENT_DRIVERS.filter((provider) => MODELS[provider].some((option) => !off.includes(option.value))).map((provider) => (
             <PillGroup key={provider} label={providerLabel(provider)}>
-              {MODELS[provider].map((option) => {
+              {MODELS[provider].filter((option) => !off.includes(option.value)).map((option) => {
                 const allowed = globalModels.has(option.value)
                 return (
                   <Pill

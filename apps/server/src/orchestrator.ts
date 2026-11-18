@@ -258,6 +258,8 @@ export interface OrchestratorOptions {
   broadcastDirectory?: () => Promise<void>
   /** What delegate_task may start; the default policy when absent. */
   subagentPolicy?: () => SubagentPolicy
+  /** Models turned off in Settings, Models: subagents may not run them and Auto never lands on one. */
+  offModels?: () => readonly string[]
   /** Manor's subagent tools for a child that may delegate further, scoped to its turn. */
   subagentMcp?: (chatId: string, agent: AgentConfig, turnId: string, personaId: string, tools: { ask: boolean; delegate: boolean }) => AttachedMcpServer
   /** Optional infrastructure work that starts only after the user message is durable. */
@@ -490,6 +492,7 @@ export class Orchestrator {
     this.subagents = new Subagents({
       store: options.store,
       policy: () => options.subagentPolicy?.() ?? DEFAULT_SUBAGENT_POLICY,
+      offModels: () => options.offModels?.() ?? [],
       parent: (context) => {
         const active = this.chats.get(context.chatId)?.active
         if (active?.turnId !== context.turnId || active.agentId !== context.agentId || active.aborted || active.helperWorkspace === undefined) return undefined

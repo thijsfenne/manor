@@ -1,5 +1,6 @@
 import type { ComponentProps } from 'react'
 import {
+  AiBrain01Icon,
   BookOpen01Icon,
   ConnectIcon,
   CpuIcon,
@@ -31,6 +32,7 @@ export type SettingsSection =
   | 'context'
   | 'auto'
   | 'subagents'
+  | 'models'
   | 'providers'
   | 'memory'
   | 'connections'
@@ -73,7 +75,13 @@ export const SETTINGS_GROUPS: readonly { label: string; sections: readonly Secti
       { id: 'subagents', label: 'Subagents', icon: HierarchySquare02Icon, keywords: ['allowed', 'maximum concurrent subagents', 'allow subagents to delegate'] },
     ],
   },
-  { label: 'Models', sections: [{ id: 'providers', label: 'Providers & keys', icon: CpuIcon, keywords: ['provider clis', 'keys', 'api keys and app passwords', 'sign in', 'subscriptions'] }] },
+  {
+    label: 'Models',
+    sections: [
+      { id: 'models', label: 'Models', icon: AiBrain01Icon, keywords: ['model', 'turn off', 'enabled models', 'model picker'] },
+      { id: 'providers', label: 'Providers & keys', icon: CpuIcon, keywords: ['provider clis', 'keys', 'api keys and app passwords', 'sign in', 'subscriptions'] },
+    ],
+  },
   { label: 'Knowledge', sections: [{ id: 'memory', label: 'Memory & knowledge', icon: BookOpen01Icon, keywords: ['memory folder', 'knowledge folder', 'note ai model', 'daily log'] }] },
   {
     label: 'Integrations',

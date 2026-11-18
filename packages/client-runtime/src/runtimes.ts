@@ -25,4 +25,4 @@ export const PROVIDERS: Option<AgentConfig['driver']>[] = [
   { value: 'mock', label: 'Mock (no provider)' },
 ]
 
-export { MODELS, EFFORTS, defaultModel, modelLabel, effortsFor, clampsEffort } from '@manor/contracts'
+export { MODELS, EFFORTS, CATALOG_DRIVERS, defaultModel, landingModel, everyModelOff, modelLabel, effortsFor, clampsEffort } from '@manor/contracts'

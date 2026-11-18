@@ -14,7 +14,9 @@ import {
   type Effort,
 } from '@manor/contracts'
 import { INSTANT, SPRING_PANEL } from '../../motion'
-import { MODELS, PROVIDERS, defaultModel, effortsFor } from '../../runtimes'
+import { hasModelOn, modelOptionsFor } from '../../runtimeChoices'
+import { MODELS, PROVIDERS, defaultModel, effortsFor, landingModel } from '../../runtimes'
+import { useOffModels } from '../../useOffModels'
 import type { Notice } from '../../state'
 import { useRequest, type RequestEvents } from '../../useRequest'
 import { Icon } from '../Icon'
@@ -315,7 +317,10 @@ function RuleFields({
   onRemove: () => void
 }) {
   const { rule } = row
-  const models = MODELS[rule.driver]
+  // A rule may still name a model turned off in Settings, Models; Auto then falls
+  // through, and the field shows it as off until another model is picked.
+  const off = useOffModels()
+  const models = modelOptionsFor(rule.driver, off, rule.model)
   const fastCapable = supportsFastMode(rule.driver, rule.model)
 
   return (
@@ -358,7 +363,7 @@ function RuleFields({
           <Select
             label="Provider"
             value={rule.driver}
-            options={RULE_PROVIDERS}
+            options={RULE_PROVIDERS.filter((option) => option.value === rule.driver || hasModelOn(option.value, off))}
             onChange={(driver: DriverName) =>
               onRuleChange((current) =>
                 settled({
@@ -366,7 +371,7 @@ function RuleFields({
                   driver,
                   model: MODELS[driver].some((option) => option.value === current.model)
                     ? current.model
-                    : defaultModel(driver) ?? '',
+                    : landingModel(driver, off) ?? '',
                 }),
               )
             }

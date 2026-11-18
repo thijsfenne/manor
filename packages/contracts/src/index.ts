@@ -1,5 +1,5 @@
-export { MODELS, EFFORTS, defaultModel, modelLabel, effortsFor, clampsEffort } from './runtimeCatalog.js'
-import { MODELS, defaultModel, effortsFor } from './runtimeCatalog.js'
+export { MODELS, EFFORTS, CATALOG_DRIVERS, defaultModel, landingModel, everyModelOff, modelLabel, effortsFor, clampsEffort } from './runtimeCatalog.js'
+import { CATALOG_DRIVERS, MODELS, defaultModel, effortsFor, landingModel } from './runtimeCatalog.js'
 import { z } from 'zod'
 export * from './pairing.js'
 import { PairingLinkSchema, PhoneAccessSchema } from './pairing.js'
@@ -684,9 +684,26 @@ export function defaultSingleRuntime(agents: readonly AgentConfig[]): SingleRunt
  * staff's provider, but on Claude the house Opus default rather than the CoS persona's
  * model. A project thread may propose its own per card (2026-10-11).
  */
-export function workSingleDefault(agents: readonly AgentConfig[]): SingleRuntime {
+export function workSingleDefault(agents: readonly AgentConfig[], off: readonly string[] = []): SingleRuntime {
   const runtime = defaultSingleRuntime(agents)
-  return runtime.driver === NEW_SINGLE_CHAT_DEFAULT.driver ? { ...NEW_SINGLE_CHAT_DEFAULT } : runtime
+  return runtimeOn(runtime.driver === NEW_SINGLE_CHAT_DEFAULT.driver ? { ...NEW_SINGLE_CHAT_DEFAULT } : runtime, off)
+}
+/**
+ * What a new conversation starts on when its default model is turned off in Settings:
+ * the same provider's first model still on, else the first provider with one on. The
+ * effort carries over where that model offers it. A chat already running keeps its own.
+ */
+export function runtimeOn(runtime: SingleRuntime, off: readonly string[]): SingleRuntime {
+  if (!off.includes(runtime.model)) return runtime
+  const driver = [runtime.driver, ...SINGLE_DRIVERS].find((candidate) =>
+    MODELS[candidate].some((option) => !off.includes(option.value)))
+  const model = driver === undefined ? undefined : landingModel(driver, off)
+  if (driver === undefined || model === undefined) return runtime
+  const efforts = effortsFor(driver, model).map((option) => option.value)
+  const effort = efforts.includes(runtime.effort) ? runtime.effort : efforts.includes('high') ? 'high' : efforts[0] ?? runtime.effort
+  // Fast belongs to the model it was set on.
+  const { speed: _speed, ...rest } = runtime
+  return { ...rest, driver, model, effort }
 }
 export const ChatModeSchema = z.enum(['house', 'single'])
 export type ChatMode = z.infer<typeof ChatModeSchema>
@@ -2876,7 +2893,7 @@ export const SubagentPolicyDraftSchema = z.object({
 
 /** Every catalog model, the levels most work needs, three at a time, no grandchildren. */
 export const DEFAULT_SUBAGENT_POLICY: SubagentPolicy = {
-  models: (['claude', 'codex', 'grok', 'cursor'] as const).flatMap((driver) => MODELS[driver].map((option) => option.value)),
+  models: CATALOG_DRIVERS.flatMap((driver) => MODELS[driver].map((option) => option.value)),
   efforts: ['low', 'medium', 'high'],
   maxConcurrent: 3,
   allowNested: false,
@@ -2950,6 +2967,12 @@ export const HouseSettingsSchema = z.object({
   /** The model and effort behind a note's comments and its composer. No tools, no persona. */
   noteAiModel: z.string().trim().min(1).max(120).default(NOTE_AI_DEFAULTS.model),
   noteAiEffort: EffortSchema.default(NOTE_AI_DEFAULTS.effort),
+  /**
+   * Models turned off in Settings, Models. They leave every picker, Auto skips them and
+   * subagents may not run them; a chat or agent already on one keeps it. Stored as the
+   * off list, so a model the catalogue gains later starts on.
+   */
+  disabledModels: z.array(z.string().min(1).max(100)).max(200).default([]),
 })
 export type HouseSettings = z.infer<typeof HouseSettingsSchema>
 
@@ -3018,12 +3041,16 @@ export interface SubagentChoice {
   efforts: Effort[]
 }
 
-/** The effective set for one persona, in catalog order; a model with no level left is not a choice. */
-export function subagentChoices(policy: SubagentPolicy, agentId: string): SubagentChoice[] {
+/**
+ * The effective set for one persona, in catalog order; a model with no level left is
+ * not a choice, and neither is one turned off in Settings, Models (`off`).
+ */
+export function subagentChoices(policy: SubagentPolicy, agentId: string, off: readonly string[] = []): SubagentChoice[] {
   const own = policy.personas[agentId]
   const efforts = policy.efforts.filter((effort) => own?.efforts === undefined || own.efforts.includes(effort))
-  return (['claude', 'codex', 'grok', 'cursor'] as const).flatMap((driver) => MODELS[driver]
-    .filter((option) => policy.models.includes(option.value) && (own?.models === undefined || own.models.includes(option.value)))
+  return CATALOG_DRIVERS.flatMap((driver) => MODELS[driver]
+    .filter((option) => !off.includes(option.value) && policy.models.includes(option.value) &&
+      (own?.models === undefined || own.models.includes(option.value)))
     .map((option) => ({
       driver,
       model: option.value,
@@ -3039,9 +3066,11 @@ export function checkSubagentChoice(
   agentId: string,
   model: string,
   effort: string,
+  off: readonly string[] = [],
 ): { ok: true; driver: DriverName; effort: Effort } | { ok: false; reason: string } {
   if (!isCatalogModel(model)) return { ok: false, reason: `${model} is not a model Manor runs.` }
   const driver = driverForModel(model)!
+  if (off.includes(model)) return { ok: false, reason: `${model} is turned off in Settings, Models.` }
   if (!policy.models.includes(model)) return { ok: false, reason: `${model} is not allowed for subagents in Settings.` }
   const own = policy.personas[agentId]
   if (own?.models !== undefined && !own.models.includes(model)) {

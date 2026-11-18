@@ -72,6 +72,8 @@ interface WorkModuleOptions {
   releaseWorktrees?: (chatId: string) => Promise<unknown>
   /** Writes Confirm's commit message when the lead handed none in; Haiku in the service. */
   writeCommitMessage?: WriteCommitMessage
+  /** Models turned off in Settings, Models: a project thread may not propose one. */
+  offModels?: () => readonly string[]
 }
 
 const BLOCKED_POLL_MS = 30_000
@@ -310,7 +312,7 @@ export class WorkModule {
       : this.options.agents().find((agent) => agent.id === context.agentId)
     if (author === undefined) throw new Error('The handoff author no longer exists.')
     // The runtime choice is the project thread's own; persona cards keep the house default.
-    const runtimeProposal = proposedRuntime(input)
+    const runtimeProposal = proposedRuntime(input, this.options.offModels?.())
     if (runtimeProposal !== undefined && !threadAuthor) {
       throw new Error('Only a project thread proposes a runtime. Leave provider, model, effort and runtimeReason out.')
     }
@@ -495,7 +497,7 @@ export class WorkModule {
       // proposed runtime or else the house default. A persona's card names its own mode.
       const threadCard = handoff.authorAgentId === SINGLE_CHAT_VOICE.id
       const single = (options.mode ?? (threadCard ? 'single' : 'house')) === 'single'
-      const fallback = threadCard ? handoff.proposedRuntime?.runtime ?? workSingleDefault(this.options.agents()) : undefined
+      const fallback = threadCard ? handoff.proposedRuntime?.runtime ?? workSingleDefault(this.options.agents(), this.options.offModels?.()) : undefined
       const runtime = single ? singleRuntime(options.runtime ?? fallback) : undefined
       if (!single && options.runtime !== undefined) throw new Error('Runtime selection requires Single mode.')
       if (!single) {

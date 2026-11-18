@@ -22,6 +22,7 @@ import {
   HOME_PROJECT_ID,
   isProjectThreadFile,
   NEW_SINGLE_CHAT_DEFAULT,
+  runtimeOn,
   NOTES_LINE_MAX,
   SESSION_STATUS_MAX,
   PROJECT_CARD_FILE,
@@ -110,6 +111,8 @@ type AcceptOptions = Pick<Extract<ClientMessage, { type: 'accept_work_handoff' }
 
 export interface ProjectThreadsOptions {
   store: Store
+  /** Models turned off in Settings; a new thread never starts on one. */
+  offModels?: () => readonly string[]
   /** `<memory dir>/memory/structured`; absent without a local checkout, where threads are refused. */
   structuredRoot: string | undefined
   agentName: (agentId: string) => string
@@ -385,7 +388,7 @@ export class ProjectThreads {
     const { store } = this.options
     const chat = await store.createChat({ kind: 'project', projectId: project.id, mode: 'single', title: project.name })
     try {
-      await store.setChatOverride(chat.id, SINGLE_CHAT_VOICE.id, { ...(runtime ?? NEW_SINGLE_CHAT_DEFAULT) })
+      await store.setChatOverride(chat.id, SINGLE_CHAT_VOICE.id, { ...(runtime ?? runtimeOn(NEW_SINGLE_CHAT_DEFAULT, this.options.offModels?.() ?? [])) })
       await store.setProjectThread(project.id, chat.id)
     } catch (error) {
       await store.deleteChat(chat.id).catch(() => undefined)

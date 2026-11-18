@@ -7,7 +7,10 @@ import {
   ClientMessageSchema,
   routineDmTarget,
   ServerMessageSchema,
+  NEW_SINGLE_CHAT_DEFAULT,
   SIDE_CHAT_DEFAULTS,
+  defaultSingleRuntime,
+  driverForModel,
   type AgentConfig,
   type McpServerConfig,
   type McpServerDraft,
@@ -1743,6 +1746,33 @@ describe('ManorService, picking a folder while creating a project', () => {
     expect((await store.listProjects()).some((row) => row.name === 'Refused')).toBe(false)
   })
 
+  it('starts a new project thread and a bare Browser session on a model still on when the default is off', async () => {
+    const store = createMemoryStore({ agents: roster })
+    const replies: ServerMessage[] = []
+    const reply = (message: ServerMessage) => { replies.push(message) }
+    const manor = new ManorService({
+      store, agents: () => roster, setAgents: () => undefined, mcpServers: () => [], setMcpServers: () => undefined,
+      resolveDriver: () => createMockDriver({ deltaDelayMs: 0 }), ensureScratchDir: scratchFor,
+      structuredMemoryRoot: mkdtempSync(path.join(os.tmpdir(), 'manor-off-memory-')), broadcast: () => undefined,
+    })
+    const off = [NEW_SINGLE_CHAT_DEFAULT.model, defaultSingleRuntime(roster).model]
+    await manor.handle({ type: 'save_house_settings', settings: { ...DEFAULT_HOUSE_SETTINGS, disabledModels: off } }, reply)
+
+    await manor.handle({ type: 'create_project', name: 'Client work', repoPaths: [] }, reply)
+    const project = (await store.listProjects()).find((row) => row.name === 'Client work')!
+    const thread = (await store.loadChatOverrides(project.threadChatId!)).__single__
+    expect(thread?.model).toBeDefined()
+    expect(off).not.toContain(thread?.model)
+
+    await manor.handle(ClientMessageSchema.parse(createChatMessage({ kind: 'browser', mode: 'single' })), reply)
+    const created = replies.filter((message) => message.type === 'chat_created').at(-1)
+    const browser = (await store.loadChatOverrides(created?.type === 'chat_created' ? created.chatId : '')).__single__
+    expect(browser?.model).toBeDefined()
+    expect(off).not.toContain(browser?.model)
+    // Auto, where the host has it, still chooses for the untouched session.
+    expect(browser?.auto).toBe(true)
+  })
+
   it('hides a project with its thread kept past the archive retention, and adds it back with the same thread', async () => {
     const store = createMemoryStore({ agents: roster })
     const replies: ServerMessage[] = []
@@ -3174,6 +3204,34 @@ describe('ManorService, routines', () => {
     expect(opened[1]?.chatId).toBe(opened[0]?.chatId)
     // A side chat is not part of the directory, so no other client has anything to update.
     expect(broadcast.length).toBe(broadcastsBefore)
+  })
+
+  it('starts a new side chat on a model still on when the default is turned off in Settings', async () => {
+    const store = createMemoryStore({ agents: cosRoster })
+    const { chatId } = await seededChat(store)
+    const { manor, replies, reply } = service(store)
+
+    await manor.handle({ type: 'save_house_settings', settings: { ...DEFAULT_HOUSE_SETTINGS, disabledModels: [SIDE_CHAT_DEFAULTS.model] } }, reply)
+    await manor.handle({ type: 'open_side_chat', chatId }, reply)
+
+    const opened = replies.find((message) => message.type === 'side_chat')
+    const model = opened?.type === 'side_chat' ? opened.model : ''
+    expect(model).not.toBe(SIDE_CHAT_DEFAULTS.model)
+    expect(driverForModel(model)).toBe('claude')
+    expect((await store.sideChatOf(chatId))?.sideModel).toBe(model)
+  })
+
+  it('leaves a side chat already open on the default when that model is turned off later', async () => {
+    const store = createMemoryStore({ agents: cosRoster })
+    const { chatId } = await seededChat(store)
+    const { manor, replies, reply } = service(store)
+
+    await manor.handle({ type: 'open_side_chat', chatId }, reply)
+    await manor.handle({ type: 'save_house_settings', settings: { ...DEFAULT_HOUSE_SETTINGS, disabledModels: [SIDE_CHAT_DEFAULTS.model] } }, reply)
+    await manor.handle({ type: 'open_side_chat', chatId }, reply)
+
+    expect(replies.filter((message) => message.type === 'side_chat').at(-1)).toMatchObject({ model: SIDE_CHAT_DEFAULTS.model })
+    expect((await store.sideChatOf(chatId))?.sideModel).toBeNull()
   })
 
   it('clears a side chat into a new thread on the same model, the old one deleted', async () => {

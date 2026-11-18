@@ -6,6 +6,7 @@ import type { Manor } from '../../useWorkspace'
 import type { ThemeChoice } from '../../useTheme'
 import type { SettingsController } from '../../useSettings'
 import { AgentsPage } from './AgentsPage'
+import { ModelsPage } from './ModelsPage'
 import { AutoRulesPage } from './AutoRulesPage'
 import { ContextFilesPage } from './ContextFilesPage'
 import { AppearancePage, GeneralPage, KeybindingsPage } from './PersonalPages'
@@ -129,6 +130,16 @@ export function SettingsHost({
             policy={workspace.subagentPolicy}
             onRequest={manor.requestSubagentPolicy}
             onSave={(policy) => manor.saveSubagentPolicy(policy)}
+            {...common}
+          />
+        )
+      case 'models':
+        return (
+          <ModelsPage
+            settings={workspace.houseSettings}
+            connections={workspace.providerConnections}
+            onCheck={manor.checkProviders}
+            onSave={(next) => manor.saveHouseSettings(next)}
             {...common}
           />
         )

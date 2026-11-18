@@ -311,3 +311,38 @@ test('a pairing link reads the same as a browser link and as an app link', () =>
     `${origin}/pair`,
   ]) assert.equal(parsePairingLink(wrong), null, wrong)
 })
+
+test('a model turned off in Settings, Models is refused by the subagent policy and left out of its choices', async () => {
+  const { DEFAULT_SUBAGENT_POLICY, checkSubagentChoice, subagentChoices } = await import('./index.js')
+  const off = ['claude-haiku-5-5']
+  assert.deepEqual(checkSubagentChoice(DEFAULT_SUBAGENT_POLICY, 'wren', 'claude-haiku-5-5', 'high', off), {
+    ok: false, reason: 'claude-haiku-5-5 is turned off in Settings, Models.',
+  })
+  assert.equal(checkSubagentChoice(DEFAULT_SUBAGENT_POLICY, 'wren', 'claude-sonnet-5-5', 'high', off).ok, true)
+  const models = subagentChoices(DEFAULT_SUBAGENT_POLICY, 'wren', off).map((choice) => choice.model)
+  assert.equal(models.includes('claude-haiku-5-5'), false)
+  assert.equal(models.includes('claude-sonnet-5-5'), true)
+})
+
+test('Settings keeps one model on, and a provider switch lands on a model still on', async () => {
+  const { CATALOG_DRIVERS, HouseSettingsSchema, MODELS, everyModelOff, landingModel } = await import('./index.js')
+  const all = CATALOG_DRIVERS.flatMap((driver) => MODELS[driver].map((option) => option.value))
+  assert.equal(everyModelOff(all), true)
+  assert.equal(everyModelOff(all.slice(1)), false)
+  assert.deepEqual(HouseSettingsSchema.parse({}).disabledModels, [])
+  assert.equal(landingModel('grok'), 'grok-4.7')
+  assert.equal(landingModel('grok', ['grok-4.7']), 'grok-4.5')
+  assert.equal(landingModel('grok', ['grok-4.5', 'grok-4.6', 'grok-4.7']), 'grok-4.7')
+})
+
+test('a new conversation whose default model is off starts on a model that is on', async () => {
+  const { MODELS, NEW_SINGLE_CHAT_DEFAULT, runtimeOn, workSingleDefault } = await import('./index.js')
+  assert.equal(runtimeOn(NEW_SINGLE_CHAT_DEFAULT, []), NEW_SINGLE_CHAT_DEFAULT)
+  const sameProvider = workSingleDefault([], ['claude-opus-5-5'])
+  assert.equal(sameProvider.driver, 'claude')
+  assert.notEqual(sameProvider.model, 'claude-opus-5-5')
+  assert.equal(sameProvider.effort, 'high')
+  const nextProvider = runtimeOn({ ...NEW_SINGLE_CHAT_DEFAULT, speed: 'fast' }, MODELS.claude.map((option) => option.value))
+  assert.equal(nextProvider.driver, 'codex')
+  assert.equal(nextProvider.speed, undefined)
+})

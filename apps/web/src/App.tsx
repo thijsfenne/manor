@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react'
 import {
   NEW_SINGLE_CHAT_DEFAULT,
+  runtimeOn,
   BROWSER_HOME_SESSION_ID,
   type Chat,
   type InlineQuote,
@@ -19,6 +20,7 @@ import { Onboarding } from './components/onboarding/Onboarding'
 import { NewAgentDialog } from './components/agents/NewAgentDialog'
 import { AutoRulesConfigProvider } from './components/settings/AutoRulesPage'
 import { ViewBoundary } from './components/RecoveryBoundary'
+import { useOffModels } from './useOffModels'
 import { RepoFileLinkProvider } from './components/RepoFileLink'
 import { SplitDragContext, SplitDragLayer } from './components/SplitDrag'
 import { NAV_RAIL_WIDTH } from './components/NavRail'
@@ -202,6 +204,7 @@ function Workspace({
   const baseRows = rowsOf(thread, open?.kind)
   const showChatRef = useRef<() => void>(() => {})
   const restorePageContextsRef = useRef<(key: string, contexts: PageContextAttachment[]) => void>(() => {})
+  const offModels = useOffModels()
   const chatDialogs = useChatDialogs({
     dismissNotice: manor.dismissNotice,
     createChat: manor.createChat,
@@ -211,7 +214,7 @@ function Workspace({
     notice: workspace.notice,
     projects: workspace.projects,
     agents: workspace.agents,
-    singleDefault: NEW_SINGLE_CHAT_DEFAULT,
+    singleDefault: runtimeOn(NEW_SINGLE_CHAT_DEFAULT, offModels),
     stageChatId: open?.id ?? null,
     stageHasRows: baseRows.length > 0,
     showChatRef,

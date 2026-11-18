@@ -41,6 +41,7 @@ import { Sheet } from '@/components/Sheet'
 import { Text } from '@/components/Text'
 import { colors, fonts, radius, spacing, squircle } from '@/theme'
 import { useHostAuto } from '@/useHostAuto'
+import { useOffModels } from '@/useOffModels'
 
 interface RuntimeSheetProps {
   open: boolean
@@ -282,6 +283,7 @@ function RuntimeSections({
   allowAuto?: boolean
 }) {
   const hostAuto = useHostAuto()
+  const off = useOffModels()
   const driver = effectiveDriver(agent, override)
   const model = activeModel(agent, override)
   const effort = activeEffort(agent, override)
@@ -298,7 +300,7 @@ function RuntimeSections({
         </View>
       ) : null}
       <View accessibilityLabel="Provider" accessibilityRole="radiogroup" style={styles.providerTabs}>
-        {providerRowsFor(agent).map((option) => {
+        {providerRowsFor(agent, override, off).map((option) => {
           const selected = option.value === driver
           const isDefault = option.value === agent.driver
           return (
@@ -308,7 +310,7 @@ function RuntimeSections({
               accessibilityState={{ selected, disabled }}
               disabled={disabled}
               key={option.value}
-              onPress={() => onChange(withDriver(agent, override, option.value))}
+              onPress={() => onChange(withDriver(agent, override, option.value, off))}
               style={({ pressed }) => [
                 styles.providerTab,
                 selected && styles.providerTabSelected,
@@ -323,12 +325,13 @@ function RuntimeSections({
       </View>
       {MODELS[driver].length > 0 ? (
         <Section title="Model">
-          {modelRowsFor(agent, override).map((row, index, all) => (
+          {modelRowsFor(agent, override, off).map((row, index, all) => (
             <MenuRow
-              disabled={disabled}
+              // A row turned off in Settings shows only while this chat still runs on it.
+              disabled={disabled || row.off === true}
               isDefault={pinnedDriver(agent, override) === undefined && row.value === (agent.model ?? defaultModel(agent.driver))}
               key={row.value}
-              label={row.label}
+              label={row.off ? `${row.label}, off` : row.label}
               last={index === all.length - 1}
               onSelect={() => onChange(withModel(agent, override, row.value))}
               selected={row.value === model}

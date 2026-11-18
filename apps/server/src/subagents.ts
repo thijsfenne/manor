@@ -130,6 +130,8 @@ export interface SubagentsOptions {
   store: Store
   /** The saved policy, read at every check so a save applies to the next call. */
   policy: () => SubagentPolicy
+  /** Models turned off in Settings, Models, read at every check like the policy. */
+  offModels?: () => readonly string[]
   /** The delegating persona's live turn, or nothing once that turn is over. */
   parent: (context: UserInputContext) => ParentWorkspace | undefined
   agentName: (agentId: string) => string
@@ -193,8 +195,9 @@ export class Subagents {
     }
     // Narrowing follows the persona the whole tree works for.
     const personaId = nestedIn === undefined ? context.agentId : this.personaOf(nestedIn)
-    const choice = checkSubagentChoice(policy, personaId, request.model, request.effort)
-    if (!choice.ok) throw new SubagentRefusal(`${choice.reason} ${allowedLine(policy, personaId)}`)
+    const off = this.options.offModels?.() ?? []
+    const choice = checkSubagentChoice(policy, personaId, request.model, request.effort, off)
+    if (!choice.ok) throw new SubagentRefusal(`${choice.reason} ${allowedLine(policy, personaId, off)}`)
     const rootChatId = nestedIn?.rootChatId ?? context.chatId
     const running = this.runningIn(rootChatId) + (this.reserved.get(rootChatId) ?? 0)
     if (running >= policy.maxConcurrent) {
@@ -243,7 +246,7 @@ export class Subagents {
       .filter((chat) => chat.kind === 'subagent' && chat.parentChatId === context.chatId && chat.subagent?.agentId === context.agentId)
       .slice(0, 10)
     return {
-      models: subagentChoices(policy, personaId).map(({ driver, model, label, efforts }) => ({ model, label, provider: driver, efforts })),
+      models: subagentChoices(policy, personaId, this.options.offModels?.() ?? []).map(({ driver, model, label, efforts }) => ({ model, label, provider: driver, efforts })),
       maxConcurrent: policy.maxConcurrent,
       runningInThisChat: this.runningIn(rootChatId),
       mayDelegate: depth === 1 || (policy.allowNested && depth <= SUBAGENT_MAX_DEPTH),
@@ -807,8 +810,8 @@ function titleOf(text: string): string {
   return text.trim().split(/\r?\n|[.!?](?=\s|$)/, 1)[0]?.trim().slice(0, SUBAGENT_TITLE_MAX) || 'Subagent task'
 }
 
-function allowedLine(policy: SubagentPolicy, agentId: string): string {
-  const choices = subagentChoices(policy, agentId)
+function allowedLine(policy: SubagentPolicy, agentId: string, off: readonly string[]): string {
+  const choices = subagentChoices(policy, agentId, off)
   if (choices.length === 0) return 'Settings allow no subagent models for this agent.'
   return `Allowed: ${choices.map((choice) => `${choice.model} (${choice.efforts.join(', ')})`).join('; ')}.`
 }

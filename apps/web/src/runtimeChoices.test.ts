@@ -12,7 +12,9 @@ import {
   isAutoOn,
   isAutoPending,
   modelRowsFor,
+  providerRowsFor,
   readHostAuto,
+  readOffModels,
   runtimeLabel,
   setHostAuto,
   subscribeHostAuto,
@@ -237,6 +239,37 @@ describe('a pinned provider', () => {
     ])
     // Unpinned, her own configured model is still the way out of a model pin.
     expect(modelRowsFor(sage, {}).map((row) => row.value)).toContain('claude-opus-5')
+  })
+})
+
+describe('models turned off in Settings', () => {
+  const sage = agent('claude', 'claude-opus-5-5')
+
+  it('leaves a picker, except the model this chat still runs on, which stays marked off', () => {
+    const off = ['claude-haiku-5-5', 'claude-opus-5-5']
+    expect(modelRowsFor(sage, { model: 'claude-sonnet-5-5' }, off).map((row) => row.value)).toEqual(['claude-fable-5-2', 'claude-sonnet-5-5'])
+    expect(modelRowsFor(sage, {}, off)).toEqual([
+      { value: 'claude-fable-5-2', label: 'Fable 5.2' },
+      { value: 'claude-opus-5-5', label: 'Opus 5.5', off: true },
+      { value: 'claude-sonnet-5-5', label: 'Sonnet 5.5' },
+    ])
+  })
+
+  it('drops a provider with every model off unless the chat runs on it, and a switch lands on a model still on', () => {
+    const grokOff = MODELS.grok.map((option) => option.value)
+    expect(providerRowsFor(sage, {}, grokOff).map((row) => row.value)).toEqual(['claude', 'codex', 'cursor'])
+    expect(providerRowsFor(sage, { driver: 'grok' }, grokOff).map((row) => row.value)).toContain('grok')
+    expect(withDriver(sage, {}, 'grok', ['grok-4.7'])).toMatchObject({ driver: 'grok', model: 'grok-4.5' })
+    // Back to her own provider with her own model off pins one still on.
+    expect(withDriver(sage, { driver: 'codex', model: 'gpt-6-luna' }, 'claude', ['claude-opus-5-5'])).toEqual({ model: 'claude-fable-5-2' })
+    expect(withDriver(sage, { driver: 'codex', model: 'gpt-6-luna' }, 'claude')).toEqual({})
+  })
+
+  it('follows the house settings frame', () => {
+    parseServerMessage(JSON.stringify({ type: 'house_settings', settings: { disabledModels: ['grok-4.5'] } }))
+    expect(readOffModels()).toEqual(['grok-4.5'])
+    parseServerMessage(JSON.stringify({ type: 'house_settings', settings: {} }))
+    expect(readOffModels()).toEqual([])
   })
 })
 

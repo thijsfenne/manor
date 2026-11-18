@@ -1,5 +1,5 @@
 import { listStructuredProjectMemory } from './structuredProjectFiles.js'
-import { HOME_PROJECT_ID, isFolder, isProjectThreadFile, SINGLE_CHAT_VOICE } from '@manor/contracts'
+import { HOME_PROJECT_ID, defaultSingleRuntime, isFolder, isProjectThreadFile, SINGLE_CHAT_VOICE } from '@manor/contracts'
 import { realpath } from 'node:fs/promises'
 import { basename, join } from 'node:path'
 import { singleRuntime, singleRuntimeRequired } from './singleChat.js'
@@ -9,6 +9,7 @@ import {
   DEFAULT_PROJECT_COLOR,
   DEFAULT_PROJECT_ICON,
   SIDE_CHAT_DEFAULTS,
+  runtimeOn,
   driverForModel,
 } from '@manor/contracts'
 import type { Orchestrator } from './orchestrator.js'
@@ -79,6 +80,8 @@ type ProjectRuntime = Pick<
 type OpeningMessage = NonNullable<Extract<ClientMessage, { type: 'create_chat' }>['openingMessage']>
 
 interface ProjectModuleOptions {
+  /** Models turned off in Settings; a side chat on the default never starts on one. */
+  offModels?: () => readonly string[]
   externalFiles?: ExternalFileOpener
   structuredMemoryRoot?: string
   store: Store
@@ -513,7 +516,14 @@ export class ProjectModule {
             return
           }
         }
-        for (const [agentId, override] of Object.entries(message.overrides ?? {})) {
+        // A Single chat sent without a runtime (a Browser session) runs the house default,
+        // so when that model is off it starts on one still on, Auto still free to choose.
+        const fallback = defaultSingleRuntime(this.options.agents())
+        const start = runtimeOn(fallback, this.options.offModels?.() ?? [])
+        const overrides = single && message.overrides?.[SINGLE_CHAT_VOICE.id] === undefined && start !== fallback
+          ? { ...message.overrides, [SINGLE_CHAT_VOICE.id]: { ...start, auto: true } }
+          : message.overrides
+        for (const [agentId, override] of Object.entries(overrides ?? {})) {
           if (!single && !this.options.agents().some((agent) => agent.id === agentId)) continue
           try {
             await this.options.orchestrator.setOverride(chat.id, agentId, override)
@@ -581,7 +591,9 @@ export class ProjectModule {
         try {
           // Clearing is a delete and a new thread, so the old one's events, sessions and
           // any turn still running go with it, exactly as when its parent is deleted.
-          const previous = message.fresh === true ? await store.sideChatOf(parent.id) : undefined
+          const existing = await store.sideChatOf(parent.id)
+          const previous = message.fresh === true ? existing : undefined
+          const created = existing === undefined || previous !== undefined
           if (previous !== undefined) {
             this.options.orchestrator.discard(previous.id)
             await store.deleteChat(previous.id)
@@ -591,6 +603,12 @@ export class ProjectModule {
           if (previous?.sideModel != null && previous.sideEffort != null) {
             await store.setSideRuntime(side.id, previous.sideModel, previous.sideEffort)
             side = { ...side, sideModel: previous.sideModel, sideEffort: previous.sideEffort }
+          }
+          // Only a new panel: one already open keeps the model and session it answers on.
+          const start = created && side.sideModel == null ? runtimeOn({ driver: 'claude', ...SIDE_CHAT_DEFAULTS }, this.options.offModels?.() ?? []) : undefined
+          if (start !== undefined && start.model !== SIDE_CHAT_DEFAULTS.model) {
+            await store.setSideRuntime(side.id, start.model, start.effort)
+            side = { ...side, sideModel: start.model, sideEffort: start.effort }
           }
         } catch (error: unknown) {
           const why = error instanceof Error ? error.message : 'the store refused it'

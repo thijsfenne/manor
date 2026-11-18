@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import { NEW_SINGLE_CHAT_DEFAULT, type Project, type ProjectIcon, type ProjectMemoryScope, type SingleRuntime } from '@manor/contracts'
-import { readSingleRuntime } from '../../runtimeChoices'
+import { NEW_SINGLE_CHAT_DEFAULT, runtimeOn, type Project, type ProjectIcon, type ProjectMemoryScope, type SingleRuntime } from '@manor/contracts'
+import { readOffModels, readSingleRuntime } from '../../runtimeChoices'
 import type { DirBrowse, Notice } from '../../state'
 import { useRequest, type RequestEvents } from '../../useRequest'
 import { draftOf, emptyDraft, normaliseProjectColor, ProjectDialog, type ProjectDraft } from './ProjectDialog'
@@ -96,7 +96,7 @@ export function ProjectDialogHost({
     if (dialog.mode === 'create') {
       request.start(
         (requestId) => onNewProject(name, draft.repoPaths, draft.icon, normaliseProjectColor(draft.color), draft.memoryScope, requestId,
-          readSingleRuntime(draft.threadRuntime, NEW_SINGLE_CHAT_DEFAULT)),
+          readSingleRuntime(draft.threadRuntime, runtimeOn(NEW_SINGLE_CHAT_DEFAULT, readOffModels()))),
         { onAck: finish },
       )
       return

@@ -1,8 +1,8 @@
 import type { DriverName, Effort } from '@manor/contracts'
-import { EFFORTS, MODELS, PROVIDERS, effortsFor } from './runtimes'
+import { CATALOG_DRIVERS, EFFORTS, MODELS, PROVIDERS, effortsFor } from './runtimes'
 
 /** The providers a subagent can run on, in the catalog's order. The mock is a test double. */
-export const SUBAGENT_DRIVERS = ['claude', 'codex', 'grok', 'cursor'] as const satisfies readonly DriverName[]
+export const SUBAGENT_DRIVERS = CATALOG_DRIVERS
 
 export const providerLabel = (driver: DriverName): string =>
   PROVIDERS.find((option) => option.value === driver)?.label ?? driver

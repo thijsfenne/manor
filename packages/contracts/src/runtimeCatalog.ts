@@ -53,6 +53,24 @@ const DEFAULT_MODELS: Record<AgentConfig['driver'], string | undefined> = {
  */
 export const defaultModel = (driver: AgentConfig['driver']): string | undefined => DEFAULT_MODELS[driver]
 
+/** The providers that run real models, in the order Settings and the pickers list them. */
+export const CATALOG_DRIVERS = ['claude', 'codex', 'grok', 'cursor'] as const satisfies readonly AgentConfig['driver'][]
+
+/**
+ * What a switch to this provider lands on: its default model, or the first model
+ * still on when the user has turned the default off in Settings, Models. A provider
+ * with every model off keeps its default, so the caller still has a value to show.
+ */
+export const landingModel = (driver: AgentConfig['driver'], off: readonly string[] = []): string | undefined => {
+  const fallback = defaultModel(driver)
+  if (fallback === undefined || !off.includes(fallback)) return fallback
+  return MODELS[driver].find((option) => !off.includes(option.value))?.value ?? fallback
+}
+
+/** True when this off list leaves no catalog model to run. Settings keeps at least one on. */
+export const everyModelOff = (off: readonly string[]): boolean =>
+  CATALOG_DRIVERS.every((driver) => MODELS[driver].every((option) => off.includes(option.value)))
+
 const LEGACY_MODEL_LABELS: Record<string, string> = {
   'claude-fable-5-1': 'Fable 5.1',
   'cursor-claude-fable-5-1': 'Claude Fable 5.1',

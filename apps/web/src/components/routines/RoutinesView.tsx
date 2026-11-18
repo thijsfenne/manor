@@ -3,7 +3,7 @@ import { motion, useReducedMotion } from 'motion/react'
 import { PlusSignIcon } from '@hugeicons/core-free-icons'
 import type { AgentConfig, Chat, Project, Routine, RoutineDraft, RoutineRun } from '@manor/contracts'
 import { HOME_PROJECT_ID, SINGLE_CHAT_VOICE, driverForModel } from '@manor/contracts'
-import { defaultSingleRuntime } from '../../runtimeChoices'
+import { defaultSingleRuntime, readOffModels, runtimeOn } from '../../runtimeChoices'
 import { accentStyle } from '../../accent'
 import { safeHex } from '../../persona'
 import { EASE_TRAVEL, INSTANT, SEGMENTED_SLIDE } from '../../motion'
@@ -162,7 +162,7 @@ export function RoutinesView({
 
   const openNew = () => {
     if (projectAgent === undefined && (first !== undefined || firstAgent === undefined)) {
-      const runtime = defaultSingleRuntime(agents)
+      const runtime = runtimeOn(defaultSingleRuntime(agents), readOffModels())
       dialog.openDraft({ ...emptyRoutineDraft(first?.id ?? HOME_PROJECT_ID, SINGLE_CHAT_VOICE.id), model: runtime.model, effort: runtime.effort })
       return
     }

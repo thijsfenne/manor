@@ -12,7 +12,7 @@ import {
   type Effort,
   type SingleRuntime,
 } from '@manor/contracts'
-import { EFFORTS, MODELS, PROVIDERS, defaultModel, effortsFor, modelLabel, type Option } from './runtimes'
+import { EFFORTS, MODELS, PROVIDERS, defaultModel, effortsFor, landingModel, modelLabel, type Option } from './runtimes'
 
 /**
  * The rules behind the composer's runtime controls, kept out of the components
@@ -24,9 +24,11 @@ import { EFFORTS, MODELS, PROVIDERS, defaultModel, effortsFor, modelLabel, type 
 export interface ModelRow {
   value: string
   label: string
+  /** Turned off in Settings, Models. Listed only while this chat still runs on it, and not pickable. */
+  off?: true
 }
 
-export { SINGLE_DRIVERS, defaultSingleRuntime, isSingleDriver } from '@manor/contracts'
+export { SINGLE_DRIVERS, defaultSingleRuntime, isSingleDriver, runtimeOn } from '@manor/contracts'
 
 export function readSingleRuntime(override: ChatOverride | undefined, fallback: SingleRuntime): SingleRuntime {
   const parsed = SingleRuntimeSchema.safeParse(override)
@@ -80,6 +82,24 @@ export function setHostAuto(available: boolean): void {
   if (available === hostAuto) return
   hostAuto = available
   for (const listener of hostAutoListeners) listener()
+}
+
+/**
+ * The models turned off in Settings, Models, as the house settings last said. Kept like
+ * `hostAuto` above: one small store the connection fills, read by a screen with
+ * `useSyncExternalStore` and handed to the pure functions below as `off`.
+ */
+let offModels: readonly string[] = []
+const offModelListeners = new Set<() => void>()
+export const readOffModels = (): readonly string[] => offModels
+export function subscribeOffModels(listener: () => void): () => void {
+  offModelListeners.add(listener)
+  return () => { offModelListeners.delete(listener) }
+}
+export function setOffModels(next: readonly string[]): void {
+  if (next.length === offModels.length && next.every((model, index) => model === offModels[index])) return
+  offModels = next
+  for (const listener of offModelListeners) listener()
 }
 
 /**
@@ -227,9 +247,15 @@ export function runtimeLabel(agent: AgentConfig, override: ChatOverride, hostAut
  * to put a live thread on by accident, so it is offered only to a persona who is
  * already on it — where it is the way out of a pin and has to have its row.
  */
-export function providerRowsFor(agent: AgentConfig): Option<DriverName>[] {
-  return PROVIDERS.filter((option) => option.value !== 'mock' || agent.driver === 'mock')
+export function providerRowsFor(agent: AgentConfig, override: ChatOverride = {}, off: readonly string[] = []): Option<DriverName>[] {
+  const current = effectiveDriver(agent, override)
+  return PROVIDERS.filter((option) => option.value === current ||
+    (option.value === 'mock' ? agent.driver === 'mock' : hasModelOn(option.value, off)))
 }
+
+/** Whether this provider still has a model on after Settings, Models; a provider without one is not offered. */
+export const hasModelOn = (driver: DriverName, off: readonly string[]): boolean =>
+  MODELS[driver].some((model) => !off.includes(model.value))
 
 /**
  * The model rows this persona's menu offers, for the provider this chat runs her on.
@@ -242,14 +268,30 @@ export function providerRowsFor(agent: AgentConfig): Option<DriverName>[] {
  * CLI, so the list is that provider's. There is no unnamed default row. The driver's
  * default model is what a switch lands on, and a leftover provider-only pin shows
  * it as selected.
+ *
+ * A model turned off in Settings (`off`) leaves the list, except the one this chat
+ * runs on now: that row stays, marked off, so the menu still says what answers.
  */
-export function modelRowsFor(agent: AgentConfig, override: ChatOverride = {}): ModelRow[] {
-  const models = MODELS[effectiveDriver(agent, override)]
+export function modelRowsFor(agent: AgentConfig, override: ChatOverride = {}, off: readonly string[] = []): ModelRow[] {
+  const catalog = MODELS[effectiveDriver(agent, override)]
+  const active = activeModel(agent, override)
+  const models: ModelRow[] = catalog.flatMap((option) => !off.includes(option.value) ? [option]
+    : option.value === active ? [{ ...option, off: true as const }] : [])
   const own = pinnedDriver(agent, override) === undefined ? agent.model : undefined
-  if (own !== undefined && !models.some((option) => option.value === own)) {
+  if (own !== undefined && !catalog.some((option) => option.value === own)) {
     return [{ value: own, label: own }, ...models]
   }
   return models
+}
+
+/**
+ * A provider's models for a plain dropdown, without those turned off in Settings,
+ * Models, except `current`: it keeps its row, labelled off, so the field still says
+ * what it holds.
+ */
+export function modelOptionsFor(driver: DriverName, off: readonly string[], current?: string): Option<string>[] {
+  return MODELS[driver].flatMap((option) => !off.includes(option.value) ? [option]
+    : option.value === current ? [{ ...option, label: `${option.label}, off` }] : [])
 }
 
 /**
@@ -270,6 +312,7 @@ export function withDriver(
   agent: AgentConfig,
   override: ChatOverride,
   value: DriverName,
+  off: readonly string[] = [],
 ): ChatOverride {
   // Picking the row that is already *pinned* changes nothing, rather than dropping a
   // model pin under it: a stray click on the current provider should cost nothing.
@@ -284,16 +327,20 @@ export function withDriver(
   // A pinned level the new provider's default model does not honour goes with the old
   // model, for the same reason: keeping it would store a setting that quietly becomes
   // another one. Grok's default is 4.7, so a switch to Grok still accepts xhigh.
-  const nextModel = defaultModel(value)
+  const nextModel = landingModel(value, off)
+  // Her own model turned off in Settings is no way out: going back to her provider
+  // then pins a model still on, so the pick lands on something that may be picked.
+  const ownModel = agent.model ?? defaultModel(value)
+  const ownOff = value === agent.driver && ownModel !== undefined && off.includes(ownModel) && nextModel !== ownModel
   const keepsEffort =
     override.effort !== undefined && effortsFor(value, nextModel).some((option) => option.value === override.effort)
   const keepsSpeed = activeSpeed(agent, override) === 'fast' && supportsFastMode(value, nextModel)
   return {
-    ...(value === agent.driver
-      ? {}
-      : { driver: value, ...(nextModel === undefined ? {} : { model: nextModel }) }),
+    ...(value !== agent.driver
+      ? { driver: value, ...(nextModel === undefined ? {} : { model: nextModel }) }
+      : ownOff && nextModel !== undefined ? { model: nextModel } : {}),
     ...(keepsEffort ? { effort: override.effort } : {}),
-    ...speedPin(agent, keepsSpeed, value, value === agent.driver ? agent.model : nextModel),
+    ...speedPin(agent, keepsSpeed, value, value === agent.driver && !ownOff ? agent.model : nextModel),
     ...(override.autoResolved ? { autoResolved: true } : {}),
   }
 }

@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import type { AgentConfig, Chat, Effort, Project, RoutineDraft } from '@manor/contracts'
 import { SINGLE_CHAT_VOICE, driverForModel, epochToWallClock, readWallClock } from '@manor/contracts'
-import { SINGLE_DRIVERS, defaultSingleRuntime } from '../../runtimeChoices'
+import { SINGLE_DRIVERS, defaultSingleRuntime, modelOptionsFor, runtimeOn } from '../../runtimeChoices'
+import { useOffModels } from '../../useOffModels'
 import {
   DAY_NAMES,
   describeSchedule,
@@ -16,7 +17,7 @@ import {
   type PresetKind,
   type SchedulePreset,
 } from '../../routines'
-import { EFFORTS, MODELS, effortsFor } from '../../runtimes'
+import { EFFORTS, effortsFor } from '../../runtimes'
 import { HOME_PROJECT_ID, type Notice } from '../../state'
 import { Modal, ModalFooter } from '../Modal'
 import { Button } from '../ui/Button'
@@ -129,6 +130,7 @@ export function RoutineDialog({
 }: RoutineDialogProps) {
   const [draft, setDraft] = useState(() => bindFixedRoutineTarget(initial, fixedTarget))
   const [shape, setShape] = useState<ScheduleShape>(() => initialShape(initial))
+  const off = useOffModels()
   // Open from the start for a schedule no preset wrote, because otherwise the form
   // would show a preset row that has nothing to do with what this routine does.
   const [custom, setCustom] = useState(() => (initial.runAt ?? null) === null && readPreset(initial.cron) === null)
@@ -153,7 +155,10 @@ export function RoutineDialog({
   // The models this persona's provider offers, plus whatever she is already pinned to
   // if the roster has moved on since — offered as itself rather than dropped, so
   // opening the form never silently changes what a routine runs on.
-  const known = single ? SINGLE_DRIVERS.flatMap((driver) => MODELS[driver]) : persona === undefined ? [] : MODELS[persona.driver]
+  const current = draft.model ?? undefined
+  const known = single
+    ? SINGLE_DRIVERS.flatMap((driver) => modelOptionsFor(driver, off, current))
+    : persona === undefined ? [] : modelOptionsFor(persona.driver, off, current)
   const modelOptions: SelectOption<string>[] = [
     ...(single ? [] : [{ value: '', label: `${persona?.name ?? 'Persona'}'s own` }]),
     ...known,
@@ -189,7 +194,7 @@ export function RoutineDialog({
       return
     }
     if (projectAgents.length === 0) {
-      const runtime = defaultSingleRuntime(agents)
+      const runtime = runtimeOn(defaultSingleRuntime(agents), off)
       edit({ projectId: projects[0]?.id ?? HOME_PROJECT_ID, chatId: null, agentId: SINGLE_CHAT_VOICE.id, model: runtime.model, effort: runtime.effort, action: 'run' })
       return
     }
@@ -398,7 +403,7 @@ export function RoutineDialog({
               // persona switch can leave a Claude routine pinned to a Codex model.
               onChange={(agentId) => {
                 if (agentId === SINGLE_CHAT_VOICE.id) {
-                  const runtime = defaultSingleRuntime(agents)
+                  const runtime = runtimeOn(defaultSingleRuntime(agents), off)
                   edit({ agentId, projectId: draft.projectId, chatId: null, model: runtime.model, effort: runtime.effort, action: 'run' })
                   return
                 }

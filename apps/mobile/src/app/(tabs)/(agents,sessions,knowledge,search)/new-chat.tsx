@@ -10,6 +10,7 @@ import UnfoldMoreIcon from '@hugeicons/core-free-icons/UnfoldMoreIcon'
 import { HugeiconsIcon, type IconSvgElement } from '@hugeicons/react-native'
 import {
   NEW_SINGLE_CHAT_DEFAULT,
+  runtimeOn,
   SINGLE_CHAT_VOICE,
   addsAgentMention,
   isFolder,
@@ -47,6 +48,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context'
 
 import { ConnectGate } from '@/components/ConnectGate'
+import { useOffModels } from '@/useOffModels'
 import { Composer } from '@/components/Composer'
 import { AiBotHeadLookingIcon } from '@/components/customIcons'
 import { GlassIconButton } from '@/components/GlassIconButton'
@@ -126,7 +128,8 @@ function NewChatFlow() {
   // that were renamed an hour ago is worse than the round trip.
   const repoFiles = selectedProjectId === '' ? undefined : workspace.repoFiles[repoListingKey(selectedProjectId)]
   const repoPaths = selectedProject?.repoPaths.join('\0') ?? ''
-  const singleDefault = NEW_SINGLE_CHAT_DEFAULT
+  // A new chat never opens on a model turned off in Settings.
+  const singleDefault = runtimeOn(NEW_SINGLE_CHAT_DEFAULT, useOffModels())
   /** An absent pin still reads as Auto on, so the manual default is explicit. */
   const singleOverride = overrides[SINGLE_CHAT_VOICE.id] ?? singleDefault
   const singleRuntime = readSingleRuntime(singleOverride, singleDefault)

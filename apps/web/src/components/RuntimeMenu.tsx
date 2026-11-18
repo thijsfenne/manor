@@ -35,6 +35,7 @@ import { ProviderMark } from './ProviderMark'
 import { RuntimeLabel } from './RuntimeLabel'
 import { SegmentedControl, type SymbolSegmentOption } from './ui/SegmentedControl'
 import { useHostAuto } from '../useHostAuto'
+import { useOffModels } from '../useOffModels'
 
 interface RuntimeMenuProps {
   agent: AgentConfig
@@ -264,6 +265,7 @@ export function RuntimeSections({
   marksDefault?: boolean
 }) {
   const hostAuto = useHostAuto()
+  const off = useOffModels()
   const driver = effectiveDriver(agent, override)
   const model = activeModel(agent, override)
   const effort = activeEffort(agent, override)
@@ -278,7 +280,7 @@ export function RuntimeSections({
       {...(onConfigureAuto === undefined ? {} : { onConfigure: onConfigureAuto })}
     />
   ) : null
-  const providerOptions: readonly SymbolSegmentOption<AgentConfig['driver']>[] = providerRowsFor(agent)
+  const providerOptions: readonly SymbolSegmentOption<AgentConfig['driver']>[] = providerRowsFor(agent, override, off)
     .filter((option) => allowedDrivers === undefined || allowedDrivers.includes(option.value))
     .map((option) => ({
       value: option.value,
@@ -295,7 +297,7 @@ export function RuntimeSections({
       variant="symbols"
       floating
       orientation={layout === 'split' ? 'vertical' : 'horizontal'}
-      onChange={(next) => onChange(withDriver(agent, override, next))}
+      onChange={(next) => onChange(withDriver(agent, override, next, off))}
     />
   )
 
@@ -303,7 +305,7 @@ export function RuntimeSections({
   // resizes the menu under the pointer.
   const tallestModelList = Math.max(
     0,
-    ...providerOptions.map((option) => modelRowsFor(agent, withDriver(agent, override, option.value)).length),
+    ...providerOptions.map((option) => modelRowsFor(agent, withDriver(agent, override, option.value, off), off).length),
   )
   const modelHeading = <p className="m-0 px-3 pt-1.5 pb-0.5 text-meta font-medium text-dim">Model</p>
 
@@ -312,11 +314,12 @@ export function RuntimeSections({
       {MODELS[driver].length > 0 ? (
         <div className="col-start-1 row-start-1">
           {modelHeading}
-          {modelRowsFor(agent, override).map((row) => (
+          {modelRowsFor(agent, override, off).map((row) => (
             <MenuRow
               key={row.value}
               label={row.label}
               selected={row.value === model}
+              {...(row.off ? { unavailable: 'Off' } : {})}
               // Under a pinned provider her own model belongs to the other CLI, so
               // nothing here is her default and the provider row above is the way back.
               isDefault={

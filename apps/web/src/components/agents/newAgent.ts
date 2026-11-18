@@ -1,16 +1,20 @@
 import type { AgentConfig, AgentDraft } from '@manor/contracts'
 import { cleanDraft, emptyDraft } from '../../persona'
-import { MODELS, defaultModel, effortsFor } from '../../runtimes'
+import { hasModelOn, readOffModels } from '../../runtimeChoices'
+import { CATALOG_DRIVERS, MODELS, defaultModel, effortsFor, landingModel } from '../../runtimes'
 
 type Driver = AgentDraft['driver']
 
 /**
- * A blank agent on `driver` with that provider's default model, for the short New agent
- * form. Memory starts on: the standing files and the daily log hang on it, and the
+ * A blank agent on `driver` with that provider's default model, or its first model still
+ * on when Settings, Models has the default off, for the short New agent form. Memory starts on: the standing files and the daily log hang on it, and the
  * switch in Agent settings is the way to turn it off.
  */
-export function newAgentDraft(agents: AgentConfig[], driver: Driver = 'claude'): AgentDraft {
-  const model = defaultModel(driver)
+export function newAgentDraft(agents: AgentConfig[], preferred: Driver = 'claude'): AgentDraft {
+  const off = readOffModels()
+  // A provider with every model off is skipped for the first one that still has one.
+  const driver = hasModelOn(preferred, off) ? preferred : CATALOG_DRIVERS.find((entry) => hasModelOn(entry, off)) ?? preferred
+  const model = landingModel(driver, off)
   return { ...emptyDraft(agents), driver, ...(model === undefined ? {} : { model }), memoryScope: true }
 }
 
