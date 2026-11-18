@@ -770,7 +770,7 @@ export function withSessionPlanRule(agent: AgentConfig): AgentConfig {
 
 /** What the user reads on a result card, said the same way to both modes' owners. */
 const GOAL_REPORT_RULE =
-  `Keep the ${GOAL_REACHED_TOOL} report short: the result in one plain sentence, one to three points of a few words each for the card's lines, and a limitation only when a real one affects using the result, in one line. Pass screenshots that show the result, such as verify-manor evidence, as screenshots; the card shows them as thumbnails.`
+  `Keep the ${GOAL_REACHED_TOOL} report short: the result in one plain sentence, one to three points of a few words each for the card's lines, and a limitation only when a real one affects using the result, in one line. Pass screenshots that show the result, such as evidence from a verify skill, as screenshots; the card shows them as thumbnails.`
 
 /**
  * Who commits a goal Session's change (2026-10-21): Manor, at the user's Confirm, with the

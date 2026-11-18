@@ -306,6 +306,8 @@ interface MockWorkStep {
   /** A plan published before the step and never ticked further: the first done, the next in progress. */
   plan?: string[]
   run: (signal: AbortSignal) => Promise<string>
+  /** The shell command the step reports running, so a check counts as proof. */
+  command?: string
   /** A second tool call after this one; its answer is the turn's reply. */
   next?: MockWorkStep
 }
@@ -313,6 +315,8 @@ interface MockWorkStep {
 const MOCK_RESULT_FILE = 'mock-result.md'
 /** The code file "mock code edit" writes, so the review gate and a reopen can be proved. */
 const MOCK_CODE_FILE = 'mock-result.ts'
+/** The UI file "mock ui edit" writes, which only a screenshot proves where the project has a verify skill. */
+const MOCK_UI_FILE = 'MockResult.tsx'
 
 async function mockGit(cwd: string, args: string[]): Promise<void> {
   const env: NodeJS.ProcessEnv = { ...process.env }
@@ -362,7 +366,8 @@ function mockMemoryEdit(input: TurnInput): Extract<RuntimeEvent, { type: 'tool_u
  * or "slow", which waits eight seconds before the commit so its state can be seen. Any turn
  * reading "mock edit: <line>" appends that line to `mock-result.md`, a file change
  * after the result is published; "mock code edit: <line>" appends it to `mock-result.ts`
- * instead, a code change. Argus reading "mock review passed" in a turn that holds
+ * instead, a code change, and "mock ui edit: <line>" to `MockResult.tsx`, a UI change.
+ * "mock check" reports a passing `pnpm test`, the proof a code change needs. Argus reading "mock review passed" in a turn that holds
  * `review_passed` calls it, the way a clean review ends. "mock deliver: <absolute path>"
  * hands that file over through the real `deliver_file` broker, several comma-separated
  * paths one after another in the same turn; a trailing "phone"
@@ -495,9 +500,10 @@ function workScriptFor(input: TurnInput, request: typeof fetch): MockWorkStep | 
     server.id === 'builtin_manor' && server.tools.includes('review_passed'))) {
     return { tool: 'mcp__manor__review_passed', run: async () => 'No findings, the current diff passes.' }
   }
-  const edit = /\bmock (code )?edit:\s*([^\n]+)/i.exec(line)
+  if (/\bmock check\b/i.test(line)) return { tool: 'Bash', command: 'pnpm test', run: async () => 'The tests pass.' }
+  const edit = /\bmock (code |ui )?edit:\s*([^\n]+)/i.exec(line)
   if (edit !== null && folder !== undefined) {
-    const file = edit[1] === undefined ? MOCK_RESULT_FILE : MOCK_CODE_FILE
+    const file = edit[1] === undefined ? MOCK_RESULT_FILE : edit[1].trim().toLowerCase() === 'ui' ? MOCK_UI_FILE : MOCK_CODE_FILE
     return {
       tool: 'Bash',
       writes: path.join(folder, file),
@@ -742,18 +748,20 @@ function ruleScriptFor(input: TurnInput, request: typeof fetch): MockWorkStep | 
 
 function projectScriptFor(input: TurnInput, request: typeof fetch): MockWorkStep | undefined {
   const text = lastUserLine(input)
-  const ask = /\bmock ask:\s*([^|\n]+)\|([^\n]+)/i.exec(text)
+  // "mock ask <id>: …" asks under that question id, such as the verify skills offer's.
+  const ask = /\bmock ask(?: (\w+))?:\s*([^|\n]+)\|([^\n]+)/i.exec(text)
   const asker = manorEndpoint(input, 'ask_user', '--broker-url')
   if (ask !== null && asker !== undefined) {
-    const options = ask[2]!.split('|').map((label) => label.trim()).filter(Boolean).slice(0, 4)
+    const id = ask[1] ?? 'choice'
+    const options = ask[3]!.split('|').map((label) => label.trim()).filter(Boolean).slice(0, 4)
     return {
       tool: 'mcp__manor__ask_user',
       run: async (signal) => {
         const payload = await postManor(request, asker, {
-          questions: [{ id: 'choice', question: ask[1]!.trim(), options: options.map((label) => ({ label })) }],
+          questions: [{ id, question: ask[2]!.trim(), options: options.map((label) => ({ label })) }],
         }, signal)
         const answers = (payload.answers ?? {}) as Record<string, unknown>
-        return `Going with ${JSON.stringify(answers.choice ?? 'nothing')}.`
+        return `Going with ${JSON.stringify(answers[id] ?? 'nothing')}.`
       },
     }
   }
@@ -1045,7 +1053,7 @@ export function createMockDriver(options: MockDriverOptions = {}): Driver {
           let answer = ''
           for (let step: MockWorkStep | undefined = workStep, at = 0; step !== undefined; step = step.next, at += 1) {
             const toolCallId = at === 0 ? 'mock-work' : `mock-work-${at}`
-            queue.push({ type: 'tool_use', toolCallId, tool: step.tool })
+            queue.push({ type: 'tool_use', toolCallId, ...(step.command === undefined ? { tool: step.tool } : describeCommand(step.command)) })
             let outcome: 'success' | 'error' = 'success'
             try {
               answer = await step.run(controller.signal)

@@ -569,6 +569,7 @@ export function createSqliteStore(options: SqliteStoreOptions): Store & {
         repoPaths: [...repoPaths],
         ...(project.threadChatId === undefined ? {} : { threadChatId: project.threadChatId }),
         ...(project.unlisted === undefined ? {} : { unlisted: project.unlisted }),
+        ...(project.verifySkills === undefined ? {} : { verifySkills: project.verifySkills }),
       })
       return undefined
     },
@@ -585,6 +586,13 @@ export function createSqliteStore(options: SqliteStoreOptions): Store & {
       if (project === undefined) throw new Error(`unknown project ${projectId}`)
       const { unlisted: _unlisted, ...rest } = project
       projects.set(projectId, unlisted ? { ...rest, unlisted: true } : rest)
+      return undefined
+    },
+    setProjectVerifySkills(projectId, answer) {
+      const project = projects.get(projectId)
+      if (project === undefined) throw new Error(`unknown project ${projectId}`)
+      // A no stays: a yes from another Session that finishes later does not reopen the offer.
+      if (project.verifySkills !== 'declined') projects.set(projectId, { ...project, verifySkills: answer })
       return undefined
     },
     getProject(projectId) {

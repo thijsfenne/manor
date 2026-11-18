@@ -93,6 +93,17 @@ describe('project setup records', () => {
     await restarted.deleteProject(project.id)
     expect(await restarted.getProjectSetup(project.id)).toBeUndefined()
   })
+
+  it('keeps a no to the verify skills offer across restart, even when a yes is stored after it', async () => {
+    const { store, filename } = fixture()
+    const project = await store.createProject('Shop')
+    await store.setProjectVerifySkills(project.id, 'declined')
+    await store.setProjectVerifySkills(project.id, 'added')
+    store.close()
+    const restarted = createSqliteStore({ filename })
+    opened.push(restarted)
+    expect((await restarted.getProject(project.id))?.verifySkills).toBe('declined')
+  })
 })
 
 describe('house settings record', () => {

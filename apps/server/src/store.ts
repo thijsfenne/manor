@@ -193,6 +193,8 @@ export interface Store {
   setProjectThread(projectId: string, chatId: string | null): Promise<void>
   /** Takes a folder off the new-Session picker, or lists it again (`Project.unlisted`). */
   setProjectUnlisted(projectId: string, unlisted: boolean): Promise<void>
+  /** Stores the user's answer to the verify skills offer (`Project.verifySkills`); a no is final. */
+  setProjectVerifySkills(projectId: string, answer: NonNullable<Project['verifySkills']>): Promise<void>
   /** One project by id. One select, and what a turn uses to find its folders. */
   getProject(projectId: string): Promise<Project | undefined>
   /** One chat by id, or nothing. How routing learns a chat's kind and membership. */

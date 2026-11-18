@@ -58,6 +58,13 @@ import { sweepUnterminatedTurns } from '../src/turnSweep.js'
 import { WorkModule } from '../src/workModule.js'
 import { createMemoryStore } from '../src/stores/memoryStore.js'
 import { GOAL_CONTINUE_NUDGE } from '../src/turnRunner.js'
+import { installVerifySkills, VERIFY_OFFER_ID, VERIFY_OFFER_OPTIONS, VERIFY_OFFER_QUESTION } from '../src/verifySkills.js'
+
+// The real installer by default; a test that needs the pinned files without the network replaces one call.
+vi.mock('../src/verifySkills.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../src/verifySkills.js')>()
+  return { ...actual, installVerifySkills: vi.fn(actual.installVerifySkills) }
+})
 import { pdfFixture } from './documentFixtures.js'
 import * as snapshots from '../src/turnFileSnapshots.js'
 import {
@@ -6994,6 +7001,138 @@ describe('Orchestrator, Single goal Sessions', () => {
       { note: expect.stringContaining('Recorded.') },
     ])
     expect((await h.store.workHandoffForTarget(chatId))?.goalReachedAt).toEqual(expect.any(Number))
+  })
+
+  describe('screenshot route', () => {
+    /** The Session's project folder with Card.tsx changed a minute ago, and a verify skill when `route`. */
+    async function uiChange(h: { store: Store; projectId: string }, chatId: string, route: boolean): Promise<string> {
+      const root = mkdtempSync(path.join(os.tmpdir(), 'manor-route-'))
+      if (route) {
+        await mkdir(path.join(root, '.cursor/skills/verify-shop'), { recursive: true })
+        await writeFile(path.join(root, '.cursor/skills/verify-shop/SKILL.md'), '---\nname: verify-shop\n---\n')
+      }
+      const file = path.join(root, 'Card.tsx')
+      await writeFile(file, 'export const Card = () => null\n')
+      await utimes(file, new Date(Date.now() - 60_000), new Date(Date.now() - 60_000))
+      await h.store.updateProject(h.projectId, 'Shop', [root])
+      await h.store.appendEvent(chatId, {
+        type: 'turn_result', agentId: SINGLE_CHAT_VOICE.id, turnId: 'turn_edit',
+        fileChanges: [{ path: file, status: 'edited', added: 1, removed: 0, edits: [] }],
+      })
+      return root
+    }
+
+    it('with a verify skill, keeps holding a UI change until a screenshot, and adds no limitation', async () => {
+      const answers: Awaited<ReturnType<Orchestrator['recordGoalClaims']>>[] = []
+      const h = await singleHarness(async () => {
+        await checkRan(h.store, h.turn())
+        const claim = (shots: { name: string; bytes: Buffer; width: number; height: number; takenAt: number }[]) =>
+          h.orchestrator.recordGoalClaims(h.turn(), [{ claim: 'Fixed.', level: 'ran' }], { result: 'Fixed.' }, shots)
+        answers.push(await claim([]))
+        answers.push(await claim([{ name: 'after.png', bytes: PNG, width: 1, height: 1, takenAt: Date.now() }]))
+        return reached('Done.')
+      })
+      const { chatId } = await acceptedSingle(h.store, h.projectId)
+      await uiChange(h, chatId, true)
+
+      await h.orchestrator.submitUserMessage(chatId, 'Fix the card.')
+
+      expect(answers).toEqual([
+        { error: expect.stringContaining("Card.tsx changed after the newest screenshot you passed (none). Take an after screenshot of every state you claim with this project's verify skill (.cursor/skills/verify-shop/SKILL.md)") },
+        { note: expect.stringContaining('Recorded.') },
+      ])
+      expect(h.seen[0]?.contextBlock).toContain('[Manor] Screenshot route: .cursor/skills/verify-shop/SKILL.md.')
+      expect(h.seen[0]?.contextBlock).not.toContain(VERIFY_OFFER_ID)
+      expect((await h.store.workHandoffForTarget(chatId))?.goalReport?.limitations).toBeUndefined()
+    })
+
+    it('without one, lets a check prove a UI change and says on the card it was not checked on screen', async () => {
+      const answers: Awaited<ReturnType<Orchestrator['recordGoalClaims']>>[] = []
+      const h = await singleHarness(async () => {
+        const claim = () => h.orchestrator.recordGoalClaims(h.turn(), [{ claim: 'Fixed.', level: 'ran' }], { result: 'Fixed.', limitations: 'Dark mode untouched.' })
+        answers.push(await claim())
+        await checkRan(h.store, h.turn())
+        answers.push(await claim())
+        return reached('Done.')
+      })
+      const { chatId } = await acceptedSingle(h.store, h.projectId)
+      await uiChange(h, chatId, false)
+
+      await h.orchestrator.submitUserMessage(chatId, 'Fix the card.')
+
+      expect(answers).toEqual([
+        { error: expect.stringContaining('Card.tsx changed after the last successful test') },
+        { note: expect.stringContaining('Recorded.') },
+      ])
+      expect(h.seen[0]?.contextBlock).toContain('[Manor] Screenshot route: none.')
+      expect(h.seen[0]?.contextBlock).toContain(`question id "${VERIFY_OFFER_ID}"`)
+      expect((await h.store.workHandoffForTarget(chatId))?.goalReport?.limitations).toBe('Not checked on screen. Dark mode untouched.')
+    })
+
+    /** A turn that asks the offer and gets `text` back from the user. */
+    const answerOffer = (h: { orchestrator: Orchestrator; turn: () => { chatId: string; agentId: string; turnId: string } }, text: string) => async () => {
+      const turn = h.turn()
+      const requestId = `ask_${text}`
+      await h.orchestrator.recordUserInputRequest(turn.chatId, turn.agentId, turn.turnId, requestId, [{
+        id: VERIFY_OFFER_ID, question: VERIFY_OFFER_QUESTION, options: VERIFY_OFFER_OPTIONS.map((label) => ({ label })),
+      }])
+      await h.orchestrator.recordUserInputResponse(turn.chatId, turn.agentId, turn.turnId, requestId, { [VERIFY_OFFER_ID]: text })
+      return [{ type: 'result', text: 'Carrying on.', sessionId: 's' }] satisfies RuntimeEvent[]
+    }
+
+    it('offers the verify skills until the user says no, then never again in that project', async () => {
+      const replies = [() => answerOffer(h, 'Yes, but later')(), () => answerOffer(h, VERIFY_OFFER_OPTIONS[0])(), () => answerOffer(h, VERIFY_OFFER_OPTIONS[1])()]
+      const h = await singleHarness(async () => await replies.shift()?.() ?? [{ type: 'result', text: 'Noted.', sessionId: 's' }])
+      const { chatId } = await acceptedSingle(h.store, h.projectId)
+      const root = await uiChange(h, chatId, false)
+      vi.mocked(installVerifySkills).mockClear()
+      // A free answer is not a yes.
+      await h.orchestrator.submitUserMessage(chatId, 'Fix the card.')
+      expect(installVerifySkills).not.toHaveBeenCalled()
+      // A failed download adds nothing and stores nothing, so the offer stays open.
+      vi.stubGlobal('fetch', vi.fn(async () => new Response('changed upstream')))
+      try {
+        await h.orchestrator.submitUserMessage(chatId, 'Go on.')
+      } finally {
+        vi.unstubAllGlobals()
+      }
+      expect((await h.store.loadEvents(chatId)).some((event) => event.type === 'system_note' && event.kind === 'error' &&
+        event.text.startsWith('Manor could not add the verify skills: LICENSE did not match the pinned version.'))).toBe(true)
+      expect((await h.store.getProject(h.projectId))?.verifySkills).toBeUndefined()
+      await expect(readFile(path.join(root, '.cursor/skills/create-verification-skill/SKILL.md'))).rejects.toThrow()
+
+      await h.orchestrator.submitUserMessage(chatId, 'Go on.')
+      expect(h.seen[2]?.contextBlock).toContain(`question id "${VERIFY_OFFER_ID}"`)
+      expect((await h.store.getProject(h.projectId))?.verifySkills).toBe('declined')
+
+      // A later Session in the same project still learns it has no route, without the offer.
+      const later = await acceptedSingle(h.store, h.projectId)
+      await h.orchestrator.submitUserMessage(later.chatId, 'Fix the header.')
+      expect(h.seen[3]?.contextBlock).toContain('[Manor] Screenshot route: none.')
+      expect(h.seen[3]?.contextBlock).not.toContain(VERIFY_OFFER_ID)
+    })
+
+    it('on a yes, adds the skills as files of the Session, and its next turn has them as its route', async () => {
+      const replies = [() => answerOffer(h, VERIFY_OFFER_OPTIONS[0])()]
+      const h = await singleHarness(async () => await replies.shift()?.() ?? [{ type: 'result', text: 'Noted.', sessionId: 's' }])
+      const { chatId } = await acceptedSingle(h.store, h.projectId)
+      const root = await uiChange(h, chatId, false)
+      const skill = path.join(root, '.cursor/skills/create-verification-skill/SKILL.md')
+      vi.mocked(installVerifySkills).mockImplementationOnce(async (folder) => {
+        expect(folder).toBe(root)
+        await mkdir(path.dirname(skill), { recursive: true })
+        await writeFile(skill, '---\nname: create-verification-skill\n---\n')
+        return [skill]
+      })
+
+      await h.orchestrator.submitUserMessage(chatId, 'Fix the card.')
+      expect((await h.store.getProject(h.projectId))?.verifySkills).toBe('added')
+      expect((await h.store.loadEvents(chatId)).find((event) => event.type === 'system_note' && event.text.startsWith('Manor added the verify skills'))).toMatchObject({ changedFiles: [skill] })
+
+      await h.orchestrator.submitUserMessage(chatId, 'Go on.')
+      expect(h.seen[1]?.contextBlock).toContain('[Manor] Screenshot route: .cursor/skills/create-verification-skill/SKILL.md.')
+      expect(h.seen[1]?.contextBlock).not.toContain(VERIFY_OFFER_ID)
+    })
   })
 
   it('counts a turn whose checkout Manor could not measure as changed code', async () => {

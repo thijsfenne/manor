@@ -12,13 +12,19 @@ import { isProse } from './goalReview.js'
  * Both shared one shape: nothing in the Session showed the final code working.
  * `goal_reached` therefore reads the Session's own record, never the claim:
  *
- * - a changed file that renders needs a screenshot passed to `goal_reached`, taken
- *   after that file last changed, so the card shows the after state;
+ * - in a project with a screenshot route (a verify skill, see `verifySkills.ts`), a changed
+ *   file that renders needs a screenshot passed to `goal_reached`, taken after that file
+ *   last changed, so the card shows the after state;
  * - any other changed code needs a successful test, typecheck, build or script run
  *   after it last changed, or such a screenshot.
  *
+ * Since 2026-11-18 a project without a route holds a file that renders to the second rule:
+ * demanding a picture nobody can take turned every UI change there into a question card.
+ * The result card then says the change was not checked on screen (`OFF_SCREEN_LIMITATION`),
+ * so the missing picture is never silent.
+ *
  * The user saying yes to the `report_without_proof` question after the last change lifts the
- * rule, for work the spike cannot show; skipping proof costs them a visible click.
+ * rule, for work no screenshot or check can show; skipping proof costs them a visible click.
  *
  * The gate catches a forgotten proof, not a forged one: a check followed by a pipe or `;`,
  * as in `pnpm test | tail` or `pnpm build; pkill vite`, counts as run whatever it printed,
@@ -309,6 +315,17 @@ const names = (changes: readonly SessionChange[]) => {
   return changes.length > 3 ? `${shown.join(', ')} and ${changes.length - 3} more` : shown.join(', ')
 }
 
+/** The UI files changed or deleted after the newest screenshot passed. */
+export const unseenUi = (changes: readonly SessionChange[], screenshotsTakenAt: readonly number[]): SessionChange[] =>
+  changes.filter((change) => isUiFile(change.file) && !screenshotsTakenAt.some((time) => time >= change.changedAt))
+
+/** What the result card says when a project without a screenshot route changed UI nobody saw. */
+export const OFF_SCREEN_LIMITATION = 'Not checked on screen.'
+
+/** The report's limitation line, led by `OFF_SCREEN_LIMITATION` and kept within the schema's 300 characters. */
+export const offScreenLimitation = (limitations: string | undefined): string =>
+  limitations === undefined ? OFF_SCREEN_LIMITATION : `${OFF_SCREEN_LIMITATION} ${limitations}`.slice(0, 300).trimEnd()
+
 /** Why `goal_reached` may not record yet, or undefined when the proof is newer than every change. */
 export function goalEvidenceBlock(input: {
   changes: readonly SessionChange[]
@@ -317,6 +334,8 @@ export function goalEvidenceBlock(input: {
   checksAt: readonly number[]
   /** When the user agreed to a report without proof, see `waiverTimes`. */
   waivedAt: readonly number[]
+  /** The project's verify skills, as the agent should read their names; empty when it has none. */
+  screenshotRoutes: readonly string[]
 }): string | undefined {
   const last = latest(input.changes)
   if (last === undefined) return undefined
@@ -324,16 +343,15 @@ export function goalEvidenceBlock(input: {
   if (after(input.waivedAt, last.changedAt)) return undefined
   const ask = `If no screenshot or check can show this change, ask the user with ask_user, question id "${PROOF_WAIVER_ID}", ` +
     'whether to report without that proof; an option starting with "Yes" that they pick unlocks it.'
-  const ui = input.changes.filter((change) => change.deleted !== true && isUiFile(change.file))
-  const lastUi = latest(ui)
-  if (lastUi !== undefined && !after(input.screenshotsTakenAt, lastUi.changedAt)) {
-    const stale = ui.filter((change) => !after(input.screenshotsTakenAt, change.changedAt))
+  // A deleted file has nothing left to picture, so it needs a check instead.
+  const stale = input.screenshotRoutes.length === 0 ? [] : unseenUi(input.changes, input.screenshotsTakenAt).filter((change) => change.deleted !== true)
+  if (stale.length > 0) {
     return `The goal is not marked reached: ${names(stale)} changed after the newest screenshot you passed${input.screenshotsTakenAt.length === 0 ? ' (none)' : ''}. ` +
-      'Take an after screenshot of every state you claim (for Manor, on the verify-manor spike), compare it with the reference or ask you were given, ' +
-      `and pass it in screenshots, then call goal_reached again. ${ask}`
+      `Take an after screenshot of every state you claim with this project's verify skill (${input.screenshotRoutes.join(' or ')}), ` +
+      `compare it with the reference or ask you were given, and pass it in screenshots, then call goal_reached again. ${ask}`
   }
   if (after(input.checksAt, last.changedAt) || after(input.screenshotsTakenAt, last.changedAt)) return undefined
-  const stale = input.changes.filter((change) => !after(input.checksAt, change.changedAt))
-  return `The goal is not marked reached: ${names(stale)} changed after the last successful test, typecheck, build or script run in this Session. ` +
+  const unproven = input.changes.filter((change) => !after(input.checksAt, change.changedAt))
+  return `The goal is not marked reached: ${names(unproven)} changed after the last successful test, typecheck, build or script run in this Session. ` +
     `Run the check that proves the current code, then call goal_reached again. ${ask}`
 }

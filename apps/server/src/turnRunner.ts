@@ -85,6 +85,7 @@ import { composeStandingContextBundle } from './standingContext.js'
 import { composeProjectMemoryBundle } from './projectMemory.js'
 import { composeStructuredMemoryBundle, type MemoryRowRanker, type StructuredMemoryBundle } from './structuredMemory.js'
 import { effectiveRepoPaths, liveWorktreeBranch, restoreWorktrees } from './worktree.js'
+import { proofRouteBlock, screenshotRoutes } from './verifySkills.js'
 import { captureFolderStats, captureTurnTree, changedFolderFiles, diffTurnTrees, namesFile, unmeasuredPaths } from './turnFileSnapshots.js'
 import { CODE_REVIEWER_ID, isManorTool, isProse } from './goalReview.js'
 import { shellMayWrite, writingParts } from './drivers/commands.js'
@@ -1617,6 +1618,9 @@ export class TurnRunner {
       proposesWork: threadTurn && allowWorkHandoff && workMcp !== undefined,
       // A Session's own lead: a Single chat in a project that is not the project's thread.
       sessionLead: single && room?.kind === 'project' && project?.threadChatId !== chatId,
+      // Set for a goal owner in a project with folders: whether its proof route note may offer verify skills.
+      ...(allowGoal && room?.projectId != null && room.projectId !== HOME_PROJECT_ID && repoPaths.length > 0
+        ? { proofRouteOffer: project?.verifySkills !== 'declined' } : {}),
       session: { sessionId, seededThroughEventId, parentSeededThroughEventId },
     }
   }
@@ -1684,7 +1688,7 @@ export class TurnRunner {
       cwd, mapping, repoPaths, manorFollowUp, aside, single, browserRoom, browserSession, isolatedRoutine,
       resolvedMcp, builtInMcp, turnMcpServers, workProjects, household, layered,
       availableSkills, selectedSkills, bundleRoots, pin, runningOn, memoryTraceEnabled, memoryRoots,
-      noteSkillsUsed, noteSelectedSkillsUsed, files, proposesWork, offersWork, threadTurn, sessionLead,
+      noteSkillsUsed, noteSelectedSkillsUsed, files, proposesWork, offersWork, threadTurn, sessionLead, proofRouteOffer,
     } = setup
     let { sessionId, seededThroughEventId, parentSeededThroughEventId } = setup.session
     let retriedFresh = false
@@ -1876,11 +1880,14 @@ export class TurnRunner {
       }
       // Read per attempt, so a retry after a long wait still sees the current window.
       const headroom = proposesWork && !nudgeOnly ? headroomNote(this.options.providerUsage?.() ?? [], Date.now()) : ''
+      // Read per attempt from the Session's own checkout, so verify skills added mid-Session count at once.
+      const proofRoute = proofRouteOffer === undefined ? '' : proofRouteBlock(await screenshotRoutes(repoPaths), proofRouteOffer)
       const contextBlock = [
         side.block,
         browserContext,
         computerContext,
         headroom,
+        proofRoute,
         ...(quietRoutine ? [room?.kind === 'run' ? RUN_ROUTINE_OUTCOME_BLOCK : DM_ROUTINE_OUTCOME_BLOCK] : []),
       ].filter((block) => block.length > 0).join('\n\n')
       let outcome: TurnOutcome

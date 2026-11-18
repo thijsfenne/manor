@@ -2793,6 +2793,9 @@ export const ProjectSchema = z.object({
   // project without a thread, carries it. Its Sessions keep the folder as their room,
   // and adding the same folder again lists it once more.
   unlisted: z.literal(true).optional(),
+  // The user's answer to the one-time offer of verify skills for a project without a
+  // screenshot route (2026-11-18). After `declined` Manor never offers them there again.
+  verifySkills: z.enum(['added', 'declined']).optional(),
 })
 export type Project = z.infer<typeof ProjectSchema>
 

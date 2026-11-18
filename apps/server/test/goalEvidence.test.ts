@@ -5,11 +5,12 @@ import { describe, expect, it } from 'vitest'
 import type { ThreadEvent } from '@manor/contracts'
 import { describeCommand } from '../src/drivers/commands.js'
 import { redactToolActivity } from '../src/drivers/toolActivity.js'
-import { PROOF_WAIVER_ID, checkFrom, checkRunTimes, codeChangeTimes, goalEvidenceBlock, isUiFile, runsCheck, unmeasuredChanges, waiverTimes } from '../src/goalEvidence.js'
+import { OFF_SCREEN_LIMITATION, PROOF_WAIVER_ID, checkFrom, checkRunTimes, codeChangeTimes, goalEvidenceBlock, isUiFile, offScreenLimitation, runsCheck, unmeasuredChanges, unseenUi, waiverTimes } from '../src/goalEvidence.js'
 
 const card = { file: '/repo/apps/web/src/components/Card.tsx', changedAt: 1_000 }
 const store = { file: '/repo/apps/server/src/store.ts', changedAt: 1_000 }
-const none = { screenshotsTakenAt: [], checksAt: [], waivedAt: [] }
+// A project with a screenshot route; `noRoute` below is one without.
+const none = { screenshotsTakenAt: [], checksAt: [], waivedAt: [], screenshotRoutes: ['.cursor/skills/verify-manor/SKILL.md'] }
 
 describe('goalEvidenceBlock', () => {
   it('passes a Session that changed no code', () => {
@@ -22,6 +23,28 @@ describe('goalEvidenceBlock', () => {
     expect(goalEvidenceBlock({ changes: [card], ...none, checksAt: [2_000] })).toContain('Card.tsx')
     expect(goalEvidenceBlock({ changes: [card], ...none, screenshotsTakenAt: [900] })).toContain('Card.tsx changed after the newest screenshot')
     expect(goalEvidenceBlock({ changes: [card], ...none, screenshotsTakenAt: [900, 1_000] })).toBeUndefined()
+  })
+
+  it('names the project\'s own verify skill in the refusal', () => {
+    expect(goalEvidenceBlock({ changes: [card], ...none })).toContain('with this project\'s verify skill (.cursor/skills/verify-manor/SKILL.md)')
+    expect(goalEvidenceBlock({ changes: [card], ...none, screenshotRoutes: ['.claude/skills/verify-shop/SKILL.md'] })).not.toContain('verify-manor')
+  })
+
+  it('without a screenshot route, holds a UI change to a check and no longer asks for a picture', () => {
+    const noRoute = { ...none, screenshotRoutes: [] }
+    expect(goalEvidenceBlock({ changes: [card], ...noRoute })).toContain('Card.tsx changed after the last successful test')
+    expect(goalEvidenceBlock({ changes: [card], ...noRoute })).not.toContain('screenshot you passed')
+    expect(goalEvidenceBlock({ changes: [card], ...noRoute, checksAt: [900] })).toContain('Card.tsx')
+    expect(goalEvidenceBlock({ changes: [card, store], ...noRoute, checksAt: [1_000] })).toBeUndefined()
+    // The UI change still went unseen, which the result card says.
+    expect(unseenUi([card, store], [])).toEqual([card])
+    expect(unseenUi([card, store], [1_000])).toEqual([])
+    const gone = { file: '/repo/Old.tsx', changedAt: 1_000, deleted: true as const }
+    expect(unseenUi([gone], [])).toEqual([gone])
+    expect(unseenUi([gone], [1_000])).toEqual([])
+    expect(offScreenLimitation(undefined)).toBe(OFF_SCREEN_LIMITATION)
+    expect(offScreenLimitation('Phone not shown.')).toBe('Not checked on screen. Phone not shown.')
+    expect(offScreenLimitation('x'.repeat(300))).toHaveLength(300)
   })
 
   it('holds other code until a check or a screenshot ran after its last change', () => {

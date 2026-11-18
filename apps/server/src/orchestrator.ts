@@ -68,7 +68,7 @@ import { DEFAULT_DELEGATION_CAP, DEFAULT_REVIEW_HOPS, DEFAULT_WAKE_CAP, WAKE_HOL
 import type { DriverResolver } from './drivers/index.js'
 import { sideAgentFor } from './sideChat.js'
 import { singleAgentFor } from './singleChat.js'
-import { SINGLE_CHAT_VOICE, parseMentions, workReopenedLine } from '@manor/contracts'
+import { HOME_PROJECT_ID, SINGLE_CHAT_VOICE, parseMentions, workReopenedLine } from '@manor/contracts'
 import { explicitWorkHandoffRequest, hasWorkDestination } from './workIntent.js'
 import { createTurnContext, type TurnContext } from './turnContext.js'
 import {
@@ -93,7 +93,8 @@ import type { UserInputContext } from './interactionCapability.js'
 import type { OpenQuestions } from './interactionBroker.js'
 import { lostConnectionNote, type RecoveryInputs } from './turnSweep.js'
 import { CHANGED_AFTER_RESULT_NOTE, CODE_REVIEWER_ID, changedAfterResult, codeChangedAfterResult, goalReviewBlock, sessionChangedFiles } from './goalReview.js'
-import { checkRunTimes, codeChangeTimes, goalEvidenceBlock, unmeasuredChanges, waiverTimes } from './goalEvidence.js'
+import { checkRunTimes, codeChangeTimes, goalEvidenceBlock, offScreenLimitation, unmeasuredChanges, unseenUi, waiverTimes } from './goalEvidence.js'
+import { VERIFY_OFFER_ID, installVerifySkills, screenshotRoutes, verifyOfferAnswer } from './verifySkills.js'
 import { checkoutBranches, leftStartBranch, prepareWorkCompletion } from './workCompletion.js'
 import { liveSessionFiles } from './sessionGit.js'
 import { effectiveRepoPaths } from './worktree.js'
@@ -1325,6 +1326,8 @@ export class Orchestrator {
     chat: ChatRuntime, chatId: string, owner: AgentConfig, handoff: WorkHandoff,
     outcome: { goalClaims?: GoalClaim[]; goalReport?: GoalReport; goalScreenshots?: readonly GoalScreenshot[] },
     events: readonly ThreadEvent[], traceNote: (text: string) => Promise<unknown>,
+    /** A UI change no screenshot showed, in a project without a screenshot route. */
+    offScreen = false,
   ): Promise<boolean> {
     let completion
     let changedFiles: string[] | undefined
@@ -1354,9 +1357,10 @@ export class Orchestrator {
     const shots = outcome.goalReport === undefined ? [] : (outcome.goalScreenshots ?? []).map(({ bytes, takenAt: _, ...shot }) => ({
       evidence: { id: `evidence_${randomUUID()}`, ...shot }, bytes,
     }))
-    const report = outcome.goalReport === undefined || shots.length === 0 ? outcome.goalReport : {
+    const report = outcome.goalReport === undefined ? undefined : {
       ...outcome.goalReport,
-      evidence: shots.map((shot) => shot.evidence),
+      ...(offScreen ? { limitations: offScreenLimitation(outcome.goalReport.limitations) } : {}),
+      ...(shots.length === 0 ? {} : { evidence: shots.map((shot) => shot.evidence) }),
     }
     const note = {
       type: 'system_note',
@@ -1384,22 +1388,65 @@ export class Orchestrator {
    * Why the Session may not report Done yet: a code change newer than its proof (see
    * goalEvidence.ts). Asked when `goal_reached` is called and again when the turn ends,
    * so an edit made after the call cannot ride along on it. At the call, `measured` is the
-   * live turn's checkout measurement, which a failure leaves unknown.
+   * live turn's checkout measurement, which a failure leaves unknown. `offScreen` says the
+   * result changed or removed UI that no screenshot showed, in a project with no way to take one.
    */
   private async unprovenGoal(
-    events: readonly ThreadEvent[], screenshots: readonly GoalScreenshot[],
+    chatId: string, events: readonly ThreadEvent[], screenshots: readonly GoalScreenshot[],
     measured?: { turnId: string; changedFiles?: string[]; fileChangesFailed?: true },
-  ): Promise<string | undefined> {
-    return goalEvidenceBlock({
-      changes: [
-        ...await codeChangeTimes([...sessionChangedFiles(events), ...measured?.changedFiles ?? []], events),
-        ...unmeasuredChanges(events, measured?.fileChangesFailed === true ? measured.turnId : undefined),
-      ],
-      screenshotsTakenAt: screenshots.map((shot) => shot.takenAt),
+  ): Promise<{ blocked?: string; offScreen: boolean }> {
+    const changes = [
+      ...await codeChangeTimes([...sessionChangedFiles(events), ...measured?.changedFiles ?? []], events),
+      ...unmeasuredChanges(events, measured?.fileChangesFailed === true ? measured.turnId : undefined),
+    ]
+    const screenshotsTakenAt = screenshots.map((shot) => shot.takenAt)
+    const routes = await screenshotRoutes(await this.chatFolders(chatId))
+    const blocked = goalEvidenceBlock({
+      changes,
+      screenshotsTakenAt,
       // A check a Manor-run subagent ran sits in its own chat, nested ones included.
       checksAt: [...checkRunTimes(events), ...(await this.subagentEvents(events)).flatMap(checkRunTimes)],
       waivedAt: waiverTimes(events),
+      screenshotRoutes: routes,
     })
+    const offScreen = routes.length === 0
+      && unseenUi(changes, screenshotsTakenAt).length > 0
+    return { ...(blocked === undefined ? {} : { blocked }), offScreen }
+  }
+
+  /** The folders a project chat works in, its own worktrees in place of the linked folders. */
+  private async chatFolders(chatId: string): Promise<string[]> {
+    const projectId = (await this.options.store.getChat(chatId))?.projectId
+    if (projectId == null) return []
+    const project = await this.options.store.getProject(projectId)
+    return effectiveRepoPaths(project?.repoPaths ?? [], await this.options.store.loadChatWorktrees(chatId))
+  }
+
+  /**
+   * Acts on the user's answer to the verify skills offer (verifySkills.ts) before the asking
+   * turn reads it: a yes adds the skills to the Session's checkout as files of this Session,
+   * a no keeps Manor from offering them in this project again.
+   */
+  private async answerVerifyOffer(chat: ChatRuntime, chatId: string, agentId: string, answer: ReturnType<typeof verifyOfferAnswer>): Promise<void> {
+    const projectId = (await this.options.store.getChat(chatId))?.projectId
+    if (answer === undefined || projectId == null || projectId === HOME_PROJECT_ID) return
+    if (answer === 'declined') {
+      await this.options.store.setProjectVerifySkills(projectId, answer)
+      return
+    }
+    const root = (await this.chatFolders(chatId))[0]
+    try {
+      if (root === undefined) throw new Error('This project has no folder to add them to.')
+      const written = await installVerifySkills(root)
+      await this.options.store.setProjectVerifySkills(projectId, answer)
+      if (written.length > 0) {
+        await this.append(chat, chatId, { type: 'system_note', kind: 'info', agentId, changedFiles: written,
+          text: 'Manor added the verify skills to this project. They land with this Session.' })
+      }
+    } catch (error) {
+      await this.append(chat, chatId, { type: 'system_note', kind: 'error', agentId,
+        text: `Manor could not add the verify skills: ${error instanceof Error ? error.message : String(error)}` })
+    }
   }
 
   /** The events of every subagent chat these events started, and of the ones those started. */
@@ -1438,8 +1485,8 @@ export class Orchestrator {
     }
     // The turn's own edits have no turn_result yet; the checkout measurement names them.
     const measured = await active.measureFiles?.().catch(() => ({ fileChangesFailed: true as const })) ?? {}
-    const unproven = await this.unprovenGoal(await this.options.store.loadEvents(context.chatId), screenshots, { ...measured, turnId: context.turnId })
-    if (unproven !== undefined) return { error: unproven }
+    const { blocked } = await this.unprovenGoal(context.chatId, await this.options.store.loadEvents(context.chatId), screenshots, { ...measured, turnId: context.turnId })
+    if (blocked !== undefined) return { error: blocked }
     // Measuring awaited; the turn may have ended meanwhile.
     if (live() !== active) return ended
     active.goalClaims = claims
@@ -1496,6 +1543,10 @@ export class Orchestrator {
     chat.active.userAnswer = asked !== undefined && asked.every((question) => answers[question.id] === question.options[0]?.label)
       ? 'confirmed'
       : 'open'
+    // Only the user's own answer adds files or stops the offer, never one Manor gave from a preference.
+    if (fromPreference === undefined && answers[VERIFY_OFFER_ID] !== undefined) {
+      await this.answerVerifyOffer(chat, chatId, agentId, verifyOfferAnswer(asked, answers[VERIFY_OFFER_ID]))
+    }
     await this.append(chat, chatId, {
       type: 'user_input_response',
       agentId,
@@ -2328,12 +2379,12 @@ export class Orchestrator {
       if (goalOwner !== undefined && goalHandoff !== undefined && !goalDone && outcome.goalReached === true) {
         const reviewer = this.agentsFor([CODE_REVIEWER_ID])[0]
         const events = await this.options.store.loadEvents(chatId)
-        const blocked = (single ? undefined : goalReviewBlock(events, reviewer?.name ?? 'Argus')) ??
-          await this.unprovenGoal(events, outcome.goalScreenshots ?? [])
+        const unproven = await this.unprovenGoal(chatId, events, outcome.goalScreenshots ?? [])
+        const blocked = (single ? undefined : goalReviewBlock(events, reviewer?.name ?? 'Argus')) ?? unproven.blocked
         if (blocked !== undefined) {
           await traceNote(blocked)
         } else {
-          if (!await this.reachGoal(chat, chatId, goalOwner, goalHandoff, outcome, events, traceNote)) break
+          if (!await this.reachGoal(chat, chatId, goalOwner, goalHandoff, outcome, events, traceNote, unproven.offScreen)) break
           // Anyone the team queued is dropped; the user's own addressees still answer.
           for (let index = queue.length - 1; index >= 0; index -= 1) {
             if (queue[index]?.delegated === true) queue.splice(index, 1)
