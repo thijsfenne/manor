@@ -28,8 +28,10 @@ const GROUPS: { id: SessionOverviewGroup; label: string; hint: string; icon: Ico
  * thread (2026-10-11), with the fold state they share. A tap opens the Session as its
  * own screen; Settled starts folded on every visit.
  */
-export function SessionOverviewList({ threadId, overview, agents, onOpen, onRevealProposal }: {
+export function SessionOverviewList({ threadId, overview, agents, inset, onOpen, onRevealProposal }: {
   threadId: string
+  /** Room for the header floating above the list and the tab bar below it. */
+  inset: { top: number; bottom: number }
   overview: SessionOverview
   /** Resolves a Multiple session's faces, the way the home list does. */
   agents: AgentConfig[]
@@ -64,7 +66,10 @@ export function SessionOverviewList({ threadId, overview, agents, onOpen, onReve
   )
 
   return (
-    <ScrollView contentContainerStyle={styles.content}>
+    <ScrollView
+      contentContainerStyle={[styles.content, { paddingTop: inset.top, paddingBottom: inset.bottom }]}
+      scrollIndicatorInsets={inset}
+    >
       {GROUPS.map(({ id, label, hint, icon, tone }) => id === 'background' && overview[id].length === 0 ? null : (
         <View key={id} style={styles.group}>
           <Pressable
@@ -107,7 +112,7 @@ export function SessionOverviewList({ threadId, overview, agents, onOpen, onReve
 }
 
 const styles = StyleSheet.create({
-  content: { gap: spacing.sm, paddingHorizontal: spacing.lg, paddingTop: spacing.xs, paddingBottom: spacing.xl },
+  content: { gap: spacing.sm, paddingHorizontal: spacing.lg },
   item: { gap: 2, borderRadius: radius.md, ...squircle, backgroundColor: colors.sheetSurface, paddingHorizontal: spacing.md, paddingVertical: spacing.md },
   pressed: { opacity: 0.7 },
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },

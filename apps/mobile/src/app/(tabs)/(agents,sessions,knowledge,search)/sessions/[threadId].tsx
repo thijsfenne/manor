@@ -7,9 +7,11 @@ import { projectSessionOverview } from '@manor/client-runtime/state'
 import { router, useLocalSearchParams } from 'expo-router'
 import { useMemo } from 'react'
 import { StyleSheet, View } from 'react-native'
-import { SafeAreaView } from 'react-native-safe-area-context'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { AuthGate } from '@/components/AuthGate'
+import { CHAT_HEADER_HEIGHT } from '@/components/ChatHeader'
+import { EdgeScrim } from '@/components/EdgeScrim'
 import { GlassIconButton } from '@/components/GlassIconButton'
 import { SessionOverviewList } from '@/components/SessionOverviewList'
 import { Text } from '@/components/Text'
@@ -28,6 +30,8 @@ export default function ProjectSessionsScreen() {
 function ProjectSessions() {
   const { threadId } = useLocalSearchParams<{ threadId: string }>()
   const { workspace, openChat } = useWorkspace()
+  // Inside a tab stack the bottom inset is the tab bar plus the home indicator.
+  const insets = useSafeAreaInsets()
   const overview = useMemo(
     // The slices the overview reads, not `workspace`, so the React Compiler keeps this screen.
     () => projectSessionOverview({
@@ -39,16 +43,10 @@ function ProjectSessions() {
   const back = () => (router.canGoBack() ? router.back() : router.replace({ pathname: '/chat/[id]', params: { id: threadId } }))
 
   return (
-    <SafeAreaView edges={['top']} style={styles.screen}>
-      <View style={styles.header}>
-        <GlassIconButton accessibilityLabel="Back to the thread" icon={ArrowLeft01Icon} onPress={back} />
-        <View style={styles.heading}>
-          <Text maxFontSizeMultiplier={1.35} numberOfLines={1} style={styles.title}>Sessions</Text>
-        </View>
-        <View style={styles.side} />
-      </View>
+    <View style={styles.screen}>
       <SessionOverviewList
         agents={workspace.agents}
+        inset={{ top: insets.top + CHAT_HEADER_HEIGHT + spacing.sm, bottom: insets.bottom + spacing.sm }}
         onOpen={(chatId) => {
           openChat(chatId)
           router.push({ pathname: '/chat/[id]', params: { id: chatId } })
@@ -60,20 +58,25 @@ function ProjectSessions() {
         overview={overview}
         threadId={threadId}
       />
-    </SafeAreaView>
+      {/* Drawn over the list, as the thread's own header, so rows scroll up softly behind it. */}
+      <View pointerEvents="box-none" style={styles.header}>
+        <EdgeScrim edge="top" height={insets.top + CHAT_HEADER_HEIGHT + 28} />
+        <View pointerEvents="box-none" style={[styles.row, { paddingTop: insets.top + 6 }]}>
+          <GlassIconButton accessibilityLabel="Back to the thread" icon={ArrowLeft01Icon} onPress={back} />
+          <View style={styles.heading}>
+            <Text maxFontSizeMultiplier={1.35} numberOfLines={1} style={styles.title}>Sessions</Text>
+          </View>
+          <View style={styles.side} />
+        </View>
+      </View>
+    </View>
   )
 }
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.background },
-  header: {
-    minHeight: 76,
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.xs,
-    paddingBottom: spacing.md,
-  },
+  header: { position: 'absolute', top: 0, right: 0, left: 0 },
+  row: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.lg },
   side: { width: 44, height: 44 },
   heading: { flex: 1, minWidth: 0, alignItems: 'center', paddingHorizontal: spacing.sm },
   title: { maxWidth: '100%', color: colors.text, fontFamily: fonts.display, fontSize: 18, letterSpacing: -0.25, textAlign: 'center' },

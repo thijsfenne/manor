@@ -1626,6 +1626,14 @@ function applyWorstData() {
     const minutesAgo = 12 + index * index * 11 + index * 90
     const preview = extraReplies[index % extraReplies.length]
     directory.chats.push(chat({ id, projectId: 'project-manor', title, preview, minutesAgo, settledMinutesAgo: index % 3 === 0 ? minutesAgo - 1 : null }))
+    // Started by the Manor thread, so its Sessions overview overflows the screen.
+    directory.workHandoffs.push({
+      id: `handoff-${id}`, sourceChatId: 'chat-thread-manor', sourceTurnId: 'turn-thread-brief', workChatId: id,
+      projectId: 'project-manor', projectName: 'Manor', title,
+      authorAgentId: 'agent-wren', leadAgentId: 'agent-wren', leadAgentName: 'Wren',
+      supportingAgentIds: [], supportingAgentNames: [], state: 'active', result: null, resultAt: null,
+      version: 1, createdAt: now - minutesAgo * 60_000, acceptedAt: now - minutesAgo * 60_000,
+    })
     const ts = now - minutesAgo * 60_000
     snapshots[id] = [
       { id: `${id}-u`, ts, type: 'user_message', text: title, mentions: [] },
