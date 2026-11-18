@@ -27,6 +27,8 @@ export interface WorkProjectThreads {
   forwardBrief(handoff: WorkHandoff, options: Pick<WorkAcceptanceOptions, 'checkout' | 'mode' | 'runtime'>, task?: string): Promise<boolean>
   /** A thread published a proposal; one for a waiting brief is accepted at once. */
   proposed(handoff: WorkHandoff): Promise<void>
+  /** Writes the thread proposal's own marked Notes row, so the thread never writes one. */
+  noteProposal(handoff: WorkHandoff): Promise<void>
   /** Checks the confirmed Session's Notes row; the thread's guards decide when it archives. */
   completeSessionStatus(sessionChatId: string): Promise<void>
   /** Refuses a pinned or unavailable Notes file before the confirmation is stored. */
@@ -405,6 +407,9 @@ export class WorkModule {
       if (unpublished || replacing.length > 0) await this.options.broadcastDirectory().catch(() => undefined)
       if (unpublished && threadAuthor && this.options.projectThreads !== undefined) {
         const published = saved
+        // Before the call returns, so the thread sees its Session's row in the same turn.
+        await this.options.projectThreads.noteProposal(published)
+          .catch((error: unknown) => console.warn(`[manor] Notes row for “${published.title}” could not be written`, error))
         // After this call's lifecycle hold: accepting takes the new proposal's own.
         void Promise.resolve().then(() => this.options.projectThreads?.proposed(published)).catch(async (error: unknown) => {
           const event = await store.appendEvent(published.sourceChatId, {

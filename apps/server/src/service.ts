@@ -458,6 +458,7 @@ export class ManorService {
       projectThreads: {
         forwardBrief: (handoff, accept, task) => this.projectThreads.forwardBrief(handoff, accept, task),
         proposed: (handoff) => this.projectThreads.proposed(handoff),
+        noteProposal: (handoff) => this.projectThreads.noteProposal(handoff),
         completeSessionStatus: (chatId) => this.projectThreads.completeSessionStatus(chatId),
         assertSessionStatusWritable: (chatId) => this.projectThreads.assertSessionStatusWritable(chatId),
       },

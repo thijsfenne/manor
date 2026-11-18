@@ -36,7 +36,7 @@ import { attachmentFields, loadHandoffAttachments } from './handoffAttachments.j
 import { answersMatch } from './interactionBroker.js'
 import type { UserInputContext } from './interactionCapability.js'
 import { dehydrateNotes, diskNote, hydrateNotes, shortNoteId } from './noteMarkers.js'
-import { confirmedAndLanded, loadNotesEvidence, noteHandoff, noteText, reconcileNotes } from './projectNotes.js'
+import { asLine, confirmedAndLanded, loadNotesEvidence, noteHandoff, noteText, proposedNote, reconcileNotes } from './projectNotes.js'
 import {
   appendCardDecision,
   applyThreadLineOp,
@@ -726,6 +726,12 @@ export class ProjectThreads {
           : input.action === 'remove' && input.old !== undefined ? { action: 'remove', old: input.old }
             : undefined
     if (op === undefined) throw new Error('add needs `line`, replace needs `old` and `line`, remove needs `old`. create is for a new card.')
+    if (file === 'notes.md' && op.action === 'add') {
+      const owned = await this.openSessionTitled(context.chatId, op.line)
+      if (owned !== undefined) {
+        throw new Error(`Manor already keeps the notes.md row for the Session “${owned.title}”, from its proposal to done, and its status updates land there. Add no row for it; edit that row with replace if it needs a different status.`)
+      }
+    }
     const applied = await this.applyLine(project, file, op)
     await this.recordWrite(context, project, {
       file, action: op.action,
@@ -739,6 +745,20 @@ export class ProjectThreads {
       ? `Saved in ${file}. It is now past its one-screen budget of ${PREFERENCES_BUDGET} characters: shorten its lines and move their detail into the linked cards before you add another.`
       : applied.archived ? 'Saved in notes.md. Completed notes moved to _archive/notes.md.'
       : `Saved in ${file}.`
+  }
+
+  /**
+   * A proposal or open Session of this thread whose title the new Notes row starts with.
+   * This only refuses a duplicate row; closing a row still never goes by title.
+   */
+  private async openSessionTitled(threadChatId: string, line: string): Promise<WorkHandoff | undefined> {
+    const fold = (text: string) => asLine(text).toLowerCase()
+    const row = fold(bareLine(line).replace(/^\[[ xX]\]\s+/, ''))
+    return (await this.options.store.listWorkHandoffs()).find((handoff) => {
+      if (handoff.sourceChatId !== threadChatId || handoff.state !== 'active' || handoff.version === 0) return false
+      const title = fold(handoff.title)
+      return title.length > 0 && row.startsWith(title) && !/[\p{L}\p{N}]/u.test(row.charAt(title.length))
+    })
   }
 
   /**
@@ -984,10 +1004,46 @@ export class ProjectThreads {
   }
 
   private sessionStatusRow(handoff: WorkHandoff) {
-    const asLine = (text: string) => text.replace(/\s+/g, ' ').trim().replace(/^-\s+/, '')
     const title = asLine(handoff.title)
     const ownLine = (content: string) => threadFileLines(content).find((existing) => noteHandoff(existing) === shortNoteId(handoff.id))
-    return { asLine, title, ownLine }
+    return { title, ownLine }
+  }
+
+  /**
+   * `start_work` from this thread writes the proposal's one Notes row, `[ ] <title>: proposed`
+   * with its marker, before the call returns. A newer version takes over the row of the
+   * one it replaces. From then on Accept, the Session's own status, Confirm, landed
+   * commits and Reject all change that same row. A pinned file stays untouched.
+   */
+  async noteProposal(handoff: WorkHandoff): Promise<void> {
+    const project = await this.options.store.getProject(handoff.projectId)
+    if (project === undefined || this.options.structuredRoot === undefined || await this.liveThread(project) !== handoff.sourceChatId) return
+    const id = shortNoteId(handoff.id)
+    const replaced = new Set((await this.options.store.listWorkHandoffs())
+      .filter((row) => row.supersededById === handoff.id).map((row) => shortNoteId(row.id)))
+    const line = diskNote(proposedNote(handoff.title), handoff.id)
+    const withRow = (content: string): string => {
+      const rows = threadFileLines(content)
+      if (rows.some((row) => noteHandoff(row) === id)) return content
+      const previous = rows.find((row) => replaced.has(noteHandoff(row) ?? '') && /^\[ \] /.test(row))
+      const applied = applyThreadLineOp(content, previous === undefined ? { action: 'add', line } : { action: 'replace', old: previous, line })
+      return 'error' in applied ? content : applied.content
+    }
+    const paths = this.paths(project)
+    await ensureProjectThreadFiles(paths, project.name, { files: ['notes.md'] })
+    await withThreadFileLock(paths.notes, async () => {
+      // A hand edit or pin made between the read and the write is kept, and the row redone on it.
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        const current = await readThreadFile(paths.notes)
+        if (isPinned(current)) return
+        const next = withRow(current)
+        if (next !== current && !await writeThreadFile(paths.notes, next, current)) continue
+        // Only this row becomes known; any other change stays the owner guard's to judge.
+        this.known.set(paths.notes, withRow(this.known.get(paths.notes) ?? current))
+        return
+      }
+      throw new Error('notes.md kept changing while Manor wrote the proposal row.')
+    })
   }
 
   /** Refuse a locked or unavailable Notes file before Confirm is stored. */
@@ -1020,7 +1076,7 @@ export class ProjectThreads {
     if (linked === undefined) throw new Error('Only a Session its project thread started has a status line in notes.md.')
     const { project, handoff, threadChatId } = linked
     await this.idleTick()
-    const { asLine, title, ownLine } = this.sessionStatusRow(handoff)
+    const { title, ownLine } = this.sessionStatusRow(handoff)
     const text = asLine(status)
     if (text.length === 0) throw new Error('`status` must be one non-empty line.')
     if (text.length > SESSION_STATUS_MAX) throw new Error(`\`status\` holds at most ${SESSION_STATUS_MAX} characters; this one has ${text.length}. Say what works and what stays open, shorter.`)

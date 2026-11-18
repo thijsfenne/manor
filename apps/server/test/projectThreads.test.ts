@@ -55,6 +55,7 @@ async function harness(roster: readonly AgentConfig[] = agents) {
     projectThreads: {
       forwardBrief: (handoff, options, task) => threads.forwardBrief(handoff, options, task),
       proposed: (handoff) => threads.proposed(handoff),
+      noteProposal: (handoff) => threads.noteProposal(handoff),
       completeSessionStatus: (chatId) => threads.completeSessionStatus(chatId),
       assertSessionStatusWritable: (chatId) => threads.assertSessionStatusWritable(chatId),
     },
@@ -2430,5 +2431,82 @@ describe('the thread\'s file writes and their Undo', () => {
     const content = await readFile(h.paths.preferences, 'utf8')
     expect(content).toContain('- Typed by hand')
     expect(content).toContain('- Second rule')
+  })
+})
+
+describe('one Notes row per thread proposal', () => {
+  const owner = (h: Awaited<ReturnType<typeof harness>>) => ({ chatId: h.threadChatId, agentId: '__single__', turnId: 'owner' })
+  const taskRows = async (h: Awaited<ReturnType<typeof harness>>) =>
+    (await readFile(h.paths.notes, 'utf8')).split('\n').filter((row) => /^- \[[ xX]\] /.test(row))
+  const archive = (h: Awaited<ReturnType<typeof harness>>) => readFile(path.join(h.paths.folder, '_archive', 'notes.md'), 'utf8')
+
+  it('writes one marked row at start_work and keeps it through a revision, Accept and the Session status', async () => {
+    const h = await harness()
+    const first = await h.propose('export')
+    expect(await taskRows(h)).toEqual([`- [ ] Export button: proposed <!-- manor-note ${first.id} -->`])
+    // A newer version takes the row over instead of adding a second one.
+    await h.work.useTool({ chatId: h.threadChatId, agentId: '__single__', turnId: 'thread_export_v2' }, {
+      assignmentKey: 'export', project: h.projectId, title: 'Export button', task: 'Add an export button, v2.', firstExecutor: 'Wren',
+    })
+    const second = (await h.store.listWorkHandoffs()).find((row) => row.supersededById === undefined && row.assignmentKey === 'export')!
+    expect(second.id).not.toBe(first.id)
+    expect((await taskRows(h)).map((row) => [noteText(row), noteHandoff(row)])).toEqual([['- [ ] Export button: proposed', second.id]])
+    const session = await h.work.accept(second.id, { mode: 'house' })
+    await h.threads.idleTick()
+    expect((await taskRows(h)).map(noteText)).toEqual(['- [ ] Export button: accepted'])
+    await h.threads.writeSessionStatus({ chatId: session, agentId: 'wren', turnId: 'status' }, 'CSV export ships')
+    const rows = await taskRows(h)
+    expect(rows.map(noteText)).toEqual(['- [ ] Export button: CSV export ships'])
+    expect(noteHandoff(rows[0]!)).toBe(second.id)
+  })
+
+  it('checks the row off with the reason on Reject, and archives it', async () => {
+    const h = await harness()
+    const handoff = await h.propose('export')
+    await h.work.reject(handoff.id)
+    await h.threads.idleTick()
+    expect(await taskRows(h)).toEqual([])
+    expect(await archive(h)).toContain(`- [x] Export button: proposed [Rejected before work started, ${new Date().toISOString().slice(0, 10)}]`)
+  })
+
+  it('closes the row of a settled Session whose commit landed on main', async () => {
+    const h = await harness()
+    const repo = path.join(h.root, 'repo')
+    await mkdir(repo)
+    const git = (...args: string[]) => execFileSync('git', args, {
+      cwd: repo, env: { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null' }, encoding: 'utf8',
+    }).trim()
+    git('init', '-q', '-b', 'main')
+    git('config', 'user.name', 'Test')
+    git('config', 'user.email', 'test@example.test')
+    await writeFile(path.join(repo, 'app.txt'), 'Before\n')
+    git('add', 'app.txt')
+    git('commit', '-qm', 'Initial')
+    await writeFile(path.join(repo, 'app.txt'), 'After\n')
+    git('commit', '-qam', 'Export button')
+    const commit = git('rev-parse', 'HEAD')
+    await h.store.updateProject(h.projectId, 'Manor', [repo])
+    const handoff = await h.propose('export')
+    const session = await h.work.accept(handoff.id, { mode: 'house' })
+    await h.threads.writeSessionStatus({ chatId: session, agentId: 'wren', turnId: 'status' }, `Committed ${commit.slice(0, 12)}.`)
+    await h.threads.idleTick()
+    expect(await taskRows(h)).toHaveLength(1)
+    await h.work.setSettled(session, true)
+    await h.threads.idleTick()
+    expect(await taskRows(h)).toEqual([])
+    expect(await archive(h)).toContain(`[Landed ${commit.slice(0, 12)}]`)
+  })
+
+  it('refuses a thread row for an open Session by its title, and allows it once that Session is closed', async () => {
+    const h = await harness()
+    const handoff = await h.propose('export')
+    await expect(h.threads.writeFile(owner(h), { file: 'notes.md', action: 'add', line: '[ ] Export button: proposed, awaiting Accept' }))
+      .rejects.toThrow('Manor already keeps the notes.md row for the Session “Export button”')
+    // Another subject that only shares the first word is not that Session's row.
+    await h.threads.writeFile(owner(h), { file: 'notes.md', action: 'add', line: '[ ] Export buttons need icons' })
+    await h.work.reject(handoff.id)
+    await h.threads.writeFile(owner(h), { file: 'notes.md', action: 'add', line: 'Export button: dropped for now' })
+    expect(await readFile(h.paths.notes, 'utf8')).toContain('- Export button: dropped for now')
+    expect(await archive(h)).toContain('- [x] Export button: proposed [Rejected before work started')
   })
 })

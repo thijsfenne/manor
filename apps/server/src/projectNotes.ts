@@ -15,6 +15,15 @@ export const confirmedAndLanded = (handoff: Pick<WorkHandoff, 'goalConfirmedAt' 
   handoff.goalConfirmedAt !== undefined && (handoff.goalCompletion === undefined ||
     handoff.goalCompletion.operation === 'none' || handoff.goalCompletion.status === 'complete')
 
+/** A title or status as one Notes line, the way a Session row writes it. */
+export const asLine = (text: string): string => text.replace(/\s+/g, ' ').trim().replace(/^-\s+/, '')
+
+/** The row `start_work` writes for a thread's proposal, before the Session has a status of its own. */
+export const proposedNote = (title: string): string => `[ ] ${asLine(title)}: proposed`
+
+/** An open row no Session owns, unchanged this long, is flagged for the thread to check or close. */
+export const UNLINKED_STALE_MS = 7 * 86_400_000
+
 export interface NoteSession {
   handoff: WorkHandoff
   settled: boolean
@@ -46,6 +55,19 @@ export function reconcileNotes(rows: readonly string[], handoffs: readonly NoteS
     if (session === undefined) return sourceNote(row, id ?? '-', updatedAt)
     const { handoff, settled } = session
     let text = noteText(row)
+    if (handoff.acceptedAt === null) {
+      // A proposal that never ran: Reject or a newer version closes its row with the reason.
+      // Only a stored Reject or replacement closes it; an old Session settled before Accept existed stays open.
+      const reason = handoff.supersededById !== undefined ? 'Replaced by a newer proposal'
+        : /^Rejected(?: before work started)?\.$/.test(handoff.result ?? '') ? handoff.result!.slice(0, -1) : undefined
+      if (handoff.state === 'active' || reason === undefined || !text.startsWith('- [ ] ')) return sourceNote(text, handoff.id, updatedAt)
+      const at = new Date(handoff.resultAt ?? git.now).toISOString().slice(0, 10)
+      return sourceNote(`${text.replace(/^- \[ \]/, '- [x]')} [${reason}, ${at}]`, handoff.id, git.now)
+    }
+    if (text === `- ${proposedNote(handoff.title)}`) {
+      text = `- [ ] ${asLine(handoff.title)}: accepted`
+      updatedAt = git.now
+    }
     if (handoff.unsettledAt !== undefined) return sourceNote(text, handoff.id, updatedAt)
     const commits = git.landed.get(handoff.id) ?? []
     const reportedAt = handoff.goalReachedAt ?? handoff.resultAt
@@ -72,12 +94,17 @@ export function reconcileNotes(rows: readonly string[], handoffs: readonly NoteS
   })
 }
 
-/** Context only, from working rows (`hydrateNotes`). An unchanged open row says its age inline; age never changes a checkbox or the file. */
+/**
+ * Context only, from working rows (`hydrateNotes`). An unchanged open row says its age inline,
+ * and one no Session owns past a week asks the thread to check it; age never changes a checkbox or the file.
+ */
 export function notesContext(content: string, now = Date.now()): string {
   return content.split('\n').map((line) => {
     const stamp = noteStamp(line)
     const age = /^- \[ \] /.test(line) && stamp?.current === true ? noteAge(stamp.updatedAt, now) : undefined
-    return age === undefined ? noteText(line) : `${noteText(line)} (${age})`
+    if (age === undefined) return noteText(line)
+    const unlinked = noteHandoff(line) === undefined && now - stamp!.updatedAt >= UNLINKED_STALE_MS
+    return `${noteText(line)} (${age}${unlinked ? ', unlinked: check or close' : ''})`
   }).join('\n')
 }
 
@@ -112,9 +139,10 @@ export async function loadNotesEvidence(
   store: Store, threadChatId: string, content: string, now = Date.now(),
   cachedSources?: ReturnType<typeof legacyNoteSources>,
 ) {
-  const handoffs = (await store.listWorkHandoffs()).filter((handoff) =>
-    handoff.sourceChatId === threadChatId && handoff.workChatId !== null && handoff.acceptedAt !== null)
-  const sessions: NoteSession[] = []
+  // Proposals count too: their row exists from start_work on, and Reject or a newer version closes it.
+  const proposals = (await store.listWorkHandoffs()).filter((handoff) => handoff.sourceChatId === threadChatId && handoff.version > 0 && handoff.state !== 'deleted')
+  const handoffs = proposals.filter((handoff) => handoff.workChatId !== null && handoff.acceptedAt !== null)
+  const sessions: NoteSession[] = proposals.filter((handoff) => handoff.acceptedAt === null).map((handoff) => ({ handoff, settled: false }))
   const needsSources = cachedSources === undefined && content.split('\n').some((line) => /^- \[ \] /.test(line) && noteHandoff(line) === undefined)
   const history = needsSources ? await Promise.all(handoffs.map(async (handoff) => ({
     handoff, events: await store.loadEvents(handoff.workChatId!),

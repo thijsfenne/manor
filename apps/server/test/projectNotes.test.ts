@@ -77,6 +77,38 @@ describe('Notes evidence', () => {
     expect(notesContext(edited!, now)).toBe('- [ ] Changed task')
   })
 
+  it('closes a never-accepted row only on a stored Reject or replacement', () => {
+    const proposal = (id: string, fields: Partial<WorkHandoff>) =>
+      ({ handoff: handoff(id, { acceptedAt: null, state: 'settled', resultAt: now, ...fields }), settled: false })
+    const result = reconcileNotes(['rejected', 'replaced', 'legacy', 'pending'].map((id) => row(id, 'Export button: proposed')), [
+      proposal('rejected', { result: 'Rejected before work started.' }),
+      proposal('replaced', { result: 'Replaced by v2.', supersededById: 'v2' }),
+      // Settled before Accept existed as a gate: its work ran, so it is no Reject.
+      proposal('legacy', { result: 'CSV export ships.' }),
+      proposal('pending', { state: 'active', resultAt: null }),
+    ], { now, landed: new Map() }).map(noteText)
+    expect(result).toEqual([
+      '- [x] Export button: proposed [Rejected before work started, 2026-10-17]',
+      '- [x] Export button: proposed [Replaced by a newer proposal, 2026-10-17]',
+      '- [ ] Export button: proposed',
+      '- [ ] Export button: proposed',
+    ])
+  })
+
+  it('flags an unlinked open row past a week for checking, and leaves a younger or linked row at its age', () => {
+    const day = 86_400_000
+    const context = notesContext([
+      sourceNote('- [ ] Old hand task', '-', now - 8 * day),
+      sourceNote('- [ ] Recent hand task', '-', now - 3 * day),
+      sourceNote('- [ ] Export button: Working', 'open', now - 8 * day),
+    ].join('\n'), now).split('\n')
+    expect(context).toEqual([
+      '- [ ] Old hand task (open 8d, unlinked: check or close)',
+      '- [ ] Recent hand task (open 3d)',
+      '- [ ] Export button: Working (open 8d)',
+    ])
+  })
+
   it('recovers legacy identity only from a unique successful tool call around the exact write', () => {
     const use: ThreadEvent = { type: 'tool_use', id: 'use', ts: 10, agentId: '__single__', turnId: 'turn', toolCallId: 'call', tool: 'mcp__manor__set_session_status' }
     const end: ThreadEvent = { type: 'tool_result', id: 'end', ts: 20, agentId: '__single__', turnId: 'turn', toolCallId: 'call', outcome: 'success' }
