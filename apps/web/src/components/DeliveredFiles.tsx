@@ -185,7 +185,8 @@ function DeliveredPage({ file }: { file: DeliveredFile }) {
   const openInBrowser = (select: boolean) => {
     setZoomed(false)
     if (openWebsite?.(browserUrl) === true) {
-      if (chatId === undefined) return
+      // Without a Browser panel of its own the page went to the full Browser.
+      if (chatId === undefined || !picks) return
       // Picking stays beside the chat, where the picked context lands in the composer;
       // Open in browser gives the page the whole stage.
       if (select) requestPageSelection(chatId, browserUrl)

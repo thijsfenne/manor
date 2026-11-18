@@ -45,6 +45,7 @@ import type { useSplitActions, useSplitStage } from '../../useSplitStage'
 import type { Theme } from '../../useTheme'
 import type { useWorkspaceNav } from '../../useWorkspaceNav'
 import type { Manor } from '../../useWorkspace'
+import { hasOwnBrowserPanel } from '../../websiteLinkRoute'
 
 /** One empty list for every pane without page contexts, so the composer keeps its props. */
 const NO_PAGE_CONTEXTS: PageContextAttachment[] = []
@@ -461,7 +462,7 @@ export function StageChatPane({
   )
   const reply = replyOf(chat.id)
   return (
-  <ExternalLinkProvider open={openWebsiteUrl} chatId={chat.id} picksPageContext={chat.kind !== 'browser' && chat.kind !== 'pair'}>
+  <ExternalLinkProvider open={openWebsiteUrl} chatId={chat.id} picksPageContext={hasOwnBrowserPanel(chat, kit.stage.roomThreadOf(chat.id) !== undefined)}>
   <ConnectCardProvider chatId={chat.id} open={manor.openConnectCard} connected={status === 'live'}>
   <DiffReviewContext.Provider value={phone ? undefined : reviewerFor(chat.id)}>
   <ChatPane
@@ -570,7 +571,7 @@ function StagePanel({ kit, chat, layout, availableWidth }: { kit: StageKit; chat
   const { roomThreadOf, visibleSplit } = kit.stage
   const { openGroupDialog } = kit.dialogs
   return (
-  <ExternalLinkProvider open={openWebsiteUrl} chatId={chat.id} picksPageContext={chat.kind !== 'browser' && chat.kind !== 'pair'}>
+  <ExternalLinkProvider open={openWebsiteUrl} chatId={chat.id} picksPageContext={hasOwnBrowserPanel(chat, kit.stage.roomThreadOf(chat.id) !== undefined)}>
   <ConnectCardProvider chatId={chat.id} open={manor.openConnectCard} connected={manor.status === 'live'}>
   <ChatPanelRegion
     key={chat.id}

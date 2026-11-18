@@ -497,8 +497,10 @@ function Workspace({
   const openWebsiteUrl = (url: string, chatId?: string): boolean => routeWebsiteLink(url, {
     browser: browserBridge,
     chat: workspace.chats.find((candidate) => candidate.id === chatId),
+    roomSession: chatId !== undefined && roomThreadOf(chatId) !== undefined,
     phone,
     showPanel: (targetChatId) => showRightPanelFor(targetChatId, 'browser'),
+    showFullBrowser: openBrowser,
     onFailure: (failedUrl) => window.alert(`Could not open this website in Browser.\n${failedUrl}`),
   })
   const browserPlace = useBrowserPlace({ activeView, workspace, manor })
