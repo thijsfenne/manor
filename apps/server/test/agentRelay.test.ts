@@ -13,6 +13,7 @@ import {
   AGENT_RELAY_OUTBOUND_MAX,
   AgentRelay,
   type RelayTurnContext,
+  withRelayExchanges,
 } from '../src/agentRelay.js'
 import type { UserInputContext } from '../src/interactionCapability.js'
 import { Orchestrator } from '../src/orchestrator.js'
@@ -20,7 +21,7 @@ import type { TurnResult } from '../src/turnRunner.js'
 import { createMemoryStore } from '../src/stores/memoryStore.js'
 import { AsyncQueue } from '../src/asyncQueue.js'
 import { contextWindowFor } from '@manor/contracts'
-import { SESSION_CONTEXT_FRACTION } from '../src/composer.js'
+import { renderCatchUpEvents, SESSION_CONTEXT_FRACTION } from '../src/composer.js'
 import { closeTerminalTurn } from '../src/agentRelayLifecycle.js'
 import { gated, marlow, sage, scratchFor, scripted, smith, until } from './helpers.js'
 
@@ -834,6 +835,107 @@ describe('agent relay orchestration', () => {
     expect((await lifecycle.store.loadEvents(lifecycle.dm.id)).filter(
       (event) => event.type === 'agent_message',
     )).toHaveLength(1)
+  })
+
+  it.each([
+    ['between its DM turns', 'between'],
+    ['while its own DM turn runs', 'during'],
+    ['while its own DM turn runs and the user steers it', 'steered'],
+  ] as const)('carries a received consultation and its reply into the receiver\'s own DM %s', async (_when, timing) => {
+    const asker = gated((input) => input.catchUp.some((event) => event.type === 'user_message' && event.source === 'agent_relay')
+      ? 'Sage has it on record.'
+      : '')
+    const receiver = gated(() => 'Recorded the grant rejection in pipeline.md.')
+    const store = createMemoryStore({ agents })
+    const askerDm = await store.createChat({ kind: 'dm', memberIds: ['marlow'], title: 'Marlow' })
+    const sageDm = await store.createChat({ kind: 'dm', memberIds: ['sage'], title: 'Sage' })
+    const orchestrator = new Orchestrator({
+      agents: () => agents,
+      store,
+      mcpServers: () => [],
+      resolveDriver: (agent) => agent.id === 'sage' ? receiver.driver : asker.driver,
+      ensureScratchDir: scratchFor,
+      emit: () => undefined,
+    })
+
+    // Sage holds a provider session in its own DM, so the later turn resumes it.
+    const earlier = orchestrator.submitUserMessage(sageDm.id, 'Where is the grant application?')
+    await until(() => receiver.forChat(sageDm.id).length === 1, 'the earlier Sage DM turn')
+    if (timing === 'between') {
+      receiver.forChat(sageDm.id)[0]?.finish()
+      await earlier
+    }
+
+    const root = orchestrator.submitUserMessage(askerDm.id, 'Tell Sage the grant fund said no.')
+    await until(() => asker.forChat(askerDm.id).length === 1, 'the asker turn')
+    const rootTurn = orchestrator.activeTurn(askerDm.id)
+    if (rootTurn === undefined) throw new Error('the asker turn should be active')
+    await orchestrator.messageAgent(rootContext(askerDm.id, rootTurn.turnId), 'Sage', 'The grant fund rejected us. Please record it.')
+    asker.forChat(askerDm.id)[0]?.finish()
+    await root
+    const pair = (await store.listChats()).find((chat) => chat.kind === 'pair')
+    if (pair === undefined) throw new Error('the pair chat should exist')
+    await until(() => receiver.forChat(pair.id).length === 1, 'the receiver turn')
+    receiver.forChat(pair.id)[0]?.finish()
+    await until(() => asker.forChat(askerDm.id).length === 2, 'the consultation return')
+    asker.forChat(askerDm.id)[1]?.finish()
+    await until(() => orchestrator.activeTurn(askerDm.id) === undefined, 'the asker return reply')
+    if (timing === 'steered') {
+      const steering = orchestrator.submitUserMessage(sageDm.id, 'Only the open applications, please.')
+      await until(() => receiver.forChat(sageDm.id).length === 2, 'the steered Sage DM attempt')
+      receiver.forChat(sageDm.id)[1]?.finish()
+      await Promise.all([earlier, steering])
+    } else if (timing === 'during') {
+      receiver.forChat(sageDm.id)[0]?.finish()
+      await earlier
+    }
+
+    const held = receiver.forChat(sageDm.id).length
+    const later = orchestrator.submitUserMessage(sageDm.id, 'Did Marlow tell you anything about the grant?')
+    await until(() => receiver.forChat(sageDm.id).length === held + 1, 'the later Sage DM turn')
+    const laterTurn = receiver.forChat(sageDm.id)[held]
+    expect(laterTurn?.input.sessionId).toBe(`session-${sageDm.id}-sage`)
+    const seen = renderCatchUpEvents(laterTurn?.input.catchUp ?? [], agents)
+    expect(seen).toContain('Marlow messaged you')
+    expect(seen).toContain('The grant fund rejected us. Please record it.')
+    expect(seen).toContain('Recorded the grant rejection in pipeline.md.')
+    expect(seen).not.toContain('Tell Sage the grant fund said no.')
+    laterTurn?.finish()
+    await later
+
+    // The stored DM keeps only its breadcrumbs; the exchange stays in the pair chat.
+    expect((await store.loadEvents(sageDm.id)).filter((event) => event.type === 'system_note')).toEqual([])
+    // Read once: the turn after next does not repeat the exchange.
+    const next = orchestrator.submitUserMessage(sageDm.id, 'Thanks.')
+    await until(() => receiver.forChat(sageDm.id).length === held + 2, 'the next Sage DM turn')
+    expect(renderCatchUpEvents(receiver.forChat(sageDm.id)[held + 1]?.input.catchUp ?? [], agents)).toBe('User: Thanks.')
+    receiver.forChat(sageDm.id)[held + 1]?.finish()
+    await next
+  })
+
+  it('reads a relay only for the DM persona that received it', async () => {
+    const store = createMemoryStore({ agents })
+    const pair = await store.pairChatFor('marlow', 'sage')
+    const dms = {
+      sage: await store.createChat({ kind: 'dm', memberIds: ['sage'], title: 'Sage' }),
+      marlow: await store.createChat({ kind: 'dm', memberIds: ['marlow'], title: 'Marlow' }),
+      smith: await store.createChat({ kind: 'dm', memberIds: ['smith'], title: 'Smith' }),
+    }
+    await store.appendEvent(pair.id, {
+      type: 'user_message', text: 'The grant fund rejected us.', mentions: [], source: 'agent_relay', authorAgentId: 'marlow', relayId: 'relay_1',
+    })
+    const marker = { type: 'agent_relay' as const, pairChatId: pair.id, turnId: 'turn_1', relayId: 'relay_1' }
+    await store.appendEvent(dms.sage.id, { ...marker, phase: 'received', agentId: 'sage', peerAgentId: 'marlow' })
+    // The asker already holds the exchange in its own turn and relay return.
+    await store.appendEvent(dms.marlow.id, { ...marker, phase: 'sent', agentId: 'marlow', peerAgentId: 'sage' })
+    // A forged breadcrumb in an unrelated DM must not pull that pair's text in.
+    await store.appendEvent(dms.smith.id, { ...marker, phase: 'received', agentId: 'smith', peerAgentId: 'marlow' })
+    const read = async (chatId: string) =>
+      renderCatchUpEvents(await withRelayExchanges(chatId, [...await store.loadEvents(chatId)], store, agents), agents)
+
+    expect(await read(dms.sage.id)).toContain('Marlow wrote: "The grant fund rejected us."')
+    expect(await read(dms.marlow.id)).toBe('')
+    expect(await read(dms.smith.id)).toBe('')
   })
 
   it('does not return pre-tool narration as the receiver reply', async () => {

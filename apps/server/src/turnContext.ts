@@ -25,6 +25,7 @@ import { access, mkdir, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { retainedEvidence } from './retainedEvidence.js'
 import { ridesAlong } from './projectThreads.js'
+import { withRelayExchanges } from './agentRelay.js'
 
 /** Everything appended strictly after `afterId`; the whole list if the cursor is unknown. */
 const eventsAfter = (events: readonly ThreadEvent[], afterId: string): ThreadEvent[] => {
@@ -81,6 +82,22 @@ const lastAgentCursorId = (
     }
   }
   return undefined
+}
+
+/**
+ * Relay markers that reached a DM while the turn ending at `cursor` ran: after its
+ * prompt was built, before the result that became the cursor. Steering extends that
+ * turn, so the walk passes it. A marker that landed just before the prompt was built
+ * comes again, which costs a line, not a lost message.
+ */
+const relaysDuringTurn = (events: readonly ThreadEvent[], cursor: string): ThreadEvent[] => {
+  const missed: ThreadEvent[] = []
+  for (let index = events.findIndex((event) => event.id === cursor) - 1; index >= 0; index -= 1) {
+    const event = events[index]
+    if (event === undefined || (event.type === 'user_message' && event.steersTurnId === undefined)) break
+    if (event.type === 'agent_relay') missed.unshift(event)
+  }
+  return missed
 }
 
 export interface PreparedTurnContext {
@@ -270,7 +287,7 @@ export function createTurnContext(options: {
       return {
         browserTargetMessageId,
         computerTargeted,
-        catchUp: tiered.events,
+        catchUp: await withRelayExchanges(chatId, tiered.events, options.store, options.agents()),
         ...(tiered.summary === undefined ? {} : { catchUpSummary: tiered.summary }),
         isFullCatchUp: true,
       }
@@ -280,7 +297,8 @@ export function createTurnContext(options: {
     // Bring its original row into this attempt without copying it in the transcript.
     const waiting = events.filter((event) => !reviewHop && event.type === 'user_message' && event.dispatchState === 'started' &&
       !tail.some((row) => row.id === event.id))
-    return { browserTargetMessageId, computerTargeted, catchUp: [...waiting, ...tail], isFullCatchUp: false }
+    const catchUp = await withRelayExchanges(chatId, [...relaysDuringTurn(events, cursor), ...waiting, ...tail], options.store, options.agents())
+    return { browserTargetMessageId, computerTargeted, catchUp, isFullCatchUp: false }
   }
 
   return {
