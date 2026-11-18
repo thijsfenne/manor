@@ -1,12 +1,15 @@
 import { z } from 'zod'
 
 /**
- * Pairing a phone or a browser with the Mac. Settings on the Mac makes a one-time link,
- * `<origin>/pair#code=<code>`; the device redeems the code once over HTTPS and keeps the
- * device token it gets back. The code rides in the fragment, so it never reaches a
- * request line, a proxy log or a referrer.
+ * Pairing a phone or a browser with the Mac. Settings on the Mac makes a one-time code
+ * and shows it as a link: `manor://pair#server=<origin>&code=<code>` opens the phone app,
+ * `<origin>/pair#code=<code>` a browser. The device redeems the code once over HTTPS and
+ * keeps the device token it gets back. The code rides in the fragment, so it never
+ * reaches a request line, a proxy log or a referrer.
  */
 export const PAIRING_PATH = '/pair'
+/** The phone app's own URL scheme, registered in its app.json. */
+const APP_PAIRING_PREFIX = 'manor://pair'
 
 /** 32 random bytes, base64url: what a pairing code and a device secret both are. */
 const SECRET = /^[A-Za-z0-9_-]{43}$/
@@ -68,22 +71,43 @@ export function pairingLink(origin: string, code: string): string {
   return `${origin}${PAIRING_PATH}#${new URLSearchParams({ code }).toString()}`
 }
 
-/**
- * The server origin and code in a pairing link, or null for anything else. Accepts the
- * link with stray whitespace around it, as a paste or a QR payload may carry.
- */
-export function parsePairingLink(text: string): { origin: string; code: string } | null {
-  let url: URL
+/** The same code as a link the phone's camera hands to the Manor app. */
+export function appPairingLink(origin: string, code: string): string {
+  return `${APP_PAIRING_PREFIX}#${new URLSearchParams({ server: origin, code }).toString()}`
+}
+
+/** An http(s) URL's origin, or null for anything else, including a URL with a sign-in. */
+function httpOrigin(text: string): string | null {
   try {
-    url = new URL(text.trim())
+    const url = new URL(text)
+    if (url.username !== '' || url.password !== '') return null
+    return url.protocol === 'https:' || url.protocol === 'http:' ? url.origin : null
   } catch {
     return null
   }
-  if (url.protocol !== 'https:' && url.protocol !== 'http:') return null
-  if (url.pathname !== PAIRING_PATH) return null
-  const code = new URLSearchParams(url.hash.replace(/^#/, '')).get('code')
+}
+
+/**
+ * The server origin and code in a pairing link of either kind, or null for anything
+ * else. Accepts the link with stray whitespace around it, as a paste or a QR payload
+ * may carry.
+ */
+export function parsePairingLink(text: string): { origin: string; code: string } | null {
+  const trimmed = text.trim()
+  const hash = trimmed.indexOf('#')
+  if (hash === -1) return null
+  const fragment = new URLSearchParams(trimmed.slice(hash + 1))
+  const code = fragment.get('code')
   if (code === null || !SECRET.test(code)) return null
-  return { origin: url.origin, code }
+  const base = trimmed.slice(0, hash)
+  if (base.toLowerCase() === APP_PAIRING_PREFIX) {
+    // The server is written as an origin exactly; anything else in it is a made-up link.
+    const server = fragment.get('server') ?? ''
+    return httpOrigin(server) === server ? { origin: server, code } : null
+  }
+  const origin = httpOrigin(base)
+  if (origin === null || new URL(base).pathname !== PAIRING_PATH) return null
+  return { origin, code }
 }
 
 /** The socket address for a server origin. */

@@ -41,7 +41,7 @@ function loadCamera(): CameraModule | null {
 export function ConnectGate({ children }: { children: ReactNode }) {
   const connection = useConnection()
   const [mode, setMode] = useState<'home' | 'paste' | 'scan'>('home')
-  const [pairing, setPairing] = useState<'scan' | 'paste' | null>(null)
+  const [pairing, setPairing] = useState<'scan' | 'paste' | 'link' | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [link, setLink] = useState('')
   const [camera, setCamera] = useState<CameraModule | null>(null)
@@ -57,7 +57,7 @@ export function ConnectGate({ children }: { children: ReactNode }) {
 
   if (connection.devServer !== null || connection.credential !== null) return children
 
-  const pair = async (text: string, source: 'scan' | 'paste') => {
+  const pair = async (text: string, source: 'scan' | 'paste' | 'link') => {
     setPairing(source)
     setError(null)
     const failure = await connection.pair(text)
@@ -108,7 +108,9 @@ export function ConnectGate({ children }: { children: ReactNode }) {
     }
   }
 
-  if (mode === 'scan' && camera !== null) {
+  const incoming = connection.incomingLink
+
+  if (mode === 'scan' && camera !== null && incoming === null) {
     const { CameraView } = camera
     return (
       <View style={styles.cameraRoot}>
@@ -142,11 +144,35 @@ export function ConnectGate({ children }: { children: ReactNode }) {
       <SafeAreaView style={styles.connect}>
         <View style={styles.heading}>
           <Text style={styles.title}>Connect to your Mac</Text>
-          <Text style={styles.subtitle}>In Manor on your Mac, open Settings → Phone and choose Pair phone.</Text>
+          <Text style={styles.subtitle}>
+            {incoming === null
+              ? 'In Manor on your Mac, open Settings → Phone and choose Pair phone.'
+              // A link from outside the app could name someone else's server, so the
+              // person confirms the exact address before the phone contacts it.
+              : `Connect this phone to ${incoming.origin}? Only continue if you just made this code on your Mac.`}
+          </Text>
         </View>
         <View style={styles.form}>
           {connection.notice === null ? null : <Text style={styles.notice}>{connection.notice}</Text>}
-          {mode === 'paste' ? (
+          {incoming !== null ? (
+            <>
+              <CardButton
+                busy={pairing === 'link'}
+                disabled={busy}
+                label={pairing === 'link' ? 'Connecting…' : 'Connect'}
+                onPress={() => void pair(incoming.link, 'link')}
+                style={styles.button}
+                variant="primary"
+              />
+              <CardButton
+                disabled={busy}
+                label="Cancel"
+                onPress={() => { setError(null); connection.dismissIncoming() }}
+                style={styles.button}
+                variant="quiet"
+              />
+            </>
+          ) : mode === 'paste' ? (
             <>
               <TextInput
                 accessibilityLabel="Paste the pairing link"

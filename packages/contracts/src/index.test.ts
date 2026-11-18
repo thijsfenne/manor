@@ -288,3 +288,26 @@ test('a question counts as skipped only when every line of its answer is the ski
   assert.equal(isSkippedAnswer('Skipped'), false)
   assert.equal(isSkippedAnswer(['Left', SKIPPED_ANSWER]), false)
 })
+
+import { appPairingLink, pairingLink, parsePairingLink } from './index.js'
+
+test('a pairing link reads the same as a browser link and as an app link', () => {
+  const code = 'a'.repeat(43)
+  const origin = 'https://mac.example.ts.net'
+  assert.deepEqual(parsePairingLink(pairingLink(origin, code)), { origin, code })
+  assert.deepEqual(parsePairingLink(` ${appPairingLink(origin, code)}\n`), { origin, code })
+  assert.deepEqual(parsePairingLink(appPairingLink('http://192.168.1.4:43179', code)), { origin: 'http://192.168.1.4:43179', code })
+  assert.match(appPairingLink(origin, code), /^manor:\/\/pair#server=https%3A%2F%2Fmac\.example\.ts\.net&code=a{43}$/)
+  for (const wrong of [
+    `manor://pair#server=javascript%3Aalert(1)&code=${code}`,
+    `manor://pair#server=${encodeURIComponent('https://user:pw@mac.example.ts.net')}&code=${code}`,
+    `manor://pair#server=${encodeURIComponent(`${origin}/path`)}&code=${code}`,
+    `manor://pair#server=https%3Amac.example.ts.net&code=${code}`,
+    `https://user:pw@mac.example.ts.net/pair#code=${code}`,
+    `manor://pair#code=${code}`,
+    `manor://other#server=${encodeURIComponent(origin)}&code=${code}`,
+    `${origin}/elsewhere#code=${code}`,
+    `${origin}/pair#code=short`,
+    `${origin}/pair`,
+  ]) assert.equal(parsePairingLink(wrong), null, wrong)
+})

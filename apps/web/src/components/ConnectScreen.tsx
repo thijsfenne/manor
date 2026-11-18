@@ -17,6 +17,10 @@ export function ConnectScreen({ error }: { error: string | null }) {
       setProblem(NOT_A_PAIRING_LINK)
       return
     }
+    if (!/^https?:/i.test(link.trim())) {
+      setProblem('This link is for the Manor app. On your Mac, choose Pair a browser instead.')
+      return
+    }
     window.location.assign(link.trim())
   }
 

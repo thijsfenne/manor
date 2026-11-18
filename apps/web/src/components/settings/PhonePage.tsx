@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { encode } from 'uqr'
-import type { PairedDevice, PairingLink, PhoneAccess, TailscaleStatus } from '@manor/contracts'
+import { appPairingLink, parsePairingLink, type PairedDevice, type PairingLink, type PhoneAccess, type TailscaleStatus } from '@manor/contracts'
 import { copyText } from '../../clipboard'
 import { relativeTime } from '../../relativeTime'
 import type { Notice } from '../../state'
@@ -59,6 +59,14 @@ const minutesLeft = (expiresAt: number, now: number) => Math.max(0, Math.ceil((e
 function PairingPanel({ link, pairedName, onDone }: { link: PairingLink; pairedName: string | null; onDone: () => void }) {
   const [now, setNow] = useState(() => Date.now())
   const [copied, setCopied] = useState<'yes' | 'failed' | null>(null)
+  // The QR opens the installed app when the iPhone camera scans it; a browser pairs only
+  // when the person asks for that link instead.
+  const [forBrowser, setForBrowser] = useState(false)
+  const appLink = useMemo(() => {
+    const parsed = parsePairingLink(link.link)
+    return parsed === null ? link.link : appPairingLink(parsed.origin, parsed.code)
+  }, [link.link])
+  const shownLink = forBrowser ? link.link : appLink
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 15_000)
     return () => window.clearInterval(timer)
@@ -69,12 +77,16 @@ function PairingPanel({ link, pairedName, onDone }: { link: PairingLink; pairedN
 
   return (
     <div className="flex gap-5 py-3 @max-[480px]:flex-col">
-      {ended === null ? <QrCode text={link.link} /> : null}
+      {ended === null ? <QrCode text={shownLink} /> : null}
       <div className="flex min-w-0 flex-col gap-2">
         {ended === null ? (
           <>
-            <span className="text-[14px] text-text">Scan this with the Manor app on your phone, or open the link in its browser.</span>
-            <code className="block truncate font-mono text-label text-muted" title={link.link}>{link.link}</code>
+            <span className="text-[14px] text-text">
+              {forBrowser
+                ? 'Open this link in the browser on your phone.'
+                : 'Scan this with the camera on your iPhone to open the Manor app.'}
+            </span>
+            <code className="block truncate font-mono text-label text-muted" title={shownLink}>{shownLink}</code>
             <span className="text-label text-muted tabular-nums">
               Works once, for {left === 1 ? '1 more minute' : `${left} more minutes`}.
             </span>
@@ -84,9 +96,14 @@ function PairingPanel({ link, pairedName, onDone }: { link: PairingLink; pairedN
         )}
         <div className="flex items-center gap-2">
           {ended === null ? (
-            <Button size="small" onClick={() => { void copyText(link.link).then((ok) => setCopied(ok ? 'yes' : 'failed')) }}>
-              {copied === 'yes' ? 'Copied' : 'Copy link'}
-            </Button>
+            <>
+              <Button size="small" onClick={() => { void copyText(shownLink).then((ok) => setCopied(ok ? 'yes' : 'failed')) }}>
+                {copied === 'yes' ? 'Copied' : 'Copy link'}
+              </Button>
+              <Button size="small" onClick={() => { setCopied(null); setForBrowser(!forBrowser) }}>
+                {forBrowser ? 'Use the app instead' : 'Pair a browser instead'}
+              </Button>
+            </>
           ) : null}
           <Button size="small" onClick={onDone}>Done</Button>
           {copied === 'failed' ? <span className="text-label text-danger">Could not copy.</span> : null}
@@ -192,7 +209,7 @@ export function PhonePage({ access, pairingLink, notice, requestEvents, onReques
           <Button size="small" disabled={pairing.pending} onClick={createLink}>{shown === null ? 'Pair phone' : 'New link'}</Button>
         </SettingsRow>
         {shown !== null && pairingLink !== null ? (
-          <PairingPanel link={pairingLink} pairedName={shown.usedBy ?? newDevice?.name ?? null} onDone={() => setShown(null)} />
+          <PairingPanel key={pairingLink.expiresAt} link={pairingLink} pairedName={shown.usedBy ?? newDevice?.name ?? null} onDone={() => setShown(null)} />
         ) : null}
       </SettingsGroup>
 
