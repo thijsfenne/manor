@@ -1,4 +1,5 @@
 import { useCallback, useMemo, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import { SidebarLeftIcon, SidebarRightIcon } from '@hugeicons/core-free-icons'
 import { BROWSER_HOME_SESSION_ID, NOTE_AI_DEFAULTS, type WorkflowSuggestion, type Chat, type PageContextAttachment, type Project, type Routine } from '@manor/contracts'
 import { composioBinding } from '../connectors/composioCatalogue'
@@ -9,7 +10,7 @@ import { retryableLazy } from '../RecoveryBoundary'
 import { BrowserSessionEmpty, BrowserSessionMenu } from '../BrowserSessionMenu'
 import { BrowserPanel } from '../BrowserPanel'
 import type { WorkspaceView } from '../Sidebar'
-import { BARE_ROWS, HEADED_ROWS, TopBarSlotContext } from '../TopBar'
+import { BARE_ROWS, HEADED_ROWS, TopBarSlotContext, useTopBarSlot } from '../TopBar'
 import { WorkspaceHeader } from '../WorkspaceHeader'
 import { IconButton } from '../ui/IconButton'
 import { NEW_CHAT_DRAFT_KEY, readDraft, writeDraft } from '../../composerDrafts'
@@ -152,7 +153,6 @@ export function DestinationView({
     return (
       <BrowserPlace
         manor={manor}
-        phone={phone}
         sidebarCollapsed={sidebarCollapsed}
         onToggleSidebar={onToggleSidebar}
         browserBridge={browserBridge}
@@ -343,7 +343,6 @@ export function DestinationView({
  */
 function BrowserPlace({
   manor,
-  phone,
   sidebarCollapsed,
   onToggleSidebar,
   browserBridge,
@@ -356,7 +355,6 @@ function BrowserPlace({
   onShowBrowserPanel,
 }: {
   manor: Manor
-  phone: boolean
   sidebarCollapsed: boolean
   onToggleSidebar: (() => void) | undefined
   browserBridge: DesktopBrowserBridge | undefined
@@ -378,11 +376,26 @@ function BrowserPlace({
     onOpenChat(chatId)
   }, [browserBridge, onShowBrowserPanel, onOpenChat])
   const { sessions, sessionChat, showSession, hidden, toggleHidden } = place
+  // On the desktop the chat handle stands at the top bar's far end; without a bar it
+  // ends the tab strip.
+  const barSlot = useTopBarSlot()
+  const chatToggle = (
+    <IconButton icon={SidebarRightIcon} iconSize={17}
+      label={hidden ? 'Show chat' : 'Hide chat'}
+      aria-expanded={!hidden} onClick={toggleHidden} />
+  )
   return (
     <div className="relative grid min-h-0 min-w-0 grid-rows-[minmax(0,1fr)]">
+      {barSlot?.element == null ? null : createPortal(
+        <>
+          <div className="order-1 flex-1" />
+          <div className="order-3 flex flex-none items-center">{chatToggle}</div>
+        </>,
+        barSlot.element,
+      )}
       <div className="grid min-h-0 min-w-0 grid-cols-[minmax(0,1fr)_auto]">
-      {/* The phone strip starts at the top edge: its drawer handle takes the light row. */}
-      <div className={`grid min-h-0 min-w-0 pl-2 pb-2 ${phone ? '' : 'pt-2'} ${hidden ? 'pr-2' : ''}`}>
+      {/* Flush in the stage, edge to edge: the line on the session column is the only seam. */}
+      <div className="grid min-h-0 min-w-0">
         <BrowserPanel
           stage
           chatId={BROWSER_HOME_SESSION_ID}
@@ -397,11 +410,7 @@ function BrowserPlace({
               label="Show sidebar" title="Show sidebar (⌘S)"
               aria-expanded={false} onClick={onToggleSidebar} />
           ) : undefined}
-          stageControl={
-            <IconButton icon={SidebarRightIcon} iconSize={17}
-              label={hidden ? 'Show chat' : 'Hide chat'}
-              aria-expanded={!hidden} onClick={toggleHidden} />
-          }
+          stageControl={barSlot === null ? chatToggle : undefined}
         />
       </div>
       {/* The session beside the page. It keeps its own session id, apart from the open chat.
@@ -410,7 +419,7 @@ function BrowserPlace({
       <div className={`relative grid min-h-0 min-w-0 overflow-hidden ${sessionPane.resizing ? '' : 'duration-200 ease-arrive motion-safe:transition-[width]'}`}
         style={{ width: hidden ? 0 : sessionPane.width }}
         aria-hidden={hidden}>
-      <div className="relative grid h-full min-h-0"
+      <div className="relative grid h-full min-h-0 border-l border-line"
         style={{ width: sessionPane.width, visibility: hidden ? 'hidden' : 'visible',
           transition: hidden ? 'visibility 0s 200ms' : 'none' }}>
         <div {...sessionPane.resizeProps}

@@ -7,9 +7,7 @@ import { useState } from 'react'
  * already draws the edge of the stage and a panel that reached it read as part of the
  * window rather than as a thing put next to the conversation. Agents and runs floated
  * first; files and browser followed once the two treatments were on screen together.
- */
-const PANEL_CARD = 'overflow-hidden rounded-dock border border-line'
-/**
+ *
  * The right sidebar's surface: the left sidebar's step with the panel's hairline. Cards
  * in the chat that wait on the user (a question, a proposal, a draft, a plan) wear it too,
  * so on the stage they read as the same kind of thing as the panel beside them. Inside,
@@ -19,8 +17,11 @@ const PANEL_CARD = 'overflow-hidden rounded-dock border border-line'
 export const SIDE_SURFACE = 'sidebar-surface border border-line bg-sidebar'
 /** On the left sidebar's step, so a side of the stage reads as a side in either room. */
 export const DOCK_PANEL_SHELL = `${SIDE_SURFACE} overflow-hidden rounded-dock`
-/** The same card standing as a page's main view (the Browser place): the stage's own white. */
-export const STAGE_PANEL_SHELL = `${PANEL_CARD} bg-surface`
+/**
+ * The same panel standing as a page's main view (the Browser place): no card of its own,
+ * flush on the stage's white from edge to edge.
+ */
+export const STAGE_PANEL_SHELL = 'overflow-hidden bg-surface'
 
 /**
  * Where a panel floats over a chat too narrow to dock it: never over the chat header,

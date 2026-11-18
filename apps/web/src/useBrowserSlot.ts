@@ -7,10 +7,18 @@ export const isPersistentBrowserProfileFailure = (reason: unknown): boolean =>
 // Sidebar and thumbnail trade this lease; obsolete cleanup cannot hide the new slot.
 const slots = new WeakMap<DesktopBrowserBridge, { owner: symbol | null; pending: Promise<void> }>()
 
-/** The sidebar frame, and the window its clipping ancestors leave open; `null` when nothing clips. */
+/**
+ * The sidebar frame, and the window its clipping ancestors leave open; `null` when nothing clips.
+ * `corners` rounds that window, top-left clockwise: the frame's own corner, or the corner
+ * of a rounded box that clips it where the two meet, so a page flush in the window's
+ * inset is cut along the inset's curve rather than poking out square.
+ */
 export interface BrowserFrame extends BrowserViewportBounds {
   clip: BrowserViewportBounds | null
+  corners: Corners
 }
+
+type Corners = [number, number, number, number]
 
 // The sidebar frame as the renderer last measured it. The desktop host echoes the same
 // bounds a few frames later; a filling guest follows this instead, so a drag moves it
@@ -74,9 +82,12 @@ export function useBrowserSidebarHidden(webviews: DesktopBrowserWebviewsBridge |
  * static ancestors between it and its containing block, so an expanded panel is not
  * cut back to the row it came from.
  */
-function clipOf(node: HTMLElement): BrowserViewportBounds | null {
+function clipOf(node: HTMLElement, bounds: BrowserViewportBounds): Pick<BrowserFrame, 'clip' | 'corners'> {
   let left = -Infinity, top = -Infinity, right = Infinity, bottom = Infinity
-  let position = node.parentElement ? getComputedStyle(node).position : 'static'
+  const rounded: Array<{ left: number; top: number; right: number; bottom: number; radii: Corners }> = []
+  const own = node.parentElement ? getComputedStyle(node) : null
+  let position = own?.position ?? 'static'
+  if (own) rounded.push({ left: bounds.x, top: bounds.y, right: bounds.x + bounds.width, bottom: bounds.y + bounds.height, radii: radiiOf(own, 0) })
   let escaping = false
   for (let parent = node.parentElement; parent; parent = parent.parentElement) {
     if (position === 'fixed') break
@@ -90,12 +101,58 @@ function clipOf(node: HTMLElement): BrowserViewportBounds | null {
     const x = box.x + parent.clientLeft, y = box.y + parent.clientTop
     if (style.overflowX !== 'visible') { left = Math.max(left, x); right = Math.min(right, x + parent.clientWidth) }
     if (style.overflowY !== 'visible') { top = Math.max(top, y); bottom = Math.min(bottom, y + parent.clientHeight) }
+    // Overflow clips to the padding box, whose corner is the border's less the border.
+    rounded.push({ left: x, top: y, right: x + parent.clientWidth, bottom: y + parent.clientHeight, radii: radiiOf(style, Math.max(parent.clientLeft, parent.clientTop)) })
   }
-  if (left === -Infinity && top === -Infinity && right === Infinity && bottom === Infinity) return null
-  // An axis nothing clips spans the whole screen.
-  left = Math.max(left, 0); top = Math.max(top, 0)
-  right = Math.min(right, window.innerWidth); bottom = Math.min(bottom, window.innerHeight)
-  return { x: Math.round(left), y: Math.round(top), width: Math.max(0, Math.round(right - left)), height: Math.max(0, Math.round(bottom - top)) }
+  let clip: BrowserViewportBounds | null = null
+  if (left !== -Infinity || top !== -Infinity || right !== Infinity || bottom !== Infinity) {
+    // An axis nothing clips spans the whole screen.
+    left = Math.max(left, 0); top = Math.max(top, 0)
+    right = Math.min(right, window.innerWidth); bottom = Math.min(bottom, window.innerHeight)
+    clip = { x: left, y: top, width: Math.max(0, right - left), height: Math.max(0, bottom - top) }
+  }
+  return { clip, corners: cornersOf(clip === null ? bounds : intersect(bounds, clip), rounded) }
+}
+
+const radiusOf = (value: string | undefined, inset: number) => Math.max(0, (Number.parseFloat(value ?? '') || 0) - inset)
+const radiiOf = (style: CSSStyleDeclaration, inset: number): Corners => [
+  radiusOf(style.borderTopLeftRadius, inset), radiusOf(style.borderTopRightRadius, inset),
+  radiusOf(style.borderBottomRightRadius, inset), radiusOf(style.borderBottomLeftRadius, inset),
+]
+
+/** The part of `bounds` inside `clip`, as the guest host draws it. */
+export function intersect(bounds: BrowserViewportBounds, clip: BrowserViewportBounds): BrowserViewportBounds {
+  const x = Math.max(bounds.x, clip.x), y = Math.max(bounds.y, clip.y)
+  return {
+    x, y,
+    width: Math.max(0, Math.min(bounds.x + bounds.width, clip.x + clip.width) - x),
+    height: Math.max(0, Math.min(bounds.y + bounds.height, clip.y + clip.height) - y),
+  }
+}
+
+/**
+ * Each corner of the shown window, rounded just enough to stay inside every rounded box
+ * around it. For a box corner `r` and a window corner `dx` and `dy` in from its edges,
+ * the smallest arc that fits is `r - (dx + dy + sqrt(2 dx dy))`: the box's own corner
+ * when flush, shrinking to nothing as the window moves in. So a page sliding toward the
+ * inset's corner (the chat closing) curves in step instead of poking out square, and a
+ * docked panel's page, well inside its card's curve, keeps its own corner.
+ */
+function cornersOf(shown: BrowserViewportBounds, boxes: ReadonlyArray<{ left: number; top: number; right: number; bottom: number; radii: Corners }>): Corners {
+  const right = shown.x + shown.width, bottom = shown.y + shown.height
+  const corners: Corners = [0, 0, 0, 0]
+  const reach = (index: number, radius: number, dx: number, dy: number) => {
+    const x = Math.max(0, dx), y = Math.max(0, dy)
+    corners[index] = Math.max(corners[index]!, radius - (x + y + Math.sqrt(2 * x * y)))
+  }
+  for (const box of boxes) {
+    const left = shown.x - box.left, top = shown.y - box.top, end = box.right - right, foot = box.bottom - bottom
+    reach(0, box.radii[0], left, top)
+    reach(1, box.radii[1], end, top)
+    reach(2, box.radii[2], end, foot)
+    reach(3, box.radii[3], left, foot)
+  }
+  return corners
 }
 
 export function useBrowserSlot({ bridge, chatId, frame, active, presentation, resetKey, placeKey, vacant = false, onError }: {
@@ -172,7 +229,12 @@ export function useBrowserSlot({ bridge, chatId, frame, active, presentation, re
         // A frame squeezed to nothing is published too, so the guest shrinks with it
         // instead of staying clickable over the chat. The host keeps its last real size.
         // Outside the key check, since the clip can change while the frame stays put.
-        if (presentation === 'sidebar') publishFrame(webviews, { ...bounds, clip: clipOf(node) })
+        // The guest follows the unrounded box, so it meets a neighbour's hairline exactly
+        // at a fractional edge; only the host gets whole pixels.
+        if (presentation === 'sidebar') {
+          const exact = { x: rect.x, y: rect.y, width: rect.width, height: rect.height }
+          publishFrame(webviews, { ...exact, ...clipOf(node, exact) })
+        }
         const key = JSON.stringify(bounds)
         if (key !== last) {
           last = key

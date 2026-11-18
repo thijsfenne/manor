@@ -1,7 +1,7 @@
 import { memo, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { BrowserViewportBounds, BrowserWebviewSnapshot, BrowserWebviewSurface, DesktopBrowserWebviewsBridge } from '@manor/contracts'
-import { useBrowserFrame, useBrowserSidebarHidden } from '../useBrowserSlot'
+import { intersect, useBrowserFrame, useBrowserSidebarHidden, type BrowserFrame } from '../useBrowserSlot'
 
 interface BrowserGuest extends HTMLElement {
   getWebContentsId(): number
@@ -46,7 +46,11 @@ export function BrowserWebviewHost({ bridge }: { bridge: DesktopBrowserWebviewsB
 const BrowserWebview = memo(function BrowserWebview({ surface, bridge, frame, clip }: {
   surface: BrowserWebviewSurface
   bridge: DesktopBrowserWebviewsBridge
-  frame: BrowserViewportBounds | null
+  /**
+   * The slot a filling page follows, with the corners it measured. Absent, the page keeps
+   * the house corner: a floating preview, or a device preview centred in the slot.
+   */
+  frame: BrowserFrame | null
   /** The window the panels around the sidebar frame leave open; the page keeps its size under it. */
   clip: BrowserViewportBounds | null
 }) {
@@ -111,34 +115,28 @@ const BrowserWebview = memo(function BrowserWebview({ surface, bridge, frame, cl
   const bounds = frame ?? surface.bounds
   // The outer box is the window onto the page, the inner one the page at its full size,
   // so a frame cut by a scrolled row clips the page the way the row clips its cards.
-  const shown = hidden || clip === null ? bounds : clipped(bounds, clip)
+  const shown = hidden || clip === null ? bounds : intersect(bounds, clip)
   const interactive = surface.presentation === 'sidebar' && shown.width > 0 && shown.height > 0
+  const corners = frame?.corners
+  const radius = corners === undefined ? 'var(--radius-lg)' : corners.map((corner) => `${corner}px`).join(' ')
+  const plateRadius = corners === undefined ? 'calc(var(--radius-lg) * 1.5)' : corners.map((corner) => `${corner * 1.5}px`).join(' ')
   return <div data-browser-webview={surface.id} data-presentation={surface.presentation}
     aria-hidden={!interactive} {...(!interactive ? { inert: '' } : {})}
     className="fixed overflow-hidden"
     style={{ left: hidden ? 0 : shown.x, top: hidden ? 0 : shown.y,
-      width: shown.width, height: shown.height,
+      width: shown.width, height: shown.height, borderRadius: radius,
       visibility: hidden && !surface.painting ? 'hidden' : undefined,
       zIndex: hidden ? -1 : `var(--z-browser-${surface.presentation})`, pointerEvents: interactive ? 'auto' : 'none' }}>
-    <div data-browser-page className="absolute isolate overflow-hidden rounded-lg"
+    {/* A guest page is transparent where it paints nothing, so this plate keeps a page
+        without its own background white instead of showing Manor through it. Rounder
+        than the clip, so its edge stays inside the anti-aliased corner rather than
+        bleeding past a dark page as a white hairline. */}
+    <div data-browser-plate aria-hidden className="absolute inset-0 bg-page" style={{ borderRadius: plateRadius }} />
+    <div data-browser-page className="absolute overflow-hidden"
       style={{ left: bounds.x - shown.x, top: bounds.y - shown.y, width: bounds.width, height: bounds.height }}>
-      {/* A guest page is transparent where it paints nothing, so this plate keeps a page
-          without its own background white instead of showing Manor through it. Rounder
-          than the clip, so its edge stays inside the anti-aliased corner rather than
-          bleeding past a dark page as a white hairline. */}
-      <div data-browser-plate aria-hidden className="absolute inset-0 -z-10 rounded-[calc(var(--radius-lg)*1.5)] bg-page" />
       <div ref={container} className="h-full w-full" style={surface.magnify ? { transformOrigin: '0 0',
         transform: `scale(${surface.magnify.scale}) translate(${-surface.magnify.x * 100}%, ${-surface.magnify.y * 100}%)` } : undefined} />
       {error && !hidden ? <p role="alert" className="absolute inset-x-0 bottom-0 m-0 bg-raised p-3 text-label text-danger">Browser page unavailable. Close this tab and reopen it.</p> : null}
     </div>
   </div>
 })
-
-function clipped(bounds: BrowserViewportBounds, clip: BrowserViewportBounds): BrowserViewportBounds {
-  const x = Math.max(bounds.x, clip.x), y = Math.max(bounds.y, clip.y)
-  return {
-    x, y,
-    width: Math.max(0, Math.min(bounds.x + bounds.width, clip.x + clip.width) - x),
-    height: Math.max(0, Math.min(bounds.y + bounds.height, clip.y + clip.height) - y),
-  }
-}

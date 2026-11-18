@@ -151,7 +151,7 @@ interface BrowserPanelProps {
   /** Recent chats a Browser page can be copied into. Given on the Browser stage. */
   openInChatTargets?: readonly CrossingTarget[]
   onOpenInChat?: (chatId: string, url: string) => Promise<void>
-  /** A control at the tab strip's far end, where the dock keeps expand and close. */
+  /** A control at the tab strip's far end, where the dock keeps expand and close. Only where no top bar holds it. */
   stageControl?: ReactNode
   /** The sidebar handle at the start of the full Browser strip when its sidebar is hidden. */
   stageLeadingControl?: ReactNode
@@ -842,7 +842,9 @@ export function BrowserPanel({
         </div>
       ) : (
         <div ref={frameRef} data-browser-slot="sidebar"
-          className={`relative mx-2 mb-2 min-h-0 overflow-hidden rounded-lg bg-bg ${deviceMode ? 'mt-2' : ''}`}>
+          // The stage's page runs to the column's edges; the guest takes this box's corners,
+          // and the window's own where the two meet.
+          className={`relative min-h-0 overflow-hidden bg-bg ${stage ? '' : 'mx-2 mb-2 rounded-lg'} ${deviceMode ? 'mt-2' : ''}`}>
           {localPage && bridge.localServers !== undefined ? (
             <BrowserLocalServers key={`${chatId}:${active?.id ?? ''}`} load={bridge.localServers} disabled={locked} onOpen={navigate} />
           ) : blank && pageVisible ? null : <p className="m-0 grid h-full place-items-center px-8 text-center text-meta leading-relaxed text-dim">

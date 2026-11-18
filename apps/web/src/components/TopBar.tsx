@@ -199,11 +199,12 @@ export function TopBar({ leadWidth, railWidth, animate, split, status, covered, 
           style={{ flex: split === null ? '1 1 0%' : `0 1 ${split.ratio * 100}%`, paddingLeft: firstInset }}
         >
           <div ref={leftSlot} className="peer contents" />
-          {/* Gone with nothing to stand before: a page that puts no header in the bar. */}
+          {/* Only before a breadcrumb: a page that puts none in the bar, or only a control
+              at its far end, leaves the controls without a line after them. */}
           <span
             aria-hidden="true"
             data-lead-line=""
-            className={`pointer-events-none absolute top-1/2 h-5 w-px -translate-y-1/2 bg-line peer-empty:hidden ${lineMotion}`}
+            className={`pointer-events-none absolute top-1/2 hidden h-5 w-px -translate-y-1/2 bg-line peer-has-[[data-top-bar-crumb]]:block ${lineMotion}`}
             style={{ left: lineLeft }}
           />
           {split === null ? connection : null}

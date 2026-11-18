@@ -339,4 +339,66 @@ describe('persistent browser guests', () => {
     await act(async () => resized())
     expect(style()).toMatchObject({ width: 0, pointerEvents: 'none' })
   })
+
+  it('rounds a flush page where it meets the window inset, and keeps it square beside the chat', async () => {
+    let push = (_snapshot: BrowserWebviewSnapshot) => {}
+    const webviews: DesktopBrowserWebviewsBridge = {
+      onChange: (listener) => { push = listener; return () => {} }, list: () => new Promise(() => {}),
+      attach: vi.fn(async () => {}), presented: vi.fn(async () => {}),
+    }
+    const shell = { webviews, show: vi.fn(async () => {}), hide: vi.fn(async () => {}) } as unknown as DesktopBrowserBridge
+    let width = 700
+    let resized = () => {}
+    vi.stubGlobal('ResizeObserver', class {
+      constructor(callback: () => void) { resized = callback }
+      observe() {}
+      disconnect() {}
+    })
+    // The inset at 46,38 to 1276,796 with its 33px corner; a square clipper of the same box inside it.
+    const inset = { getBoundingClientRect: () => ({ x: 46, y: 38 }), clientLeft: 0, clientTop: 0, clientWidth: 1230, clientHeight: 758, parentElement: null }
+    const stage = { getBoundingClientRect: () => ({ x: 46, y: 38 }), clientLeft: 0, clientTop: 0, clientWidth: 1230, clientHeight: 758, parentElement: inset }
+    const radius = (value: string) => ({ borderTopLeftRadius: value, borderTopRightRadius: value, borderBottomRightRadius: value, borderBottomLeftRadius: value })
+    const styles = new Map<unknown, Partial<CSSStyleDeclaration>>([
+      [inset, { position: 'relative', overflowX: 'hidden', overflowY: 'hidden', ...radius('33px') }],
+      [stage, { position: 'relative', overflowX: 'hidden', overflowY: 'hidden', ...radius('0px') }],
+    ])
+    vi.stubGlobal('window', { innerWidth: 1280, innerHeight: 800, addEventListener: vi.fn(), removeEventListener: vi.fn() })
+    vi.stubGlobal('getComputedStyle', (node: unknown) => styles.get(node) ?? { position: 'static', overflowX: 'visible', overflowY: 'visible', ...radius('0px') })
+    function Frame() {
+      const frame = useRef<HTMLDivElement>(null)
+      useBrowserSlot({ bridge: shell, chatId: 'chat', frame, active: true, presentation: 'sidebar', onError: vi.fn() })
+      return <div ref={frame} data-frame />
+    }
+    // The page under the tab strip, from the inset's left edge to the chat column's line.
+    await act(async () => { tree = create(<><Frame /><BrowserWebviewHost bridge={webviews} /></>, { createNodeMock: (node) =>
+      node.props['data-frame'] ? { getBoundingClientRect: () => ({ x: 46, y: 120, width, height: 676 }), parentElement: stage }
+        : node.props.className === 'h-full w-full' ? { appendChild: () => {} } : null }) })
+    await paint()
+    await act(async () => push({ revision: 1, surfaces: [surface({ fill: true })] }))
+    const style = () => tree!.root.findByProps({ 'data-browser-webview': 'tab' }).props.style
+    expect(style()).toMatchObject({ left: 46, top: 120, width: 700, height: 676, borderRadius: '0px 0px 0px 33px' })
+    expect(shell.show).toHaveBeenLastCalledWith({ x: 46, y: 120, width: 700, height: 676 }, 'chat', undefined, 'sidebar')
+
+    // A fractional edge reaches the guest as it is, so it meets the divider exactly; the host gets whole pixels.
+    width = 700.4
+    await act(async () => resized())
+    expect(style()).toMatchObject({ width: 700.4 })
+    expect(shell.show).toHaveBeenLastCalledWith({ x: 46, y: 120, width: 700, height: 676 }, 'chat', undefined, 'sidebar')
+
+    // Mid-slide, 20px short of the inset's right edge: the corner curves in step, inside the inset's arc.
+    width = 1210
+    await act(async () => resized())
+    expect(style()).toMatchObject({ borderRadius: '0px 0px 13px 33px' })
+
+    // The chat hidden: the page reaches the inset's right edge and takes that corner too.
+    width = 1230
+    await act(async () => resized())
+    expect(style()).toMatchObject({ width: 1230, borderRadius: '0px 0px 33px 33px' })
+    expect(tree!.root.findByProps({ 'data-browser-plate': true }).props.style.borderRadius).toBe('0px 0px 49.5px 49.5px')
+    expect(shell.show).toHaveBeenLastCalledWith({ x: 46, y: 120, width: 1230, height: 676 }, 'chat', undefined, 'sidebar')
+
+    // A device preview stands centred in the slot with the house corner, not the inset's.
+    await act(async () => push({ revision: 2, surfaces: [surface({ revision: 2 })] }))
+    expect(style().borderRadius).toBe('var(--radius-lg)')
+  })
 })

@@ -213,8 +213,8 @@ describe('the lead controls and full screen', () => {
     expect(before.inset).toMatch(/^max\(16px, /)
     expect(firstGroup(root).props.style.paddingLeft).toMatch(/^max\(16px, /)
     expect(leadLine(root).props.style.left).toMatch(/^max\(0px, .* - 334px\)\)$/)
-    // Hidden where no page header has landed in the group.
-    expect(leadLine(root).props.className).toContain('peer-empty:hidden')
+    // Hidden where no page breadcrumb has landed in the group.
+    expect(leadLine(root).props.className).toContain('peer-has-[[data-top-bar-crumb]]:block')
   })
 
   it('uses the full-screen arrangement in a plain browser tab', () => {

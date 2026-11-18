@@ -96,7 +96,7 @@ export function WorkspaceHeader(props: WorkspaceHeaderProps) {
   const { trailing } = props
   return createPortal(
     <>
-      <div className="order-1 flex min-w-0 flex-1 items-center gap-2">
+      <div data-top-bar-crumb="" className="order-1 flex min-w-0 flex-1 items-center gap-2">
         <Crumb {...props} compact muted={!slot.focused} />
       </div>
       {trailing === undefined ? null : <div className="order-3 flex flex-none items-center">{trailing}</div>}
