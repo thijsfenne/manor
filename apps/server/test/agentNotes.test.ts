@@ -70,15 +70,15 @@ async function setup(kind: 'dm' | 'pair' = 'dm') {
 }
 
 describe('update_notes', () => {
-  it('refuses a line over 160 characters with its date and a multi-line one, and writes nothing', async () => {
+  it('refuses a line over 300 characters with its date and a multi-line one, and writes nothing', async () => {
     const s = await setup()
     const dated = ` (${today})`
-    await expect(s.writer.write(s.context(), { action: 'add', line: 'a'.repeat(161 - dated.length) })).rejects.toThrow('at most 160 characters')
+    await expect(s.writer.write(s.context(), { action: 'add', line: 'a'.repeat(301 - dated.length) })).rejects.toThrow('at most 300 characters')
     await expect(s.writer.write(s.context(), { action: 'add', line: 'one\ntwo' })).rejects.toThrow('one line')
     await expect(readFile(s.notes, 'utf8')).rejects.toMatchObject({ code: 'ENOENT' })
     // The longest line that still fits lands, in its own file only.
-    await s.writer.write(s.context(), { action: 'add', line: 'a'.repeat(160 - dated.length) })
-    expect(await readFile(s.notes, 'utf8')).toContain(`- ${'a'.repeat(160 - dated.length)}${dated}`)
+    await s.writer.write(s.context(), { action: 'add', line: 'a'.repeat(300 - dated.length) })
+    expect(await readFile(s.notes, 'utf8')).toContain(`- ${'a'.repeat(300 - dated.length)}${dated}`)
     expect(await readdir(s.agents)).toEqual(['sage.md'])
     expect(s.lastWrite()).toMatchObject({ action: 'add', agentId: 'sage', file: 'sage.md' })
   })

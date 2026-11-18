@@ -22,6 +22,7 @@ import {
 } from '@manor/contracts'
 import { connectionCatalogEntry } from './mcp/capabilityCatalog.js'
 import { agentNotesPath, type MemoryTarget } from './memoryTarget.js'
+import { AGENT_NOTE_LINE_MAX } from './agentNotes.js'
 import { CODE_REVIEWER_ID, REVIEW_PASSED_TOOL } from './goalReview.js'
 import { PREFERENCE_ANSWER_GUARD } from './interactionBroker.js'
 import { materialisedImageStem } from './scratch.js'
@@ -219,7 +220,7 @@ export function composeMemoryBlock(
   const notesPath = agentNotesPath(target, agentId)
   const notes = notesPath === undefined
     ? undefined
-    : `Standing notes that are only about how you work for the user live at ${notesPath}. Change them only with update_notes, one agreement per line in at most 160 characters. The test is whether another agent would also need to know it. If yes, it belongs in the shared memory layers instead. A lasting rule the user states for how you work with them ("write follow-ups in Dutch") is one line in these notes, never an edit to your instructions; a newer rule replaces the older line. Manor shows the user each saved line with Undo.`
+    : `Standing notes that are only about how you work for the user live at ${notesPath}. Change them only with update_notes, one agreement per line in at most ${AGENT_NOTE_LINE_MAX} characters with its date. The test is whether another agent would also need to know it. If yes, it belongs in the shared memory layers instead. A lasting rule the user states for how you work with them ("write follow-ups in Dutch") is one line in these notes, never an edit to your instructions; a newer rule replaces the older line. Manor shows the user each saved line with Undo.`
   const loops = openLoops
     ? `Open work lives at ${path.resolve(target.dailyDir, '..', 'open-loops.md')}. Read its maintenance rules before adding, updating or reminding about an item. Keep one current-state line with a concrete next action, owner, source reference and last checked date. Advice, doubt and intentions without an action are not tasks. Before every reminder, read the completion source; a stale ledger or missing evidence cannot prove the item is open. When you observe completion, close the matching item in this same turn with the evidence reference, preserving its identity and any declined/notified markers. Respect the user's explicit rejection without asking again. The observing persona maintains the line; a later maintenance pass only catches missed updates. Remembering work never grants permission to execute it.`
     : undefined

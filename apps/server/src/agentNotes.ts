@@ -86,7 +86,7 @@ export function notesUpdateOf(
 }
 
 /** An agent's notes line holds at most this, the date Manor appends included. */
-export const AGENT_NOTE_LINE_MAX = 160
+export const AGENT_NOTE_LINE_MAX = 300
 /** Past this many lines the tool result asks to merge; the write still lands. */
 const AGENT_NOTES_SOFT_LINES = 20
 

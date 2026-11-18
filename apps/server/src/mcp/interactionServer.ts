@@ -26,6 +26,7 @@ import { INTERACTION_TOOL_NAMES, SUBAGENT_TOOLS } from './interactionAttachment.
 import { isRecord, option, type JsonRecord, type McpToolServer } from './stdio.js'
 import { AGENT_RELAY_OUTBOUND_MAX } from '../agentRelay.js'
 import { INTERVIEW_INSTRUCTIONS_MAX } from '../agentInterview.js'
+import { AGENT_NOTE_LINE_MAX } from '../agentNotes.js'
 
 const ASK_USE =
   'Use only when an answer materially changes the work; do not use for confirmations or progress updates, except to confirm your restatement before proposing complex Work with start_work, or a new memory card (named in the question) before update_project_file create. Each question gets two to four concrete options; the UI adds a free-form row. Set multi on a question when more than one option may be chosen.'
@@ -433,7 +434,7 @@ const projectReportTool = {
 // An agent's own standing notes, `memory/agents/<id>.md`, for an agent with memory on.
 const notesTool = {
   name: 'update_notes',
-  description: 'Change one line of your own standing notes, the agreements on how you work for the user that load on every turn. One agreement per line, at most 160 characters with the date Manor appends. A lasting rule the user states for how you work with them is one line here, never an edit to your instructions; a newer rule replaces the older line rather than sitting next to it. add needs line; replace needs old (quoted exactly) and line; remove needs old. Each change shows in the chat with Undo.',
+  description: `Change one line of your own standing notes, the agreements on how you work for the user that load on every turn. One agreement per line, at most ${AGENT_NOTE_LINE_MAX} characters with the date Manor appends. A lasting rule the user states for how you work with them is one line here, never an edit to your instructions; a newer rule replaces the older line rather than sitting next to it. add needs line; replace needs old (quoted exactly) and line; remove needs old. Each change shows in the chat with Undo.`,
   inputSchema: {
     type: 'object',
     properties: {
