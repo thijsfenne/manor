@@ -910,7 +910,7 @@ export function createSqliteStore(options: SqliteStoreOptions): Store & {
         ...note, ...(note.goalReport === undefined ? {} : { workHandoffVersion: saved.version }),
       }, evidence)
     },
-    reviseWorkGoal(handoffId, version, text) {
+    reviseWorkGoal(handoffId, version, text, images = []) {
       const held = workHandoffs.get(handoffId)
       if (held === undefined || held.workChatId === null) throw new Error('This Session is no longer available.')
       if (held.goalConfirmedAt !== undefined) throw new Error('This result has already been confirmed. Start a new assignment for further changes.')
@@ -929,6 +929,7 @@ export function createSqliteStore(options: SqliteStoreOptions): Store & {
       const single = chats.get(held.workChatId)?.mode === 'single'
       const event = operations.appendEvent(held.workChatId, {
         type: 'user_message', text: single ? feedback : `@${lead}${separator}${feedback}`, mentions: single ? [] : [held.leadAgentId], dispatchState: 'pending',
+        ...(images.length > 0 ? { images } : {}),
       })
       if (event.type !== 'user_message') throw new Error('Could not store the feedback.')
       return { handoff, event, sourceEvents: [sourceEvent] }

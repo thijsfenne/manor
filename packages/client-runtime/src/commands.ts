@@ -261,8 +261,8 @@ export function createWorkspaceCommands(send: Send, update: Update) {
     approveMergeFix: (handoffId: string, tip: string, requestId?: string) =>
       send({ type: 'approve_merge_fix', handoffId, tip, ...(requestId === undefined ? {} : { requestId }) }),
     /** Sends the user's feedback on a result back to its Session; the version refuses a stale card. */
-    reviseWorkGoal: (handoffId: string, version: number, text: string, requestId?: string) =>
-      send({ type: 'revise_work_goal', handoffId, version, text, ...(requestId === undefined ? {} : { requestId }) }),
+    reviseWorkGoal: (handoffId: string, version: number, text: string, requestId?: string, images: ImageAttachment[] = []) =>
+      send({ type: 'revise_work_goal', handoffId, version, text, ...(images.length === 0 ? {} : { images }), ...(requestId === undefined ? {} : { requestId }) }),
     stopTurn: (turnId: string) => send({ type: 'stop', turnId }),
     /** Stops the background work a chat waits on after its turns ended, and any pending wake. */
     stopBackground: (chatId: string) => send({ type: 'stop_background', chatId }),

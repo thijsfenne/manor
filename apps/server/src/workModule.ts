@@ -1,5 +1,5 @@
 import path from 'node:path'
-import type { AgentConfig, CheckoutRequest, ClientMessage, ConfirmRequest, GoalCommit, Project, ServerMessage, ThreadEvent, WorkAttachment, WorkCompletion, WorkHandoff, WorkMerge } from '@manor/contracts'
+import type { AgentConfig, CheckoutRequest, ClientMessage, ConfirmRequest, GoalCommit, ImageAttachment, Project, ServerMessage, ThreadEvent, WorkAttachment, WorkCompletion, WorkHandoff, WorkMerge } from '@manor/contracts'
 import { HOME_PROJECT_ID, MERGE_REPAIRS_MAX, agentFitsChat, contextEvents, SESSION_DEFAULT_AGENT_ID, SINGLE_CHAT_VOICE, summaryInContext, workHandoffHasLead, workSingleDefault } from '@manor/contracts'
 import { MAX_CATCH_UP_CHARS, catchUpCut, renderCatchUpEvents } from './composer.js'
 import { SUPERSEDED_PROPOSAL, type ChatWorktree, type LandedAttempt, type Store } from './store.js'
@@ -1298,7 +1298,7 @@ export class WorkModule {
     await this.options.broadcastDirectory()
   }
 
-  async reviseGoal(handoffId: string, version: number, text: string): Promise<void> {
+  async reviseGoal(handoffId: string, version: number, text: string, images: ImageAttachment[] = []): Promise<void> {
     await this.orderLifecycle(handoffId, async () => {
       const held = await this.handoffFor(handoffId)
       const room = held.workChatId === null ? undefined : await this.options.store.getChat(held.workChatId)
@@ -1306,7 +1306,7 @@ export class WorkModule {
       if (room?.mode !== 'single' && !this.options.agents().some((agent) => agent.id === held.leadAgentId && room !== undefined && agentFitsChat(agent, room))) {
         throw new Error('The Session lead is no longer available.')
       }
-      const { handoff, event, sourceEvents } = await this.options.store.reviseWorkGoal(handoffId, version, text)
+      const { handoff, event, sourceEvents } = await this.options.store.reviseWorkGoal(handoffId, version, text, images)
       for (const sourceEvent of sourceEvents) {
         this.options.broadcast({ type: 'event', chatId: handoff.sourceChatId, event: sourceEvent })
       }

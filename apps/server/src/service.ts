@@ -1299,7 +1299,7 @@ export class ManorService {
         ack()
         return
       case 'revise_work_goal':
-        await this.workModule.reviseGoal(message.handoffId, message.version, message.text)
+        await this.workModule.reviseGoal(message.handoffId, message.version, message.text, message.images ?? [])
         ack()
         return
       case 'save_agent':

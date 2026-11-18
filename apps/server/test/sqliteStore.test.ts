@@ -853,7 +853,7 @@ describe('durable Work proposals', () => {
     expect(GoalReportSchema.safeParse({ result: 'Done.', choices: [{ title: 'Pick', options: ['only one'] }] }).success).toBe(false)
   })
 
-  it('sends Request changes only to the Session and leaves no feedback message in the source DM', async () => {
+  it('sends Request changes with its pictures only to the Session and leaves no feedback message in the source DM', async () => {
     const { store } = fixture()
     const proposal = await pendingProposal(store)
     const target = await workModule(store).module.accept(proposal.id)
@@ -870,13 +870,14 @@ describe('durable Work proposals', () => {
         submitUserMessage: async () => undefined, runStoredUserMessage: run, runExclusive: <T>(_chatId: string, fn: () => Promise<T>) => fn() },
     })
 
-    await module.reviseGoal(proposal.id, reached.version, 'Commit changes')
+    const screenshot = { name: 'pasted-image.jpg', dataUrl: 'data:image/jpeg;base64,/9j/4AAQ' }
+    await module.reviseGoal(proposal.id, reached.version, 'Commit changes', [screenshot])
 
     const added = (await store.loadEvents(proposal.sourceChatId)).slice(before)
     expect(added).toEqual([expect.objectContaining({ type: 'system_note', workHandoffId: proposal.id, workHandoffPhase: 'reopened' })])
     expect(broadcast.mock.calls.map(([message]) => message.event)).toEqual(added)
     const feedback = (await store.loadEvents(target)).at(-1)
-    expect(feedback).toMatchObject({ type: 'user_message', text: '@Sage Commit changes', mentions: ['sage'], dispatchState: 'pending' })
+    expect(feedback).toMatchObject({ type: 'user_message', text: '@Sage Commit changes', mentions: ['sage'], dispatchState: 'pending', images: [screenshot] })
     expect(run.mock.calls).toEqual([[target, feedback]])
     const reopened = (await store.workHandoffForTarget(target))!
     expect(reopened).toMatchObject({ state: 'active', version: reached.version + 1 })

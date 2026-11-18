@@ -1,14 +1,17 @@
 import AlertCircleIcon from '@hugeicons/core-free-icons/AlertCircleIcon'
+import Cancel01Icon from '@hugeicons/core-free-icons/Cancel01Icon'
 import CheckmarkCircle02Icon from '@hugeicons/core-free-icons/CheckmarkCircle02Icon'
 import Tick02Icon from '@hugeicons/core-free-icons/Tick02Icon'
 import { HugeiconsIcon } from '@hugeicons/react-native'
+import { Image } from 'expo-image'
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { Pressable, StyleSheet, TextInput, View, type ColorValue } from 'react-native'
-import Animated, { FadeIn } from 'react-native-reanimated'
-import { WORK_CHANGES_LIMIT, readWorkChanges, settleWorkChanges, subscribeWorkChanges, writeWorkChanges } from '@manor/client-runtime/work-changes'
+import Animated, { FadeIn, FadeOut, LinearTransition, ReduceMotion } from 'react-native-reanimated'
+import { WORK_CHANGES_LIMIT, readWorkChangeImages, readWorkChanges, settleWorkChanges, subscribeWorkChanges, writeWorkChangeImages, writeWorkChanges } from '@manor/client-runtime/work-changes'
 import { readWorkChangesOpen, setWorkChangesOpen, subscribeWorkProposals } from '@manor/client-runtime/work-proposals'
-import type { GoalChoice } from '@manor/contracts'
-import { WORK_RESULT_CONNECTION_LOST, evidenceThumbnailRatio, workBlockedReason, workCardStatus, workConfirmTitle, pickWorkChoice, workChangesAsked, workChoicePicked, workResultActionLabels, workResultChoiceList, workResultFiles, workResultLines, type WorkHandoffRow, type WorkResult, type WorkStatus } from '@manor/client-runtime/state'
+import { ImageAttachmentSchema, MAX_MESSAGE_ATTACHMENTS, type GoalChoice, type ImageAttachment } from '@manor/contracts'
+import { WORK_RESULT_CONNECTION_LOST, evidenceThumbnailRatio, workBlockedReason, workCardStatus, workConfirmTitle, pickWorkChoice, workChangesAsked, workChoicePicked, workResultActionLabels, workResultChoiceList, workResultFiles, workResultLines, workResultWaits, type WorkHandoffRow, type WorkResult, type WorkStatus } from '@manor/client-runtime/state'
+import { addImagePasteListener, setImagePasteEnabled } from '../../modules/manor-image-paste/src'
 import { useWorkspaceActions, useWorkspaceStatus } from '@/providers/WorkspaceProvider'
 import { colors, fonts, radius, spacing, squircle } from '@/theme'
 import { AttachmentThumbnail, ImageViewer } from './Attachments'
@@ -112,38 +115,45 @@ function YourCall({ result, picked, disabled, onPick }: {
   )
 }
 
-/** Where a revealed card comes to rest: centred, or with its foot at the bottom of the thread. */
-export type RevealPlace = 'center' | 'end'
-
-/** Each result's open Request changes field, so the bar can focus one already open. */
-const changeFields = new Map<string, TextInput>()
-/** The field the bar asked to focus, for a card that mounts only after the scroll. */
-let barOpening: string | null = null
-// Long enough for the list's animated scroll to land.
-const SCROLL_MS = 450
-// Long enough for the keyboard to finish rising and the thread to stop moving with it.
-const KEYBOARD_MS = 600
-
 /**
- * Request changes from the bar above the composer: bring the card in, then open and
- * focus its field there, and the field's focus places the card above the keyboard (see
- * `onShowCard`). The scroll goes first because the thread holds itself at its end: a
- * card growing its field, or a keyboard rising, while the thread is at its end pulls
- * it straight back there.
+ * The result whose Request changes field is being written (2026-11-18): its card stands
+ * in the composer's place above the keyboard, and its own slot in the thread stays empty
+ * at the same height, so the list does not move. Blur, Cancel and Send put it back.
  */
-export function openWorkChangesFromBar(handoffId: string, reveal: (place: RevealPlace) => void): void {
-  reveal('center')
-  setTimeout(() => {
-    const field = changeFields.get(handoffId)
-    if (field?.isFocused() === true) return
-    if (field !== undefined) {
-      field.focus()
-      return
-    }
-    barOpening = handoffId
-    setWorkChangesOpen(handoffId, true)
-  }, SCROLL_MS)
+let docked: string | null = null
+const dockListeners = new Set<() => void>()
+const subscribeDock = (listener: () => void) => {
+  dockListeners.add(listener)
+  return () => { dockListeners.delete(listener) }
 }
+const readDock = () => docked
+
+function dockWorkChanges(handoffId: string | null): void {
+  if (docked === handoffId) return
+  docked = handoffId
+  for (const listener of dockListeners) listener()
+}
+
+/** Puts this result's card back in the thread, unless another one took the composer's place since. */
+function releaseWorkChanges(handoffId: string): void {
+  if (docked === handoffId) dockWorkChanges(null)
+}
+
+/** Opens a result's field in the composer's place: the card's Request changes, and the bar's above the composer. */
+export function openWorkChanges(handoffId: string): void {
+  setWorkChangesOpen(handoffId, true)
+  dockWorkChanges(handoffId)
+}
+
+/** The result whose card stands in the composer's place, or null; only while its field is open. */
+export function useDockedWorkChanges(): string | null {
+  const handoffId = useSyncExternalStore(subscribeDock, readDock, readDock)
+  const readOpen = () => handoffId !== null && readWorkChangesOpen(handoffId)
+  return useSyncExternalStore(subscribeWorkProposals, readOpen, readOpen) ? handoffId : null
+}
+
+/** A card whose result still takes Request changes, the same test its body uses for the field. */
+export const workChangesDockable = (row: WorkHandoffRow): boolean => row.report?.decision === 'open' && workResultWaits(row)
 
 // The Mac's thumbnail height, so a result's screenshots read the same on both.
 const EVIDENCE_HEIGHT = 32
@@ -185,6 +195,31 @@ function EvidenceRow({ evidence }: { evidence: WorkResult['evidence'] }) {
   )
 }
 
+const PICTURE_SIZE = 44
+
+/** The pictures pasted into Request changes, small at the top of the field, each with its own remove. */
+function ChangeImages({ handoffId, images }: { handoffId: string; images: readonly ImageAttachment[] }) {
+  if (images.length === 0) return null
+  return (
+    <Animated.View layout={LinearTransition.duration(180).reduceMotion(ReduceMotion.System)} style={styles.pictures}>
+      {images.map((image, index) => (
+        <Animated.View entering={FadeIn.duration(140).reduceMotion(ReduceMotion.System)} exiting={FadeOut.duration(100).reduceMotion(ReduceMotion.System)} key={`${image.name}:${index}`} style={styles.picture}>
+          <Image accessibilityIgnoresInvertColors contentFit="cover" source={{ uri: image.dataUrl }} style={styles.pictureImage} />
+          <Pressable
+            accessibilityLabel={`Remove ${image.name}`}
+            accessibilityRole="button"
+            hitSlop={6}
+            onPress={() => writeWorkChangeImages(handoffId, images.filter((_, at) => at !== index))}
+            style={styles.pictureRemove}
+          >
+            <HugeiconsIcon color={colors.onPrimary} icon={Cancel01Icon} size={10} strokeWidth={2.2} />
+          </Pressable>
+        </Animated.View>
+      ))}
+    </Animated.View>
+  )
+}
+
 /**
  * The result part of an assignment's card on the phone, the copy of the Mac body: up to
  * three result lines and the limitation, the choices left to the user, then its screenshots
@@ -193,7 +228,7 @@ function EvidenceRow({ evidence }: { evidence: WorkResult['evidence'] }) {
  * stands; the phone has no scroll to an older one. The card itself opens the Session. The header carries the status; a
  * commit or merge that did not land adds its reason here, with the way into the Session.
  */
-export function WorkResultBody({ result, onShowCard, blocked = false, sessionSettled = false, waits = true, onOpenSession }: {
+export function WorkResultBody({ result, docked: inDock = false, blocked = false, sessionSettled = false, waits = true, onOpenSession }: {
   result: WorkResult
   /** The Session is settled: Retry waits until the user reopens it, Open Session stays. */
   sessionSettled?: boolean
@@ -203,10 +238,10 @@ export function WorkResultBody({ result, onShowCard, blocked = false, sessionSet
   blocked?: boolean
   onOpenSession?: () => void
   /**
-   * Brings this card in with its foot at the bottom of the thread. The keyboard lifts the
-   * thread by its own height, which leaves a field anywhere higher under the header.
+   * The copy in the composer's place, which holds the real field. The card in the thread
+   * shows what is written, and a tap there brings the card down here.
    */
-  onShowCard?: () => void
+  docked?: boolean
 }) {
   const { acceptWorkResult, reviseWorkResult, retryWorkResult, askCheckoutStatus } = useWorkspaceActions()
   const handoffId = result.handoffId
@@ -214,22 +249,18 @@ export function WorkResultBody({ result, onShowCard, blocked = false, sessionSet
   const readChanges = () => readWorkChangesOpen(handoffId)
   const changesOpen = useSyncExternalStore(subscribeWorkProposals, readChanges, readChanges)
   const setWriting = (next: boolean) => setWorkChangesOpen(handoffId, next)
-  const fieldRef = useRef<TextInput | null>(null)
-  const bindField = (field: TextInput | null) => {
-    fieldRef.current = field
-    if (field === null) changeFields.delete(handoffId)
-    else changeFields.set(handoffId, field)
-  }
+  const fieldFocused = useRef(false)
   // Kept outside the card: the list unmounts a row that scrolls away, and the text has to be there when it returns.
   const readFeedback = () => readWorkChanges(handoffId)
   const feedback = useSyncExternalStore(subscribeWorkChanges, readFeedback, readFeedback)
+  const readImages = () => readWorkChangeImages(handoffId)
+  const images = useSyncExternalStore(subscribeWorkChanges, readImages, readImages)
   const [busy, setBusy] = useState(false)
   const busyRef = useRef(false)
   const [error, setError] = useState<string | null>(null)
   const connected = useWorkspaceStatus() === 'live'
   const open = result.decision === 'open' && waits
   const writing = open && changesOpen
-  const wasWriting = useRef(writing)
   const confirmHint = open ? workConfirmTitle(result) : undefined
   const labels = workResultActionLabels(result)
   const openReport = open && (result.operation === 'none' || result.choices !== undefined) ? onOpenSession : undefined
@@ -244,15 +275,37 @@ export function WorkResultBody({ result, onShowCard, blocked = false, sessionSet
     if (open && result.worktree && result.mergeInto === undefined && sessionId !== null) askCheckoutStatus(sessionId)
   }, [open, result.worktree, result.mergeInto, sessionId, askCheckoutStatus])
 
-  // Focus when the field opens, or when the bar asked for it, never just because a card
-  // that left it open scrolls back into the list.
+  // A picture pasted into the field joins it, the same picture the composer would stage:
+  // the native paste shrinks it to a JPEG data URL and the wire's own schema checks it.
   useEffect(() => {
-    if (writing && (!wasWriting.current || barOpening === handoffId)) {
-      barOpening = null
-      fieldRef.current?.focus()
+    if (!inDock) return
+    const subscription = addImagePasteListener((event) => {
+      if (!fieldFocused.current) return
+      if (event.error === 'too_large') {
+        setError('Manor could not shrink this image enough.')
+        return
+      }
+      const current = readWorkChangeImages(handoffId)
+      if (current.length >= MAX_MESSAGE_ATTACHMENTS) {
+        setError(`You can attach up to ${MAX_MESSAGE_ATTACHMENTS} images.`)
+        return
+      }
+      const parsed = ImageAttachmentSchema.safeParse(event)
+      if (!parsed.success) {
+        setError('Manor could not attach this image.')
+        return
+      }
+      setError(null)
+      writeWorkChangeImages(handoffId, [...current, parsed.data])
+    })
+    return () => {
+      subscription.remove()
+      if (fieldFocused.current) setImagePasteEnabled(false)
+      // Gone from the composer's place for any reason (the screen was covered, the result
+      // moved on): the card is back in the thread, and stays there when the screen returns.
+      releaseWorkChanges(handoffId)
     }
-    wasWriting.current = writing
-  }, [writing, handoffId])
+  }, [inDock, handoffId])
 
   // The reconnect snapshot says what happened to a lost action; the card shows that instead.
   useEffect(() => {
@@ -280,7 +333,14 @@ export function WorkResultBody({ result, onShowCard, blocked = false, sessionSet
     setError(null)
     const next = pickWorkChoice(readWorkChanges(handoffId), choice, option)
     writeWorkChanges(handoffId, next)
-    setWriting(workChangesAsked(next, result.choices))
+    const asked = workChangesAsked(next, result.choices)
+    // A pick that opens the field brings it into the composer's place; one already open stays where it is.
+    if (asked && !changesOpen) openWorkChanges(handoffId)
+    else setWriting(asked)
+  }
+  const sent = () => {
+    settleWorkChanges(handoffId, text, images)
+    releaseWorkChanges(handoffId)
   }
 
   return (
@@ -324,7 +384,7 @@ export function WorkResultBody({ result, onShowCard, blocked = false, sessionSet
                 <CardButton
                   disabled={busy || !connected}
                   label={labels.secondary}
-                  onPress={() => { setError(null); setWriting(true) }}
+                  onPress={() => { setError(null); openWorkChanges(handoffId) }}
                   variant="secondary"
                 />
                 <CardButton
@@ -342,30 +402,70 @@ export function WorkResultBody({ result, onShowCard, blocked = false, sessionSet
       ) : null}
       {writing ? (
         <View style={styles.writeBox}>
-          <TextInput
-            ref={bindField}
-            onFocus={() => {
-              if (onShowCard !== undefined) setTimeout(onShowCard, KEYBOARD_MS)
-            }}
-            accessibilityLabel="Requested changes"
-            editable={!busy && connected}
-            maxLength={WORK_CHANGES_LIMIT}
-            multiline
-            onChangeText={(next) => writeWorkChanges(handoffId, next)}
-            placeholder="What should change?"
-            placeholderTextColor={colors.dim}
-            selectionColor={colors.busy}
-            style={styles.input}
-            textAlignVertical="top"
-            value={feedback}
-          />
+          {inDock ? (
+            <View style={styles.field}>
+              <ChangeImages handoffId={handoffId} images={images} />
+              <TextInput
+                accessibilityLabel="Requested changes"
+                autoFocus
+                // Stays editable while a send is out, or iOS takes the keyboard away under the card.
+                editable={connected}
+                maxLength={WORK_CHANGES_LIMIT}
+                multiline
+                onBlur={() => {
+                  fieldFocused.current = false
+                  setImagePasteEnabled(false)
+                  // A send in flight keeps the card here, where its answer or error lands.
+                  if (busyRef.current) return
+                  // Nothing written closes again, so the card comes back exactly as it left.
+                  if (readWorkChanges(handoffId).trim() === '' && readWorkChangeImages(handoffId).length === 0) setWriting(false)
+                  releaseWorkChanges(handoffId)
+                }}
+                onChangeText={(next) => writeWorkChanges(handoffId, next)}
+                onFocus={() => {
+                  fieldFocused.current = true
+                  setImagePasteEnabled(true)
+                }}
+                placeholder="What should change?"
+                placeholderTextColor={colors.dim}
+                selectionColor={colors.busy}
+                style={[styles.input, images.length > 0 && styles.inputBelowPictures]}
+                textAlignVertical="top"
+                value={feedback}
+              />
+            </View>
+          ) : (
+            // What is written so far; writing happens in the composer's place.
+            <Pressable
+              accessibilityHint="Opens the field above the keyboard"
+              accessibilityLabel="Requested changes"
+              accessibilityRole="button"
+              accessibilityValue={{ text: feedback }}
+              disabled={busy || !connected}
+              onPress={() => dockWorkChanges(handoffId)}
+              style={styles.field}
+            >
+              <ChangeImages handoffId={handoffId} images={images} />
+              <Text style={[styles.input, images.length > 0 && styles.inputBelowPictures, feedback === '' && styles.placeholder]}>
+                {feedback === '' ? 'What should change?' : feedback}
+              </Text>
+            </Pressable>
+          )}
           <View style={[styles.actions, styles.end]}>
-            <CardButton disabled={busy} label="Cancel" onPress={() => setWriting(false)} variant="quiet" />
+            <CardButton
+              disabled={busy}
+              label="Cancel"
+              onPress={() => {
+                setWriting(false)
+                releaseWorkChanges(handoffId)
+              }}
+              variant="quiet"
+            />
             <CardButton
               busy={busy}
               disabled={busy || !connected || text === ''}
               label={busy ? 'Sending…' : 'Send to Session'}
-              onPress={() => void run(() => reviseWorkResult(result.handoffId, result.version, text), () => settleWorkChanges(handoffId, text))}
+              onPress={() => void run(() => reviseWorkResult(result.handoffId, result.version, text, [...images]), sent)}
               variant="primary"
             />
           </View>
@@ -410,7 +510,15 @@ const styles = StyleSheet.create({
   blocked: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   shrink: { flex: 1 },
   writeBox: { gap: spacing.sm },
-  input: { minHeight: 88, borderRadius: radius.md, ...squircle, backgroundColor: colors.fill, padding: spacing.md, color: colors.text, fontFamily: fonts.sans, fontSize: 15, lineHeight: 21 },
+  field: { borderRadius: radius.md, ...squircle, backgroundColor: colors.fill },
+  input: { minHeight: 88, padding: spacing.md, color: colors.text, fontFamily: fonts.sans, fontSize: 15, lineHeight: 21 },
+  // The text's own top padding is the gap under the pictures, and the field keeps its height.
+  inputBelowPictures: { minHeight: 88 - PICTURE_SIZE - spacing.md },
+  placeholder: { color: colors.dim },
+  pictures: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, paddingHorizontal: spacing.md, paddingTop: spacing.md },
+  picture: { width: PICTURE_SIZE, height: PICTURE_SIZE },
+  pictureImage: { width: PICTURE_SIZE, height: PICTURE_SIZE, borderRadius: radius.sm, ...squircle },
+  pictureRemove: { position: 'absolute', top: -5, right: -5, width: 18, height: 18, alignItems: 'center', justifyContent: 'center', borderRadius: 9, backgroundColor: colors.text },
   actions: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: spacing.sm },
   end: { justifyContent: 'flex-end' },
   error: { color: colors.danger, fontFamily: fonts.sans, fontSize: 13 },

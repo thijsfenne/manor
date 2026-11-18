@@ -1,4 +1,4 @@
-import type { Chat, WorkHandoff } from '@manor/contracts'
+import type { Chat, ImageAttachment, WorkHandoff } from '@manor/contracts'
 import { setWorkChangesOpen } from './workProposals'
 
 /**
@@ -8,7 +8,11 @@ import { setWorkChangesOpen } from './workProposals'
  * surface that shows the field reads the same text.
  */
 const texts = new Map<string, string>()
+/** The pictures pasted into the same field on the phone, kept beside its text for the same reason. */
+const pictures = new Map<string, readonly ImageAttachment[]>()
 const listeners = new Set<() => void>()
+const NO_PICTURES: readonly ImageAttachment[] = []
+const notify = () => { for (const listener of listeners) listener() }
 
 /** The most a Session takes in one Request changes, the same cap as the wire. */
 export const WORK_CHANGES_LIMIT = 40_000
@@ -25,17 +29,29 @@ export function writeWorkChanges(handoffId: string, text: string): void {
   if (readWorkChanges(handoffId) === text) return
   if (text === '') texts.delete(handoffId)
   else texts.set(handoffId, text)
-  for (const listener of listeners) listener()
+  notify()
+}
+
+/** Always the same array for a field without pictures, so a reader that compares sees no change. */
+export const readWorkChangeImages = (handoffId: string): readonly ImageAttachment[] => pictures.get(handoffId) ?? NO_PICTURES
+
+export function writeWorkChangeImages(handoffId: string, images: readonly ImageAttachment[]): void {
+  if (readWorkChangeImages(handoffId) === images) return
+  if (images.length === 0) pictures.delete(handoffId)
+  else pictures.set(handoffId, images)
+  notify()
 }
 
 /**
- * The server took the feedback: the field closes and its text goes. Call it from the
- * send's own answer and not from the card, which may be gone by then. Left open, the
- * field would greet the next result. Text written since the send stays.
+ * The server took the feedback: the field closes and its text and pictures go. Call it
+ * from the send's own answer and not from the card, which may be gone by then. Left open,
+ * the field would greet the next result. Text written and pictures pasted since the send stay.
  */
-export function settleWorkChanges(handoffId: string, sent: string): void {
+export function settleWorkChanges(handoffId: string, sent: string, sentImages: readonly ImageAttachment[] = NO_PICTURES): void {
   setWorkChangesOpen(handoffId, false)
   if (readWorkChanges(handoffId).trim() === sent) writeWorkChanges(handoffId, '')
+  const kept = readWorkChangeImages(handoffId).filter((image) => !sentImages.includes(image))
+  writeWorkChangeImages(handoffId, kept.length === 0 ? NO_PICTURES : kept)
 }
 
 /** The same test the card uses for a result the user can still ask to change. */
@@ -50,14 +66,18 @@ function resultCanChange(handoff: WorkHandoff, chats: readonly Chat[]): boolean 
  * was written. Each client runs it on its own snapshot, or the texts are never let go.
  */
 export function forgetClosedWorkChanges(handoffs: readonly WorkHandoff[], chats: readonly Chat[]): void {
-  if (texts.size === 0) return
+  if (texts.size === 0 && pictures.size === 0) return
   const open = new Set(handoffs.filter((handoff) => resultCanChange(handoff, chats)).map((handoff) => handoff.id))
-  const closed = [...texts.keys()].filter((handoffId) => !open.has(handoffId))
-  for (const handoffId of closed) texts.delete(handoffId)
-  if (closed.length > 0) for (const listener of listeners) listener()
+  const closed = [...new Set([...texts.keys(), ...pictures.keys()])].filter((handoffId) => !open.has(handoffId))
+  for (const handoffId of closed) {
+    texts.delete(handoffId)
+    pictures.delete(handoffId)
+  }
+  if (closed.length > 0) notify()
 }
 
 /** Test seam. Nothing in the app forgets every text at once. */
 export function clearWorkChanges(): void {
   texts.clear()
+  pictures.clear()
 }

@@ -1,4 +1,5 @@
 import type { AgentConfig, Chat, Project, ServerMessage, ThreadEvent, WorkHandoff } from '@manor/contracts'
+import { ClientMessageSchema } from '@manor/contracts'
 import { describe, expect, it } from 'vitest'
 import { evidenceVisibleCount, firstSentence, goalReportEventId, messageBrief, rowsOf, threadWorkCard, workByline, openWorkDecisions, projectWorkHandoffs, sessionReadyRow, workCardInView, workCardLine, workBlockedReason, workCardStatus, workConfirmTitle, pickWorkChoice, workChangesAsked, workChoicePicked, workResultActionLabels, workResultChoiceList, workResultFiles, workResultLines, type Row, type WorkHandoffRow } from './transcriptState'
 import { emptyThread } from './threadState'
@@ -59,10 +60,14 @@ describe('the shared Work handoff projection', () => {
     const commands = createWorkspaceCommands((message) => wire.push(message) > 0, () => { throw new Error('no optimistic change') })
     commands.confirmWorkGoal(handoff.id, 'main', 3)
     commands.reviseWorkGoal(handoff.id, 3, 'Use the chat title.')
+    const pasted = { name: 'pasted-image.jpg', dataUrl: 'data:image/jpeg;base64,/9j/4AAQ' }
+    commands.reviseWorkGoal(handoff.id, 3, 'Like this.', 'req-1', [pasted])
     expect(wire).toEqual([
       { type: 'confirm_work_goal', handoffId: handoff.id, mergeInto: 'main', version: 3 },
       { type: 'revise_work_goal', handoffId: handoff.id, version: 3, text: 'Use the chat title.' },
+      { type: 'revise_work_goal', handoffId: handoff.id, version: 3, text: 'Like this.', images: [pasted], requestId: 'req-1' },
     ])
+    expect(ClientMessageSchema.safeParse(wire[2]).success).toBe(true)
   })
 
   it('gives a Session its own Ready row while its result waits, with the merge branch the linked folders agree on', () => {

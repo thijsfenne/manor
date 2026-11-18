@@ -1440,7 +1440,8 @@ describe('createGrokDriver', () => {
       throw new Error('the descendant died on SIGTERM, so SIGKILL was never exercised')
     }
 
-    const deadline = Date.now() + 2500
+    // The KILL follows a 1.5s grace and two `ps` snapshots, which a loaded suite slows down.
+    const deadline = Date.now() + 6000
     let alive = true
     while (Date.now() < deadline) {
       try {

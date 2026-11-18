@@ -1,6 +1,6 @@
 import type { Chat, WorkHandoff } from '@manor/contracts'
 import { beforeEach, describe, expect, it } from 'vitest'
-import { clearWorkChanges, forgetClosedWorkChanges, readWorkChanges, settleWorkChanges, subscribeWorkChanges, writeWorkChanges } from './workChanges'
+import { clearWorkChanges, forgetClosedWorkChanges, readWorkChangeImages, readWorkChanges, settleWorkChanges, subscribeWorkChanges, writeWorkChangeImages, writeWorkChanges } from './workChanges'
 import { readWorkChangesOpen, setWorkChangesOpen } from './workProposals'
 
 const handoff = (id: string, changes: Partial<WorkHandoff> = {}) => ({ id, state: 'active', workChatId: `session-${id}`, ...changes }) as WorkHandoff
@@ -36,8 +36,24 @@ describe('Request changes texts', () => {
     expect(readWorkChanges('b')).toBe('First and more')
   })
 
+  it('drops the pictures that were sent and keeps one pasted since the send', () => {
+    const sent = [{ name: 'pasted-image.jpg', dataUrl: 'data:image/jpeg;base64,AAAA' }]
+    writeWorkChangeImages('a', sent)
+    writeWorkChangeImages('b', sent)
+    const added = [...sent, { name: 'pasted-image.jpg', dataUrl: 'data:image/jpeg;base64,BBBB' }]
+    writeWorkChangeImages('b', added)
+
+    settleWorkChanges('a', '', sent)
+    settleWorkChanges('b', '', sent)
+
+    expect(readWorkChangeImages('a')).toEqual([])
+    expect(readWorkChangeImages('a')).toBe(readWorkChangeImages('none'))
+    expect(readWorkChangeImages('b')).toEqual([added[1]])
+  })
+
   it('forgets the feedback of a confirmed, withdrawn or closed result and keeps the rest', () => {
     for (const id of ['open', 'confirmed', 'withdrawn', 'settled', 'archived', 'gone']) writeWorkChanges(id, `about ${id}`)
+    writeWorkChangeImages('gone', [{ name: 'pasted-image.jpg', dataUrl: 'data:image/jpeg;base64,AAAA' }])
 
     forgetClosedWorkChanges(
       [handoff('open'), handoff('confirmed', { goalConfirmedAt: 1 }), handoff('withdrawn', { state: 'deleted' }), handoff('settled'), handoff('archived')],
@@ -45,5 +61,6 @@ describe('Request changes texts', () => {
     )
 
     expect(['open', 'confirmed', 'withdrawn', 'settled', 'archived', 'gone'].filter((id) => readWorkChanges(id) !== '')).toEqual(['open'])
+    expect(readWorkChangeImages('gone')).toEqual([])
   })
 })

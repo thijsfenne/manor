@@ -1,11 +1,11 @@
 import { WorkHandoffCard } from '@/components/WorkHandoffCard'
 import { Badge } from '@/components/Badge'
 import { KickoffCard } from '@/components/KickoffCard'
-import { KeyboardFooter, useFooterPadding } from '@/components/KeyboardFooter'
+import { FOOTER_GAP, KeyboardFooter, useFooterPadding } from '@/components/KeyboardFooter'
 import { WakeNotices } from '@/components/SubagentRow'
 import { SubagentDirectory, SubagentLaunchesContext, type SubagentLaunches } from '@/lib/subagentContext'
 import { WorkDecisionDock } from '@/components/WorkDecisionDock'
-import type { RevealPlace } from '@/components/WorkResultBody'
+import { openWorkChanges, useDockedWorkChanges, workChangesDockable } from '@/components/WorkResultBody'
 import ArrowDown01Icon from '@hugeicons/core-free-icons/ArrowDown01Icon'
 import CellsIcon from '@hugeicons/core-free-icons/CellsIcon'
 import GitBranchIcon from '@hugeicons/core-free-icons/GitBranchIcon'
@@ -24,7 +24,7 @@ import { chatSubagents, chatWaitsOnBackground, dmWorking, runningSubagents } fro
 import { chatFallbackTargets, composerRecipients, composerShowsRecipients, replyFallbackTargets, roomAgents } from '@manor/client-runtime/mentions'
 import { chatChangedFiles, resolveMarkdownRepoLink } from '@manor/client-runtime/changed-files'
 import { defaultSingleRuntime, effectiveDriver, isAutoPending, readSingleRuntime, runtimeLabel, runtimeParts, singleRuntimeVoice } from '@manor/client-runtime/runtime-choices'
-import type { ChangeableAnswer, OpenAsk, PendingDocument, QuietWorkspace, RelayExchange, Row, SessionLink, ThreadShape, TurnConsultation, TurnRow, UnannouncedConsultation } from '@manor/client-runtime/state'
+import type { ChangeableAnswer, OpenAsk, PendingDocument, QuietWorkspace, RelayExchange, Row, SessionLink, ThreadShape, TurnConsultation, TurnRow, UnannouncedConsultation, WorkHandoffRow } from '@manor/client-runtime/state'
 import { activityOf, chatOf, dmMemoryMarks, isHomeRoom, isProjectThread, roomOf, sitsSettled, messageBrief, projectSessionOverview, sessionsDot, openAsk, sessionLiveOf, threadQuestionIn, openSubagentQuestion, subagentSummaryOf, changeableAnswers, personaOf, projectWorkHandoffs, repoListingKey, rowHasQuoteSource, rowsOf, createRowMemory, createValueMemory, feedIndexOf, NO_OPEN_THREAD_BUNDLES, openThreadBundleAt, setThreadBundleOpen, threadBundleOpen, threadBundleOpenItems, threadStretch, onlyConsulted, runtimeStartedAgentIds, sessionReadyRow, sessionThreadOf, stackedConsultationMarkers, relayExchanges, relayMarkerAction, projectThreadFeed, threadQuestionAdvice, threadOf, withSessionTitle, threadSpacing, unannouncedConsultations, workDecisionOpen, type ScreenSpan } from '@manor/client-runtime/state'
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router'
 import { KeyboardAwareLegendList, useKeyboardScrollToEnd } from '@legendapp/list/keyboard'
@@ -33,7 +33,7 @@ import { historyStart, olderHistoryKey } from '@manor/client-runtime/history-win
 import { plainDraftText } from '@manor/client-runtime/plain-preview'
 import type { LegendListRef } from '@legendapp/list/react-native'
 import { memo, useCallback, useContext, useEffect, useMemo, useRef, useState, type RefObject } from 'react'
-import { Platform, Pressable, StyleSheet, View, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native'
+import { Platform, Pressable, StyleSheet, View, useWindowDimensions, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native'
 import { useKeyboardState } from 'react-native-keyboard-controller'
 import Animated, { useSharedValue, type SharedValue } from 'react-native-reanimated'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -97,9 +97,6 @@ const ESTIMATED_ROW = 120
 
 /** What the footer stands on before its first layout, so the list opens at the right floor. */
 const ESTIMATED_FOOTER = 120
-/** The jump to the latest message: its height plus the gap it floats above the footer by. */
-const JUMP_SPACE = 44
-
 /** One identity, so a chat that offers no skills does not re-render the composer. */
 const NO_SKILLS: SkillConfig[] = []
 const isUserBubbleRow = (row: Row | undefined): boolean =>
@@ -190,6 +187,9 @@ function ChatContent({ chatId }: { chatId: string | undefined }) {
   // composer: with the keyboard down, up, or mid-flight. The keyboard controller
   // drives both natively along the keyboard's own curve, nothing scrolls from JS.
   const keyboardUp = useKeyboardState((state) => state.isVisible)
+  // Read when the keys start to rise, so a card in the composer's place knows its room before they land.
+  const keyboardHeight = useKeyboardState((state) => state.height)
+  const windowHeight = useWindowDimensions().height
   // The keyboard view adds this to the keyboard's height and reports the sum to the list
   // as its bottom inset. It must be the only one reporting: the footer's height alone, as
   // the list's own composer hook reports it, is a keyboard short while the keys are up,
@@ -567,18 +567,16 @@ function ChatContent({ chatId }: { chatId: string | undefined }) {
   }, [openQuoteSource])
   const openQuoteSourceStable = useCallback((eventId: string) => openQuoteSourceRef.current(eventId), [])
 
-  const revealRow = useCallback((rowKey: string, place: RevealPlace = 'center') => {
-    // A card at the end rests above the jump to the latest message, which floats there.
-    const position = place === 'end' ? { viewPosition: 1, viewOffset: -JUMP_SPACE } : { viewPosition: 0.5 }
+  const revealRow = useCallback((rowKey: string) => {
     const holder = visibleRows[feedIndexOf(visibleRows, rowKey)]
-    if (holder !== undefined) scrollToHolder(holder, holder.key === rowKey ? undefined : (item) => item.key === rowKey, position)
+    if (holder !== undefined) scrollToHolder(holder, holder.key === rowKey ? undefined : (item) => item.key === rowKey, { viewPosition: 0.5 })
   }, [scrollToHolder, visibleRows])
   // The same call for the memoized rows, which must not re-render on every new message.
   const revealRowRef = useRef(revealRow)
   useEffect(() => {
     revealRowRef.current = revealRow
   }, [revealRow])
-  const revealRowStable = useCallback((rowKey: string, place?: RevealPlace) => revealRowRef.current(rowKey, place), [])
+  const revealRowStable = useCallback((rowKey: string) => revealRowRef.current(rowKey), [])
   // A proposal picked on the project's Sessions screen lands on its card here.
   useFocusEffect(useCallback(() => {
     if (!projectThread || chatId === undefined) return
@@ -630,6 +628,13 @@ function ChatContent({ chatId }: { chatId: string | undefined }) {
     [cardsOut, chatId, openCardKeys],
   )
   const headerFloor = insets.top + CHAT_HEADER_HEIGHT
+  // The card whose Request changes field is being written stands in the composer's place.
+  // Only on the screen in front, which is where the field's keyboard is.
+  const dockedId = useDockedWorkChanges()
+  const dockedRow = dockedId === null || covered ? undefined
+    : rows.find((row): row is WorkHandoffRow => row.kind === 'work_handoff' && row.handoffId === dockedId && workChangesDockable(row))
+  // From just under the header down to the footer's floor, a footer gap above the keys.
+  const dockedMaxHeight = windowHeight - keyboardHeight - FOOTER_GAP - headerFloor - spacing.sm
   // Settling is the measurement in the frame after the rows changed, before the list has
   // pinned its end; every other measurement takes the cards where they are.
   const measureWorkCards = useCallback((settling = false) => {
@@ -874,6 +879,9 @@ function ChatContent({ chatId }: { chatId: string | undefined }) {
       <KeyboardFooter enabled={keyboardUp && !isPair} padded={false} sink={keyboardSink} style={styles.footer}>
       <View
         onLayout={(event) => {
+          // A card in the composer's place overlays its own slot in the thread, so the list
+          // keeps the composer's floor and nothing in it moves, there or on the way back.
+          if (dockedRow !== undefined) return
           const height = Math.round(event.nativeEvent.layout.height)
           // The keyboard view takes a shrink off the offset without stopping at the top,
           // which sinks a short chat below the composer when a question card closes.
@@ -896,12 +904,12 @@ function ChatContent({ chatId }: { chatId: string | undefined }) {
             The jump floats, because it comes and goes with the scroll and nothing should
             shift under a thumb when it does; without the pill it rests just above the bar. */}
         <View pointerEvents="box-none">
-          {showAggregateChanges ? (
+          {showAggregateChanges && dockedRow === undefined ? (
             <Animated.View entering={glassRise} exiting={glassSink} style={styles.pill}>
               <EditsPill files={chatChanges} onPress={() => setAllEditsOpen(true)} />
             </Animated.View>
           ) : null}
-          {showJump ? (
+          {showJump && dockedRow === undefined ? (
             <Animated.View entering={glassRise} exiting={glassSink} style={styles.jump}>
               <GlassIconButton
                 accessibilityLabel="Jump to latest"
@@ -926,24 +934,42 @@ function ChatContent({ chatId }: { chatId: string | undefined }) {
           }}
           pointerEvents="box-none"
         >
-          {isPair || sessionDmAgent !== undefined ? null : (
+          {isPair || sessionDmAgent !== undefined || dockedRow !== undefined ? null : (
             <WorkDecisionDock
               rows={sessionReady === undefined ? rows : [sessionReady]}
               inView={workCardsInView}
               agents={workspace.agents}
               onReject={rejectWork}
-              onReveal={(rowKey, place) => {
+              onReveal={(rowKey) => {
                 // The phone has no diff: a Session's own Ready row leads to its card in the
                 // briefing DM, where Request changes writes and the result reads in full.
                 const source = sessionReady?.key === rowKey ? workspace.workHandoffs.find((handoff) => handoff.id === sessionReady.handoffId)?.sourceChatId : undefined
-                if (source === undefined) revealRow(rowKey, place)
+                if (source === undefined) revealRow(rowKey)
                 else router.push({ pathname: '/chat/[id]', params: { id: source } })
+              }}
+              onRequestChanges={(row) => {
+                // The card comes into the composer's place to take what should change; a
+                // Session's own Ready row writes it on the card in the briefing DM.
+                openWorkChanges(row.handoffId)
+                const source = sessionReady?.key === row.key ? workspace.workHandoffs.find((handoff) => handoff.id === row.handoffId)?.sourceChatId : undefined
+                if (source !== undefined) router.push({ pathname: '/chat/[id]', params: { id: source } })
               }}
             />
           )}
         </View>
         <View style={styles.footerInner}>
-          {isPair || sessionDmAgent !== undefined ? (
+          {dockedRow !== undefined ? (
+            // In the composer's place while its field is written, and before any question:
+            // the field was just picked, and its slot in the thread stays empty meanwhile.
+            <WorkHandoffCard
+              row={dockedRow}
+              agents={workspace.agents}
+              onReject={rejectWork}
+              onReveal={revealRow}
+              inThread={projectThread && project !== undefined}
+              docked={{ maxHeight: dockedMaxHeight }}
+            />
+          ) : isPair || sessionDmAgent !== undefined ? (
             <View style={styles.pairFooter}>
               <View style={styles.pairNotice}>
                 <HugeiconsIcon color={colors.muted} icon={LockIcon} size={15} strokeWidth={1.8} />
@@ -1255,7 +1281,7 @@ interface LiveTranscriptProps {
   onScroll: (event: NativeSyntheticEvent<NativeScrollEvent>) => void
   onOpenAgentRelay: (chatId: string) => void
   onRejectWork: (chatId: string) => void
-  onReveal: (rowKey: string, place?: RevealPlace) => void
+  onReveal: (rowKey: string) => void
   onOpenSubagent: (toolCallId: string) => void
   onOpenQuoteSource: (eventId: string) => void
   onReply: (reply: MessageReply) => void
@@ -1503,7 +1529,7 @@ interface TranscriptRowProps {
   /** In a Session: the project whose thread sent the user's messages on here. */
   forwardSource?: string
   onRejectWork: (chatId: string) => void
-  onReveal: (rowKey: string, place?: RevealPlace) => void
+  onReveal: (rowKey: string) => void
   onOpenSubagent: (toolCallId: string) => void
   /** In a DM: the memory writes this turn's reply shows. */
   memoryChanges?: Extract<Row, { kind: 'turn' }>['memoryChanges']

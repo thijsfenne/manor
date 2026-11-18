@@ -9,6 +9,7 @@ import type {
   ConfirmRequest,
   Effort,
   EventSync,
+  ImageAttachment,
   ProjectIcon,
   ProjectMemoryScope,
   McpServerConfig,
@@ -375,7 +376,7 @@ export interface Store {
     handoffId: string, note: WorkHandoffNote, evidence?: readonly DocumentOriginal[], changedFiles?: readonly string[],
   ): Promise<ThreadEvent | undefined>
   /** Reopens an unconfirmed result and durably queues the user's feedback in the same Session. */
-  reviseWorkGoal(handoffId: string, version: number, text: string): Promise<{ handoff: WorkHandoff; event: Extract<ThreadEvent, { type: 'user_message' }>; sourceEvents: ThreadEvent[] }>
+  reviseWorkGoal(handoffId: string, version: number, text: string, images?: ImageAttachment[]): Promise<{ handoff: WorkHandoff; event: Extract<ThreadEvent, { type: 'user_message' }>; sourceEvents: ThreadEvent[] }>
   /**
    * Reopens an unconfirmed result the way Request changes does, without queuing a message,
    * because a turn changed code after it was published. Appends `note` to the Work chat and

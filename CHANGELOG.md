@@ -4,6 +4,7 @@ What changed for someone who uses Manor, newest first. A version is a tag on `ma
 
 ## Unreleased
 
+- On the phone, Request changes on a Session's result card takes pictures: paste one into the field and it shows as a small thumbnail with its own remove, and goes to the Session with your text. While you write, the card stands above the keyboard in place of the message field, so only one field is on screen. Cancel, Send or tapping away puts the card back in the thread where it was.
 - A line in an agent's standing notes may now hold 300 characters, its date included, instead of 160. Lines saved before stay as they are.
 - A project's Notes no longer show Manor's hidden source tags as text. A task that stayed open and unchanged for three days or more shows how long, such as open 4d, beside it. The project thread now reads that age on the task itself instead of a second stale copy of it above the list.
 - On the phone, a project thread no longer jumps up and down when a proposal or result card arrives or changes. At the bottom it moves once to keep the card in view.

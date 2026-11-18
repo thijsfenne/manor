@@ -1835,6 +1835,11 @@ server.on('connection', (socket) => {
       send(socket, { type: 'ack', requestId: message.requestId, workChatId })
       return
     }
+    // Request changes is only acked; the log line shows what reached the Session's request.
+    if (message.type === 'revise_work_goal') {
+      const images = Array.isArray(message.images) ? message.images : []
+      console.log(`revise_work_goal ${message.handoffId} textLength=${String(message.text ?? '').length} images=${images.map((image) => `${image?.name}:${String(image?.dataUrl ?? '').length}`).join(',') || 'none'}`)
+    }
     const command = message.type === 'send_message' ? chatCommandOf(message) : undefined
     if (command !== undefined) runCommand(message.chatId, command)
     else if (message.type === 'send_message' && REPLIES[message.chatId] !== undefined) reply(message.chatId, REPLIES[message.chatId], message.text, message.images, message.quotes)

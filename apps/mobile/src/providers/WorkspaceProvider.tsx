@@ -124,8 +124,8 @@ export interface WorkspaceActions {
   confirmWorkGoal: (handoffId: string, mergeInto?: string, version?: number) => boolean
   /** Accepts a reported result; resolves on the server's ack and rejects with its notice. */
   acceptWorkResult: (handoffId: string, mergeInto: string | undefined, version: number) => Promise<void>
-  /** Sends feedback on a reported result back to the same Session. */
-  reviseWorkResult: (handoffId: string, version: number, text: string) => Promise<void>
+  /** Sends feedback on a reported result, with any pasted pictures, back to the same Session. */
+  reviseWorkResult: (handoffId: string, version: number, text: string, images: ImageAttachment[]) => Promise<void>
   /** Runs a blocked commit or merge again under the same Confirm; resolves on the server's ack. */
   retryWorkResult: (handoffId: string) => Promise<void>
   /** The user approves the conflict fix Manor holds before it merges a confirmed Session. */
@@ -505,8 +505,8 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     [answered, commands],
   )
   const reviseWorkResult = useCallback(
-    (handoffId: string, version: number, text: string) =>
-      answered((id) => commands().reviseWorkGoal(handoffId, version, text, id)),
+    (handoffId: string, version: number, text: string, images: ImageAttachment[]) =>
+      answered((id) => commands().reviseWorkGoal(handoffId, version, text, id, images)),
     [answered, commands],
   )
   const retryWorkResult = useCallback(

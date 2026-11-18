@@ -4,8 +4,8 @@ import Attachment01Icon from '@hugeicons/core-free-icons/Attachment01Icon'
 import CellsIcon from '@hugeicons/core-free-icons/CellsIcon'
 import CheckmarkCircle02Icon from '@hugeicons/core-free-icons/CheckmarkCircle02Icon'
 import { HugeiconsIcon } from '@hugeicons/react-native'
-import { useContext, useEffect, useState } from 'react'
-import { Pressable, StyleSheet, View } from 'react-native'
+import { useContext, useEffect, useRef, useState } from 'react'
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native'
 import Animated, { Easing, FadeIn, FadeOut, LinearTransition, ReduceMotion, useAnimatedStyle, useReducedMotion, useSharedValue, withTiming } from 'react-native-reanimated'
 import { router } from 'expo-router'
 import { workReopenedLine, type AgentConfig, type ChatMode, type SingleRuntime } from '@manor/contracts'
@@ -26,7 +26,7 @@ import { SegmentedControl } from './SegmentedControl'
 import { SingleRuntimeSheet } from './RuntimeSheet'
 import { Text } from './Text'
 import { WorkPromptSheet } from './WorkPromptSheet'
-import { WORK_STATUS_TONE, WorkCardStatusLabel, WorkResultBody, WorkStatusMark, type RevealPlace } from './WorkResultBody'
+import { WORK_STATUS_TONE, WorkCardStatusLabel, WorkResultBody, WorkStatusMark, useDockedWorkChanges, workChangesDockable } from './WorkResultBody'
 
 const MODE_OPTIONS = [
   { value: 'single', label: 'Single' },
@@ -34,12 +34,18 @@ const MODE_OPTIONS = [
 ] as const
 const SINGLE_ONLY_OPTIONS = [MODE_OPTIONS[0], { ...MODE_OPTIONS[1], disabled: true }] as const
 
-export function WorkHandoffCard({ row, agents, onReject, onReveal, inThread = false }: {
+export function WorkHandoffCard({ row, agents, onReject, onReveal, inThread = false, docked }: {
   row: Extract<Row, { kind: 'work_handoff' }>
   agents: AgentConfig[]
   onReject: (handoffId: string) => void
   /** Scrolls a card into view by row key: a replaced proposal points at its newest version. */
-  onReveal: (rowKey: string, place?: RevealPlace) => void
+  onReveal: (rowKey: string) => void
+  /**
+   * Set on the copy that stands in the composer's place while its Request changes field is
+   * written. The height that fits between the header and the keyboard; a taller card scrolls,
+   * kept at its end, where the field is.
+   */
+  docked?: { maxHeight: number }
   /**
    * Set in a project thread: the card changes shape as its Session moves (one line once
    * accepted, one line once done), and the line's word is the overview's for its Session.
@@ -57,6 +63,10 @@ export function WorkHandoffCard({ row, agents, onReject, onReveal, inThread = fa
   const [runtimeOpen, setRuntimeOpen] = useState(false)
   const [promptDraft, setPromptDraft] = useState<string | null>(null)
   const tile = useContext(InBundle)
+  const dockedId = useDockedWorkChanges()
+  const dockScroll = useRef<ScrollView>(null)
+  // The height this card had in the thread, which its slot keeps while it is docked.
+  const [slot, setSlot] = useState(0)
   const pending = row.acceptedAt === null
   const canAccept = pending && row.status === 'Working'
   const canReject = pending && row.status === 'Working'
@@ -205,54 +215,84 @@ export function WorkHandoffCard({ row, agents, onReject, onReveal, inThread = fa
       </View>
     </View>
   )
+  const content = (
+    <>
+      {openSession === undefined ? head : (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`Open Session ${row.title}`}
+          onPress={openSession}
+          style={({ pressed }) => pressed && styles.pressed}
+        >
+          {head}
+        </Pressable>
+      )}
+      {report === undefined ? null : (
+        <View style={styles.resultIndent}>
+          <WorkResultBody
+            result={report}
+            blocked={workCardStatus(row)?.tone === 'warn'}
+            sessionSettled={row.status === 'Settled'}
+            waits={workResultWaits(row)}
+            docked={docked !== undefined}
+            {...(openSession === undefined ? {} : { onOpenSession: openSession })}
+          />
+        </View>
+      )}
+      {canAccept ? (
+        <RuntimeBlock
+          open={detailsOpen}
+          onToggle={() => setDetailsOpen((value) => !value)}
+          disabled={accepting}
+          runtime={singleMode ? runtime : undefined}
+          attachments={workProposalAttachmentCount(row)}
+          // A thread's card is always Single (2026-11-17); only a persona's card offers the mode.
+          {...(row.threadAuthored === true ? {} : { mode: { value: mode, block: multipleBlock, onChange: chooseMode } })}
+          onModel={() => setRuntimeOpen(true)}
+          {...(proposedTask === undefined ? {} : { prompt: { edited: editedTask !== undefined, onOpen: () => setPromptDraft(editedTask ?? proposedTask) } })}
+        />
+      ) : null}
+      {canAccept || canReject ? (
+        <View style={styles.workActions}>
+          {canAccept && row.worktreeAvailable ? <Checkbox label="Worktree" checked={isolate} disabled={accepting} onChange={setIsolate} compact /> : null}
+          <View style={styles.grow} />
+          {canReject ? <CardButton label="Reject" variant="quiet" disabled={accepting} onPress={() => { onReject(row.handoffId) }} /> : null}
+          {canAccept ? <CardButton label={accepting ? 'Accepting…' : 'Accept'} variant="primary" disabled={accepting} busy={accepting} onPress={accept} /> : null}
+        </View>
+      ) : null}
+      {error === null ? null : <Text accessibilityRole="alert" style={[styles.workError, { color: colors.danger }]}>{error}</Text>}
+    </>
+  )
+  if (docked !== undefined) {
+    return (
+      <GlassSurface radius={radius.panel} fallbackColor={colors.surface} style={{ maxHeight: docked.maxHeight }}>
+        <ScrollView
+          ref={dockScroll}
+          contentContainerStyle={styles.workCard}
+          keyboardShouldPersistTaps="handled"
+          onContentSizeChange={() => dockScroll.current?.scrollToEnd({ animated: false })}
+          // The rising keys shrink the room after the content was laid out; the field stays in view.
+          onLayout={() => dockScroll.current?.scrollToEnd({ animated: false })}
+          style={styles.dockScroll}
+        >
+          {content}
+        </ScrollView>
+      </GlassSurface>
+    )
+  }
+  // Its copy stands in the composer's place: the slot keeps the height the card had, so
+  // nothing in the thread moves while the field changes there, and the card comes back to it.
+  if (dockedId === row.handoffId && workChangesDockable(row)) return <View style={{ height: slot }} />
   return (
     <>
       {/* Glass outermost, never inside a Pressable or a fading parent, or it renders flat. */}
-      <GlassSurface radius={radius.panel} fallbackColor={colors.surface} style={styles.workCard}>
-        {openSession === undefined ? head : (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={`Open Session ${row.title}`}
-            onPress={openSession}
-            style={({ pressed }) => pressed && styles.pressed}
-          >
-            {head}
-          </Pressable>
-        )}
-        {report === undefined ? null : (
-          <View style={styles.resultIndent}>
-            <WorkResultBody
-              result={report}
-              blocked={workCardStatus(row)?.tone === 'warn'}
-              sessionSettled={row.status === 'Settled'}
-              waits={workResultWaits(row)}
-              onShowCard={() => onReveal(row.key, 'end')}
-              {...(openSession === undefined ? {} : { onOpenSession: openSession })}
-            />
-          </View>
-        )}
-        {canAccept ? (
-          <RuntimeBlock
-            open={detailsOpen}
-            onToggle={() => setDetailsOpen((value) => !value)}
-            disabled={accepting}
-            runtime={singleMode ? runtime : undefined}
-            attachments={workProposalAttachmentCount(row)}
-            // A thread's card is always Single (2026-11-17); only a persona's card offers the mode.
-            {...(row.threadAuthored === true ? {} : { mode: { value: mode, block: multipleBlock, onChange: chooseMode } })}
-            onModel={() => setRuntimeOpen(true)}
-            {...(proposedTask === undefined ? {} : { prompt: { edited: editedTask !== undefined, onOpen: () => setPromptDraft(editedTask ?? proposedTask) } })}
-          />
-        ) : null}
-        {canAccept || canReject ? (
-          <View style={styles.workActions}>
-            {canAccept && row.worktreeAvailable ? <Checkbox label="Worktree" checked={isolate} disabled={accepting} onChange={setIsolate} compact /> : null}
-            <View style={styles.grow} />
-            {canReject ? <CardButton label="Reject" variant="quiet" disabled={accepting} onPress={() => { onReject(row.handoffId) }} /> : null}
-            {canAccept ? <CardButton label={accepting ? 'Accepting…' : 'Accept'} variant="primary" disabled={accepting} busy={accepting} onPress={accept} /> : null}
-          </View>
-        ) : null}
-        {error === null ? null : <Text accessibilityRole="alert" style={[styles.workError, { color: colors.danger }]}>{error}</Text>}
+      <GlassSurface
+        radius={radius.panel}
+        fallbackColor={colors.surface}
+        onLayout={(event) => setSlot(event.nativeEvent.layout.height)}
+        style={styles.workCard}
+      >
+        {content}
       </GlassSurface>
       <SingleRuntimeSheet
         open={runtimeOpen}
@@ -427,6 +467,7 @@ const styles = StyleSheet.create({
   pressed: { opacity: 0.7 },
   grow: { flex: 1 },
   workCard: { gap: spacing.md, padding: 14 },
+  dockScroll: { flexGrow: 0 },
   workMain: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.md },
   workBody: { flex: 1, minWidth: 0, gap: spacing.xs },
   workHead: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },

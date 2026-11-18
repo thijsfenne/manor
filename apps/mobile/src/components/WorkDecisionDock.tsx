@@ -12,7 +12,6 @@ import { CardButton } from './CardButton'
 import { FadingScrollView } from './FadingScrollView'
 import { GlassSurface } from './GlassSurface'
 import { Text } from './Text'
-import { openWorkChangesFromBar, type RevealPlace } from './WorkResultBody'
 
 const ROW_HEIGHT = 48
 /** Three rows show; the top of a fourth peeks in under the cut, which says the list scrolls. */
@@ -28,12 +27,14 @@ const FADE_OUT = FadeOut.duration(160)
  * actions under the card's labels; the rest of the row scrolls to the card. Gone when
  * every open card is in view, and until the thread has said which ones are (`inView` null).
  */
-export function WorkDecisionDock({ rows, inView, agents, onReject, onReveal }: {
+export function WorkDecisionDock({ rows, inView, agents, onReject, onReveal, onRequestChanges }: {
   rows: readonly Row[]
   inView: ReadonlySet<string> | null
   agents: AgentConfig[]
   onReject: (handoffId: string) => void
-  onReveal: (rowKey: string, place?: RevealPlace) => void
+  onReveal: (rowKey: string) => void
+  /** What to change is written on the card, which comes into the composer's place to take it. */
+  onRequestChanges: (row: WorkHandoffRow) => void
 }) {
   const open = inView === null ? [] : openWorkDecisions(rows, inView)
   if (open.length === 0) return null
@@ -53,7 +54,7 @@ export function WorkDecisionDock({ rows, inView, agents, onReject, onReveal }: {
             <Animated.View key={decision.row.key} entering={FADE_IN} exiting={FADE_OUT}>
               {decision.kind === 'proposal'
                 ? <ProposalRow row={decision.row} agents={agents} onReject={onReject} onReveal={onReveal} />
-                : <ResultRow row={decision.row} result={decision.row.report!} onReveal={onReveal} />}
+                : <ResultRow row={decision.row} result={decision.row.report!} onReveal={onReveal} onRequestChanges={onRequestChanges} />}
             </Animated.View>
           ))}
         </FadingScrollView>
@@ -66,7 +67,7 @@ function ProposalRow({ row, agents, onReject, onReveal }: {
   row: WorkHandoffRow
   agents: AgentConfig[]
   onReject: (handoffId: string) => void
-  onReveal: (rowKey: string, place?: RevealPlace) => void
+  onReveal: (rowKey: string) => void
 }) {
   const { acceptWorkHandoff } = useWorkspaceActions()
   const proposal = useWorkProposal(row, agents)
@@ -88,7 +89,12 @@ function ProposalRow({ row, agents, onReject, onReveal }: {
   )
 }
 
-function ResultRow({ row, result, onReveal }: { row: WorkHandoffRow; result: WorkResult; onReveal: (rowKey: string, place?: RevealPlace) => void }) {
+function ResultRow({ row, result, onReveal, onRequestChanges }: {
+  row: WorkHandoffRow
+  result: WorkResult
+  onReveal: (rowKey: string) => void
+  onRequestChanges: (row: WorkHandoffRow) => void
+}) {
   const { acceptWorkResult, askCheckoutStatus } = useWorkspaceActions()
   const connected = useWorkspaceStatus() === 'live'
   const [busy, setBusy] = useState(false)
@@ -131,8 +137,7 @@ function ResultRow({ row, result, onReveal }: { row: WorkHandoffRow; result: Wor
       secondary={{
         label: labels.secondary,
         disabled: busy || !connected,
-        // What to change is written on the card: open its field there and bring the card in.
-        onPress: () => openWorkChangesFromBar(result.handoffId, (place) => onReveal(row.key, place)),
+        onPress: () => onRequestChanges(row),
       }}
       primary={{
         label: busy ? labels.pending : labels.primary,
@@ -156,7 +161,7 @@ function DecisionRow({ kind, row, error, onReveal, secondary, primary }: {
   kind: 'Proposal' | 'Ready'
   row: WorkHandoffRow
   error: string | null
-  onReveal: (rowKey: string, place?: RevealPlace) => void
+  onReveal: (rowKey: string) => void
   secondary: RowAction
   /** `action` names the decision for VoiceOver while the label says it is underway. */
   primary: RowAction & { action: string; busy: boolean; hint?: string }

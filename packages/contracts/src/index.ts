@@ -4483,7 +4483,7 @@ const ClientMessageWireSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('approve_merge_fix'), handoffId: z.string(), tip: z.string().min(1).max(64), ...optionalRequestId }),
   z.object({
     type: z.literal('revise_work_goal'), handoffId: z.string(), version: z.number().int().nonnegative(),
-    text: z.string().trim().min(1).max(40_000), ...optionalRequestId,
+    text: z.string().trim().min(1).max(40_000), images: messageAttachmentFields.images, ...optionalRequestId,
   }),
   z.object({
     type: z.literal('accept_work_handoff'), handoffId: z.string().optional(), chatId: z.string().optional(),
