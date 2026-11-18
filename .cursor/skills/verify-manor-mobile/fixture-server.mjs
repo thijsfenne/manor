@@ -23,6 +23,7 @@ const EXPORT_QUESTIONS = [
       { label: 'HTML', description: 'Opent in de browser met de opmaak van Manor.' },
     ],
   },
+  { id: 'placement', question: 'Waar komt de knop?', options: [{ label: 'In het chatmenu' }, { label: 'In de kopbalk' }] },
 ]
 
 const PORT = Number(process.env.MANOR_MOBILE_VERIFY_PORT ?? 43182)
