@@ -54,13 +54,17 @@ function ResultLines({ result, settled }: { result: WorkResult; settled: boolean
     <View style={styles.lines}>
       {lines.map((line, index) => (
         <View key={index} style={styles.line}>
-          <HugeiconsIcon color={colors.muted} icon={Tick02Icon} size={15} strokeWidth={1.8} style={styles.lineIcon} />
+          <View style={[styles.lineIcon, styles.resultIcon]}>
+            <HugeiconsIcon color={colors.muted} icon={Tick02Icon} size={15} strokeWidth={1.8} />
+          </View>
           <Text selectable style={[styles.result, styles.lineText, settled && styles.mutedText]}>{line}</Text>
         </View>
       ))}
       {result.limitations === undefined ? null : (
         <View style={styles.line}>
-          <HugeiconsIcon color={colors.dim} icon={AlertCircleIcon} size={15} strokeWidth={1.8} style={styles.lineIcon} />
+          <View style={[styles.lineIcon, styles.limitationIcon]}>
+            <HugeiconsIcon color={colors.dim} icon={AlertCircleIcon} size={15} strokeWidth={1.8} />
+          </View>
           <Text numberOfLines={2} selectable style={[styles.limitation, styles.lineText]}>{result.limitations}</Text>
         </View>
       )}
@@ -482,7 +486,11 @@ const styles = StyleSheet.create({
   body: { gap: spacing.md },
   lines: { gap: spacing.xs },
   line: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm },
-  lineIcon: { marginTop: 3 },
+  // The icon box is as tall as its text's first line, so the icon follows that line when the
+  // text wraps. The padding is the optical nudge: the eye centres on the x-height, below the line box middle.
+  lineIcon: { justifyContent: 'center' },
+  resultIcon: { height: 21, paddingTop: 4 },
+  limitationIcon: { height: 18, paddingTop: 2 },
   lineText: { flex: 1 },
   question: { color: colors.text, fontFamily: fonts.sans, fontSize: 13, lineHeight: 18 },
   choice: { gap: 6 },
