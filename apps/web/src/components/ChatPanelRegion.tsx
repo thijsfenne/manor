@@ -84,6 +84,8 @@ interface ChatPanelRegionProps {
   /** The launch call ids of the subagent view open over this chat, down to the one on stage. */
   subagentPath: readonly string[]
   onOpenSubagent: (toolCallId: string) => void
+  /** Out of layout, not closed: a subagent view lies over the chat and the panel waits behind it. */
+  hidden?: boolean
 }
 
 /** Panel lifecycle and data belong to the thread, never to workspace focus. */
@@ -92,7 +94,7 @@ export function ChatPanelRegion({
   selectedFile, setSelectedFiles, selectedNote, setSelectedNotes, pageContextCount, onAddPageContext,
   onQuoteNote, onAddNoteToSideChat, onClose, onMove, onFloat, onSendToBrowser, onOpenBrowser, onOpenChat, onRevealMessage, onOpenRoutine, onOpenRoutines,
   onDialogChange, onEditGroup, diffScope, onDiffScope, onToggleDiff, onOpenFile, subagentPath, onOpenSubagent,
-  noteRequest, onNoteRequestHandled,
+  noteRequest, onNoteRequestHandled, hidden = false,
 }: ChatPanelRegionProps) {
   const { workspace, status } = manor
   const thread = threadOf(workspace, open.id)
@@ -742,7 +744,7 @@ export function ChatPanelRegion({
           ? ''
           : 'duration-200 motion-safe:transition-[width]'
       }`}
-      style={{ '--region-width': `${regionWidth}px` } as CSSProperties}
+      style={{ '--region-width': `${regionWidth}px`, ...(hidden ? { display: 'none' } : {}) } as CSSProperties}
     >
       {/* One tree for one panel and for several: alone, the grid and its cells step
           out of the box model and the panel sits in the region as it always has, so

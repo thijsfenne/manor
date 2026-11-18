@@ -41,6 +41,7 @@ import type { useOutboundDraftActions } from '../../useOutboundDraftActions'
 import type { usePanelSelections } from '../../usePanelSelections'
 import type { useRevealRequests } from '../../useRevealRequests'
 import { layoutHas, offeredLayout, offeredPanels, type PanelLayout, type useRightPanel } from '../../useRightPanel'
+import { subagentChrome } from '../../subagentChrome'
 import type { useSplitActions, useSplitStage } from '../../useSplitStage'
 import type { Theme } from '../../useTheme'
 import type { useWorkspaceNav } from '../../useWorkspaceNav'
@@ -370,7 +371,7 @@ export function ChatStage({
       )}
       </div>
 
-      {!paneSplit && open !== null && railShown ? <StagePanel kit={kit} chat={open} layout={activeLayout} availableWidth={stageWidth} /> : null}
+      {!paneSplit && open !== null && railShown ? <StagePanel kit={kit} chat={open} layout={activeLayout} availableWidth={stageWidth} hidden={subagentChrome(kit.subagentPath(open.id)).panelHidden} /> : null}
     </div>
 
     </div>
@@ -432,7 +433,10 @@ export function StageChatPane({
   // and a `Sessions` crumb back to the overview, or to the thread where it stands alone.
   const roomThreadId = pane === undefined ? roomThreadOf(chat.id) : undefined
   const settled = sitsSettled(workspace, chat)
-  const settleControl = roomThreadId === undefined ? null : (
+  // A subagent lying over the chat is not the Session: it has no Settle, no panel doors
+  // and no environment panel. They come back as they were when it is closed.
+  const chrome = subagentChrome(subagentPath(chat.id))
+  const settleControl = roomThreadId === undefined || !chrome.settle ? null : (
     <SettleButton settled={settled} {...(phone ? { size: 44 } : {})} onToggle={() => setChatSettled(chat.id, !settled)} />
   )
   const backToSessions = roomThreadId === undefined ? undefined
@@ -448,7 +452,7 @@ export function StageChatPane({
     : offeredLayout(layoutFor(chat.id), offeredPanels(items, phone))
   // The Browser place's session column has no panels of its own, and the phone opens
   // its one panel from the header's own button.
-  const paneRail = pane !== undefined || phone ? undefined : {
+  const paneRail = pane !== undefined || phone || !chrome.doors ? undefined : {
     items,
     layout: paneLayout,
     // Against what is on screen, not what is stored: those differ for a chat that
@@ -456,7 +460,7 @@ export function StageChatPane({
     onSelect: (id: RailItem['id']) => toggleFor(chat.id, id, paneLayout),
   }
   const agentsDoor = kit.railItems.find((item) => item.id === 'agents')
-  const phoneAgents = !phone || open === null || open.kind === 'pair' || (open.mode === 'single' && agentsDoor === undefined) || newChatDraft !== null ? undefined : (
+  const phoneAgents = !phone || !chrome.doors || open === null || open.kind === 'pair' || (open.mode === 'single' && agentsDoor === undefined) || newChatDraft !== null ? undefined : (
     <PhoneAgentsButton className="relative block" running={kit.running.length > 0 || agentsDoor?.busy === true}
       selected={layoutHas(kit.activeLayout, 'agents')} onClick={() => showPanel('agents')} />
   )
@@ -474,7 +478,7 @@ export function StageChatPane({
     focused={paneFocused}
     split={paneSplit || pane !== undefined}
     panel={!paneSplit ? null : (
-      <StagePanel kit={kit} chat={chat} layout={paneLayout} availableWidth={splitPaneContentWidth(kit.stageWidth, stage.ratio.ratio, side)} />
+      <StagePanel kit={kit} chat={chat} layout={paneLayout} availableWidth={splitPaneContentWidth(kit.stageWidth, stage.ratio.ratio, side)} hidden={chrome.panelHidden} />
     )}
     focusMode={focusMode}
     side={side}
@@ -561,7 +565,7 @@ export function StageChatPane({
 }
 
 /** A chat's docked panel region: beside the stage's one chat, or inside its pane of a split. */
-function StagePanel({ kit, chat, layout, availableWidth }: { kit: StageKit; chat: Chat; layout: PanelLayout; availableWidth: number }) {
+function StagePanel({ kit, chat, layout, availableWidth, hidden = false }: { kit: StageKit; chat: Chat; layout: PanelLayout; availableWidth: number; hidden?: boolean }) {
   const { manor, rightPanel, panels, nav } = kit
   const { pageContextsByChat, addPageContext } = kit.pageContexts
   const { noteRequest, clearNoteRequest, reveal } = kit.reveals
@@ -584,8 +588,9 @@ function StagePanel({ kit, chat, layout, availableWidth }: { kit: StageKit; chat
     // Holds the docked editors' window keys, which Settings must not leave live under it.
     // Focus mode hides the region (styles.css) without closing it, so its contents
     // stay mounted; it only gives up the keys and the native browser page meanwhile.
-    focused={kit.open?.id === chat.id && !kit.settingsOpen && !kit.focusMode}
-    ownsBrowserView={kit.browserViewChatId === chat.id && !kit.focusMode}
+    focused={kit.open?.id === chat.id && !kit.settingsOpen && !kit.focusMode && !hidden}
+    ownsBrowserView={kit.browserViewChatId === chat.id && !kit.focusMode && !hidden}
+    hidden={hidden}
     phone={kit.phone}
     instant={visibleSplit === null && kit.chatSwitched}
     browserBridge={kit.browserBridge}

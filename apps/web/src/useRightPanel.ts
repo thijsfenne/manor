@@ -436,6 +436,8 @@ export function toggledPanels(
   return { open: true, layout: withPanel(instead === undefined ? shown : withoutPanel(shown, instead), id) }
 }
 
+const NEVER_BLOCKED = { current: () => false }
+
 /**
  * Which panels the region has open, remembered per chat: a browser session opened in
  * one thread must not greet you in every other thread, and the same goes for the other
@@ -454,6 +456,10 @@ export function toggledPanels(
  *
  * `offersSide` names the chats whose rail has a side chat door; ⌘; does nothing in the others,
  * so it cannot store a panel the chat never shows.
+ *
+ * `shortcutsBlocked` is a ref to a predicate naming the chats whose panels are out of sight
+ * for now, such as one a subagent view covers; ⌘B and ⌘; leave them alone, so they return as
+ * they were. A ref, because what covers a chat is known further down than this hook is called.
  */
 export function useRightPanel(
   chatId: string | null,
@@ -461,6 +467,7 @@ export function useRightPanel(
   shortcutsActive = true,
   closedByDefault: (targetChatId: string) => boolean = () => false,
   offersSide: (targetChatId: string) => boolean = () => true,
+  shortcutsBlocked: { readonly current: (targetChatId: string) => boolean } = NEVER_BLOCKED,
 ) {
   const [byChat, setByChat] = useState<Record<string, string>>(read)
   // Read through a ref so a predicate written fresh each render leaves the callbacks stable.
@@ -584,7 +591,7 @@ export function useRightPanel(
     if (!shortcutsActive) return
     const onKeyDown = (event: KeyboardEvent) => {
       const shortcut = rightPanelShortcut(event)
-      if (shortcut === null || chatId === null) return
+      if (shortcut === null || chatId === null || shortcutsBlocked.current(chatId)) return
       event.preventDefault()
       if (shortcut === 'toggle') toggle()
       else if (offersSideRef.current(chatId)) toggleFor(chatId, 'side')

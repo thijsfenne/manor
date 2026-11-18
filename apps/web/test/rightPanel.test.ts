@@ -233,6 +233,38 @@ const press = (
   ...extra,
 })
 
+describe('shortcuts on a chat whose panels are out of sight', () => {
+  afterEach(() => vi.unstubAllGlobals())
+
+  it('leaves the panels alone on Cmd+B while blocked and toggles them again once not', () => {
+    let keydown: ((event: unknown) => void) | undefined
+    vi.stubGlobal('window', {
+      localStorage: { getItem: () => null, setItem: vi.fn() },
+      addEventListener: (type: string, handler: (event: unknown) => void) => { if (type === 'keydown') keydown = handler },
+      removeEventListener: vi.fn(),
+    })
+    let panel!: ReturnType<typeof useRightPanel>
+    let blocked = true
+    const Probe = () => {
+      panel = useRightPanel('chat', false, true, () => false, () => true, { current: () => blocked })
+      return null
+    }
+    let view!: ReactTestRenderer
+    act(() => { view = create(createElement(Probe)) })
+    const before = panel.layout
+    const preventDefault = vi.fn()
+    const press = () => act(() => keydown!({ key: 'b', metaKey: true, ctrlKey: false, altKey: false, shiftKey: false, repeat: false, preventDefault }))
+    press()
+    expect(panel.layout).toEqual(before)
+    expect(preventDefault).not.toHaveBeenCalled()
+    blocked = false
+    act(() => view.update(createElement(Probe)))
+    press()
+    expect(panel.layout).toEqual([])
+    act(() => view.unmount())
+  })
+})
+
 describe('rightPanelShortcut', () => {
   it('claims Cmd/Ctrl+; for side chat and keeps Cmd/Ctrl+B as the rail toggle', () => {
     expect(rightPanelShortcut(press(';'))).toBe('side')

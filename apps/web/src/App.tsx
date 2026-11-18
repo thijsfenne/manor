@@ -57,6 +57,7 @@ import { useSettings } from './useSettings'
 import { useSidebar } from './useSidebar'
 import { chatOnStage, focusedSplitChatId, occupiedSplitIds, type SplitStage } from './splitStage'
 import { useSplitActions, useSplitStage } from './useSplitStage'
+import { subagentChrome } from './subagentChrome'
 import { useSubagentViews } from './useSubagentViews'
 import { useTheme } from './useTheme'
 import { useViewportWidth } from './useViewportWidth'
@@ -187,8 +188,11 @@ function Workspace({
   // Below `open` rather than with the other state: the rail's memory is per chat,
   // so the hook needs to know which one is on the stage.
   // A session in its project room opens on its transcript alone; the Session door brings the panel (2026-10-11).
+  // The subagent views are created further down, so the hook reads what covers a chat through a ref.
+  const panelsCoveredRef = useRef<(chatId: string) => boolean>(() => false)
   const rightPanel = useRightPanel(open?.id ?? null, sidebarOverlay, !focusRequested, (chatId) => roomThreadOf(chatId) !== undefined,
-    (chatId) => { const kind = chatOf(workspace, chatId)?.kind; return kind === undefined || chatKindOffersSideChat(kind) })
+    (chatId) => { const kind = chatOf(workspace, chatId)?.kind; return kind === undefined || chatKindOffersSideChat(kind) },
+    panelsCoveredRef)
   const panels = usePanelSelections(manor, rightPanel)
   // Methods by name: the compiler keys a call like `rightPanel.showFor(…)` on `rightPanel`,
   // which these hooks hand back new with every render, so a callback through it would be too.
@@ -373,6 +377,9 @@ function Workspace({
 
   const { sidebarSubagents, subagentPath, pushSubagentView, popSubagentView, closeSubagentView, openSubagent } =
     useSubagentViews(workspace, openChat, closeSidebarOverlay, occupiedChatIdsOf(visibleSplit, null, open?.id ?? null))
+  useEffect(() => {
+    panelsCoveredRef.current = (chatId) => subagentChrome(subagentPath(chatId)).panelHidden
+  }, [subagentPath])
   const subagentOnStage = open !== null && subagentPath(open.id).length > 0
   // A chat's own row always lands on the chat, also from a subagent it started.
   const openChatFromSidebar = (chatId: string) => {
@@ -497,7 +504,8 @@ function Workspace({
   const openWebsiteUrl = (url: string, chatId?: string): boolean => routeWebsiteLink(url, {
     browser: browserBridge,
     chat: workspace.chats.find((candidate) => candidate.id === chatId),
-    roomSession: chatId !== undefined && roomThreadOf(chatId) !== undefined,
+    // A chat a subagent view covers has its panel out of sight too, so a link goes to the full Browser.
+    roomSession: chatId !== undefined && (roomThreadOf(chatId) !== undefined || subagentChrome(subagentPath(chatId)).panelHidden),
     phone,
     showPanel: (targetChatId) => showRightPanelFor(targetChatId, 'browser'),
     showFullBrowser: openBrowser,
@@ -570,7 +578,8 @@ function Workspace({
   // Only the stage views draw the split; elsewhere the bar has one group whatever is remembered.
   const splitShown = paneSplit && (activeView === 'chat' || activeView === 'new-chat' || activeView === 'empty-chat')
   const browserPaneIds = visibleSplit === null ? [] : occupiedSplitIds(visibleSplit, draftSide)
-    .filter((id) => layoutHas(layoutFor(id), 'browser'))
+    // A pane a subagent view covers hides its panel, so it cannot be the one holding the native page.
+    .filter((id) => layoutHas(layoutFor(id), 'browser') && !subagentChrome(subagentPath(id)).panelHidden)
   const browserViewChatId = browserPaneIds.find((id) => id === open?.id) ?? browserPaneIds[0] ?? open?.id
   const occupiedChatIds = occupiedChatIdsOf(visibleSplit, draftSide, newChatDraft === null ? (open?.id ?? null) : null)
 
