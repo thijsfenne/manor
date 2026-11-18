@@ -17,6 +17,7 @@ import {
   statSync,
   writeFileSync,
   unlinkSync,
+  utimesSync,
 } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
@@ -24,6 +25,7 @@ import { fileURLToPath } from 'node:url'
 import { setTimeout as sleep } from 'node:timers/promises'
 import { randomUUID } from 'node:crypto'
 import { chatRunning, cwdOf, describeAge, envOf, groupMembers, parseElapsed, resolveOwner, staleReason, staleVerdict, stopGroup } from '../verify-manor/stale-run.mjs'
+import { DEFAULT_IDLE_MS, DEFAULT_LEASE_PATH, DEFAULT_STALL_MS, addPids, describeHolder, holderIdleMs, leaveQueue, markUse, readLease, release, tryAcquire, waitForLease, yieldIfIdle } from './lease.mjs'
 
 const SKILL_DIR = dirname(fileURLToPath(import.meta.url))
 const REPO_ROOT = resolve(SKILL_DIR, '../../..')
@@ -42,6 +44,17 @@ const RENDER_TIMEOUT_MS = Number(process.env.MANOR_MOBILE_VERIFY_RENDER_TIMEOUT_
 const AUTH_ON = process.env.MANOR_MOBILE_VERIFY_AUTH === 'on'
 // Visible once the first screen has rendered: the house chrome, or the gate when auth is on.
 const READY_LABEL = AUTH_ON ? 'Welcome home' : 'Open menu'
+// One run at a time owns the simulator and the fixed ports; another lease file is for testing the lease itself.
+const LEASE_PATH = process.env.MANOR_MOBILE_VERIFY_LEASE ?? DEFAULT_LEASE_PATH
+/** A duration override from the environment; unset, blank, negative or not a number gives `fallback`. */
+const envMs = (name, fallback) => {
+  const ms = process.env[name]?.trim() ? Number(process.env[name]) : NaN
+  return Number.isFinite(ms) && ms >= 0 ? ms : fallback
+}
+// launch waits as long as the queue moves and gives up only after this long behind the same run.
+const STALL_MS = envMs('MANOR_MOBILE_VERIFY_STALL_MS', DEFAULT_STALL_MS)
+// A holder left undriven this long gives the simulator to a waiting launch, even while its chat works.
+const IDLE_MS = envMs('MANOR_MOBILE_VERIFY_IDLE_MS', DEFAULT_IDLE_MS)
 const MAC_BLOCKER =
   'blocked: this worker cannot run an iOS Simulator. Need a Mac cloud worker / private Mac worker (Xcode + Simulator). Linux, Expo web, and browser screenshots are not mobile proof.'
 
@@ -280,18 +293,29 @@ async function stopOrphan(port, what, pid) {
 }
 
 /**
- * Why a port is held, and by whom, for the refusal. A leftover run holds the fixed ports
- * until somebody cleans it up: when it is stale (over a day old, or its owning chat has
- * no running turn) its own checkout's `cleanup` stops it, which signals only the groups
+ * Runs another checkout's own `cleanup`, told which run it may stop: a replacement run in the
+ * same checkout is left alone. Returns the last line it printed, for a refusal.
+ */
+function cleanupIn(ownerDir, runId, extra = []) {
+  const cleanup = spawnSync(process.execPath, [join(ownerDir, 'control-manor-mobile.mjs'), 'cleanup', '--expect', runId, ...extra], { cwd: ownerDir, encoding: 'utf8', timeout: 60_000 })
+  return (cleanup.stderr || cleanup.stdout || 'no output').trim().split('\n').at(-1)
+}
+
+/**
+ * Why a port is held, and by whom, as `{ message, wait }`. A leftover run holds the fixed
+ * ports until somebody cleans it up: when it is stale (over a day old, or its owning chat
+ * has no running turn) its own checkout's `cleanup` stops it, which signals only the groups
  * that run recorded and claimed. A run whose checkout is gone is stale as well and has no
- * cleanup left, so its own group is stopped. Anything else is refused with its owner named.
+ * cleanup left, so its own group is stopped. A verify run that is not stale comes back with
+ * `wait: true`, its listener `pid` and `who` it is, so launch waits for it; anything else is a
+ * refusal with its owner named.
  * Returns undefined once the port is free.
  */
 async function holderOrFree(port, what) {
   const listeners = portOwners(port)
   if (listeners.length === 0) return undefined
   const ownerDir = ownerSkillDirOf(listeners[0])
-  const unknown = `${what} port ${port} is already in use (pid ${listeners.join(', ')}) by a process that is not a verify-manor-mobile run Manor can identify. Manor does not touch it. Free the port by hand and retry.`
+  const unknown = { message: `${what} port ${port} is already in use (pid ${listeners.join(', ')}) by a process that is not a verify-manor-mobile run Manor can identify. Manor does not touch it. Free the port by hand and retry.` }
   if (ownerDir === undefined) {
     const line = await stopOrphan(port, what, listeners[0])
     if (line === undefined) return unknown
@@ -317,13 +341,11 @@ async function holderOrFree(port, what) {
   const who = `${theirs.chatId ? `chat ${theirs.chatId.slice(0, 8)}` : 'started by hand'}, checkout ${theirs.repoRoot ?? dirname(dirname(dirname(ownerDir)))}, ${describeAge(ageMs)} old`
   if (verdict === undefined) {
     const why = ownerRunning === true ? 'its owner has a turn running' : ownerRunning === false ? 'its owner used it in the last 15 minutes' : 'it is under a day old and names no chat to check'
-    return `${what} port ${port} is held by a verify run that is not stale (${who}): ${why}. Wait for that Session, or ask it to run \`control-manor-mobile.mjs cleanup\` in ${ownerDir}.`
+    return { message: `${what} port ${port} is held by a verify run that is not stale (${who}): ${why}.`, wait: true, pid: listeners[0], who }
   }
   let failure
   if (theirs.runId) {
-    // Its own cleanup, told which run it may stop: a replacement run in the same checkout is left alone.
-    const cleanup = spawnSync(process.execPath, [join(ownerDir, 'control-manor-mobile.mjs'), 'cleanup', '--expect', theirs.runId], { cwd: ownerDir, encoding: 'utf8' })
-    failure = (cleanup.stderr || cleanup.stdout || 'no output').trim().split('\n').at(-1)
+    failure = cleanupIn(ownerDir, theirs.runId)
   } else {
     // A run from before markers: only the group the listener sits in, and only while a member
     // still carries this skill's own variables. Its saved pids are not trusted beyond that.
@@ -338,7 +360,7 @@ async function holderOrFree(port, what) {
   }
   for (let waited = 0; waited < 8_000 && portOwners(port).length > 0; waited += 250) await sleep(250)
   if (portOwners(port).length > 0) {
-    return `${what} port ${port} is held by a stale verify run (${who}), but stopping it in ${ownerDir} did not free the port${failure ? `: ${failure}` : ''}.`
+    return { message: `${what} port ${port} is held by a stale verify run (${who}), but stopping it in ${ownerDir} did not free the port${failure ? `: ${failure}` : ''}.` }
   }
   const line = `Stopped the stale verify run on ${what.toLowerCase()} port ${port} (${who}): ${staleReason(verdict, ageMs, theirs.chatId)}. ${theirs.runId ? 'Its own cleanup ran' : 'Its process group was stopped'} in ${ownerDir}.`
   stoppedStale.push(line)
@@ -349,7 +371,102 @@ async function holderOrFree(port, what) {
 /** A fixed port must be free for this run: a stale leftover is cleared, anything else refuses with its owner named. */
 async function assertPortFree(port, what) {
   const holder = await holderOrFree(port, what)
-  if (holder !== undefined) fail(holder)
+  if (holder !== undefined) fail(holder.message)
+}
+
+/** The exit-3 message once launch has waited STALL_MS without progress: `what` stood still, and what to do instead of stopping that run. */
+const gaveUp = (what, who) =>
+  `${what} (${who}), which should not happen. Do not stop that run and do not ask the user what to do: finish and report the work without screenshots, and say in the report that the phone verify run was stuck behind ${who}.`
+
+/**
+ * Before launch starts anything: waits until a fixed port is free, polling every 5 s. Only a
+ * verify run that is not stale is waited for (a run started by an older copy of this script
+ * holds no lease), as long as the port changes hands: the standstill clock restarts when its
+ * listener pid changes, and the wait exits 3 after STALL_MS behind the same listener. Its line
+ * is printed on the first try, on every new listener and otherwise at most once a minute. A
+ * true refusal fails at once. Every poll marks `runId` in use, since waiting for the port at the
+ * head of the queue is holding the lease; a refusal means the lease moved on, and the launch
+ * fails before it starts anything and leaves the lease alone.
+ */
+async function waitForPort(port, what, runId) {
+  const started = Date.now()
+  let behind
+  let stalledSince
+  let reportedAt
+  const stillHolds = () => {
+    if (markUse(LEASE_PATH, runId)) return
+    fail(`This launch lost the phone verify lease while it waited for ${what.toLowerCase()} port ${port}. Run \`launch\` again; it waits its turn.`)
+  }
+  for (;;) {
+    // Checked before the probe, which may stop a stale run, and again before the launch goes on.
+    stillHolds()
+    const holder = await holderOrFree(port, what)
+    stillHolds()
+    if (holder === undefined) return
+    if (!holder.wait) fail(holder.message)
+    const changed = holder.pid !== behind
+    if (changed) {
+      behind = holder.pid
+      stalledSince = Date.now()
+    }
+    const stalledMs = Date.now() - stalledSince
+    if (stalledMs >= STALL_MS) fail(gaveUp(`The same run held ${what.toLowerCase()} port ${port} for ${describeAge(stalledMs)}`, holder.who), 3)
+    if (changed || Date.now() - reportedAt >= 60_000) {
+      reportedAt = Date.now()
+      console.error(`${holder.message} Waited ${describeAge(Date.now() - started)}; launch keeps waiting while the port changes hands and gives up only when the same run holds it for ${describeAge(STALL_MS)}. That run is not stopped.`)
+    }
+    await sleep(Math.min(5000, STALL_MS - (Date.now() - stalledSince)))
+  }
+}
+
+/**
+ * The `blocked` hook of the lease wait, for a holder that is still alive. First the standing
+ * stale rule on its own state file; then a holder nobody has driven for IDLE_MS, whether or
+ * not its chat has a turn running. Either way its checkout's `cleanup` stops it (which also
+ * frees the lease); a holder that is in use, or has a command running, is never touched.
+ */
+async function stopStaleHolder(holder) {
+  const ownerDir = join(holder.checkout, '.cursor/skills/verify-manor-mobile')
+  const judged = runVerdict(join(ownerDir, '.run/state.json'), holder.runId)
+  if (judged?.verdict !== undefined) {
+    cleanupIn(ownerDir, holder.runId)
+    // Its cleanup may have found the owner back at work and left it alone.
+    if (readLease(LEASE_PATH).holder?.runId !== holder.runId) {
+      const line = `Stopped the stale verify run holding the phone verify lease (${describeHolder(holder)}): ${staleReason(judged.verdict, judged.ageMs, holder.chatId)}. Its own cleanup ran in ${ownerDir}.`
+      stoppedStale.push(line)
+      console.error(line)
+      return
+    }
+  }
+  const idle = holderIdleMs(holder)
+  if (idle <= IDLE_MS) return
+  cleanupIn(ownerDir, holder.runId, ['--idle'])
+  // Its cleanup leaves a run alone that was driven again meanwhile.
+  if (readLease(LEASE_PATH).holder?.runId === holder.runId) return
+  const line = `Stopped the idle verify run holding the phone verify lease (${describeHolder(holder)}): not used for ${describeAge(idle)}. Its own cleanup ran in ${ownerDir}.`
+  stoppedStale.push(line)
+  console.error(line)
+}
+
+/**
+ * Called first by every command that drives the simulator: only the run that holds the phone
+ * verify lease may touch its screen, so anything else exits 3. Marks the run in use on the
+ * lease now and again when this command exits, so a waiting launch measures its idle time
+ * from the end of the last command. Also refreshes state.json's mtime, the idle clock of the
+ * stale rule.
+ */
+function requireLease() {
+  const { runId } = loadState()
+  if (!runId || !markUse(LEASE_PATH, runId)) {
+    const { holder } = readLease(LEASE_PATH)
+    const held = holder ? `it is held by ${describeHolder(holder)}` : 'nobody holds it'
+    fail(`This run does not hold the phone verify lease (${held}). The simulator screen belongs to another run. Run \`launch\`, which waits its turn.`, 3)
+  }
+  process.on('exit', () => {
+    try { markUse(LEASE_PATH, runId) } catch { /* the command's own outcome is what counts */ }
+  })
+  const now = new Date()
+  utimesSync(STATE_PATH, now, now)
 }
 
 function tailOf(path, lines = 15) {
@@ -781,24 +898,77 @@ async function waitForFirstScreen() {
 async function cmdLaunch() {
   assertSafeWs()
   if (!isDarwin() || !hasXcode()) fail(MAC_BLOCKER, 2)
-  // Before anything slow: a stale run from another checkout may hold the fixed ports.
+  // Two chats can share one checkout and so one state file: a live run of another chat is not
+  // joined, and a dead one's state is removed so this launch gets an identity of its own.
+  const saved = loadState()
+  const mine = resolveOwner().chatId
+  if (saved.chatId && mine && saved.chatId !== mine) {
+    if (pidAlive(saved.fixturePid) || pidAlive(saved.metroPid)) {
+      fail(`This checkout's phone verify run belongs to chat ${saved.chatId.slice(0, 8)} and is still running; launch does not join or stop it. Do not ask the user what to do: finish and report the work without screenshots, and say in the report that the phone verify run was busy.`, 3)
+    }
+    unlinkSync(STATE_PATH)
+  }
+  const { runId, chatId } = runIdentity()
+  if (!runId) fail('This checkout still has a live verify run from before run markers. Run `control-manor-mobile.mjs cleanup` first, then launch again.')
+  // Queues behind the run that holds the simulator and the fixed ports; that run is never stopped while it is in use.
+  const lease = await waitForLease(LEASE_PATH, { runId, checkout: REPO_ROOT, chatId }, {
+    stallMs: STALL_MS,
+    onWait: ({ holder, position, waitedMs }) =>
+      console.error(`launch waits for the phone verify lease, place ${position} in the queue, held by ${describeHolder(holder)}. Waited ${describeAge(waitedMs)}; launch keeps waiting while the queue moves or the run in front is being used, and gives up only after ${describeAge(STALL_MS)} without any of that. That run is not stopped.`),
+    blocked: stopStaleHolder,
+  })
+  if (lease.timedOut) fail(gaveUp(`The run in front neither used the phone verify simulator nor gave it up for ${describeAge(lease.stalledMs)}`, describeHolder(lease.holder)), 3)
+  // In use from here: a waiting launch never stops a run while this launcher runs. Refused when
+  // this launch joined its own run while a cleanup hands that run over; it fails before the exit
+  // hook below exists, so it neither releases nor marks the lease under that cleanup. Not exit
+  // 3: the handover takes seconds, and the next launch simply queues.
+  if (!markUse(LEASE_PATH, runId)) {
+    fail('This checkout\'s phone verify run is being handed to a waiting run after it sat idle. Run `launch` again in a few seconds; it waits its turn.')
+  }
+  let reclaimedLease
+  if (lease.reclaimed) {
+    const why = lease.reclaimed.reason === 'checkout-gone' ? 'its checkout no longer exists' : 'its processes are gone'
+    reclaimedLease = `Took over the phone verify lease from a run that left it (${describeHolder(lease.reclaimed.holder)}): ${why}.`
+    console.error(reclaimedLease)
+  }
+  // A launch that ends with nothing running must not hold up the queue; a run left running keeps
+  // the lease, idle from the moment this launch ended.
+  process.on('exit', () => {
+    try {
+      // A lease that moved on is the next run's, and one in a handover is that cleanup's to release.
+      if (!markUse(LEASE_PATH, runId)) return
+      const state = loadState()
+      if (!pidAlive(state.fixturePid) && !pidAlive(state.metroPid)) release(LEASE_PATH, runId)
+    } catch { /* once this launcher is gone, the next in line takes over a lease nothing keeps alive */ }
+  })
+  // A run starting afresh is as old as this moment, not as the launch that once queued for it.
   const ours = loadState()
-  if (!pidAlive(ours.fixturePid)) await assertPortFree(FIXTURE_PORT, 'Fixture')
-  if (!pidAlive(ours.metroPid)) await assertPortFree(METRO_PORT, 'Metro')
+  if (!pidAlive(ours.fixturePid) && !pidAlive(ours.metroPid)) saveState({ ...ours, startedAt: Date.now() })
+  // Before anything slow: a stale run from another checkout may hold the fixed ports.
+  if (!pidAlive(ours.fixturePid)) await waitForPort(FIXTURE_PORT, 'Fixture', runId)
+  if (!pidAlive(ours.metroPid)) await waitForPort(METRO_PORT, 'Metro', runId)
   requireMaestro()
   ensureDependencies()
-  await startFixture()
+  holdWith(runId, await startFixture())
   await waitForFixture()
   const udid = bootSimulator()
   ensureDevClient(udid)
-  await startMetro()
+  holdWith(runId, await startMetro())
   await waitForMetro()
   await launchAndWait(udid)
-  console.log(JSON.stringify({ ok: true, fixture: FIXTURE_WS, udid, bundleId: BUNDLE_ID, ...(stoppedStale.length === 0 ? {} : { stoppedStale }) }, null, 2))
+  console.log(JSON.stringify({ ok: true, fixture: FIXTURE_WS, udid, bundleId: BUNDLE_ID, ...(stoppedStale.length === 0 ? {} : { stoppedStale }), ...(reclaimedLease ? { reclaimedLease } : {}) }, null, 2))
+}
+
+/** Records a process launch just started on the lease, so the run keeps it after the launcher exits. */
+function holdWith(runId, pid) {
+  if (!addPids(LEASE_PATH, runId, [pid])) {
+    fail(`This launch no longer holds the phone verify lease (${describeHolder(readLease(LEASE_PATH).holder)}). Run \`control-manor-mobile.mjs cleanup\`, then launch again.`)
+  }
 }
 
 async function cmdDoctor() {
   const state = loadState()
+  const lease = readLease(LEASE_PATH)
   const report = {
     platform: process.platform,
     xcode: hasXcode(),
@@ -815,6 +985,13 @@ async function cmdDoctor() {
     skillDepsInstalled: skillDepsInstalled(),
     maestro: maestroBin() || null,
     javaHome: javaHome() || null,
+    lease: {
+      path: LEASE_PATH,
+      holder: lease.holder ? describeHolder(lease.holder) : null,
+      ours: Boolean(state.runId) && lease.holder?.runId === state.runId,
+      waiting: lease.waiters.length,
+      idleMinutes: lease.holder ? Math.floor(holderIdleMs(lease.holder) / 60_000) : null,
+    },
     blocker: null,
   }
   if (!isDarwin() || !hasXcode()) {
@@ -906,6 +1083,7 @@ function onSimulator() {
 }
 
 function cmdTap() {
+  requireLease()
   const name = flag('--name')
   if (!name) fail('tap requires --name (accessibility label)')
   runMaestro(writeTempFlow([`- tapOn: "${escapeYaml(name)}"`]))
@@ -913,12 +1091,14 @@ function cmdTap() {
 
 /** Long-press by accessibility label or visible text, the way a message bubble opens its action sheet. */
 function cmdLongPress() {
+  requireLease()
   const name = flag('--name')
   if (!name) fail('long-press requires --name (accessibility label or visible text)')
   runMaestro(writeTempFlow([`- longPressOn: "${escapeYaml(name)}"`]))
 }
 
 function cmdFill() {
+  requireLease()
   const name = flag('--name')
   const value = flag('--value')
   if (!name || value === undefined) fail('fill requires --name and --value')
@@ -932,6 +1112,7 @@ function cmdFill() {
 }
 
 async function cmdHome() {
+  requireLease()
   if (!isDarwin() || !hasXcode()) fail(MAC_BLOCKER, 2)
   const udid = bootedUdid()
   if (!udid) fail('No booted simulator')
@@ -939,6 +1120,7 @@ async function cmdHome() {
 }
 
 function cmdScreenshot() {
+  requireLease()
   const path = flag('--path')
   if (!path) fail('screenshot requires --path')
   if (!isDarwin() || !hasXcode()) fail(MAC_BLOCKER, 2)
@@ -990,6 +1172,7 @@ function compactHierarchy(node, lines = []) {
 }
 
 function cmdSnapshot() {
+  requireLease()
   const path = flag('--path')
   const bin = maestroBin()
   if (!bin) fail('snapshot needs Maestro (`maestro hierarchy`); not found on PATH or in ~/.maestro/bin')
@@ -1042,8 +1225,16 @@ function cmdCleanup() {
     console.log(`left alone: this checkout's run is not ${expected}.`)
     return
   }
+  // With `--idle` the run must still hold the lease and be undriven for IDLE_MS, decided once
+  // and under the lease lock: from then on its drive commands are refused, so there is nothing
+  // to ask again, and a second cleanup for the same run is left out.
+  const idleOnly = expected !== undefined && process.argv.includes('--idle')
+  if (idleOnly && !yieldIfIdle(LEASE_PATH, expected, IDLE_MS)) {
+    console.log('left alone: that run is no longer stale.')
+    return
+  }
   // Asked again before each signal: the owner may have resumed since the launch that called this looked.
-  const due = () => !expected || runVerdict(STATE_PATH, expected)?.verdict !== undefined
+  const due = () => !expected || idleOnly || runVerdict(STATE_PATH, expected)?.verdict !== undefined
   if (!due()) {
     console.log('left alone: that run is no longer stale.')
     return
@@ -1052,11 +1243,19 @@ function cmdCleanup() {
   const halted = () => {
     console.log('left alone: that run is no longer stale.')
   }
+  // Cleanup holds the lease itself until the release below, so no launch takes it, as free or
+  // as dead, and adopts the simulator between the kills and the shutdown. It joins this run's
+  // lease, or takes one that is free or dead with nobody queued; otherwise another run holds or
+  // is queued for the simulator, so this cleanup leaves the queue at once and the simulator to
+  // that run. A run from before run markers has no lease: the simulator is ours only when nobody holds one.
+  const acquired = state.runId ? tryAcquire(LEASE_PATH, { runId: state.runId, checkout: REPO_ROOT, chatId: state.chatId }).acquired : undefined
+  if (acquired === false) leaveQueue(LEASE_PATH, process.pid)
+  const simulatorOurs = acquired ?? readLease(LEASE_PATH).holder === null
   killClaimed(state.metroPid, state.claimedMetro, state.runId)
   if (!due()) return halted()
   killClaimed(state.fixturePid, state.claimedFixture, state.runId)
   if (!due()) return halted()
-  if (state.claimedSimulator && state.simulatorUdid && isDarwin() && hasXcode()) {
+  if (simulatorOurs && state.claimedSimulator && state.simulatorUdid && isDarwin() && hasXcode()) {
     try {
       simctl('shutdown', state.simulatorUdid)
     } catch {
@@ -1065,7 +1264,11 @@ function cmdCleanup() {
   }
   rmSync(join(RUN_DIR, 'devclient'), { recursive: true, force: true })
   if (existsSync(STATE_PATH)) unlinkSync(STATE_PATH)
-  console.log('cleaned claimed fixture, metro, and simulator. Evidence was not deleted.')
+  // Others queue for the simulator behind this run.
+  if (state.runId) release(LEASE_PATH, state.runId)
+  console.log(simulatorOurs
+    ? 'cleaned claimed fixture, metro, and simulator. Evidence was not deleted.'
+    : 'cleaned claimed fixture and metro; left the simulator running because another run holds or is queued for the phone verify lease. Evidence was not deleted.')
 }
 
 function flag(name) {

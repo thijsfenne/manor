@@ -40,22 +40,35 @@ node .cursor/skills/verify-manor-mobile/control-manor-mobile.mjs launch
 
 `launch` needs no manual setup. In order, it:
 
-1. Installs missing dependencies from the lockfile, never changing it: the mobile app and its workspace packages (`pnpm install --frozen-lockfile --filter @manor/mobile...`, which also gives the fixture its `tsx`) and the skill-local `ws` (`npm ci`). Idle worktrees have every `node_modules` stripped, so this runs on the first launch there. A checkout that has them skips it.
-2. Starts the skill-local fixture on **43182**.
-3. Boots an iOS Simulator, or reuses one that is already booted. It uses `MANOR_MOBILE_VERIFY_SIMULATOR` when this Mac has a device of that name; otherwise it picks an available iPhone, preferring one that already carries the dev client, then a "Pro".
-4. Makes sure the dev client is on that simulator (see below).
-5. Starts Metro on **8088** with fixture env (`--host lan` so the Simulator can reach `127.0.0.1`; Expo `--localhost` binds IPv6 only on this Mac) and waits until it answers.
-6. Launches `com.thijsfenne.manor`, restarting a running app (it would otherwise keep the JavaScript it loaded before and show stale client code), and **waits until the app has rendered**: Metro reports `iOS Bundled`, then Maestro sees the `Open menu` label (`Welcome home` with auth on) twice in one Maestro flow. On a fresh simulator each pass first dismisses the notification permission alert (`Allow`) and the dev client's onboarding sheet and dev menu (`Continue`, `Close`), so evidence screenshots show the Agents list. A cold bundle takes about 35s. On a timeout it exits non-zero and names the Metro log; budgets are `MANOR_MOBILE_VERIFY_BUNDLE_TIMEOUT_MS` (240000) and `MANOR_MOBILE_VERIFY_RENDER_TIMEOUT_MS` (180000).
+1. Takes the phone verify lease (below), waiting in line when another run holds it.
+2. Installs missing dependencies from the lockfile, never changing it: the mobile app and its workspace packages (`pnpm install --frozen-lockfile --filter @manor/mobile...`, which also gives the fixture its `tsx`) and the skill-local `ws` (`npm ci`). Idle worktrees have every `node_modules` stripped, so this runs on the first launch there. A checkout that has them skips it.
+3. Starts the skill-local fixture on **43182**.
+4. Boots an iOS Simulator, or reuses one that is already booted. It uses `MANOR_MOBILE_VERIFY_SIMULATOR` when this Mac has a device of that name; otherwise it picks an available iPhone, preferring one that already carries the dev client, then a "Pro".
+5. Makes sure the dev client is on that simulator (see below).
+6. Starts Metro on **8088** with fixture env (`--host lan` so the Simulator can reach `127.0.0.1`; Expo `--localhost` binds IPv6 only on this Mac) and waits until it answers.
+7. Launches `com.thijsfenne.manor`, restarting a running app (it would otherwise keep the JavaScript it loaded before and show stale client code), and **waits until the app has rendered**: Metro reports `iOS Bundled`, then Maestro sees the `Open menu` label (`Welcome home` with auth on) twice in one Maestro flow. On a fresh simulator each pass first dismisses the notification permission alert (`Allow`) and the dev client's onboarding sheet and dev menu (`Continue`, `Close`), so evidence screenshots show the Agents list. A cold bundle takes about 35s. On a timeout it exits non-zero and names the Metro log; budgets are `MANOR_MOBILE_VERIFY_BUNDLE_TIMEOUT_MS` (240000) and `MANOR_MOBILE_VERIFY_RENDER_TIMEOUT_MS` (180000).
 
 Ready when `launch` exits 0: screenshots taken now show the Agents tab, not the splash. Its title is `Agents`.
 
-Fixture 43182 and Metro 8088 are fixed ports shared by every checkout. If another checkout's run holds one, `launch` looks at that run before it refuses:
+**One run at a time.** Every checkout shares one simulator and the fixed ports, so one run at a time owns them through a machine-wide lease (`~/.manor/verify-mobile.lease.json`). `launch` queues for it in arrival order and prints its place, who holds it and since when (`chat 1a2b3c4d, checkout /path, since 14:02 (12 minutes)`). A holder whose processes are all gone, or whose checkout was removed, is taken over (`reclaimedLease` in the JSON). The stale rule below still applies to an abandoned holder that is alive. A run that has not been driven for 5 minutes (`MANOR_MOBILE_VERIFY_IDLE_MS`) gives the simulator to a waiting launch through its own `cleanup`, even while its chat is still working; a command that is running counts as use, so a long `launch` is safe, though a command that hangs longer than 30 minutes no longer counts as use. So do the verification round in one go. `launch` waits as long as the queue moves or the run in front is being used, with no total limit, so with several chats waiting it can take an hour or more. Run it like this:
 
-- **Stale** (over a day old, or its owning chat has no running turn and left it alone for 15 minutes; never while that chat has a turn running): `launch` runs that checkout's own `cleanup`, prints `Stopped the stale verify run …` on stderr and lists it as `stoppedStale` in its JSON, then goes on. Only the process groups that run recorded and claimed are signalled, and a run with a `MANOR_VERIFY_MOBILE` marker only while a group member still carries it. No asking the maintainer first; this is a standing rule for stale runs, never for live Manor (43179).
+1. Start `launch` as a background command when the shell tool can do that, otherwise with the longest timeout it allows. Keep that one job: wait for it to finish, then read its final output and exit status. Do not start a second `launch` beside it.
+2. Ready is exit 0 and the JSON with `"ok": true`. Until then, run no drive commands.
+3. If the shell tool ended the command at its own timeout before `launch` finished, that is not exit 3: run `launch` again. It queues again, at the back.
+4. While it waits, other work that needs no simulator can go on.
+
+- **Wait.** Never stop, clean up or signal another run's processes yourself, and never work around the lease (another lease file, another simulator, driving without `launch`).
+- **A drive command that exits 3** (`home`, `tap`, `long-press`, `fill`, `snapshot`, `screenshot`) means this run lost the lease, which is to be expected after a pause: the screen belongs to another run. Run `launch` again; it waits its turn.
+- **`launch` that exits 3** means the run in front neither used the simulator nor gave it up for 40 minutes (`MANOR_MOBILE_VERIFY_STALL_MS`), which means something is broken, or this checkout's run belongs to another chat. Finish and report the work without screenshots, say so in the report, and do not ask the user what to do.
+
+Fixture 43182 and Metro 8088 are fixed ports shared by every checkout. If another checkout's run still holds one once `launch` has the lease, `launch` looks at that run:
+
+- **Stale** (over a day old, or its owning chat has no running turn and left it alone for 15 minutes; never while that chat has a turn running): `launch` runs that checkout's own `cleanup`, prints `Stopped the stale verify run …` on stderr and lists it as `stoppedStale` in its JSON, then goes on. Only the process groups that run recorded and claimed are signalled, and a run with a `MANOR_VERIFY_MOBILE` marker only while a group member still carries it. No asking the maintainer first; this is a standing rule for stale runs, never for live Manor (43179). The same goes for a stale lease holder.
 - **Checkout gone** (the worktree was removed under the run, so its state file and its `cleanup` went with it): the run is stale at any age, unless the chat it names in `MANOR_VERIFY_MOBILE_CHAT` has a turn running. `launch` stops the listener's own process group and reports it the same way. It does so only when every process in that group carries this skill's variables, never for its own group, and it checks all of that again before each signal. A group that also holds anything else is refused like an unidentified run.
-- **Not stale, or not a run Manor can identify** (no state file in a checkout that still exists, or the listener is not in a group that state names): `launch` refuses and names the owner (chat, checkout, age) instead of serving that run's code, or the pid when it cannot tell.
+- **Not stale** (for example a run started by an older copy of this script, which takes no lease): `launch` waits for it by the same rule, printing its owner (chat, checkout, age) at most once a minute, and exits 3 when the same listener holds the port for 40 minutes.
+- **Not a run Manor can identify** (no state file in a checkout that still exists, or the listener is not in a group that state names), or a stale run whose cleanup did not free the port: `launch` refuses at once and names the owner, or the pid when it cannot tell.
 
-The stale rule lives in `../verify-manor/stale-run.mjs`; `node --test .cursor/skills/verify-manor/stale-run.test.mjs` covers it.
+The stale rule lives in `../verify-manor/stale-run.mjs`; `node --test .cursor/skills/verify-manor/stale-run.test.mjs` covers it, and `node --test .cursor/skills/verify-manor-mobile/lease.test.mjs` covers the lease.
 
 Keep `apps/mobile/.env.local` in place. `EXPO_NO_DOTENV=1` alone does not keep it out: Expo's development bundle reads `.env*` files at runtime and lets them win, which ships the live Tailscale socket. `apps/mobile/metro.config.js` drops the dotenv watcher extensions under that flag, and `launch` starts Metro with `--clear` because the file map cache is shared with ordinary dev runs. The fixture also needs `EXPO_PUBLIC_MANOR_AUTH=off`, which `launch` sets. Run `doctor` before driving. If the app reaches live Manor or shows the auth gate, stop the drive and check the served bundle for `ts.net` before retrying.
 
@@ -79,7 +92,7 @@ Teardown is `cleanup` below. If a Simulator was already booted, launch will not 
 node .cursor/skills/verify-manor-mobile/control-manor-mobile.mjs doctor
 ```
 
-Must report `fixtureOpen: true` on `ws://127.0.0.1:43182/ws`, a booted Simulator UDID, and `appInstalled: true`. It also reports the dependency state, the Maestro path and the JDK it will use. Refuses 43179 and Tailscale WSS. `live43179Http: 200` is normal and is not a reason to drive that port.
+Must report `fixtureOpen: true` on `ws://127.0.0.1:43182/ws`, a booted Simulator UDID, and `appInstalled: true`. It also reports the dependency state, the Maestro path, the JDK it will use and `lease` (`holder`, `ours`: whether this checkout's run holds it, `waiting`: how many launches queue, `idleMinutes`: how long the holder has not been driven). Refuses 43179 and Tailscale WSS. `live43179Http: 200` is normal and is not a reason to drive that port.
 
 On Linux or a Mac without Xcode, doctor exits **2** and prints `blocker` with the Mac-worker reason. That is the honest proof outcome here, not a green fake.
 
@@ -138,7 +151,7 @@ The fixture is a static house plus a few reactions. Most rooms never answer a se
 - **Trace thumbnails.** `Schermafbeeldingen` (`chat-trace-images`, Manor) is a finished Single Session, first under Standalone sessions on the Sessions tab; tap `Worked for 9s` to see its runs. Its first turn has two runs: one read of a picture (one thumbnail on the run and its row), then four (two thumbnails and `+2`, on the run and on the grouped reads). Its second turn reads the picture the user attached, which shows no thumbnail, beside one that does. The links stand in for what the Mac signs; the exclusion itself is proved on the server.
 - **Mail cards.** `Mail klaarzetten` (`chat-mail-drafts`, Manor) is a Single Session with three outbound Gmail cards, one per turn: an open card (scrolled above the first screen) with `Draft subject`, `Draft Cc`, `Draft body`, `Discard draft` and `Send`, then `Sent · info@example.com` with the reply `Sent to info@example.com.` below it, then `Discarded · info@example.com`. `Open mail card` on a fold reopens it read-only. Send and Discard are only acked.
 - **Inline steering.** `Bijsturen in de stream` is a Single Session with a saved steer halfway through an assistant message. Its completed trace checks the text before and after the addition and its visibility with the trace closed. No live provider is involved.
-- **Reactions.** Accept on a proposal creates its Session and opens on a markdown kickoff. The Session from Marlow's `Fix the date labels` starts a turn when it is first opened, quiet for 12s, then a line and a read every 3s for 72s, so it starts short under the kickoff and outgrows the screen after about four lines. Reach it through Search (`date labels`, then `Chat, Fix the date labels`). Accept on the Ready result goes pending, then lands as committed three seconds later; a stale version is refused with a notice. Project settings save, broadcast and ack. Request changes (`revise_work_goal`) is only acked, and logs `revise_work_goal <handoff> textLength=<n> images=<name>:<data URL length>,…` to the fixture log. A `/compact`, `/clear` or `/goal` send adds its line in any room, no bubble and no turn. A reply in the thread `Stilte` ends with a new proposal card, `Datumlabels nalopen`, about 15s after the send, so a card lands while the thread sits at its end; Accept works on it and on `Instellingen opruimen`. `kill -HUP $(lsof -tiTCP:43182 -sTCP:LISTEN)` turns the newest accepted one into a Ready result, whose Confirm commits three seconds later. Everything else is acked.
+- **Reactions.** Accept on a proposal creates its Session and opens on a markdown kickoff. The Session from Marlow's `Fix the date labels` starts a turn when it is first opened, quiet for 12s, then a line and a read every 3s for 72s, so it starts short under the kickoff and outgrows the screen after about four lines. Reach it through Search (`date labels`, then `Chat, Fix the date labels`). Accept on the Ready result goes pending, then lands as committed three seconds later; a stale version is refused with a notice. Project settings save, broadcast and ack. Request changes (`revise_work_goal`) is only acked, and logs `revise_work_goal <handoff> textLength=<n> images=<name>:<data URL length>,…` to the fixture log. A `/compact`, `/clear` or `/goal` send adds its line in any room, no bubble and no turn. A reply in the thread `Stilte` ends with a new proposal card, `Datumlabels nalopen`, about 15s after the send, so a card lands while the thread sits at its end; Accept works on it and on `Instellingen opruimen`. `kill -HUP $(lsof -tiTCP:43182 -sTCP:LISTEN)` turns the newest accepted one into a Ready result, whose Confirm commits three seconds later. Send this and the other fixture signals below only right after a drive command of this run succeeded, so the listener is this run's fixture; never after an exit 3, when it may be another run's. Everything else is acked.
 - **Vault and mymind.** Two notes, `Projects/Manor.md` and `Daily/2026-11-16.md`; Knowledge lists them and Search finds them (`inbox` hits both). `kill -USR2 $(lsof -tiTCP:43182 -sTCP:LISTEN)` flips both hosts off (Artifacts leaves the menu, Knowledge stays and says there is no vault) and back on.
 - **Search.** The fixture answers `search` with every user or assistant message whose text contains the query, plus matching vault notes. `weekmenu` gives a chat, four messages and no notes.
 
@@ -164,11 +177,11 @@ If doctor exits 2, write `evidence/<feature>/PROOF-BLOCKED.md` with the doctor J
 node .cursor/skills/verify-manor-mobile/control-manor-mobile.mjs cleanup
 ```
 
-Kills only the fixture and Metro **this run started**. Shuts down a Simulator only if this run booted it. Never kill by process name. Never touch 43179. Evidence is not deleted.
+Kills only the fixture and Metro **this run started**. Shuts down a Simulator only if this run booted it, and releases the phone verify lease. Never kill by process name. Never touch 43179. Evidence is not deleted. Always run it when the verification round is done: it frees the simulator for waiting runs at once instead of after 5 idle minutes.
 
 After a failed iteration, run cleanup before the next launch so 43182 and Metro 8088 are not stranded. Then confirm the evidence files still exist.
 
-**After every code change, `cleanup` and then `launch`.** `launch` starts Metro with `CI=1`, and Metro in CI mode does not pick up file changes: a Metro that is still running keeps serving the bundle it built first, whatever you edit afterwards, and a screenshot of it proves the old code. Restarting the app does not help; only a fresh Metro does.
+**After every code change, `cleanup` and then `launch`.** `launch` starts Metro with `CI=1`, and Metro in CI mode does not pick up file changes: a Metro that is still running keeps serving the bundle it built first, whatever you edit afterwards, and a screenshot of it proves the old code. Restarting the app does not help; only a fresh Metro does. `cleanup` gives up the lease, so that `launch` goes to the back of the queue when others wait.
 
 ## Helpers
 
@@ -193,7 +206,7 @@ brew install openjdk@21
 
 | Command | What it does |
 |---|---|
-| `launch` | Deps, fixture 43182, Simulator, dev client, Metro 8088, launch app and wait for first render |
+| `launch` | Wait for the phone verify lease as long as the queue moves or the run in front is used (exit 3 after 40 minutes with neither), then deps, fixture 43182, Simulator, dev client, Metro 8088, launch app and wait for first render |
 | `deps` | Install missing mobile and skill dependencies from the lockfile, nothing else |
 | `doctor` | Read-only health as JSON; exit 2 on non-Mac |
 | `home` | Relaunch the Manor bundle on the booted sim and wait for first render (same JavaScript; it does not pick up edits Fast Refresh missed) |
@@ -204,7 +217,7 @@ brew install openjdk@21
 | `snapshot --path <file>` | Full Maestro hierarchy dump (JSON) to that file, prints the path |
 | `screenshot --path <file.png>` | `simctl` PNG plus `<file>.preview.png` at 400px wide; prints both as JSON |
 | `wait-settle [--ms 800]` | Plain pause |
-| `cleanup` | Tear down what launch claimed |
+| `cleanup` | Tear down what launch claimed and release the lease |
 
 There is no scroll, swipe or back-gesture command; go back through a visible control such as `Terug`. Quote values with spaces.
 
@@ -219,3 +232,6 @@ Environment: set the same variables on `launch` and on every later command of th
 | `MANOR_MOBILE_VERIFY_DATA=worst` | Same house with worst-case strings for UI stress (long, one-character, CJK, emoji, unbreakable-compound and empty names, titles, previews, paths, mail and file names) and extra rows: 30 more Manor Sessions, more changed files, a long MCP server and skill. Set on `launch`; the fixture reads it at start, so `cleanup` and `launch` to change it |
 | `MANOR_MOBILE_VERIFY_DATA=empty` | A house with no projects, chats, agents, routines, DM files, plugins or skills, so the empty states render. Set on `launch` like `worst`; unset keeps the default house |
 | `MANOR_MOBILE_VERIFY_BUNDLE_TIMEOUT_MS` / `MANOR_MOBILE_VERIFY_RENDER_TIMEOUT_MS` | Wait budgets, 240000 / 180000 |
+| `MANOR_MOBILE_VERIFY_STALL_MS` | How long `launch` waits without progress before it exits 3: for the lease, a run in front that is neither used nor given up; for a fixed port, the same listener. 2400000 (40 minutes) |
+| `MANOR_MOBILE_VERIFY_IDLE_MS` | How long a lease holder may go undriven before a waiting `launch` has it cleaned up, 300000 (5 minutes) |
+| `MANOR_MOBILE_VERIFY_LEASE=<file>` | Another lease file, only for testing the lease itself; never to get around it |
