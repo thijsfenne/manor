@@ -13,26 +13,26 @@
   },
   "bug-fix-performance": {
     "description": "Diagnose or fix a software defect, investigate performance, improve tooling or iterate against a concrete technical check. Use hardest only for unusually difficult problems with many interacting constraints.",
-    "driver": "claude",
-    "model": "claude-opus-5-5",
+    "driver": "codex",
+    "model": "gpt-6.2-sol",
     "effort": "high"
   },
   "exploration": {
     "description": "Explore a codebase, trace how something works or gather evidence about why it behaves that way. The deliverable is findings for later synthesis, not a bug fix or a polished explanation.",
-    "driver": "codex",
-    "model": "gpt-6.1-sol",
-    "effort": "xhigh"
+    "driver": "claude",
+    "model": "claude-opus-5-5",
+    "effort": "high"
   },
   "judgment-prose": {
     "description": "Advice, ordinary planning, writing, summarising, explaining findings, comparing options or synthesising research. The deliverable requires judgment or considered prose. Brief test contributions belong to routine; only substantial design or planning across a large scope belongs to hardest.",
-    "driver": "codex",
-    "model": "gpt-6.1-sol",
-    "effort": "high"
+    "driver": "claude",
+    "model": "claude-fable-5-2",
+    "effort": "medium"
   },
   "hardest": {
     "description": "Only complex coding tasks or thinking through a problem with a large scope, such as difficult architecture, a complex implementation or debugging across interacting systems, or designing a substantial product or programme. The assignment must explicitly require that complexity or breadth. Ordinary advice, prose, research, brief observations, mini examples, test replies and naming one risk do not qualify. An agent's specialty alone never qualifies.",
     "driver": "claude",
-    "model": "claude-opus-5-5",
-    "effort": "xhigh"
+    "model": "claude-fable-5-2",
+    "effort": "high"
   }
 }
