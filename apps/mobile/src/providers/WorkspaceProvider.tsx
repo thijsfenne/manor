@@ -59,15 +59,15 @@ import {
 } from 'react'
 import { AppState } from 'react-native'
 
-import { mobileConfig } from '@/lib/config'
+import { checkDevice } from '@manor/client-runtime/pairing'
+import { webSocketUrlFor } from '@manor/contracts'
 import {
   onPushTokenChanged,
   registerForPushNotifications,
   unregisterForPushNotifications,
 } from '@/lib/notifications'
-import { authClient } from '@/lib/authClient'
 import { watchForeground } from './appLifecycle'
-import { useAuth } from './AuthProvider'
+import { useConnection } from './ConnectionProvider'
 
 const BACKGROUND_RECONNECT_AFTER_MS = 10_000
 const PUSH_ACK_WAIT_MS = 2_000
@@ -167,8 +167,8 @@ export interface WorkspaceActions {
   runRoutine: (routineId: string) => string | null
   /** Asks the Mac for the memory folder's suggestion ledger; it lands in `workspace.workflowSuggestions`. */
   listWorkflowSuggestions: () => boolean
-  /** Forgets this install before ending the authenticated session. */
-  signOut: () => Promise<void>
+  /** Takes this phone's push registration off the Mac, then forgets the Mac. */
+  forget: () => Promise<void>
   /** Asks for the vault's note listing; nothing until the Knowledge screen wants it. */
   listVault: () => boolean
   readVaultFile: (path: string) => boolean
@@ -196,11 +196,11 @@ const SEARCH_CONNECTION_LOST = 'Not connected. Search again when Manor is back.'
 const requestId = (prefix: string) => `mobile-${prefix}-${Date.now()}-${Math.random().toString(36).slice(2)}`
 
 export function WorkspaceProvider({ children }: { children: ReactNode }) {
-  const auth = useAuth()
-  const authRef = useRef(auth)
+  const device = useConnection()
+  const deviceRef = useRef(device)
   useEffect(() => {
-    authRef.current = auth
-  }, [auth])
+    deviceRef.current = device
+  }, [device])
 
   // Outside React: a text frame changes the store, and only its live readers render.
   const [store] = useState(() => createWorkspaceStore(emptyWorkspace))
@@ -230,7 +230,10 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const workAcceptance = useRef(createWorkAcceptance())
   /** Override requests still in flight, so an ack or a notice can settle the right chat. */
   const overrideRequests = useRef(new Map<string, string>())
-  const signedIn = auth.session !== null
+  const connected = device.origin !== null
+  /** A new pairing, or none, is a different connection from the one before it. */
+  const connectionKey = device.credential?.deviceId ?? 'dev'
+  const { ready: deviceReady, origin } = device
 
   const framesRef = useRef<FrameQueue<ServerMessage> | null>(null)
   if (framesRef.current === null) {
@@ -297,17 +300,17 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   )
 
   useEffect(() => {
-    if (!auth.ready || (auth.enabled && !signedIn)) {
+    if (!deviceReady || !connected) {
       connectionRef.current?.dispose()
       connectionRef.current = null
-      // Signing out tears the store down with the connection. The previous
+      // Forgetting the Mac tears the store down with the connection. The previous
       // connection's cleanup has already flushed the frame queue by the time this
       // body runs, so the reset cannot land underneath queued messages.
       /* eslint-disable react-hooks/set-state-in-effect */
       setWorkspace(() => emptyWorkspace)
       setCreatedChat(null)
       setCreatedProject(null)
-      // The auth gate covers this state; a session that becomes ready opens on connecting.
+      // The Connect screen covers this state; a connection that becomes ready opens on connecting.
       setStatus('connecting')
       /* eslint-enable react-hooks/set-state-in-effect */
       return
@@ -315,14 +318,19 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
 
     let connection: WorkspaceConnection
     connection = createWorkspaceConnection({
-      url: mobileConfig.webSocketUrl,
+      url: webSocketUrlFor(origin ?? ''),
       auth: {
-        // The stored session refreshes a token near its end first. After an hour in a
-        // pocket the held one has expired, and the server would refuse the first attempt.
-        getToken: () => authClient === null
-          ? authRef.current.getToken()
-          : authClient.getSession().then((session) => session?.access_token ?? null, () => authRef.current.getToken()),
-        onRejected: () => void authClient?.refresh(),
+        // The device token does not expire; the development override has none.
+        getToken: () => deviceRef.current.credential?.token ?? null,
+        // A turned-away socket keeps retrying. Only a Mac that says it no longer knows
+        // this phone sends it back to the Connect screen; a sleeping Mac does not.
+        onRejected: () => {
+          const credential = deviceRef.current.credential
+          if (credential === null) return
+          void checkDevice(credential).then((state) => {
+            if (state === 'revoked') void deviceRef.current.revoked(credential.deviceId)
+          })
+        },
       },
       sockets: {
         openState: WebSocket.OPEN,
@@ -417,11 +425,11 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       connection.dispose()
       if (connectionRef.current === connection) connectionRef.current = null
     }
-  }, [auth.enabled, auth.ready, auth.sessionKey, setWorkspace, signedIn, store])
+  }, [connected, connectionKey, deviceReady, origin, setWorkspace, store])
 
   useEffect(() => {
-    if (!auth.ready || (auth.enabled && !signedIn)) return
-    // A successful sign-in re-enables registration after the previous account's
+    if (!deviceReady || !connected) return
+    // Pairing again re-enables registration after the previous Mac's
     // explicit teardown left this provider mounted.
     signingOutRef.current = false
     let active = true
@@ -467,7 +475,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       if (pushRefreshRef.current === trigger) pushRefreshRef.current = () => {}
       removeListener()
     }
-  }, [auth.enabled, auth.ready, signedIn])
+  }, [connected, connectionKey, deviceReady])
 
   const openChat = useCallback((chatId: string) => {
     setWorkspace((current) => selectChat(current, chatId))
@@ -561,7 +569,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     if (status === 'live') forgetClosedWorkChanges(workspace.workHandoffs, workspace.chats)
   }, [status, workspace.workHandoffs, workspace.chats])
 
-  const signOut = useCallback(async () => {
+  const forget = useCallback(async () => {
     signingOutRef.current = true
     try {
       const token = pushTokenRef.current
@@ -583,10 +591,10 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       }
       const nativeDeleted = await unregisterForPushNotifications()
       if (!serverDeleted && !nativeDeleted) {
-        throw new Error('Push registration could not be removed; the session remains active.')
+        throw new Error('Push registration could not be removed; the connection stays.')
       }
       pushTokenRef.current = null
-      await authRef.current.signOut()
+      await deviceRef.current.forget()
     } catch (error) {
       signingOutRef.current = false
       pushRefreshRef.current()
@@ -773,14 +781,14 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       closeDirs,
       runRoutine,
       listWorkflowSuggestions,
-      signOut,
+      forget,
       listVault,
       readVaultFile,
       search,
       listArtifacts,
       loadMoreArtifacts,
     }),
-    [acceptWorkHandoff, answerSecretRequest, answerUserInput, changeSessionAnswer, askCheckoutStatus, askProjectCheckout, clearCreatedChat, clearCreatedProject, closeDirs, confirmWorkGoal, acceptWorkResult, reviseWorkResult, retryWorkResult, approveMergeFix, createChat, addFolder, removeFolder, deleteProject, discardOutboundDraft, ignoreOutboundDraft, listWorkflowSuggestions, listArtifacts, getDmFiles, listDirs, listRepoFiles, listVault, loadMoreArtifacts, openChat, leaveChat, openSubagentThread, readOutboundThread, readRepoFile, readVaultFile, rejectWorkHandoff, search, restoreOutboundDraft, runRoutine, sendMessage, setChatOverride, setChatSettled, signOut, snoozeOutboundDraft, stopBackground, stopSubagent, stopTurn, submitOutboundDraft, updateProject],
+    [acceptWorkHandoff, answerSecretRequest, answerUserInput, changeSessionAnswer, askCheckoutStatus, askProjectCheckout, clearCreatedChat, clearCreatedProject, closeDirs, confirmWorkGoal, acceptWorkResult, reviseWorkResult, retryWorkResult, approveMergeFix, createChat, addFolder, removeFolder, deleteProject, discardOutboundDraft, ignoreOutboundDraft, listWorkflowSuggestions, listArtifacts, getDmFiles, listDirs, listRepoFiles, listVault, loadMoreArtifacts, openChat, leaveChat, openSubagentThread, readOutboundThread, readRepoFile, readVaultFile, rejectWorkHandoff, search, restoreOutboundDraft, runRoutine, sendMessage, setChatOverride, setChatSettled, forget, snoozeOutboundDraft, stopBackground, stopSubagent, stopTurn, submitOutboundDraft, updateProject],
   )
 
   const data = useMemo<WorkspaceData>(

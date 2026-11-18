@@ -259,6 +259,19 @@ describe('persistent SQLite store', () => {
     }
   })
 
+  it('drops the password account and unowned push addresses once pairing arrives, and nothing else', () => {
+    const { store, filename } = fixture()
+    for (const collection of ['authOwner', 'authSessions', 'pushTokens', 'houseSettings']) {
+      new SqliteRecords(store.db, collection).set('k', { collection })
+    }
+    store.db.exec('PRAGMA user_version = 15')
+    store.close()
+    const migrated = createSqliteStore({ filename })
+    opened.push(migrated)
+    const left = migrated.db.prepare("SELECT collection FROM records WHERE key = 'k' ORDER BY collection").all().map((row) => row.collection)
+    expect(left).toEqual(['houseSettings'])
+  })
+
   it('keeps a 32 MiB page cache for transcript reads', () => {
     const { store } = fixture()
     expect(store.db.prepare('PRAGMA cache_size').get()?.cache_size).toBe(-32768)

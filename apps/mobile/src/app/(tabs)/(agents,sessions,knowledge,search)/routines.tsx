@@ -6,7 +6,7 @@ import { HugeiconsIcon } from '@hugeicons/react-native'
 import { Pressable, SectionList, StyleSheet, View } from 'react-native'
 import { FadeIn, FadeOut, ReduceMotion } from 'react-native-reanimated'
 
-import { AuthGate } from '@/components/AuthGate'
+import { ConnectGate } from '@/components/ConnectGate'
 import { Blobatar } from '@/components/Blobatar'
 import { EmptyCard } from '@/components/EmptyCard'
 import { ProviderMark } from '@/components/ProviderMark'
@@ -20,7 +20,7 @@ import { colors, fonts, radius, spacing } from '@/theme'
 const now = () => Date.now()
 
 export default function RoutinesScreen() {
-  return <AuthGate><SectionScaffold title="Scheduled tasks"><RoutinesList /></SectionScaffold></AuthGate>
+  return <ConnectGate><SectionScaffold title="Scheduled tasks"><RoutinesList /></SectionScaffold></ConnectGate>
 }
 
 const KINDS = [{ value: 'recurring', label: 'Recurring' }, { value: 'once', label: 'Once' }] as const

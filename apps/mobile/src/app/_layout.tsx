@@ -13,7 +13,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import { KeyboardProvider } from 'react-native-keyboard-controller'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
 
-import { AuthProvider } from '@/providers/AuthProvider'
+import { ConnectionProvider } from '@/providers/ConnectionProvider'
 import { WorkspaceProvider } from '@/providers/WorkspaceProvider'
 import { WindowInsetsProvider } from '@/lib/windowInsets'
 import { chatIdFromNotificationResponse, Notifications } from '@/lib/notifications'
@@ -43,7 +43,7 @@ export default function RootLayout() {
       <SafeAreaProvider>
       <WindowInsetsProvider>
         <ThemeProvider value={scheme === 'dark' ? DarkTheme : DefaultTheme}>
-          <AuthProvider>
+          <ConnectionProvider>
             <WorkspaceProvider>
               <NotificationNavigation />
               {/* The four tabs and every screen reached from them live one level down,
@@ -53,7 +53,7 @@ export default function RootLayout() {
               </Stack>
               <StatusBar style="auto" />
             </WorkspaceProvider>
-          </AuthProvider>
+          </ConnectionProvider>
         </ThemeProvider>
       </WindowInsetsProvider>
       </SafeAreaProvider>

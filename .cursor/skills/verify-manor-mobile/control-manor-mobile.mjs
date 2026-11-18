@@ -34,6 +34,9 @@ const STATE_PATH = join(RUN_DIR, 'state.json')
 const BUNDLE_ID = 'com.thijsfenne.manor'
 const FIXTURE_PORT = Number(process.env.MANOR_MOBILE_VERIFY_PORT ?? 43182)
 const FIXTURE_WS = process.env.MANOR_MOBILE_VERIFY_WS ?? `ws://127.0.0.1:${FIXTURE_PORT}/ws`
+const FIXTURE_ORIGIN = FIXTURE_WS.replace(/^ws/, 'http').replace(/\/ws$/, '')
+/** The one link the fixture pairs with; `fixture-server.mjs` holds the same code. */
+const FIXTURE_PAIRING_LINK = `${FIXTURE_ORIGIN}/pair#code=${'F'.repeat(43)}`
 const METRO_PORT = 8088
 // Optional. Unset, or a name this Mac does not have, picks an available iPhone instead.
 const SIMULATOR_NAME = process.env.MANOR_MOBILE_VERIFY_SIMULATOR
@@ -41,9 +44,9 @@ const SIMULATOR_DEVICES = join(homedir(), 'Library/Developer/CoreSimulator/Devic
 // A cold Metro cache bundles in about 35s on this Mac; the budget leaves room for a slow disk.
 const BUNDLE_TIMEOUT_MS = Number(process.env.MANOR_MOBILE_VERIFY_BUNDLE_TIMEOUT_MS ?? 240_000)
 const RENDER_TIMEOUT_MS = Number(process.env.MANOR_MOBILE_VERIFY_RENDER_TIMEOUT_MS ?? 180_000)
-const AUTH_ON = process.env.MANOR_MOBILE_VERIFY_AUTH === 'on'
-// Visible once the first screen has rendered: the house chrome, or the gate when auth is on.
-const READY_LABEL = AUTH_ON ? 'Welcome home' : 'Open menu'
+const PAIR_ON = process.env.MANOR_MOBILE_VERIFY_PAIR === 'on'
+// Visible once the first screen has rendered: the house chrome, or the Connect screen in pair mode.
+const READY_LABEL = PAIR_ON ? 'Connect to your Mac' : 'Open menu'
 // One run at a time owns the simulator and the fixed ports; another lease file is for testing the lease itself.
 const LEASE_PATH = resolve(process.env.MANOR_MOBILE_VERIFY_LEASE ?? DEFAULT_LEASE_PATH)
 /** A duration override from the environment; unset, blank, negative or not a number gives `fallback`. */
@@ -261,7 +264,7 @@ function ownerSkillDirOf(pid) {
 const stoppedStale = []
 
 /** A process of this skill, of any checkout: the run marker, or the variables a run from before markers set. */
-const ofThisSkill = (env) => env.includes(`${MARKER_VAR}=`) || env.includes('MANOR_MOBILE_VERIFY_PORT=') || env.includes('EXPO_PUBLIC_MANOR_WS=ws://')
+const ofThisSkill = (env) => env.includes(`${MARKER_VAR}=`) || env.includes('MANOR_MOBILE_VERIFY_PORT=') || env.includes('EXPO_PUBLIC_MANOR_WS=ws://') || env.includes('EXPO_PUBLIC_MANOR_DEV_SERVER=http://127.0.0.1')
 
 /**
  * Stops the run behind a listener whose checkout was removed under it. Its state file and
@@ -572,13 +575,9 @@ const METRO_LOG = join(RUN_DIR, 'metro.log')
 function fixtureAppEnv() {
   return {
     ...process.env,
-    EXPO_PUBLIC_MANOR_WS: FIXTURE_WS,
-    EXPO_PUBLIC_SUPABASE_URL: '',
-    EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: '',
-    // The fixture has no owner login; without this the app stops at "Welcome home".
-    // MANOR_MOBILE_VERIFY_AUTH=on keeps that gate up to prove the sign-in screen
-    // itself; its auth client still talks to the fixture origin only.
-    EXPO_PUBLIC_MANOR_AUTH: AUTH_ON ? 'on' : 'off',
+    // The development override skips pairing. MANOR_MOBILE_VERIFY_PAIR=on leaves it
+    // empty, so the app opens on the Connect screen and pairs with the fixture's link.
+    EXPO_PUBLIC_MANOR_DEV_SERVER: PAIR_ON ? '' : FIXTURE_ORIGIN,
     EXPO_NO_DOTENV: '1',
     CI: '1',
   }
@@ -970,7 +969,7 @@ async function cmdLaunch() {
   holdWith(runId, await startMetro())
   await waitForMetro()
   await launchAndWait(udid)
-  console.log(JSON.stringify({ ok: true, fixture: FIXTURE_WS, udid, bundleId: BUNDLE_ID, ...(stoppedStale.length === 0 ? {} : { stoppedStale }), ...(reclaimedLease ? { reclaimedLease } : {}) }, null, 2))
+  console.log(JSON.stringify({ ok: true, fixture: FIXTURE_WS, udid, bundleId: BUNDLE_ID, ...(PAIR_ON ? { pairingLink: FIXTURE_PAIRING_LINK } : {}), ...(stoppedStale.length === 0 ? {} : { stoppedStale }), ...(reclaimedLease ? { reclaimedLease } : {}) }, null, 2))
 }
 
 /**

@@ -16,7 +16,7 @@ describe('the settings nav search', () => {
   })
 
   it('matches a row label from a page the title does not name', () => {
-    expect(ids('Sign out')).toEqual(['general'])
+    expect(ids('Forget this Mac')).toEqual(['general'])
     expect(ids('backups')).toEqual(['storage'])
   })
 

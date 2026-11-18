@@ -11,6 +11,7 @@ import { ContextFilesPage } from './ContextFilesPage'
 import { AppearancePage, GeneralPage, KeybindingsPage } from './PersonalPages'
 import type { SettingsLocation } from './sections'
 import { SettingsView } from './SettingsView'
+import { PhonePage } from './PhonePage'
 import { StoragePage } from './StoragePage'
 import { SubagentsPage } from './SubagentsPage'
 import { AboutPage, MemoryPage, ProvidersPage } from './SystemPages'
@@ -24,7 +25,7 @@ interface SettingsHostProps {
   settings: SettingsController
   manor: Manor
   theme: { choice: ThemeChoice; set: (choice: ThemeChoice) => void }
-  account?: { onSignOut: () => void }
+  account?: { onForget: () => void }
   providerUpdates: readonly ProviderUpdate[]
   /** The New agent door, which leaves Settings for the short form. */
   onNewAgent: () => void
@@ -186,6 +187,19 @@ export function SettingsHost({
             onImport={manor.importSkill}
             onDelete={manor.deleteSkill}
             onDialogChange={onDialogChange}
+            {...common}
+          />
+        )
+      case 'phone':
+        return (
+          <PhonePage
+            access={workspace.phoneAccess}
+            pairingLink={workspace.pairingLink}
+            requestEvents={manor.requestEvents}
+            onRequest={manor.requestPhoneAccess}
+            onSetServing={manor.setTailscaleServe}
+            onCreateLink={manor.createPairingLink}
+            onRevoke={manor.revokeDevice}
             {...common}
           />
         )

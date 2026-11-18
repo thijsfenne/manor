@@ -41,7 +41,9 @@ import { gitBinary } from './gitBinary.js'
 import { createDirectoryChannel } from './directoryChannel.js'
 import { stopAllCliChildren } from './drivers/childTermination.js'
 import { RuntimeDiagnostics, handleDiagnostics } from './runtimeDiagnostics.js'
-import { LocalAuth } from './localAuth.js'
+import { PairedDevices, handlePairingRequest, handlesPairingRequest } from './pairedDevices.js'
+import { createPhoneAccess, refusesForwarded } from './phoneAccess.js'
+import { createTailscaleRunner, createTailscaleServe } from './tailscale.js'
 import { ensureLocalAccessToken, isLocalAccessToken } from './localAccess.js'
 import { createGate, createUpgradeGuard, rejectUpgrade } from './auth.js'
 import { ArtifactBroker, ARTIFACT_TOOL_NAMES, type ArtifactToolName } from './artifactBroker.js'
@@ -315,11 +317,10 @@ async function main(): Promise<void> {
   // Module-held, so the claim lives exactly as long as this process.
   if (resolved.config.kind === 'sqlite') databaseOwner = claimDatabaseOwner(resolved.config.filename)
   const store = createStore(resolved.config)
-  const localAuth = auth.config.mode === 'on' && 'filename' in auth.config && store.db !== undefined
-    ? new LocalAuth(store.db, auth.config.ownerUserId)
-    : undefined
-  // The desktop shell on this Mac reads this key from the data directory; other devices sign in.
-  const localAccessToken = localAuth === undefined ? undefined : ensureLocalAccessToken(paths.localAccessToken)
+  if (store.db === undefined) throw new Error('The store has no database for paired devices')
+  const devices = new PairedDevices(store.db)
+  // The desktop shell on this Mac reads this key from the data directory; other devices pair.
+  const localAccessToken = auth.config.mode === 'on' ? ensureLocalAccessToken(paths.localAccessToken) : undefined
   // One cell for the household, read through `agents` by the service, the orchestrator
   // and all three drivers. Nothing captures the list itself, so a persona saved from
   // the UI is live on the next turn instead of after the next restart.
@@ -1322,10 +1323,21 @@ async function main(): Promise<void> {
   }
 
   const serveStatic = createStaticHandler(process.env.MANOR_WEB_DIST)
-  const tokenGate = createGate(auth.config, localAuth === undefined || localAccessToken === undefined
+  const tokenGate = createGate(auth.config, localAccessToken === undefined
     ? {}
-    : { verify: (token) => Promise.resolve(isLocalAccessToken(token, localAccessToken) || localAuth.verify(token)) })
+    : { verify: (token) => Promise.resolve(isLocalAccessToken(token, localAccessToken) || devices.verify(token) !== undefined) })
+  const phone = createPhoneAccess({
+    devices,
+    tailscale: createTailscaleServe({ run: createTailscaleRunner(), port: PORT }),
+    broadcast,
+    dropPushToken: (token) => { void store.deletePushToken(token).catch(() => undefined) },
+  })
   const http = createServer((request, response) => {
+    if (refusesForwarded(request, { authOff: auth.config.mode === 'off', isMcp: (url) => mcpHost.handles(url) })) {
+      response.writeHead(404, { 'content-type': 'application/json' })
+      response.end('{"error":"Not found."}')
+      return
+    }
     if (request.method === 'GET' && request.url === '/diagnostics') {
       void handleDiagnostics(request, response, tokenGate, () => diagnostics.report(drivers.byProvider, mcpServers(), browser.isReady()))
       return
@@ -1335,8 +1347,12 @@ async function main(): Promise<void> {
       response.end(JSON.stringify({ ok: true, store: resolved.config.kind }))
       return
     }
-    if (localAuth !== undefined && request.url?.startsWith('/auth/')) {
-      void localAuth.handle(request, response, origins.origins)
+    if (handlesPairingRequest(request)) {
+      void handlePairingRequest(request, response, devices, {
+        allowedOrigins: origins.origins,
+        onChange: phone.announce,
+        onForget: phone.forget,
+      })
       return
     }
     if (mcpHost.handles(request.url)) {
@@ -1452,6 +1468,10 @@ async function main(): Promise<void> {
   const wss = new WebSocketServer({ noServer: true })
 
   http.on('upgrade', (request, socket, head) => {
+    if (refusesForwarded(request, { authOff: auth.config.mode === 'off', isMcp: () => false })) {
+      rejectUpgrade(socket, 401)
+      return
+    }
     void guard({ url: request.url, headers: { origin: request.headers.origin, host: request.headers.host } })
       .then((verdict) => {
         if (!verdict.ok) {
@@ -1516,6 +1536,7 @@ async function main(): Promise<void> {
   wss.on('connection', (socket, request) => {
     directories.connect(socket, request.url)
     clients.add(socket)
+    phone.attach(socket, new URL(request.url ?? '/', 'http://manor.invalid').searchParams.get('token'), request.headers.host)
     usage.setClientCount(clients.size)
     providerUpdates.setClientCount(clients.size)
     providerConnections.setClientCount(clients.size)
@@ -1634,7 +1655,9 @@ async function main(): Promise<void> {
         browser.settle(browserHost, message.data)
         return
       }
-      void service.handle(message.data, reply).catch((error: unknown) => {
+      if (message.data.type === 'register_push_token') phone.notePushToken(socket, message.data.token)
+      const handled = phone.handles(message.data) ? phone.handle(socket, message.data, reply) : service.handle(message.data, reply)
+      void handled.catch((error: unknown) => {
         console.error(`[manor] ${message.data.type} failed`, error)
         // A request can never end in silence, the same rule turns already live under.
         // Every dialog in the app waits for the change it asked for to come back, so a
@@ -1656,6 +1679,7 @@ async function main(): Promise<void> {
 
     const drop = () => {
       clients.delete(socket)
+      phone.detach(socket)
       presence.drop(socket)
       browser.unregister(browserHost)
       const orphaned = desktopLease.detachHost(browserHost)

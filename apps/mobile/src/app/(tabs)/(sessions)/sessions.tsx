@@ -31,7 +31,7 @@ import ReanimatedSwipeable, {
 import Animated, { useAnimatedStyle, type SharedValue } from 'react-native-reanimated'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
-import { AuthGate } from '@/components/AuthGate'
+import { ConnectGate } from '@/components/ConnectGate'
 import { DisclosureChevron } from '@/components/DisclosureChevron'
 import { GlassPressable } from '@/components/GlassPressable'
 import { KeyboardFooter } from '@/components/KeyboardFooter'
@@ -58,9 +58,9 @@ const runningLabel = (count: number): string => `${count} running`
 
 export default function HomeScreen() {
   return (
-    <AuthGate>
+    <ConnectGate>
       <ProjectInbox />
-    </AuthGate>
+    </ConnectGate>
   )
 }
 

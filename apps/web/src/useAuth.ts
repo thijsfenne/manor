@@ -1,123 +1,136 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { ManorSession } from '@manor/client-runtime/auth'
-import { authClient } from './authClient'
+import { PAIRING_PATH } from '@manor/contracts'
+import { checkDevice, redeemPairingLink, unpairDevice, type DeviceCredential, type PairResult } from '@manor/client-runtime/pairing'
+import { authDisabled, browserName, clearCredential, loadCredential, saveCredential, serverOrigin } from './deviceAccess'
 import { desktopLocalAccess } from './desktopBrowser'
 
 /**
- * 'unknown' is the moment before the stored session has been read. It matters:
- * showing the login screen during it would flash a sign-in form at someone who
- * is already signed in, every single load. 'local' is the desktop shell on the Mac
- * that runs the server: it holds the server's own key, so there is no account to
- * show and nothing to sign out of.
+ * 'unknown' is the moment before the stored pairing has been read, and 'pairing' the
+ * moment a pairing link is being redeemed: showing the Connect screen during either
+ * would flash it at someone who is about to get in. 'local' is the desktop shell on
+ * the Mac that runs the server: it holds the server's own key, so there is nothing to
+ * pair and nothing to forget.
  */
 export type AuthState =
   | { status: 'disabled' }
   | { status: 'unknown' }
+  | { status: 'pairing' }
   | { status: 'local' }
-  | { status: 'signed-out' }
-  | { status: 'signed-in'; userId: string; email: string }
+  | { status: 'unpaired'; error: string | null }
+  | { status: 'paired'; deviceId: string }
 
 export interface Auth {
   state: AuthState
-  /** Resolves to the error message to show, or null when the sign-in worked. */
-  signIn: (email: string, password: string) => Promise<string | null>
-  signOut: () => void
-  /** The current access token, read at connect time so it is never a stale copy. */
+  /** Forgets this browser here and on the Mac. */
+  forget: () => void
+  /** The current device token, read at connect time so it is never a stale copy. */
   getToken: () => string | null
-  /** Ask for a fresh token; called when a socket was turned away at the door. */
+  /** Called when a socket was turned away at the door. */
   refresh: () => void
 }
 
-/** A refused handshake retries on backoff, so one refresh per half minute is plenty. */
+/** A refused handshake retries on backoff, so one check per half minute is plenty. */
 const REFRESH_INTERVAL_MS = 30_000
 
+/** The link this page was opened with, when it is a pairing link. */
+const pairingLinkInLocation = (): string | null =>
+  window.location.pathname === PAIRING_PATH && window.location.hash.includes('code=') ? window.location.href : null
+
 /**
- * Owns the session for the whole app. The auth client does the persisting and the token
- * refreshing; this hook only turns its events into something the UI can render
- * and hands the socket a way to read the current token.
+ * One redemption per link and page load. A replayed effect (development Strict Mode)
+ * waits on the first request instead of spending the one-time code a second time.
+ */
+let redemption: { link: string; result: Promise<PairResult> } | null = null
+function redeemOnce(link: string): Promise<PairResult> {
+  if (redemption?.link !== link) redemption = { link, result: redeemPairingLink(link, browserName(navigator.userAgent)) }
+  return redemption.result
+}
+
+/**
+ * Owns this browser's way in. The desktop shell asks its own Mac for the key; any other
+ * browser pairs once through a link from Settings → Phone on the Mac and keeps the
+ * device token it got. Opening that link here redeems it and takes the code out of the
+ * address bar.
  */
 export function useAuth(): Auth {
-  const client = authClient
-  const [state, setState] = useState<AuthState>(client === null ? { status: 'disabled' } : { status: 'unknown' })
-  const tokenRef = useRef<string | null>(null)
+  const [state, setState] = useState<AuthState>(authDisabled ? { status: 'disabled' } : { status: 'unknown' })
+  const credentialRef = useRef<DeviceCredential | null>(null)
+  const localTokenRef = useRef<string | null>(null)
   const lastRefreshRef = useRef(0)
-  const localRef = useRef(false)
 
   useEffect(() => {
-    if (client === null) return
+    if (authDisabled) return
     let disposed = false
-    let leave = () => {}
 
-    const apply = (session: ManorSession | null) => {
+    const usePairing = () => {
       if (disposed) return
-      tokenRef.current = session?.access_token ?? null
-      setState(
-        session === null
-          ? { status: 'signed-out' }
-          : { status: 'signed-in', userId: session.user.id, email: session.user.email ?? 'signed in' },
-      )
-    }
-
-    const useAccount = () => {
-      if (disposed) return
-      const unsubscribe = client.subscribe(apply)
-      // Unreadable storage opens the login form rather than holding "Opening the house…"
-      // forever. Signing in reads storage again, and the client's timer announces the
-      // stored session by itself if a later read recovers.
-      void client.getSession().then(apply, () => apply(null))
-      client.setActive(true)
-      leave = () => {
-        unsubscribe()
-        client.setActive(false)
+      const link = pairingLinkInLocation()
+      if (link === null) {
+        const held = loadCredential(serverOrigin())
+        credentialRef.current = held
+        setState(held === null ? { status: 'unpaired', error: null } : { status: 'paired', deviceId: held.deviceId })
+        return
       }
+      setState({ status: 'pairing' })
+      void redeemOnce(link).then((result) => {
+        if (disposed) return
+        // The code is spent either way; it has no business staying in the address bar or history.
+        window.history.replaceState(null, '', '/')
+        if (!result.ok) {
+          credentialRef.current = loadCredential(serverOrigin())
+          setState(credentialRef.current === null ? { status: 'unpaired', error: result.error } : { status: 'paired', deviceId: credentialRef.current.deviceId })
+          return
+        }
+        try { saveCredential(serverOrigin(), result.credential) } catch { /* Paired for this visit; the next one pairs again. */ }
+        credentialRef.current = result.credential
+        setState({ status: 'paired', deviceId: result.credential.deviceId })
+      })
     }
 
-    // The desktop shell asks its own Mac for the key first. No key (a browser tab, the
-    // phone, a server without one) means the account door, exactly as before.
     const readLocal = desktopLocalAccess()
-    if (readLocal === undefined) useAccount()
+    if (readLocal === undefined) usePairing()
     else {
       void readLocal().then(
         (token) => {
           if (disposed) return
-          if (token === null) return useAccount()
-          localRef.current = true
-          tokenRef.current = token
+          if (token === null) return usePairing()
+          localTokenRef.current = token
           setState({ status: 'local' })
         },
-        useAccount,
+        usePairing,
       )
     }
-    return () => {
-      disposed = true
-      leave()
-    }
-  }, [client])
+    return () => { disposed = true }
+  }, [])
 
-  const signIn = useCallback(
-    async (email: string, password: string) => {
-      if (client === null) return null
-      return client.signIn(email, password)
-    },
-    [client],
-  )
+  const forget = useCallback(() => {
+    const held = credentialRef.current
+    credentialRef.current = null
+    clearCredential(serverOrigin())
+    setState({ status: 'unpaired', error: null })
+    if (held !== null) void unpairDevice(held)
+  }, [])
 
-  const signOut = useCallback(() => {
-    if (client === null) return
-    void client.signOut()
-  }, [client])
-
-  const getToken = useCallback(() => tokenRef.current, [])
+  const getToken = useCallback(() => localTokenRef.current ?? credentialRef.current?.token ?? null, [])
 
   const refresh = useCallback(() => {
-    if (client === null) return
     const now = Date.now()
     if (now - lastRefreshRef.current < REFRESH_INTERVAL_MS) return
     lastRefreshRef.current = now
-    if (!localRef.current) return void client.refresh()
-    // A turned-away key was replaced on disk (the file was deleted to change the lock): read it again.
-    void desktopLocalAccess()?.().then((token) => { if (token !== null) tokenRef.current = token }, () => undefined)
-  }, [client])
+    if (localTokenRef.current !== null) {
+      // A turned-away key was replaced on disk (the file was deleted to change the lock): read it again.
+      void desktopLocalAccess()?.().then((token) => { if (token !== null) localTokenRef.current = token }, () => undefined)
+      return
+    }
+    const held = credentialRef.current
+    if (held === null) return
+    void checkDevice(held).then((verdict) => {
+      if (verdict !== 'revoked' || credentialRef.current !== held) return
+      credentialRef.current = null
+      clearCredential(serverOrigin())
+      setState({ status: 'unpaired', error: 'This browser was removed from Manor. Pair it again.' })
+    })
+  }, [])
 
-  return { state, signIn, signOut, getToken, refresh }
+  return { state, forget, getToken, refresh }
 }

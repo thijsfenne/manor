@@ -25,7 +25,7 @@ This file, `features/` and the fixture map below list every command, flag, handl
 - **Never** the maintainer's real phone, TestFlight install, or Tailscale `wss://…tailnet.ts.net/ws`.
 - **Never** the live household roster. The fixture seeds Marlow / Sage / Smith.
 - **Never** treat Expo web (`pnpm --filter @manor/mobile web`) or a Chromium screenshot as mobile proof.
-- Auth is **off**: launch clears `EXPO_PUBLIC_SUPABASE_*` and sets `EXPO_NO_DOTENV=1` so `apps/mobile/.env.local` cannot pull the live house.
+- No pairing: launch points the app at the fixture with `EXPO_PUBLIC_MANOR_DEV_SERVER` and sets `EXPO_NO_DOTENV=1`, so `apps/mobile/.env.local` cannot pull the live house. `MANOR_MOBILE_VERIFY_PAIR=on` leaves the override out to prove the Connect screen.
 - Fixture WebSocket is **`ws://127.0.0.1:43182/ws`**. Port 43180 is the desktop spike; do not steal it.
 
 If this machine is not macOS with Xcode, stop. Report proof as blocked: need a Mac cloud worker / private Mac worker. Do not invent a web substitute.
@@ -46,7 +46,7 @@ node .cursor/skills/verify-manor-mobile/control-manor-mobile.mjs launch
 4. Boots an iOS Simulator, or reuses one that is already booted. It uses `MANOR_MOBILE_VERIFY_SIMULATOR` when this Mac has a device of that name; otherwise it picks an available iPhone, preferring one that already carries the dev client, then a "Pro".
 5. Makes sure the dev client is on that simulator (see below).
 6. Starts Metro on **8088** with fixture env (`--host lan` so the Simulator can reach `127.0.0.1`; Expo `--localhost` binds IPv6 only on this Mac) and waits until it answers.
-7. Launches `com.thijsfenne.manor`, restarting a running app (it would otherwise keep the JavaScript it loaded before and show stale client code), and **waits until the app has rendered**: Metro reports `iOS Bundled`, then Maestro sees the `Open menu` label (`Welcome home` with auth on) twice in one Maestro flow. On a fresh simulator each pass first dismisses the notification permission alert (`Allow`) and the dev client's onboarding sheet and dev menu (`Continue`, `Close`), so evidence screenshots show the Agents list. A cold bundle takes about 35s. On a timeout it exits non-zero and names the Metro log; budgets are `MANOR_MOBILE_VERIFY_BUNDLE_TIMEOUT_MS` (240000) and `MANOR_MOBILE_VERIFY_RENDER_TIMEOUT_MS` (180000).
+7. Launches `com.thijsfenne.manor`, restarting a running app (it would otherwise keep the JavaScript it loaded before and show stale client code), and **waits until the app has rendered**: Metro reports `iOS Bundled`, then Maestro sees the `Open menu` label (`Connect to your Mac` in pair mode) twice in one Maestro flow. On a fresh simulator each pass first dismisses the notification permission alert (`Allow`) and the dev client's onboarding sheet and dev menu (`Continue`, `Close`), so evidence screenshots show the Agents list. A cold bundle takes about 35s. On a timeout it exits non-zero and names the Metro log; budgets are `MANOR_MOBILE_VERIFY_BUNDLE_TIMEOUT_MS` (240000) and `MANOR_MOBILE_VERIFY_RENDER_TIMEOUT_MS` (180000).
 
 Ready when `launch` exits 0: screenshots taken now show the Agents tab, not the splash. Its title is `Agents`.
 
@@ -70,7 +70,7 @@ Fixture 43182 and Metro 8088 are fixed ports shared by every checkout. If anothe
 
 The stale rule lives in `../verify-manor/stale-run.mjs`; `node --test .cursor/skills/verify-manor/stale-run.test.mjs` covers it, and `node --test .cursor/skills/verify-manor-mobile/lease.test.mjs` covers the lease.
 
-Keep `apps/mobile/.env.local` in place. `EXPO_NO_DOTENV=1` alone does not keep it out: Expo's development bundle reads `.env*` files at runtime and lets them win, which ships the live Tailscale socket. `apps/mobile/metro.config.js` drops the dotenv watcher extensions under that flag, and `launch` starts Metro with `--clear` because the file map cache is shared with ordinary dev runs. The fixture also needs `EXPO_PUBLIC_MANOR_AUTH=off`, which `launch` sets. Run `doctor` before driving. If the app reaches live Manor or shows the auth gate, stop the drive and check the served bundle for `ts.net` before retrying.
+Keep `apps/mobile/.env.local` in place. `EXPO_NO_DOTENV=1` alone does not keep it out: Expo's development bundle reads `.env*` files at runtime and lets them win, which ships the live Tailscale socket. `apps/mobile/metro.config.js` drops the dotenv watcher extensions under that flag, and `launch` starts Metro with `--clear` because the file map cache is shared with ordinary dev runs. `launch` points the app at the fixture with `EXPO_PUBLIC_MANOR_DEV_SERVER`, which only a development build honours and which skips pairing. Run `doctor` before driving. If the app reaches live Manor or shows the Connect screen on an ordinary run, stop the drive and check the served bundle for `ts.net` before retrying.
 
 ### Dev client and the Xcode 27 SIGTRAP
 
@@ -125,7 +125,7 @@ Stable handles from this repo:
 | `Open ${title}` / `Open settled gesprek ${title}` | Inbox rows |
 | `Open gesprek met ${name}` | Direct list |
 | `Stuur bericht` / `Stop antwoord` | Composer |
-| `Welcome home` + `Log in` | Auth gate — **must not appear** on an ordinary fixture run (auth off). If it does, `.env.local` leaked. To prove the gate itself, `cleanup` and launch with `MANOR_MOBILE_VERIFY_AUTH=on`, then `cleanup` and launch again without it. |
+| `Connect to your Mac` / `Scan QR` / `Paste link` / `Paste the pairing link` / `Connect` | Connect screen (`ConnectGate.tsx`). **Must not appear** on an ordinary fixture run. To prove pairing, `cleanup` and launch with `MANOR_MOBILE_VERIFY_PAIR=on`: `launch` prints `pairingLink`; tap `Paste link`, `fill --name "Paste the pairing link" --value <link>`, tap `Connect`, and the house opens. End with `Forget this Mac` in the house menu, because the simulator's Keychain keeps the pairing for the next pair-mode run, then `cleanup` and launch again without the variable. |
 
 `tap` / `fill` / `snapshot` need **Maestro** and a JDK. The CLI finds Maestro itself (`PATH`, then `~/.maestro/bin`) and the keg-only JDK (`JAVA_HOME`, then `/opt/homebrew/opt/openjdk@21`), so nothing needs exporting in a Session shell. It pins Maestro to the booted simulator, because it refuses to guess while a phone is also connected. Screenshots use `xcrun simctl io booted screenshot` and do not go through a browser.
 
@@ -222,13 +222,13 @@ brew install openjdk@21
 
 There is no scroll, swipe or back-gesture command; go back through a visible control such as `Terug`. Quote values with spaces.
 
-Environment: set the same variables on `launch` and on every later command of that run (`doctor` checks the fixture port it is given, and `home` waits for `Welcome home` only under `MANOR_MOBILE_VERIFY_AUTH=on`). With another fixture port, signal that port: `kill -USR2 $(lsof -tiTCP:43183 -sTCP:LISTEN)`.
+Environment: set the same variables on `launch` and on every later command of that run (`doctor` checks the fixture port it is given, and `home` waits for `Connect to your Mac` only under `MANOR_MOBILE_VERIFY_PAIR=on`). With another fixture port, signal that port: `kill -USR2 $(lsof -tiTCP:43183 -sTCP:LISTEN)`.
 
 | Variable | Effect |
 |---|---|
 | `MANOR_MOBILE_VERIFY_PORT=43183` | A second isolated fixture socket, never 43179 (Metro stays on 8088) |
 | `MANOR_MOBILE_VERIFY_SIMULATOR=<device name>` | Simulator to prefer |
-| `MANOR_MOBILE_VERIFY_AUTH=on` | Keep the auth gate, to prove `Welcome home` itself |
+| `MANOR_MOBILE_VERIFY_PAIR=on` | No development override: the app opens on `Connect to your Mac` and pairs with the fixture's one link (printed by `launch` as `pairingLink`) |
 | `MANOR_MOBILE_VERIFY_EVIDENCE=1..5` | Screenshots on the Ready `Export a chat as Markdown` result (default 3), for the thumbnail row. The fixture reads it at start, so `cleanup` and `launch` to change it |
 | `MANOR_MOBILE_VERIFY_DATA=worst` | Same house with worst-case strings for UI stress (long, one-character, CJK, emoji, unbreakable-compound and empty names, titles, previews, paths, mail and file names) and extra rows: 30 more Manor Sessions, more changed files, a long MCP server and skill. Set on `launch`; the fixture reads it at start, so `cleanup` and `launch` to change it |
 | `MANOR_MOBILE_VERIFY_DATA=empty` | A house with no projects, chats, agents, routines, DM files, plugins or skills, so the empty states render. Set on `launch` like `worst`; unset keeps the default house |

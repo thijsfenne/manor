@@ -1,7 +1,8 @@
 export { MODELS, EFFORTS, defaultModel, modelLabel, effortsFor, clampsEffort } from './runtimeCatalog.js'
 import { MODELS, defaultModel, effortsFor } from './runtimeCatalog.js'
 import { z } from 'zod'
-export * from './auth.js'
+export * from './pairing.js'
+import { PairingLinkSchema, PhoneAccessSchema } from './pairing.js'
 export * from './slackRichText.js'
 export * from './searchText.js'
 export * from './connectCard.js'
@@ -4286,6 +4287,14 @@ const ClientMessageWireSchema = z.discriminatedUnion('type', [
   }),
   // About, Providers and Memory & vault asking what the Mac runs; reply-only.
   z.object({ type: z.literal('get_system_info'), ...optionalRequestId }),
+  // Settings → Phone: Tailscale HTTPS and the paired devices. The reply is `phone_access`.
+  z.object({ type: z.literal('get_phone_access'), ...optionalRequestId }),
+  // A one-time pairing link; the reply `pairing_link` goes to the asking socket only.
+  z.object({ type: z.literal('create_pairing_link'), ...optionalRequestId }),
+  // Forgets one paired device and closes its open connections at once.
+  z.object({ type: z.literal('revoke_device'), deviceId: z.string().uuid(), ...optionalRequestId }),
+  // Adds or removes Manor's own `tailscale serve` mapping, and nothing else.
+  z.object({ type: z.literal('set_tailscale_serve'), on: z.boolean(), ...optionalRequestId }),
   // Show one of the listed log files in Finder. Paths outside that list are refused.
   z.object({ type: z.literal('reveal_log'), path: z.string(), ...optionalRequestId }),
   /** Shows the memory or Knowledge folder in Finder on the Mac the server runs on. */
@@ -4833,6 +4842,10 @@ export const ServerMessageSchema = z.discriminatedUnion('type', [
   // Reply to get_context_files, and after a save or a refused stale save, to that socket.
   z.object({ type: z.literal('context_files'), ...ContextFilesSchema.shape, ...optionalRequestId }),
   z.object({ type: z.literal('system_info'), info: SystemInfoSchema, ...optionalRequestId }),
+  // Reply to get_phone_access, and broadcast after a pair, a revoke or a Tailscale change.
+  z.object({ type: z.literal('phone_access'), access: PhoneAccessSchema, ...optionalRequestId }),
+  // Reply to create_pairing_link. The code inside is shown once and never stored.
+  z.object({ type: z.literal('pairing_link'), ...PairingLinkSchema.shape, ...optionalRequestId }),
   MyMindConnectionStatusSchema.extend({ type: z.literal('mymind_status') }),
   z.object({
     type: z.literal('mymind_objects'),

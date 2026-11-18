@@ -155,6 +155,8 @@ Environment, set on `launch` (a changed value restarts the server or browser on 
 
 Headless Chromium has no Electron preload, so the Browser shows no tabs. For the tab strip, launch with `MANOR_VERIFY_INIT_SCRIPT=$PWD/.cursor/skills/verify-manor/stubs/desktop-browser.js`; see `features/browser-tabs.md`.
 
+The spike's server finds `stubs/bin/tailscale` first on its PATH, a stand-in CLI for a signed-in tailnet named `manor-spike.example.ts.net`, so Settings → Phone shows and flips Tailscale HTTPS without touching the Mac's real Tailscale. Pair a device for the Paired devices list with `curl -X POST <origin>/pair -H 'Content-Type: application/json' -d '{"code":"<code from a link>","name":"Test phone"}'`.
+
 `clock` works through `stubs/server-clock.mjs`, which `launch` loads into the spike's server only. The page keeps the real time, so a message sent under `clock --days-ago 12` reads as twelve days old.
 
 `node .cursor/skills/verify-manor/stubs/dm-files-fixture.mjs /tmp/<folder>` writes sample pictures, PDFs, markdown, a data file, an HTML page and (with ffmpeg) a short video to attach or deliver; see `features/dm-files.md`.

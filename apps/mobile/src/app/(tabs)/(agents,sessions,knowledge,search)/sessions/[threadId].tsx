@@ -9,8 +9,8 @@ import { useMemo } from 'react'
 import { StyleSheet, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
-import { AuthGate } from '@/components/AuthGate'
 import { CHAT_HEADER_HEIGHT } from '@/components/ChatHeader'
+import { ConnectGate } from '@/components/ConnectGate'
 import { EdgeScrim } from '@/components/EdgeScrim'
 import { GlassIconButton } from '@/components/GlassIconButton'
 import { SessionOverviewList } from '@/components/SessionOverviewList'
@@ -21,9 +21,9 @@ import { colors, fonts, spacing } from '@/theme'
 
 export default function ProjectSessionsScreen() {
   return (
-    <AuthGate>
+    <ConnectGate>
       <ProjectSessions />
-    </AuthGate>
+    </ConnectGate>
   )
 }
 

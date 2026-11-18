@@ -3,7 +3,7 @@ import { useFocusEffect } from 'expo-router'
 import { useCallback, useMemo, useState } from 'react'
 import { StyleSheet, View } from 'react-native'
 
-import { AuthGate } from '@/components/AuthGate'
+import { ConnectGate } from '@/components/ConnectGate'
 import { FileBrowser, ROOT_PLACE, placeBehind, placeTitles, type BrowserPlace } from '@/components/FileBrowser'
 import { SectionScaffold } from '@/components/SectionScaffold'
 import { useTabReset } from '@/lib/tabNavigation'
@@ -12,7 +12,7 @@ import { Text } from '@/components/Text'
 import { colors, fonts, spacing } from '@/theme'
 
 export default function KnowledgeScreen() {
-  return <AuthGate><Vault /></AuthGate>
+  return <ConnectGate><Vault /></ConnectGate>
 }
 
 /**

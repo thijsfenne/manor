@@ -8,7 +8,7 @@ import { useCallback } from 'react'
 import { StyleSheet, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 
-import { AuthGate } from '@/components/AuthGate'
+import { ConnectGate } from '@/components/ConnectGate'
 import { FileLibrary } from '@/components/FileLibrary'
 import { GlassIconButton } from '@/components/GlassIconButton'
 import { Text } from '@/components/Text'
@@ -18,9 +18,9 @@ import { colors, fonts, spacing } from '@/theme'
 
 export default function DmFilesScreen() {
   return (
-    <AuthGate>
+    <ConnectGate>
       <DmFiles />
-    </AuthGate>
+    </ConnectGate>
   )
 }
 

@@ -249,6 +249,8 @@ function serverEnv(entry) {
     HOME: home,
     // Corepack caches pnpm under HOME; the spike HOME has none and its download fails.
     COREPACK_HOME: process.env.COREPACK_HOME ?? join(homedir(), '.cache/node/corepack'),
+    // A stand-in Tailscale CLI comes first, so Settings → Phone never touches the real tailnet.
+    PATH: [join(SKILL_DIR, 'stubs/bin'), process.env.PATH].filter(Boolean).join(':'),
     MANOR_STORE: 'memory',
     MANOR_AUTH: 'off',
     MANOR_DRIVER: 'mock',

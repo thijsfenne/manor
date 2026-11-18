@@ -12,7 +12,7 @@ const usable = (value: string): boolean => /^[A-Za-z0-9_-]{43}$/.test(value)
  * the same macOS user who can already read the database beside it, so the desktop
  * shell opens the house without a password. It stays the same across restarts, and
  * deleting the file is how to change the lock. A client on another device cannot
- * read it and uses the password account instead.
+ * read it and pairs through Settings → Phone instead.
  */
 export function ensureLocalAccessToken(file: string): string {
   try {

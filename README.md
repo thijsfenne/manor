@@ -12,7 +12,7 @@ It is a Mac app for Apple Silicon. Everything stays on your Mac: the chats, the 
 - A memory folder of plain markdown that your agents read and that Manor keeps up to date.
 - A Knowledge folder for your own notes. An Obsidian vault works as it is.
 - A built in browser that agents can use, with your approval.
-- A phone companion (Expo, in `apps/mobile`) that connects to Manor on your Mac. You build it yourself, see `apps/mobile/README.md`. Its interface is partly Dutch.
+- A phone companion (Expo, in `apps/mobile`) that connects to Manor on your Mac in three steps: Tailscale on both devices, open the app, scan the QR code in Settings → Phone. You build it yourself, see `apps/mobile/README.md`. Its interface is partly Dutch.
 
 ## Requirements
 

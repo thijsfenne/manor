@@ -2,7 +2,7 @@
 
 Manor runs on SQLite and stores its database at `~/.manor/sqlite/manor.db` unless `MANOR_SQLITE_PATH` overrides it. `MANOR_STORE` accepts `sqlite` or `memory`; unset means `sqlite`, and any other value stops startup. Node 22.13 or newer supplies SQLite. The app requires no Docker or Colima service.
 
-The existing launchd service starts the Manor server, which opens SQLite itself. The phone uses `EXPO_PUBLIC_MANOR_WS` and authenticates against that same Mac over HTTPS. A development client needs to reload the updated JavaScript bundle; a packaged phone build needs a new build.
+The existing launchd service starts the Manor server, which opens SQLite itself. The phone pairs with that same Mac through Settings → Phone and reaches it over Tailscale HTTPS. A development client needs to reload the updated JavaScript bundle; a packaged phone build needs a new build.
 
 ## Storage model
 
@@ -12,7 +12,7 @@ Small domain objects live as typed JSON records. Transcript payloads have indivi
 
 All store operations complete inside a synchronous SQLite transaction before the runtime receives their result. Mutations and routine claims take `BEGIN IMMEDIATE`; the explicit list of pure reads in `sqliteStore.ts` runs in a deferred, `query_only` snapshot, so another connection holding the write lock never stalls a read. WAL serializes writes while reads proceed. The in-memory test store uses this same implementation. Out-of-process record changes are detected through SQLite's data version, allowing the household to refresh when another process writes.
 
-The desktop shell on the same Mac needs no account; it reads the local access key. A password account, when one exists, is for other devices. Manor issues random device credentials, stores sessions privately, and accepts only that owner. Access expires after an hour, refresh credentials after 30 days, and sign-out revokes the device session. Browsers must use an allowed origin; the phone authenticates without relying on an Origin header. No signup endpoint exists. The account is created or changed on the Mac with `pnpm --filter @manor/server account you@example.com`, which asks for the password, and a running server finds it on the next sign-in. Changing it ends every device session, so no device connects or refreshes again without the new password. A connection that is already open is checked only at its handshake and lasts until it drops or Manor restarts. `account --remove` deletes the account and its sessions.
+The desktop shell on the same Mac needs no pairing; it reads the local access key. Every other device, a phone app or a browser, pairs once through a one-time link from Settings → Phone. The link holds a random code in its fragment, so it never reaches a request log; the server keeps only the code's hash, in memory, for 10 minutes and one use. Redeeming it at `POST /pair` returns a device token `<device id>.<secret>`, and `paired_devices` stores only a SHA-256 hash of the secret, compared in constant time. The token opens the WebSocket and `GET /pair/device`, which tells a device whether the Mac still knows it. Revoking a device in Settings deletes its row, drops the push address it registered and closes its open connection at once; `DELETE /pair/device` does the same from the device. Browsers must use an allowed origin; the phone sends none. Migration 016 removed the earlier password account and its sessions, so each device pairs once again.
 
 ## Where an older database came from
 

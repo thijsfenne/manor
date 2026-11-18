@@ -15,7 +15,7 @@ import { useBubbleTint } from '@/components/bubbleTint'
 import { imageParts } from '@/components/markdownImageParts'
 import { sourceItemHref } from '@/components/sourceLinks'
 import { Text } from '@/components/Text'
-import { serverMediaUri } from '@/lib/config'
+import { serverMediaUri } from '@/lib/connection'
 import { colors, fonts, radius, spacing, squircle } from '@/theme'
 
 /** A vault's `[[wikilinks]]`: which note a name means, and how to open the one it found. */

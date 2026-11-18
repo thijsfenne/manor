@@ -257,7 +257,7 @@ export function resolveMyMindConfig(env: NodeJS.ProcessEnv): MyMindConfigResult 
 
 export type AuthConfig =
   | { mode: 'off' }
-  | { mode: 'on'; filename: string; ownerUserId?: string }
+  | { mode: 'on'; filename: string }
 
 export type AuthConfigResult = { ok: true; config: AuthConfig } | { ok: false; message: string }
 
@@ -306,15 +306,10 @@ export function resolveAllowedOrigins(env: NodeJS.ProcessEnv): AllowedOriginsRes
 }
 
 const AUTH_NEEDS_SQLITE =
-  'Auth is on but MANOR_STORE=memory has no account to check tokens against: use the SQLite store, or start with MANOR_AUTH=off for a local run.'
+  'Auth is on but MANOR_STORE=memory keeps no paired devices to check tokens against: use the SQLite store, or start with MANOR_AUTH=off for a local run.'
 
 const authUnknown = (value: string) =>
   `MANOR_AUTH=${value} is not a setting: use "on", "off", or leave it unset (on unless MANOR_STORE=memory).`
-
-const ownerUnusable = (value: string) =>
-  `MANOR_OWNER_USER_ID=${value} is not a user id: paste the UUID of the one Manor account.`
-
-const OWNER_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 /**
  * Decides whether connections must prove who they are. Auth follows the store by
@@ -323,9 +318,8 @@ const OWNER_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$
  * laptop. `MANOR_AUTH=off` is the deliberate way out for local dev and the tests;
  * `on` without credentials is fatal rather than degraded, since a server that
  * silently stopped checking tokens looks exactly like one that is checking them.
- * `MANOR_OWNER_USER_ID` pins the password account when one exists. Without it the
- * house has whichever single account its database holds, or none: then only the
- * local access token on this Mac opens the door.
+ * With auth on, the desktop shell on this Mac opens the door with the local access
+ * token and every other device with the token it got from pairing.
  */
 export function resolveAuthConfig(env: NodeJS.ProcessEnv, store: StoreConfig): AuthConfigResult {
   const setting = env['MANOR_AUTH'] ?? ''
@@ -333,13 +327,9 @@ export function resolveAuthConfig(env: NodeJS.ProcessEnv, store: StoreConfig): A
   const wanted = setting === '' ? store.kind !== 'memory' : setting === 'on'
   if (!wanted) return { ok: true, config: { mode: 'off' } }
 
-  // LocalAuth keeps its accounts in the SQLite file; the memory store has none.
+  // Paired devices live in the SQLite file; a memory store forgets them on exit.
   if (store.kind !== 'sqlite') return { ok: false, message: AUTH_NEEDS_SQLITE }
-  // Optional: a house without a password account is reached with the local access token only.
-  const ownerUserId = (env['MANOR_OWNER_USER_ID'] ?? '').trim()
-  if (ownerUserId === '') return { ok: true, config: { mode: 'on', filename: store.filename } }
-  if (!OWNER_ID.test(ownerUserId)) return { ok: false, message: ownerUnusable(ownerUserId) }
-  return { ok: true, config: { mode: 'on', filename: store.filename, ownerUserId } }
+  return { ok: true, config: { mode: 'on', filename: store.filename } }
 }
 
 export const DEFAULT_LISTEN_HOST = '127.0.0.1'

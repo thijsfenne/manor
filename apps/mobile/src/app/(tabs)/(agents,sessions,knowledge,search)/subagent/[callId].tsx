@@ -8,7 +8,7 @@ import { router, useLocalSearchParams } from 'expo-router'
 import { useCallback, useEffect, useMemo } from 'react'
 import { StyleSheet, View } from 'react-native'
 
-import { AuthGate } from '@/components/AuthGate'
+import { ConnectGate } from '@/components/ConnectGate'
 import { ChatHeader } from '@/components/ChatHeader'
 import { SubagentConversation } from '@/components/SubagentConversation'
 import { Text } from '@/components/Text'
@@ -18,7 +18,7 @@ import { colors, fonts, spacing } from '@/theme'
 
 export default function SubagentScreen() {
   const { callId, chatId, rootId } = useLocalSearchParams<{ callId: string; chatId: string; rootId: string }>()
-  return <AuthGate><SubagentContent callId={callId} chatId={chatId} key={`${chatId}:${callId}`} rootId={rootId} /></AuthGate>
+  return <ConnectGate><SubagentContent callId={callId} chatId={chatId} key={`${chatId}:${callId}`} rootId={rootId} /></ConnectGate>
 }
 
 /**

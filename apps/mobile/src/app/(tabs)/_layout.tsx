@@ -3,7 +3,7 @@ import { NativeTabs } from 'expo-router/unstable-native-tabs'
 import { useMemo, useState } from 'react'
 import type { ImageSourcePropType } from 'react-native'
 
-import { AuthGate } from '@/components/AuthGate'
+import { ConnectGate } from '@/components/ConnectGate'
 import { Drawer } from '@/components/Drawer'
 import { HouseMenu, type HouseSection } from '@/components/HouseMenu'
 import { HouseDrawerContext } from '@/lib/houseDrawer'
@@ -48,7 +48,7 @@ export default function TabsLayout() {
   const drawer = useMemo(() => ({ open: menuOpen, setOpen: setMenuOpen }), [menuOpen])
 
   return (
-    <AuthGate>
+    <ConnectGate>
       <HouseDrawerContext.Provider value={drawer}>
         <Drawer
           menu={<HouseMenu active={active} onClose={() => setMenuOpen(false)} />}
@@ -79,6 +79,6 @@ export default function TabsLayout() {
           </NativeTabs>
         </Drawer>
       </HouseDrawerContext.Provider>
-    </AuthGate>
+    </ConnectGate>
   )
 }

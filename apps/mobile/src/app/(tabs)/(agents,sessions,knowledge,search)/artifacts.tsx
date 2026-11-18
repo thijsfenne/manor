@@ -6,15 +6,15 @@ import * as WebBrowser from 'expo-web-browser'
 import { useEffect, useRef, useState } from 'react'
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, TextInput, View } from 'react-native'
 
-import { AuthGate } from '@/components/AuthGate'
+import { ConnectGate } from '@/components/ConnectGate'
 import { SectionScaffold } from '@/components/SectionScaffold'
-import { serverMediaUri } from '@/lib/config'
+import { serverMediaUri } from '@/lib/connection'
 import { useWorkspace } from '@/providers/WorkspaceProvider'
 import { Text } from '@/components/Text'
 import { colors, fonts, radius, spacing, squircle, tracking } from '@/theme'
 
 export default function ArtifactsScreen() {
-  return <AuthGate><SectionScaffold title="Artifacts"><Library /></SectionScaffold></AuthGate>
+  return <ConnectGate><SectionScaffold title="Artifacts"><Library /></SectionScaffold></ConnectGate>
 }
 
 const KIND_LABEL: Record<MyMindArtifact['kind'], string> = {

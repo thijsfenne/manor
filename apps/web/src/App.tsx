@@ -14,7 +14,7 @@ import { SettingsLayer, useSettingsDoors } from './components/workspace/Settings
 import { WorkspaceDialogs } from './components/workspace/WorkspaceDialogs'
 import { WorkspaceNavRail } from './components/workspace/WorkspaceNavRail'
 import { ExternalLinkProvider } from './components/ExternalLink'
-import { Login } from './components/Login'
+import { ConnectScreen } from './components/ConnectScreen'
 import { Onboarding } from './components/onboarding/Onboarding'
 import { NewAgentDialog } from './components/agents/NewAgentDialog'
 import { AutoRulesConfigProvider } from './components/settings/AutoRulesPage'
@@ -73,20 +73,20 @@ import { LiveWorkspaceProvider } from './liveThread'
 const WS_URL = resolveWebSocketUrl(import.meta.env.VITE_MANOR_WS, window.location)
 
 export interface Account {
-  onSignOut: () => void
+  onForget: () => void
 }
 
 /**
- * The door. Nothing below it mounts until the session is known, so an
- * unauthenticated visitor gets a login screen and never a chat UI that cannot
- * connect. With `VITE_MANOR_AUTH=off` there is no door at all, the mirror of the
- * server's `MANOR_AUTH=off`. Otherwise the local `ManorAuthClient` decides.
+ * The door. Nothing below it mounts until this browser's way in is known, so a browser
+ * that is not paired gets the Connect screen and never a chat UI that cannot connect.
+ * With `VITE_MANOR_AUTH=off` there is no door at all, the mirror of the server's
+ * `MANOR_AUTH=off`.
  */
 export function App() {
   const auth = useAuth()
   const { state } = auth
   /**
-   * Above the door, so a visitor waiting at the login screen still follows the OS when
+   * Above the door, so a visitor waiting at the Connect screen still follows the OS when
    * it flips. The inline script in index.html has already painted the right theme; this
    * is what keeps it right for the rest of the session.
    */
@@ -94,17 +94,14 @@ export function App() {
 
   const workspaceAuth: WorkspaceAuth | undefined = state.status === 'disabled'
     ? undefined
-    : { sessionKey: state.status === 'signed-in' ? state.userId : state.status, getToken: auth.getToken, onRejected: auth.refresh }
+    : { sessionKey: state.status === 'paired' ? state.deviceId : state.status, getToken: auth.getToken, onRejected: auth.refresh }
 
-  if (state.status === 'unknown') {
-    return <main className="grid h-full place-items-center p-6 text-[13px] text-dim">Opening the workspace…</main>
+  if (state.status === 'unknown' || state.status === 'pairing') {
+    return <main className="grid h-full place-items-center p-6 text-[13px] text-dim">{state.status === 'pairing' ? 'Pairing this browser…' : 'Opening the workspace…'}</main>
   }
-  if (state.status === 'signed-out') return <Login onSubmit={auth.signIn} />
+  if (state.status === 'unpaired') return <ConnectScreen error={state.error} />
 
-  const account: Account | undefined =
-    state.status === 'signed-in'
-      ? { onSignOut: auth.signOut }
-      : undefined
+  const account: Account | undefined = state.status === 'paired' ? { onForget: auth.forget } : undefined
 
   return <Workspace auth={workspaceAuth} account={account} theme={theme} />
 }

@@ -74,7 +74,7 @@ export function SettingsLayer({
   settings: SettingsController
   manor: Manor
   theme: ReturnType<typeof useTheme>
-  account: { onSignOut: () => void } | undefined
+  account: { onForget: () => void } | undefined
   onNewAgent: () => void
   /** Agent settings wherever that agent's editor lives: its DM, or this page. */
   onEditAgent: (agentId: string) => void

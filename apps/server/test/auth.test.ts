@@ -106,7 +106,7 @@ describe('token gate', () => {
   it('builds a verifying gate from an on config without touching the network', async () => {
     const verify = vi.fn(only('good'))
     const gate = createGate(
-      { mode: 'on', filename: '/private/manor.db', ownerUserId: '11111111-1111-4111-8111-111111111111' },
+      { mode: 'on', filename: '/private/manor.db' },
       { verify },
     )
 
@@ -115,7 +115,7 @@ describe('token gate', () => {
   })
 
   it('refuses to build an on gate without a verifier, rather than letting everyone in', () => {
-    expect(() => createGate({ mode: 'on', filename: '/private/manor.db', ownerUserId: 'x' })).toThrow('verifier')
+    expect(() => createGate({ mode: 'on', filename: '/private/manor.db' })).toThrow('verifier')
   })
 })
 

@@ -29,6 +29,8 @@ import type {
   SubagentPolicy,
   SubagentSummary,
   SystemInfo,
+  PhoneAccess,
+  PairingLink,
   NativeSubagent,
   ThreadEvent,
   UserProfile,
@@ -479,6 +481,10 @@ export interface WorkspaceState {
   contextFiles: ContextFiles | null
   /** What the Mac runs, for Settings' read-only pages; null before they asked. */
   systemInfo: SystemInfo | null
+  /** Settings → Phone: Tailscale HTTPS and the paired devices; null before the page asked. */
+  phoneAccess: PhoneAccess | null
+  /** The pairing link this client asked for last. Held only in memory, for the open page. */
+  pairingLink: PairingLink | null
   /**
    * Child threads opened in a Subagents panel, by child id to parent id. An older child
    * falls out of `subagents` once three newer ones finish, and its thread would go with
@@ -674,6 +680,8 @@ export const emptyWorkspace: WorkspaceState = {
   houseSettings: null,
   contextFiles: null,
   systemInfo: null,
+  phoneAccess: null,
+  pairingLink: null,
   childThreads: {},
 }
 
@@ -1493,6 +1501,12 @@ export function reduce(
 
     case 'system_info':
       return { ...state, systemInfo: msg.info }
+
+    case 'phone_access':
+      return { ...state, phoneAccess: msg.access }
+
+    case 'pairing_link':
+      return { ...state, pairingLink: { link: msg.link, expiresAt: msg.expiresAt, loopback: msg.loopback } }
 
     case 'outbound_thread':
       return {

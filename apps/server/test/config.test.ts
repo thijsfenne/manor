@@ -96,18 +96,14 @@ describe('resolveStoreConfig', () => {
 
 const memory: StoreConfig = { kind: 'memory' }
 const sqlite: StoreConfig = { kind: 'sqlite', filename: '/private/manor.db' }
-const OWNER = '11111111-1111-4111-8111-111111111111'
 
 describe('resolveAuthConfig', () => {
   it('is off by default over the memory store, so the tests and local runs need nothing', () => {
     expect(resolveAuthConfig({}, memory)).toEqual({ ok: true, config: { mode: 'off' } })
   })
 
-  it('is on by default over the SQLite store, with the owner id', () => {
-    expect(resolveAuthConfig({ MANOR_OWNER_USER_ID: OWNER }, sqlite)).toEqual({
-      ok: true,
-      config: { mode: 'on', filename: '/private/manor.db', ownerUserId: OWNER },
-    })
+  it('is on by default over the SQLite store', () => {
+    expect(resolveAuthConfig({}, sqlite)).toEqual({ ok: true, config: { mode: 'on', filename: '/private/manor.db' } })
   })
 
   it('takes MANOR_AUTH=off over the store default', () => {
@@ -115,24 +111,11 @@ describe('resolveAuthConfig', () => {
   })
 
   it('fails fast when auth is asked for over the memory store, which has no account to check', () => {
-    const result = resolveAuthConfig({ MANOR_AUTH: 'on', MANOR_OWNER_USER_ID: OWNER }, memory)
+    const result = resolveAuthConfig({ MANOR_AUTH: 'on' }, memory)
 
     expect(result.ok).toBe(false)
     if (result.ok) throw new Error('expected a failure')
     expect(result.message).toContain('MANOR_AUTH=off')
-    expect(result.message.split('\n')).toHaveLength(1)
-  })
-
-  it('stays on without an owner id, for a house that has no password account', () => {
-    expect(resolveAuthConfig({}, sqlite)).toEqual({ ok: true, config: { mode: 'on', filename: '/private/manor.db' } })
-  })
-
-  it('refuses an owner id that is not a UUID rather than treating any token as the owner', () => {
-    const result = resolveAuthConfig({ MANOR_OWNER_USER_ID: 'sam' }, sqlite)
-
-    expect(result.ok).toBe(false)
-    if (result.ok) throw new Error('expected a failure')
-    expect(result.message).toContain('MANOR_OWNER_USER_ID=sam')
     expect(result.message.split('\n')).toHaveLength(1)
   })
 
@@ -158,7 +141,7 @@ describe('resolveListenHost', () => {
 
 describe('resolveUnauthenticatedBind', () => {
   const off = { mode: 'off' } as const
-  const on = { mode: 'on', filename: '/private/manor.db', ownerUserId: OWNER } as const
+  const on = { mode: 'on', filename: '/private/manor.db' } as const
 
   it('allows auth-off on loopback and auth-on anywhere', () => {
     expect(resolveUnauthenticatedBind({}, off, '127.0.0.1')).toEqual({ ok: true })
@@ -332,13 +315,9 @@ describe('resolveRoutinesMode', () => {
   })
 })
 
-it('resolves local SQLite auth with or without the owner id', () => {
+it('resolves local SQLite auth', () => {
   const store = resolveStoreConfig({ MANOR_STORE: 'sqlite', MANOR_SQLITE_PATH: '/private/manor.db' })
   expect(store).toEqual({ ok: true, config: { kind: 'sqlite', filename: '/private/manor.db' } })
   if (!store.ok) throw new Error('expected SQLite config')
-  const ownerUserId = '11111111-1111-4111-8111-111111111111'
-  expect(resolveAuthConfig({ MANOR_OWNER_USER_ID: ownerUserId }, store.config)).toEqual({
-    ok: true, config: { mode: 'on', filename: '/private/manor.db', ownerUserId },
-  })
   expect(resolveAuthConfig({}, store.config)).toEqual({ ok: true, config: { mode: 'on', filename: '/private/manor.db' } })
 })

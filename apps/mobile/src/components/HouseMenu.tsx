@@ -3,7 +3,7 @@ import Archive02Icon from '@hugeicons/core-free-icons/Archive02Icon'
 import BookOpen01Icon from '@hugeicons/core-free-icons/BookOpen01Icon'
 import CellsIcon from '@hugeicons/core-free-icons/CellsIcon'
 import DashboardSpeed02Icon from '@hugeicons/core-free-icons/DashboardSpeed02Icon'
-import Logout01Icon from '@hugeicons/core-free-icons/Logout01Icon'
+import Unlink01Icon from '@hugeicons/core-free-icons/Unlink01Icon'
 import PuzzleIcon from '@hugeicons/core-free-icons/PuzzleIcon'
 import Search01Icon from '@hugeicons/core-free-icons/Search01Icon'
 import {
@@ -21,9 +21,9 @@ import { router, useNavigationContainerRef, type Href } from 'expo-router'
 import { Alert, Pressable, StyleSheet, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
-import { hostName } from '@/lib/config'
+import { hostName } from '@/lib/connection'
 import { openTabActions, resetTab } from '@/lib/tabNavigation'
-import { useAuth } from '@/providers/AuthProvider'
+import { useConnection } from '@/providers/ConnectionProvider'
 import { useWorkspaceActions, useWorkspaceData, useWorkspaceStatus } from '@/providers/WorkspaceProvider'
 import { AiBotHeadLookingIcon, AiBotHeadLookingSolidIcon } from '@/components/customIcons'
 import { Text } from '@/components/Text'
@@ -54,12 +54,12 @@ const ITEMS: Item[] = [
 
 /**
  * What sits behind a room when the page slides aside: the house's rooms, the Mac
- * this phone is the remote for, and the way out of the account.
+ * this phone is the remote for, and the way to forget that Mac again.
  */
 export function HouseMenu({ active, onClose }: { active: HouseSection; onClose: () => void }) {
   const insets = useSafeAreaInsets()
-  const auth = useAuth()
-  const { signOut } = useWorkspaceActions()
+  const connection = useConnection()
+  const { forget } = useWorkspaceActions()
   const { workspace } = useWorkspaceData()
   // As on the Mac's rail, Artifacts exists only where its host does. Still unknown keeps
   // the row, so it does not blink away while the Mac answers. Knowledge is a tab and
@@ -85,7 +85,7 @@ export function HouseMenu({ active, onClose }: { active: HouseSection; onClose: 
         <Text style={styles.title}>Manor</Text>
         <View style={styles.hostRow}>
           <View style={[styles.dot, status === 'live' ? styles.dotLive : status === 'connecting' ? styles.dotConnecting : styles.dotOffline]} />
-          <Text numberOfLines={1} style={styles.hostName}>{status === 'live' ? hostName : status === 'connecting' ? 'Connecting…' : 'Offline'}</Text>
+          <Text numberOfLines={1} style={styles.hostName}>{status === 'live' ? hostName() : status === 'connecting' ? 'Connecting…' : 'Offline'}</Text>
         </View>
       </View>
 
@@ -111,19 +111,19 @@ export function HouseMenu({ active, onClose }: { active: HouseSection; onClose: 
 
       <UsageItem current={active} onClose={onClose} />
 
-      {auth.enabled ? (
+      {connection.devServer === null ? (
         <Pressable
           accessibilityRole="button"
-          onPress={() => void signOut()
+          onPress={() => void forget()
             .then(() => router.replace('/'))
             .catch(() => Alert.alert(
-              'Sign-out failed',
-              'Manor could not sign out safely. Check the connection to your Mac and try again.',
+              'Forgetting failed',
+              'Manor could not forget this Mac safely. Check the connection to your Mac and try again.',
             ))}
           style={({ pressed }) => [styles.item, pressed && styles.pressed]}
         >
-          <HugeiconsIcon color={colors.muted} icon={Logout01Icon} size={21} strokeWidth={1.7} />
-          <Text style={styles.label}>Sign out</Text>
+          <HugeiconsIcon color={colors.muted} icon={Unlink01Icon} size={21} strokeWidth={1.7} />
+          <Text style={styles.label}>Forget this Mac</Text>
         </Pressable>
       ) : null}
     </View>

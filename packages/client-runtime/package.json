@@ -39,7 +39,7 @@
     "./composer-formatting": "./src/composerFormatting.ts",
     "./attachments": "./src/attachments.ts",
     "./dm-files": "./src/dmFiles.ts",
-    "./auth": "./src/auth.ts",
+    "./pairing": "./src/pairing.ts",
     "./slack-draft-formatting": "./src/slackDraftFormatting.ts",
     "./outbound-draft-edits": "./src/outboundDraftEdits.ts",
     "./work-proposals": "./src/workProposals.ts",

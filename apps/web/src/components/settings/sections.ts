@@ -13,6 +13,7 @@ import {
   PaintBoardIcon,
   PuzzleIcon,
   Settings02Icon,
+  SmartPhone01Icon,
 } from '@hugeicons/core-free-icons'
 import { workspaceShortcut } from '../../useWorkspaceNav'
 import { rightPanelShortcut } from '../../useRightPanel'
@@ -34,6 +35,7 @@ export type SettingsSection =
   | 'memory'
   | 'connections'
   | 'skills'
+  | 'phone'
   | 'storage'
   | 'about'
 
@@ -56,7 +58,7 @@ export const SETTINGS_GROUPS: readonly { label: string; sections: readonly Secti
   {
     label: 'Personal',
     sections: [
-      { id: 'general', label: 'General', icon: Settings02Icon, keywords: ['sign out', 'default agent', 'photo', 'name', 'profile', 'routing'] },
+      { id: 'general', label: 'General', icon: Settings02Icon, keywords: ['forget this mac', 'default agent', 'photo', 'name', 'profile', 'routing'] },
       { id: 'appearance', label: 'Appearance', icon: PaintBoardIcon, keywords: ['theme', 'dark', 'light', 'system'] },
       { id: 'keybindings', label: 'Keybindings', icon: KeyboardIcon, keywords: ['shortcuts', 'keys', 'workspace'] },
       { id: 'usage', label: 'Usage & limits', icon: DashboardSpeed02Icon, keywords: ['tokens', 'cost', 'api-rate equivalent', 'limits', 'period', 'breakdown', 'cost quality'] },
@@ -83,6 +85,7 @@ export const SETTINGS_GROUPS: readonly { label: string; sections: readonly Secti
   {
     label: 'System',
     sections: [
+      { id: 'phone', label: 'Phone', icon: SmartPhone01Icon, keywords: ['pair phone', 'tailscale https', 'paired devices', 'revoke', 'qr code'] },
       { id: 'storage', label: 'Storage', icon: HardDriveIcon, keywords: ['settle quiet sessions', 'delete archived chats', 'keep picture copies', 'keep backups', 'retention'] },
       { id: 'about', label: 'About', icon: InformationCircleIcon, keywords: ['version', 'logs', 'diagnostics', 'server running since'] },
     ],

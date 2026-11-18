@@ -246,6 +246,14 @@ export interface Manor {
   saveContextFile: (name: ContextFileName, content: string, baseHash: string, requestId?: string) => boolean
   /** Asks what the Mac runs, for Settings' read-only pages. */
   requestSystemInfo: () => void
+  /** Asks for Tailscale HTTPS and the paired devices, into `workspace.phoneAccess`. */
+  requestPhoneAccess: () => void
+  /** Turns Manor's Tailscale HTTPS mapping on or off; the broadcast carries the new state. */
+  setTailscaleServe: (on: boolean, requestId?: string) => boolean
+  /** Asks for a one-time pairing link, into `workspace.pairingLink`. */
+  createPairingLink: (requestId?: string) => boolean
+  /** Removes a paired device and closes its open connection. */
+  revokeDevice: (deviceId: string, requestId?: string) => boolean
   /** Shows a listed log file in Finder on the Mac. */
   revealLog: (path: string) => boolean
   revealFolder: (folder: 'memory' | 'knowledge') => boolean
@@ -1103,6 +1111,22 @@ export function useWorkspace(url: string, auth?: WorkspaceAuth): Manor {
     send({ type: 'get_system_info' })
   }, [send])
 
+  const requestPhoneAccess = useCallback(() => {
+    send({ type: 'get_phone_access' })
+  }, [send])
+  const setTailscaleServe = useCallback(
+    (on: boolean, requestId?: string) => send({ type: 'set_tailscale_serve', on, ...(requestId === undefined ? {} : { requestId }) }),
+    [send],
+  )
+  const createPairingLink = useCallback(
+    (requestId?: string) => send({ type: 'create_pairing_link', ...(requestId === undefined ? {} : { requestId }) }),
+    [send],
+  )
+  const revokeDevice = useCallback(
+    (deviceId: string, requestId?: string) => send({ type: 'revoke_device', deviceId, ...(requestId === undefined ? {} : { requestId }) }),
+    [send],
+  )
+
   const revealLog = useCallback((path: string) => send({ type: 'reveal_log', path }), [send])
   const revealFolder = useCallback((folder: 'memory' | 'knowledge') => send({ type: 'reveal_folder', folder }), [send])
 
@@ -1686,6 +1710,10 @@ export function useWorkspace(url: string, auth?: WorkspaceAuth): Manor {
     requestContextFiles,
     saveContextFile,
     requestSystemInfo,
+    requestPhoneAccess,
+    setTailscaleServe,
+    createPairingLink,
+    revokeDevice,
     revealLog,
     revealFolder,
     answerUserInput,

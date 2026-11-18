@@ -43,7 +43,7 @@ import { DmWorkingIndicator } from '@/components/DmWorkingIndicator'
 import { carryPendingKeys } from '@/lib/listKeys'
 import { cardsShownInThread, workCardOut } from '@/lib/workDock'
 import { Attachments, ImageViewer } from '@/components/Attachments'
-import { AuthGate } from '@/components/AuthGate'
+import { ConnectGate } from '@/components/ConnectGate'
 import { Blobatar } from '@/components/Blobatar'
 import { ChatHeader, CHAT_HEADER_HEIGHT } from '@/components/ChatHeader'
 import { Composer, type ComposerProps } from '@/components/Composer'
@@ -85,7 +85,7 @@ export default function ChatScreen() {
   // Keyed on the chat, so everything the screen holds about one conversation — its
   // draft, its sheets, where it was scrolled — belongs to that conversation and never
   // carries over to another one the router happens to hand this route.
-  return <AuthGate><ChatContent chatId={chatId} key={chatId} /></AuthGate>
+  return <ConnectGate><ChatContent chatId={chatId} key={chatId} /></ConnectGate>
 }
 
 /** Closer to the bottom than this, in points, still counts as reading the latest. */

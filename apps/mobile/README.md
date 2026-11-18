@@ -3,28 +3,33 @@
 The native Expo client for Manor. It connects to the existing Manor server over
 WebSocket and reuses the shared contracts, state reducer, and connection runtime.
 
-## Local setup
+## Connect to your Mac
 
-Create `apps/mobile/.env.local` with the Tailscale WebSocket endpoint of the Manor
-server. Auth uses that same host over HTTPS. No database credentials belong on the
-phone.
+The phone finds its Mac by pairing, once. Nothing about the Mac is built into the app.
+
+1. Install Tailscale on the Mac and on the phone, and sign in to the same tailnet on both.
+   The tailnet needs MagicDNS and HTTPS certificates (Tailscale admin console, DNS).
+2. Open the Manor app on the phone. It shows Connect to your Mac.
+3. On the Mac, open Settings → Phone, turn on Tailscale HTTPS and choose Pair phone.
+   Scan the QR code with the phone, or paste the link.
+
+Tailscale HTTPS runs `tailscale serve` for Manor's own port, so only devices in your
+tailnet reach it. Manor never uses Funnel. The pairing link works once, for 10 minutes.
+The phone keeps its device token in the iOS Keychain; the Mac keeps only a hash of it.
+
+Settings → Phone lists the paired devices. Revoke closes that device's connection at
+once, and the phone goes back to Connect to your Mac. Forget this Mac in the phone's
+menu does the same from the phone. Opening the pairing link in a phone browser pairs
+that browser instead, for the web app.
+
+## Development
+
+A development build can skip pairing and talk to a server on this machine, as the
+verify fixture does. Put this in `apps/mobile/.env.local`; release builds ignore it.
 
 ```dotenv
-EXPO_PUBLIC_MANOR_WS=wss://your-manor-host.tailnet.ts.net/ws
+EXPO_PUBLIC_MANOR_DEV_SERVER=http://127.0.0.1:43180
 ```
-
-The phone signs in with the password account of your Manor. A new install has none,
-because the desktop app on the Mac needs no account. Create it once on the Mac, from
-the repository root. The command asks for the password and does not echo it.
-
-```bash
-pnpm --filter @manor/server account you@example.com
-```
-
-Run it again to change the email or the password. No device connects again without the
-new password. A connection that is open at that moment lasts until it drops, so restart
-Manor to close it at once. `account --remove` deletes the account, and then only the Mac
-opens Manor.
 
 Then start Expo from the repository root.
 
@@ -38,5 +43,5 @@ development; configure the Expo project's APNs/FCM credentials before testing pu
 delivery (`eas credentials --platform ios` or `--platform android`).
 
 The Mac still hosts Manor and must be awake and reachable through Tailscale. The
-PWA remains the fallback client. The server sends completion pushes through Expo;
+web app remains the fallback client. The server sends completion pushes through Expo;
 the app suppresses them while it is in front and opens the named chat when tapped.

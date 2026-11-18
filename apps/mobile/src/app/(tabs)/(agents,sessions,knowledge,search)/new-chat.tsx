@@ -46,7 +46,7 @@ import {
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 
-import { AuthGate } from '@/components/AuthGate'
+import { ConnectGate } from '@/components/ConnectGate'
 import { Composer } from '@/components/Composer'
 import { AiBotHeadLookingIcon } from '@/components/customIcons'
 import { GlassIconButton } from '@/components/GlassIconButton'
@@ -62,9 +62,9 @@ type Stage = 'projects' | 'folders' | 'draft'
 
 export default function NewChatScreen() {
   return (
-    <AuthGate>
+    <ConnectGate>
       <NewChatFlow />
-    </AuthGate>
+    </ConnectGate>
   )
 }
 

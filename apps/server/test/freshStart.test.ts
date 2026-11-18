@@ -4,7 +4,6 @@ import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { createStore } from '../src/stores/index.js'
 import { createSqliteStore } from '../src/stores/sqliteStore.js'
-import { LocalAuth } from '../src/localAuth.js'
 import { ensureLocalAccessToken, isLocalAccessToken } from '../src/localAccess.js'
 
 const homes: string[] = []
@@ -35,17 +34,6 @@ describe('a first run on an empty home', () => {
     createSqliteStore({ filename }).close()
 
     expect(() => createStore({ kind: 'sqlite', filename })).toThrow(/never finished/)
-  })
-
-  it('lets nobody sign in with a password while the house has no account', async () => {
-    const store = createStore({ kind: 'sqlite', filename: path.join(home(), 'manor.db') })
-    if (store.db === undefined) throw new Error('expected a SQLite store')
-    const auth = new LocalAuth(store.db)
-
-    expect((await auth.signIn('anyone@example.invalid', 'guess')).status).toBe(401)
-    expect(auth.verify('guess')).toBe(false)
-    expect(() => new LocalAuth(store.db!, '11111111-1111-4111-8111-111111111111')).toThrow(/does not hold/)
-    store.close?.()
   })
 })
 

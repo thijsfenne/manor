@@ -20,7 +20,6 @@
     "provision:computer": "bash scripts/provision-computer.sh",
     "build:computer": "bash scripts/build-computer-driver.sh",
     "register:computer": "tsx --env-file-if-exists=.env src/mcp/registerComputer.ts",
-    "account": "tsx --env-file-if-exists=.env src/setAccount.ts",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "backup:sqlite": "tsx --env-file-if-exists=.env src/backupSqlite.ts",
@@ -29,7 +28,6 @@
   "dependencies": {
     "@fontsource-variable/figtree": "^5.3.0",
     "@manor/contracts": "workspace:*",
-    "bcryptjs": "^3.0.3",
     "cron-parser": "^5.10.0",
     "fflate": "^0.8.3",
     "ical.js": "^2.2.1",

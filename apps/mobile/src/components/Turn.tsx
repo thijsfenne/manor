@@ -74,7 +74,7 @@ import { Text } from '@/components/Text'
 import type { QuoteSelectionSource } from '@/components/QuoteSelectionSheet'
 import { colors, fonts, radius, spacing, squircle } from '@/theme'
 import { useWindowInsets } from '@/lib/windowInsets'
-import { serverMediaUri } from '@/lib/config'
+import { serverMediaUri } from '@/lib/connection'
 
 /**
  * One persona's turn, read the way the Mac reads it: her face and name, the stable

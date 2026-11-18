@@ -1676,8 +1676,41 @@ function hostStatuses() {
 /** The public sites the sources message in Smith's DM cites; `no-icon.invalid` never answers. */
 const ICON_SITES = new Set(['https://www.cuimc.columbia.edu', 'https://www.healio.com', 'https://no-icon.invalid', 'https://pubmed.ncbi.nlm.nih.gov'])
 
+/**
+ * Pairing as the Mac answers it, for the Connect screen: one fixed code that works
+ * until a device holds it, and is free again once that device forgets the Mac. The
+ * link is printed by `launch` under MANOR_MOBILE_VERIFY_PAIR=on. The socket itself
+ * takes any token, as the fixture has no door.
+ */
+const FIXTURE_PAIRING_CODE = 'F'.repeat(43)
+const FIXTURE_DEVICE_ID = '00000000-0000-4000-8000-000000000001'
+const FIXTURE_DEVICE_TOKEN = `${FIXTURE_DEVICE_ID}.${'f'.repeat(43)}`
+let fixturePaired = false
+
+function answerPairing(request, response) {
+  const json = (status, body) => response.writeHead(status, { 'content-type': 'application/json' }).end(JSON.stringify(body))
+  if (request.url === '/pair/device') {
+    if (request.headers.authorization !== `Bearer ${FIXTURE_DEVICE_TOKEN}` || !fixturePaired) return json(401, { error: 'Not paired' })
+    if (request.method === 'DELETE') fixturePaired = false
+    return json(200, request.method === 'DELETE' ? { ok: true } : { deviceId: FIXTURE_DEVICE_ID, name: 'Simulator' })
+  }
+  let body = ''
+  request.on('data', (chunk) => { body += chunk })
+  request.on('end', () => {
+    let code
+    try { code = JSON.parse(body).code } catch { return json(400, { error: 'Invalid pairing request' }) }
+    if (code !== FIXTURE_PAIRING_CODE || fixturePaired) return json(410, { error: 'This pairing link has expired or was already used.' })
+    fixturePaired = true
+    json(200, { token: FIXTURE_DEVICE_TOKEN, deviceId: FIXTURE_DEVICE_ID })
+  })
+}
+
 // The socket and the result's screenshots share one port, as on the Mac.
 const http = createServer((request, response) => {
+  if ((request.url === '/pair' && request.method === 'POST') || request.url === '/pair/device') {
+    answerPairing(request, response)
+    return
+  }
   // Site icons as the Mac's proxy serves them: the site's own /favicon.ico, or 404. Only
   // the sites the sources message cites are fetched, so this is no proxy to anything else.
   const icon = new URL(request.url ?? '/', 'http://fixture')

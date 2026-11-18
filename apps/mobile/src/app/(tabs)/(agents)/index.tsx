@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { FlatList, Pressable, StyleSheet, View } from 'react-native'
 
 import { AgentStack } from '@/components/AgentStack'
-import { AuthGate } from '@/components/AuthGate'
+import { ConnectGate } from '@/components/ConnectGate'
 import { Blobatar } from '@/components/Blobatar'
 import { RoleBadge } from '@/components/RoleBadge'
 import { SectionScaffold } from '@/components/SectionScaffold'
@@ -23,7 +23,7 @@ const CHIEF_FACE_SIZE = 96
 const PINNED_FACE_SIZE = 72
 
 export default function DirectScreen() {
-  return <AuthGate><SectionScaffold title="Agents"><DirectList /></SectionScaffold></AuthGate>
+  return <ConnectGate><SectionScaffold title="Agents"><DirectList /></SectionScaffold></ConnectGate>
 }
 
 /**

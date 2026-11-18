@@ -19,7 +19,7 @@ import { HugeiconsIcon, type IconSvgElement } from '@hugeicons/react-native'
 import { Image } from 'expo-image'
 import { ScrollView, StyleSheet, View } from 'react-native'
 
-import { AuthGate } from '@/components/AuthGate'
+import { ConnectGate } from '@/components/ConnectGate'
 import { appLabel } from '@/components/ConnectCards'
 import { EmptyCard } from '@/components/EmptyCard'
 import { SectionScaffold } from '@/components/SectionScaffold'
@@ -29,7 +29,7 @@ import { Text } from '@/components/Text'
 import { colors, fonts, radius, spacing, squircle } from '@/theme'
 
 export default function PluginsScreen() {
-  return <AuthGate><SectionScaffold title="Plugins"><PluginsRoom /></SectionScaffold></AuthGate>
+  return <ConnectGate><SectionScaffold title="Plugins"><PluginsRoom /></SectionScaffold></ConnectGate>
 }
 
 type PluginSection = 'connectors' | 'skills' | 'suggestions'

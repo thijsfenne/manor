@@ -27,7 +27,7 @@ export function GeneralPage({ agents, profile, account, notice, requestEvents, o
   /** Null until the server's connect message lands; nothing is saved over an unread profile. */
   profile: UserProfile | null
   /** Present only where sign-in is on; the local desktop app has nobody to sign out. */
-  account?: { onSignOut: () => void }
+  account?: { onForget: () => void }
   notice: Notice | null
   requestEvents: RequestEvents
   onSaveAgent: (draft: AgentDraft, requestId: string) => boolean
@@ -40,9 +40,9 @@ export function GeneralPage({ agents, profile, account, notice, requestEvents, o
       <ProfileGroup profile={profile} requestEvents={requestEvents} onSave={onSaveProfile} onProblem={setProblem} onDismissNotice={onDismissNotice} />
       <RoutingGroup agents={agents} requestEvents={requestEvents} onSaveAgent={onSaveAgent} onProblem={setProblem} onDismissNotice={onDismissNotice} />
       {account === undefined ? null : (
-        <SettingsGroup title="Session">
-          <SettingsRow label="Sign out" description="Ends this browser's session. The Mac keeps running.">
-            <Button size="compact" variant="secondary" onClick={account.onSignOut}>Sign out</Button>
+        <SettingsGroup title="This browser">
+          <SettingsRow label="Forget this Mac" description="Removes this browser from Manor. Pair it again from Settings → Phone on your Mac.">
+            <Button size="compact" variant="secondary" onClick={account.onForget}>Forget this Mac</Button>
           </SettingsRow>
         </SettingsGroup>
       )}

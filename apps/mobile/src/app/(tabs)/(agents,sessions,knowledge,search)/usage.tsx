@@ -13,7 +13,7 @@ import {
   type Heat,
 } from '@manor/client-runtime/usage'
 
-import { AuthGate } from '@/components/AuthGate'
+import { ConnectGate } from '@/components/ConnectGate'
 import { ProviderMark } from '@/components/ProviderMark'
 import { SectionScaffold } from '@/components/SectionScaffold'
 import { useWorkspace } from '@/providers/WorkspaceProvider'
@@ -21,7 +21,7 @@ import { Text } from '@/components/Text'
 import { colors, fonts, radius, spacing, squircle } from '@/theme'
 
 export default function UsageScreen() {
-  return <AuthGate><SectionScaffold title="Usage"><UsageList /></SectionScaffold></AuthGate>
+  return <ConnectGate><SectionScaffold title="Usage"><UsageList /></SectionScaffold></ConnectGate>
 }
 
 const heatColor = (heat: Heat) =>
