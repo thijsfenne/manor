@@ -6143,9 +6143,27 @@ export interface DesktopFilesBridge {
   save(src: string, name: string): Promise<DesktopFileResult>
 }
 
+/** A macOS privacy permission Manor's computer use runs on. */
+export const DESKTOP_PERMISSION_IDS = ['accessibility', 'screen-recording'] as const
+export type DesktopPermissionId = (typeof DESKTOP_PERMISSION_IDS)[number]
+/** `pending`: System Settings was opened for it this run and the grant has not arrived yet. */
+export type DesktopPermissionState = 'granted' | 'not-granted' | 'pending'
+export type DesktopPermissionStatus = Record<DesktopPermissionId, DesktopPermissionState>
+
+/**
+ * Manor's own Accessibility and Screen Recording grants. `status` reads them fresh on
+ * every call, so a grant shows without a restart; `open` shows that permission's pane
+ * in System Settings.
+ */
+export interface DesktopPermissionsBridge {
+  status(): Promise<DesktopPermissionStatus>
+  open(id: DesktopPermissionId): Promise<void>
+}
+
 export interface DesktopHostBridge {
   browser: DesktopBrowserBridge
   computer?: DesktopComputerBridge
+  permissions?: DesktopPermissionsBridge
   files?: DesktopFilesBridge
   /** The Finder folder dialog on the Mac: the absolute path chosen, or null on cancel. */
   chooseFolder?: () => Promise<string | null>

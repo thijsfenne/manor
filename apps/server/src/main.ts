@@ -162,6 +162,7 @@ import { reconcileCalendarServer } from './mcp/calendarRegistration.js'
 import { reconcileRemindersServer } from './mcp/remindersRegistration.js'
 import { reconcileCodexComputerServer } from './mcp/codexComputerRegistration.js'
 import { CODEX_COMPUTER_MCP_NAME } from './computerPolicy.js'
+import { addEmbeddedComputer, embeddedComputerDraft, embeddedComputerLaunch } from './mcp/computerAttachment.js'
 import { PAPER_MCP_NAME } from './mcp/paperAttachment.js'
 import { probePaperRow, reconcilePaperServer } from './mcp/paperRegistration.js'
 import { memoryRoot, memoryDirPinned, memoryTargetNotice, resolveMemoryTarget } from './memoryTarget.js'
@@ -935,7 +936,8 @@ async function main(): Promise<void> {
     ), BROWSER_BROKER_CAPABILITY_ENV, browserMcpServer, turnId),
     // Stdio upstreams keep a proxy process; HTTP upstreams are forwarded from here
     // through the same broker route, with the same capability on the same env key.
-    guardMcp: (attached, context) => attached.map((item) => {
+    guardMcp: (attached, context) => attached.map((registered) => {
+      const item = embeddedComputerLaunch(registered)
       const secrets = proxySecretEnv(item)
       const inProcess = forwardsOverHttp(item) || sharesStdioProcess(item)
       // A capability served here carries no secrets: the CLI holds the token and must not redeem them.
@@ -1050,7 +1052,7 @@ async function main(): Promise<void> {
     // The probe spawns a process, so the service takes it as an option rather than
     // importing it: a test can register a server without anything running.
     probeMcpServer: (draft) =>
-      draft.name === PAPER_MCP_NAME ? probePaperRow(draft) : probeMcpServer(draft),
+      draft.name === PAPER_MCP_NAME ? probePaperRow(draft) : probeMcpServer(embeddedComputerDraft(draft)),
     resolveDriver: drivers.resolve,
     liveSessions: drivers.liveSessions,
     ensureScratchDir: (chatId) => scratch.ensure(chatId),
@@ -1145,6 +1147,12 @@ async function main(): Promise<void> {
     void service.syncOpenLoops()
     setInterval(() => void service.syncOpenLoops(), OPEN_LOOPS_POLL_MS).unref()
   }
+
+  void addEmbeddedComputer(store, mcpServers).then((added) => {
+    if (added === undefined) return
+    registry = [...registry, added]
+    broadcast({ type: 'mcp_servers', servers: [...registry] })
+  })
 
   // A boot before the network is up leaves Composio off for the whole day. Retry
   // through the Test path (so the registry and every client update the same way),

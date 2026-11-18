@@ -9,6 +9,10 @@ import { CODEX_COMPUTER_TOOLS, COMPUTER_CALL_LIMIT, COMPUTER_TOOLS, computerRefu
 import { DesktopLease } from '../src/desktopLease.js'
 import { CODEX_COMPUTER_PLUGIN_DIR, resolveCodexComputer } from '../src/mcp/codexComputerLaunch.js'
 import { codexComputerMcpDraft, reconcileCodexComputerServer } from '../src/mcp/codexComputerRegistration.js'
+import {
+  addEmbeddedComputer, CUA_DRIVER_PATH, EMBEDDED_COMPUTER_ENV_KEYS, embeddedComputerFromEnv, embeddedComputerLaunch,
+} from '../src/mcp/computerAttachment.js'
+import { createSqliteStore } from '../src/stores/sqliteStore.js'
 import { effectProxyAttachment, type EffectProxyUpstream } from '../src/mcp/effectProxyAttachment.js'
 import type { Store } from '../src/store.js'
 
@@ -322,5 +326,92 @@ describe('resolving the Codex computer engine', () => {
     const store = {} as Store
     const [reconciled] = await reconcileCodexComputerServer(store, [row], { HOME: mkdtempSync(join(tmpdir(), 'codex-home-')) })
     expect(reconciled?.unavailable).toContain('not installed')
+  })
+})
+
+describe('embeddedComputerLaunch', () => {
+  const inside = { driver: '/Applications/Manor.app/Contents/Resources/cua-driver/cua-driver', socket: '/tmp/manor-cua-x/driver.sock' }
+
+  it('points the registered Cua row at the driver inside Manor.app for the turn', () => {
+    const attached = { server: { ...computer, envKeys: ['HOME'] }, disabledTools: ['drag'] }
+    const launched = embeddedComputerLaunch(attached, inside)
+    expect(launched.server.command).toBe(inside.driver)
+    expect(launched.server.args).toEqual(['mcp', '--embedded', '--socket', inside.socket])
+    expect(launched.server.envKeys).toEqual(['HOME', ...EMBEDDED_COMPUTER_ENV_KEYS])
+    expect(launched.disabledTools).toEqual(['drag'])
+    // The registry row itself stays as stored; a checkout shares it.
+    expect(attached.server.command).toBe(CUA_DRIVER_PATH)
+  })
+
+  it('leaves the row alone without an embedded driver, and leaves every other row alone', () => {
+    const attached = { server: computer, disabledTools: [] }
+    expect(embeddedComputerLaunch(attached, undefined)).toBe(attached)
+    const other = { server: { ...computer, name: 'calendar' }, disabledTools: [] }
+    expect(embeddedComputerLaunch(other, inside)).toBe(other)
+    const custom = { server: { ...computer, command: '/usr/local/bin/cua-driver' }, disabledTools: [] }
+    expect(embeddedComputerLaunch(custom, inside)).toBe(custom)
+  })
+
+  it('reads both paths from the environment the desktop shell sets, or neither', () => {
+    expect(embeddedComputerFromEnv({ MANOR_CUA_DRIVER: inside.driver, MANOR_CUA_SOCKET: inside.socket })).toEqual(inside)
+    expect(embeddedComputerFromEnv({ MANOR_CUA_DRIVER: inside.driver })).toBeUndefined()
+    expect(embeddedComputerFromEnv({ MANOR_CUA_DRIVER: '', MANOR_CUA_SOCKET: inside.socket })).toBeUndefined()
+  })
+})
+
+describe('addEmbeddedComputer', () => {
+  const probed = { tools: ['click', 'list_apps'], readOnlyTools: ['list_apps'], schemaChars: 10 }
+
+  function embeddedFixture() {
+    const directory = mkdtempSync(join(tmpdir(), 'manor-embedded-computer-'))
+    const socket = join(directory, 'driver.sock')
+    writeFileSync(socket, '')
+    const filename = join(directory, 'manor.db')
+    return { inside: { driver: join(directory, 'cua-driver'), socket }, filename, store: createSqliteStore({ filename }) }
+  }
+
+  it('adds the usual row once, probed through the embedded driver, and a removal sticks across restarts', async () => {
+    const { inside, filename, store } = embeddedFixture()
+    const probe = vi.fn(async () => probed)
+    const added = await addEmbeddedComputer(store, () => [], { inside, probe })
+    expect(probe).toHaveBeenCalledWith(expect.objectContaining({ command: inside.driver, args: ['mcp', '--embedded', '--socket', inside.socket] }))
+    expect(added).toMatchObject({ name: 'computer', command: CUA_DRIVER_PATH, args: ['mcp'], tools: probed.tools })
+    await store.deleteMcpServer(added!.id)
+    store.close()
+    const restarted = createSqliteStore({ filename })
+    expect(await addEmbeddedComputer(restarted, () => [], { inside, probe })).toBeUndefined()
+    expect(probe).toHaveBeenCalledTimes(1)
+    restarted.close()
+  })
+
+  it('tries again on the next start when the daemon did not answer, and leaves a server without the driver alone', async () => {
+    const { inside, store } = embeddedFixture()
+    const probe = vi.fn(async () => probed)
+    const silent = { ...inside, socket: `${inside.socket}.missing` }
+    expect(await addEmbeddedComputer(store, () => [], { inside: silent, probe, socketWaitMs: 0 })).toBeUndefined()
+    expect(probe).not.toHaveBeenCalled()
+    const failing = vi.fn(async () => { throw new Error('daemon not listening') })
+    expect(await addEmbeddedComputer(store, () => [], { inside, probe: failing })).toBeUndefined()
+    expect(await store.setupDone('computer-connector')).toBe(false)
+    expect(await addEmbeddedComputer(store, () => [], { probe })).toBeUndefined()
+    expect(probe).not.toHaveBeenCalled()
+    expect(await addEmbeddedComputer(store, () => [], { inside, probe })).toBeDefined()
+    store.close()
+  })
+
+  it('counts a row that is already there, or registered during the probe, as done', async () => {
+    const { inside, store } = embeddedFixture()
+    const probe = vi.fn(async () => probed)
+    expect(await addEmbeddedComputer(store, () => [computer], { inside, probe })).toBeUndefined()
+    expect(probe).not.toHaveBeenCalled()
+    expect(await store.setupDone('computer-connector')).toBe(true)
+    const second = embeddedFixture()
+    let registry: McpServerConfig[] = []
+    const racing = vi.fn(async () => { registry = [computer]; return probed })
+    expect(await addEmbeddedComputer(second.store, () => registry, { inside: second.inside, probe: racing })).toBeUndefined()
+    expect(await second.store.listMcpServers()).toEqual([])
+    expect(await second.store.setupDone('computer-connector')).toBe(true)
+    store.close()
+    second.store.close()
   })
 })

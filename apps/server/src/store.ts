@@ -111,6 +111,8 @@ export interface ChatSummary {
 /** Household rows whose out-of-process writes must invalidate server state. */
 export type HouseholdResource = 'agents' | 'routines'
 
+export type SetupStep = 'computer-connector'
+
 export interface HouseholdChange {
   resource: HouseholdResource
   event: 'insert' | 'update' | 'delete' | 'reconnect'
@@ -153,6 +155,12 @@ export interface Store {
   deletePushToken(token: string): Promise<void>
   getProjectSetup(projectId: string): Promise<{ version: number } | undefined>
   setProjectSetupVersion(projectId: string, version: number): Promise<void>
+  /**
+   * One-time steps Manor takes on its own, such as adding the computer connector on a
+   * new Manor.app. Once done, a step stays done, so undoing its result sticks.
+   */
+  setupDone(step: SetupStep): Promise<boolean>
+  markSetupDone(step: SetupStep): Promise<void>
   /**
    * When each task row of a project's notes.md last changed (`noteMarkers.ts`). A cache:
    * an empty answer only resets the age shown beside an open row.

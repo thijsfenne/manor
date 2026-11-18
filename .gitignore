@@ -7,6 +7,8 @@ dist.old/
 .bundle/
 data/
 apps/desktop/release/
+# The patched Cua driver that release-mac.sh stages for the app bundle.
+apps/desktop/.computer-driver/
 .env
 *.local
 .DS_Store

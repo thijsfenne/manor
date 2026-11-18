@@ -6,6 +6,7 @@ import { CHOOSE_FOLDER_CHANNEL } from './folderDialog'
 import { LOCAL_ACCESS_CHANNEL } from './localAccess'
 import { NOTIFY_ACTIVATE_CHANNEL } from './notifyChannels'
 import { PRESENCE_CHANNEL } from './presence'
+import { PERMISSIONS_OPEN_CHANNEL, PERMISSIONS_STATUS_CHANNEL } from './systemPermissions'
 import { FULLSCREEN_CHANNEL, ZOOM_CHANNEL } from './zoomChannels'
 
 /**
@@ -99,6 +100,14 @@ app.whenReady().then(async () => {
     ipcMain.handle(LOCAL_ACCESS_CHANNEL, () => 'smoke-key')
     if (await window.webContents.executeJavaScript('globalThis.manorDesktop?.localAccess?.()') !== 'smoke-key') {
       throw new Error('Local access channel mismatch.')
+    }
+    ipcMain.handle(PERMISSIONS_STATUS_CHANNEL, () => 'smoke-status')
+    if (await window.webContents.executeJavaScript('globalThis.manorDesktop?.permissions?.status()') !== 'smoke-status') {
+      throw new Error('Permissions status channel mismatch.')
+    }
+    ipcMain.handle(PERMISSIONS_OPEN_CHANNEL, (_event, id: unknown) => `opened ${String(id)}`)
+    if (await window.webContents.executeJavaScript(`globalThis.manorDesktop?.permissions?.open('accessibility')`) !== 'opened accessibility') {
+      throw new Error('Permissions open channel mismatch.')
     }
 
     // The push channel is the one string main and preload must agree on, and the

@@ -1,6 +1,9 @@
 #!/bin/bash
 # Builds the release DMG of Manor.app for Apple Silicon into apps/desktop/release/.
 # Run from the repo root via `pnpm desktop:release`. It never touches /Applications.
+# It needs Rust (https://rustup.rs): the patched Cua driver is built and embedded in
+# Resources/cua-driver, signed with the app, so Accessibility and Screen Recording are
+# granted to Manor itself.
 #
 #   MANOR_SIGN_IDENTITY   a "Developer ID Application" identity in your keychain: its SHA-1
 #                         hash, or its name without that prefix (`security find-identity -v -p codesigning`)
@@ -19,8 +22,15 @@ dmg="release/Manor-$version-arm64.dmg"
 identity="${MANOR_SIGN_IDENTITY:-}"
 profile="${MANOR_NOTARY_PROFILE:-}"
 
+driver_stage=".computer-driver"
+driver="$app/Contents/Resources/cua-driver/cua-driver"
+
 say() { printf '[release] %s\n' "$*"; }
 
+# electron-builder copies the staged driver from here (extraResources). Removed again on
+# exit, so a later `pnpm desktop:package` does not pick up a stale copy.
+trap 'rm -rf "$driver_stage"' EXIT
+bash ../server/scripts/build-computer-driver.sh --embed "$driver_stage"
 pnpm bundle:app
 pnpm build
 rm -f "$dmg"
@@ -33,6 +43,7 @@ if [ "${#missing[@]}" -gt 0 ]; then
   # build.mac.identity is null, so electron-builder neither signs nor notarizes.
   pnpm exec electron-builder --mac dir --arm64 --publish never
   pnpm sign:mac
+  [ -x "$driver" ] || { say "the embedded driver is missing from $app"; exit 1; }
   pnpm exec electron-builder --mac dmg --arm64 --prepackaged "$app" --publish never
   say "built $dmg (ad hoc)"
   exit 0
@@ -51,6 +62,12 @@ xcrun notarytool submit "$dmg" --keychain-profile "$profile" --wait
 xcrun stapler staple "$dmg"
 
 codesign --verify --deep --strict "$app"
+team="$(codesign -dv "$app" 2>&1 | sed -n 's/^TeamIdentifier=//p')"
+driver_team="$(codesign -dv "$driver" 2>&1 | sed -n 's/^TeamIdentifier=//p')"
+if [ -z "$team" ] || [ "$driver_team" != "$team" ]; then
+  say "the embedded driver is signed by '${driver_team:-nobody}', the app by '${team:-nobody}'"
+  exit 1
+fi
 xcrun stapler validate "$app"
 xcrun stapler validate "$dmg"
 spctl --assess --type execute "$app"

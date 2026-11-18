@@ -38,6 +38,8 @@ import { loadRenderer } from './rendererLoad'
 import { listLocalServers } from './localServers'
 import { DEFAULT_RENDERER_URL, isAllowedRendererNavigation, resolveRendererUrl } from './rendererUrl'
 import { bundledServerEntry, manorAnswers, startBundledServer, waitForManor } from './bundledServer'
+import { EmbeddedDriver, embeddedDriverPath } from './embeddedDriver'
+import { registerPermissionsIpc } from './systemPermissions'
 import { bindPageFullscreen, bindWindowChrome, trafficLightPositionForZoom } from './windowChrome'
 import { FULLSCREEN_CHANNEL, ZOOM_CHANNEL } from './zoomChannels'
 
@@ -56,6 +58,8 @@ let browserAdblock: BrowserAdblock | null = null
 let browserProfileError: string | null = null
 let browserProfileTransition = Promise.resolve()
 let browserChromeFocused = false
+/** The release build's own Cua daemon, running only beside the bundled server. */
+let embeddedDriver: EmbeddedDriver | null = null
 const BROWSER_PROFILE_UNAVAILABLE = 'MANOR_BROWSER_PROFILE_UNAVAILABLE'
 
 // `electron .` otherwise inherits the runtime's generic identity in the macOS menu
@@ -95,6 +99,11 @@ app.whenReady().then(async () => {
   registerFolderDialogIpc(() => mainWindow)
   registerLocalAccessIpc(() => mainWindow)
   registerComputerStopIpc(() => mainWindow)
+  registerPermissionsIpc({
+    owner: () => mainWindow,
+    driver: embeddedDriverPath(process.resourcesPath),
+    onGranted: () => { void embeddedDriver?.restart() },
+  })
   registerChromeIpc()
   browserHistory = new BrowserHistoryStore(path.join(app.getPath('userData'), 'browser-history.sqlite'))
   browserBookmarks = new BrowserBookmarksStore(path.join(app.getPath('userData'), 'browser-bookmarks.sqlite'))
@@ -150,14 +159,28 @@ async function ensureServer(): Promise<boolean> {
   const entry = bundledServerEntry(process.resourcesPath)
   // A build without the bundle (`pnpm dev`) keeps waiting for a server somebody starts.
   if (entry === null) return true
+  // Only this server's turns run in Manor's own responsibility chain, so only it gets
+  // the embedded driver. A window on another server keeps that server's CuaDriver.app.
+  const driver = embeddedDriverPath(process.resourcesPath)
+  if (driver !== null) {
+    embeddedDriver = new EmbeddedDriver(driver)
+    embeddedDriver.start()
+    app.on('will-quit', () => embeddedDriver?.stop())
+  }
   try {
-    const server = await startBundledServer({ entry, execPath: process.execPath, resourcesPath: process.resourcesPath })
+    const server = await startBundledServer({
+      entry, execPath: process.execPath, resourcesPath: process.resourcesPath,
+      ...(driver === null || embeddedDriver === null ? {} : { computer: { driver, socket: embeddedDriver.socket } }),
+    })
     process.env.MANOR_DESKTOP_URL = `${server.origin}/`
     app.on('will-quit', () => server.stop())
     // The server going away under a running app leaves a window that can do nothing.
     server.child.once('exit', () => { if (!quitting) app.quit() })
     return true
   } catch (error: unknown) {
+    // The daemon only serves this app's own server.
+    embeddedDriver?.stop()
+    embeddedDriver = null
     // At login a LaunchAgent's server may still be starting and hold the database.
     if (!own && await waitForManor(DEFAULT_RENDERER_URL, 30_000)) return true
     dialog.showErrorBox('Manor could not start', messageOf(error))

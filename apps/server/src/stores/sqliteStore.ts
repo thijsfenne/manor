@@ -115,6 +115,7 @@ export function createSqliteStore(options: SqliteStoreOptions): Store & {
   const profile = new SqliteRecords<UserProfile>(db, 'profile')
   const houseSettings = new SqliteRecords<unknown>(db, 'settings')
   const projectSetup = new SqliteRecords<{ version: number }>(db, 'projectSetup')
+  const setupSteps = new SqliteRecords<boolean>(db, 'setupSteps')
   const noteAges = new SqliteRecords<NoteAges>(db, 'noteAges')
   let projectCounter = 0
   let chatCounter = 0
@@ -395,6 +396,11 @@ export function createSqliteStore(options: SqliteStoreOptions): Store & {
     },
     setProjectSetupVersion(projectId, version) {
       if (projectSetup.get(projectId)?.version !== version) projectSetup.set(projectId, { version })
+      return undefined
+    },
+    setupDone: (step) => setupSteps.get(step) === true,
+    markSetupDone(step) {
+      setupSteps.set(step, true)
       return undefined
     },
     loadNoteAges: (projectId) => noteAges.get(projectId) ?? {},
@@ -1581,5 +1587,5 @@ const READS = new Set<keyof SyncStore>([
   'workHandoffForTarget', 'loadRoster', 'listMcpServers', 'listSkills', 'loadSkillBundle', 'loadEvents', 'loadThread', 'loadDocument', 'documentIds',
   'listUnresolvedOutboundSubmissions', 'getOutboundThreadDecision', 'getChatSummary', 'getSessions',
   'loadChatOverrides', 'loadChatWorktrees', 'usageRuns', 'searchMessages', 'listRoutines', 'listRuns', 'getSubagentPolicy',
-  'getProfile', 'getHouseSettings', 'getProjectSetup', 'loadNoteAges',
+  'getProfile', 'getHouseSettings', 'getProjectSetup', 'setupDone', 'loadNoteAges',
 ])

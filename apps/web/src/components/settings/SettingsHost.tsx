@@ -13,9 +13,11 @@ import { AppearancePage, GeneralPage, KeybindingsPage } from './PersonalPages'
 import type { SettingsLocation } from './sections'
 import { SettingsView } from './SettingsView'
 import { PhonePage } from './PhonePage'
+import { PermissionsPage } from './PermissionsPage'
 import { StoragePage } from './StoragePage'
 import { SubagentsPage } from './SubagentsPage'
 import { AboutPage, MemoryPage, ProvidersPage } from './SystemPages'
+import { desktopPermissions } from '../../desktopBrowser'
 
 const UsageView = retryableLazy(() => import('../usage/UsageView').then((module) => module.UsageView))
 const ConnectorsView = retryableLazy(() => import('../connectors/ConnectorsView').then((module) => module.ConnectorsView))
@@ -214,6 +216,8 @@ export function SettingsHost({
             {...common}
           />
         )
+      case 'permissions':
+        return <PermissionsPage bridge={desktopPermissions()} />
       case 'storage':
         return (
           <StoragePage

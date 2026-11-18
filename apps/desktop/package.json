@@ -59,6 +59,10 @@
       {
         "from": "../web/dist",
         "to": "web"
+      },
+      {
+        "from": ".computer-driver",
+        "to": "cua-driver"
       }
     ],
     "mac": {

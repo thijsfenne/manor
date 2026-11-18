@@ -64,6 +64,17 @@ describe('what the bundled server is started with', () => {
       .toMatchObject({ MANOR_DATA_DIR: '/data', MANOR_ROUTINES: 'off' })
   })
 
+  it('hands the embedded Cua driver and its socket to the server only when the app runs one', () => {
+    const base = { env: {}, home: '/Users/sam', path: '', port: 1, resourcesPath: '/r' }
+    expect(bundledServerEnv(base)).not.toHaveProperty('MANOR_CUA_DRIVER')
+    expect(bundledServerEnv({ ...base, computer: { driver: '/r/cua-driver/cua-driver', socket: '/tmp/manor-cua-1/driver.sock' } })).toMatchObject({
+      MANOR_CUA_DRIVER: '/r/cua-driver/cua-driver',
+      MANOR_CUA_SOCKET: '/tmp/manor-cua-1/driver.sock',
+      CUA_DRIVER_RS_TELEMETRY_ENABLED: '0',
+      CUA_DRIVER_RS_UPDATE_CHECK: '0',
+    })
+  })
+
   it('finds the bundle only where the app carries one', () => {
     const resources = temp()
     expect(bundledServerEntry(resources)).toBeNull()

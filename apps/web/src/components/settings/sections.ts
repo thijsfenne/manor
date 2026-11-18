@@ -13,6 +13,7 @@ import {
   MagicWand01Icon,
   PaintBoardIcon,
   PuzzleIcon,
+  SecurityCheckIcon,
   Settings02Icon,
   SmartPhone01Icon,
 } from '@hugeicons/core-free-icons'
@@ -38,6 +39,7 @@ export type SettingsSection =
   | 'connections'
   | 'skills'
   | 'phone'
+  | 'permissions'
   | 'storage'
   | 'about'
 
@@ -94,6 +96,7 @@ export const SETTINGS_GROUPS: readonly { label: string; sections: readonly Secti
     label: 'System',
     sections: [
       { id: 'phone', label: 'Phone', icon: SmartPhone01Icon, keywords: ['pair phone', 'tailscale https', 'paired devices', 'revoke', 'qr code'] },
+      { id: 'permissions', label: 'Permissions', icon: SecurityCheckIcon, keywords: ['accessibility', 'screen recording', 'system settings', 'privacy', 'computer use'] },
       { id: 'storage', label: 'Storage', icon: HardDriveIcon, keywords: ['settle quiet sessions', 'delete archived chats', 'keep picture copies', 'keep backups', 'retention'] },
       { id: 'about', label: 'About', icon: InformationCircleIcon, keywords: ['version', 'logs', 'diagnostics', 'server running since'] },
     ],

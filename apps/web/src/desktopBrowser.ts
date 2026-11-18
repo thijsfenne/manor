@@ -1,4 +1,4 @@
-import type { DesktopBrowserBridge, DesktopComputerBridge, DesktopFilesBridge, DesktopHostBridge, DesktopNotifyBridge, DesktopPresenceBridge } from '@manor/contracts'
+import type { DesktopBrowserBridge, DesktopComputerBridge, DesktopFilesBridge, DesktopHostBridge, DesktopNotifyBridge, DesktopPermissionsBridge, DesktopPresenceBridge } from '@manor/contracts'
 
 declare global {
   interface Window {
@@ -132,4 +132,9 @@ export async function reuseBrowserTab(browser: DesktopBrowserBridge, chatId: str
     throw new Error('The matching browser tab is no longer available.')
   }
   return { state: selected, tab }
+}
+
+/** Manor's macOS permissions, or nothing in a browser tab or a shell that predates the bridge. */
+export function desktopPermissions(): DesktopPermissionsBridge | undefined {
+  return typeof window === 'undefined' ? undefined : window.manorDesktop?.permissions
 }

@@ -10,6 +10,7 @@ import type {
   DesktopFilesBridge,
   DesktopHostBridge,
   DesktopNotifyBridge,
+  DesktopPermissionsBridge,
   DesktopPresenceBridge,
 } from '@manor/contracts'
 
@@ -20,7 +21,7 @@ import type {
  * `exposeInMainWorld` runs, `window.manorDesktop` is simply absent, and Manor
  * concludes there is no desktop host and hides the browser entirely. Type imports
  * are erased and therefore fine; a runtime one is not. `browserChannels.ts`,
- * `notifyChannels.ts`, `folderDialog.ts` and `localAccess.ts` hold the same strings for the main process, and
+ * `notifyChannels.ts`, `folderDialog.ts`, `localAccess.ts` and `systemPermissions.ts` hold the same strings for the main process, and
  * `smoke:preload` fails if they disagree.
  */
 const BROWSER_STATE_CHANNEL = 'manor:browser:state'
@@ -33,6 +34,8 @@ const ZOOM_CHANNEL = 'manor:zoom'
 const FULLSCREEN_CHANNEL = 'manor:fullscreen'
 const CHOOSE_FOLDER_CHANNEL = 'manor:choose-folder'
 const LOCAL_ACCESS_CHANNEL = 'manor:local-access'
+const PERMISSIONS_STATUS_CHANNEL = 'manor:permissions:status'
+const PERMISSIONS_OPEN_CHANNEL = 'manor:permissions:open'
 
 // A Manor shortcut typed while a web page had focus never reached this window; main
 // sends it here and it is replayed where Manor's own key listeners wait.
@@ -147,6 +150,11 @@ const computer: DesktopComputerBridge = {
   connectionLost: () => ipcRenderer.invoke('manor:computer:connection-lost'),
 }
 
+const permissions: DesktopPermissionsBridge = {
+  status: () => ipcRenderer.invoke(PERMISSIONS_STATUS_CHANNEL),
+  open: (id) => ipcRenderer.invoke(PERMISSIONS_OPEN_CHANNEL, id),
+}
+
 const files: DesktopFilesBridge = {
   open: (src, name) => ipcRenderer.invoke('manor:files:open', src, name),
   save: (src, name) => ipcRenderer.invoke('manor:files:save', src, name),
@@ -176,6 +184,7 @@ const host: DesktopHostBridge = {
   notify,
   presence,
   computer,
+  permissions,
   files,
   chooseFolder: () => ipcRenderer.invoke(CHOOSE_FOLDER_CHANNEL),
   localAccess: () => ipcRenderer.invoke(LOCAL_ACCESS_CHANNEL),

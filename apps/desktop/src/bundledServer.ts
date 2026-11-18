@@ -3,6 +3,7 @@ import { existsSync, mkdirSync, openSync } from 'node:fs'
 import { createServer } from 'node:net'
 import os from 'node:os'
 import path from 'node:path'
+import { EMBEDDED_DRIVER_ENV } from './embeddedDriver'
 
 /**
  * The server this app carries inside itself, for a Mac where nothing else runs one.
@@ -95,9 +96,16 @@ export function bundledServerEnv(options: {
   path: string
   port: number
   resourcesPath: string
+  /** The embedded Cua driver and its daemon's socket; the server points the computer connector there. */
+  computer?: { driver: string; socket: string }
 }): NodeJS.ProcessEnv {
   return {
     ...options.env,
+    ...(options.computer === undefined ? {} : {
+      ...EMBEDDED_DRIVER_ENV,
+      MANOR_CUA_DRIVER: options.computer.driver,
+      MANOR_CUA_SOCKET: options.computer.socket,
+    }),
     // The app's own binary runs the entry file as plain Node.
     ELECTRON_RUN_AS_NODE: '1',
     PATH: options.path,
@@ -129,6 +137,7 @@ export async function startBundledServer(options: {
   timeoutMs?: number
   /** Tests name a port of their own, so they never take the one a real server uses. */
   port?: number
+  computer?: { driver: string; socket: string }
 }): Promise<BundledServer> {
   const env = options.env ?? process.env
   const home = options.home ?? os.homedir()
@@ -137,7 +146,10 @@ export async function startBundledServer(options: {
   mkdirSync(logs, { recursive: true })
   const child = spawn(options.execPath, [options.entry], {
     cwd: home,
-    env: bundledServerEnv({ env, home, path: await loginShellPath(env, home), port, resourcesPath: options.resourcesPath }),
+    env: bundledServerEnv({
+      env, home, path: await loginShellPath(env, home), port, resourcesPath: options.resourcesPath,
+      ...(options.computer === undefined ? {} : { computer: options.computer }),
+    }),
     stdio: ['ignore', openSync(path.join(logs, 'manor.log'), 'a'), openSync(path.join(logs, 'manor.err.log'), 'a')],
   })
   const origin = `http://localhost:${port}`

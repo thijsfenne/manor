@@ -98,8 +98,21 @@ entitlements to what runs today: JIT for V8, Reminders through EventKit for the
 such as a provider CLI counts as Manor for these checks. The usage descriptions in
 `build.mac.extendInfo` follow the same rule.
 
+Both paths need Rust (`rustup`, installed with `--no-modify-path`): the script first
+builds Manor's patched Cua driver (`apps/server/scripts/build-computer-driver.sh
+--embed`) and electron-builder puts it in `Resources/cua-driver`, where it is signed
+with the app. The signed path checks that the driver carries the app's team. When the
+app runs its bundled server, main starts that driver's daemon as its own child
+(`src/embeddedDriver.ts`) and the server points the `computer` connector at it, so
+macOS asks for Accessibility and Screen Recording for Manor itself. Grants are meant
+to survive an update signed with the same Developer ID; that is not yet checked on a
+real upgrade. On its first start with the driver the
+server adds the `computer` connector once. A window on another server, and a checkout,
+keep using `/Applications/CuaDriver.app`. Settings → Permissions shows the
+two grants, read through a fresh probe child of the driver.
+
 When either variable is missing, the script logs which one and builds a DMG that holds
-an ad hoc signed app, the same app `pnpm desktop:package` makes. That path is for
+an ad hoc signed app, the same app `pnpm desktop:package` makes plus the driver. That path is for
 contributors without a certificate; the DMG is not notarized and is not for handing
 out. Neither path touches `/Applications`; `pnpm desktop:install` stays the local
 ad hoc install.
