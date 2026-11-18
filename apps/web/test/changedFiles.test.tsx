@@ -173,8 +173,8 @@ describe('the changed-files card', () => {
     expect(html).toContain('4 changed files')
     expect(html).toContain('Show files')
     expect(html).not.toContain('Hide files')
-    expect(html).toContain('+4')
-    expect(html).toContain('−4')
+    // Each digit of a count is its own element, so it can move on its own.
+    expect(html.replace(/<[^>]+>/g, '')).toContain('+4−4')
     // Three names, alphabetical, and a count for the rest.
     expect(html.indexOf('App.tsx')).toBeLessThan(html.indexOf('BRIEFING.md'))
     expect(html).toContain('Show all 4 files')
@@ -211,8 +211,7 @@ describe('the changed-files card', () => {
       ...files[0]!, added: 42, removed: 7, diffTruncated: true,
     }]} />)
     expect(html).toContain('1 changed file')
-    expect(html).toContain('+42')
-    expect(html).toContain('−7')
+    expect(html.replace(/<[^>]+>/g, '')).toContain('+42−7')
     expect(html).toContain('Partial diff')
   })
 

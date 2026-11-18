@@ -1,9 +1,12 @@
 import { ArrowRight01Icon, Folder01Icon, FolderOpenIcon, GitCompareIcon } from '@hugeicons/core-free-icons'
-import { useMemo, useState } from 'react'
+import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
+import { useMemo, useState, type ReactNode } from 'react'
 import { changedGroups, changedTotals, changedTree, type ChangedFile, type ChangedNode } from '../changedFiles'
+import { DISCLOSURE, DISCLOSURE_OUT, INSTANT } from '../motion'
 import { baseName, FileMark } from './fileMark'
 import { DiffBody } from './FileDiff'
 import { Icon } from './Icon'
+import { PopDigits } from './ui/PopDigits'
 import { useDiffReview } from './session/diffReview'
 
 interface ChangedFilesProps {
@@ -86,48 +89,59 @@ export function ChangedFiles({ files, onOpenFile, turnId }: ChangedFilesProps) {
         )}
       </div>
 
-      {open ? (
-        <div className="mt-1.5">
-          {tree.map((node) => (
-            <Row key={node.key} node={node} depth={0} folded={folded} onToggle={toggleFolder} onOpenFile={onOpenFile} />
-          ))}
-        </div>
-      ) : (
-        <div className="mt-2 flex min-w-0 flex-col gap-1.5 px-1">
-          {/* One group is the card's own count again, so it prints no header. */}
-          {groups.length < 2 ? null : (
-            <p className="m-0 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-dim">
-              {groups.map((group, index) => (
-                <span key={group.name} className="flex items-center gap-1.5">
-                  <span className="font-mono text-muted">{group.name}</span>
-                  <span>
-                    {group.count} {group.count === 1 ? 'file' : 'files'}
-                  </span>
-                </span>
+      {/* Two slots, the tree above the names, so a click folds one shut while the other
+          folds out and the card eases between the two heights instead of jumping. */}
+      <AnimatePresence initial={false}>
+        {open ? (
+          <Fold key="tree" paired>
+            <div className="pt-1.5">
+              {tree.map((node) => (
+                <Row key={node.key} node={node} depth={0} folded={folded} onToggle={toggleFolder} onOpenFile={onOpenFile} />
               ))}
-            </p>
-          )}
-          <div className="flex flex-wrap items-center gap-1.5">
-            {chips.slice(0, CHIPS).map((file) => (
-              <Name
-                key={file.raw}
-                file={file}
-                className="rounded-md border border-line px-2 py-[3px]"
-                onOpenFile={onOpenFile}
-              />
-            ))}
-            {files.length > CHIPS ? (
-              <button
-                type="button"
-                className="cursor-pointer border-0 bg-transparent px-1 py-[3px] text-dim [font:inherit] hover:text-text"
-                onClick={() => setOpen(true)}
-              >
-                Show all {files.length} files
-              </button>
-            ) : null}
-          </div>
-        </div>
-      )}
+            </div>
+          </Fold>
+        ) : null}
+      </AnimatePresence>
+      <AnimatePresence initial={false}>
+        {open ? null : (
+          <Fold key="names" paired>
+            <div className="flex min-w-0 flex-col gap-1.5 px-1 pt-2">
+              {/* One group is the card's own count again, so it prints no header. */}
+              {groups.length < 2 ? null : (
+                <p className="m-0 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-dim">
+                  {groups.map((group) => (
+                    <span key={group.name} className="flex items-center gap-1.5">
+                      <span className="font-mono text-muted">{group.name}</span>
+                      <span>
+                        {group.count} {group.count === 1 ? 'file' : 'files'}
+                      </span>
+                    </span>
+                  ))}
+                </p>
+              )}
+              <div className="flex flex-wrap items-center gap-1.5">
+                {chips.slice(0, CHIPS).map((file) => (
+                  <Name
+                    key={file.raw}
+                    file={file}
+                    className="rounded-md border border-line px-2 py-[3px]"
+                    onOpenFile={onOpenFile}
+                  />
+                ))}
+                {files.length > CHIPS ? (
+                  <button
+                    type="button"
+                    className="cursor-pointer border-0 bg-transparent px-1 py-[3px] text-dim [font:inherit] hover:text-text"
+                    onClick={() => setOpen(true)}
+                  >
+                    Show all {files.length} files
+                  </button>
+                ) : null}
+              </div>
+            </div>
+          </Fold>
+        )}
+      </AnimatePresence>
     </div>
   )
 }
@@ -241,18 +255,48 @@ function FileRow({
           <Stat added={file.added} removed={file.removed} />
         )}
       </div>
-      {open ? (
-        // Each hunk as the driver reported it, in order. Four calls into one file are
-        // four boxes, because merging them would invent lines nobody wrote.
-        <div className="mt-1 mb-2 flex flex-col gap-1" style={{ paddingLeft: indent }}>
-          {file.edits.map((edit, index) => (
-            <DiffBody key={`${file.raw}-${index}`} edit={edit} />
-          ))}
-          {file.diffTruncated ? <p className="m-0 text-warn">Part of this diff was too large to show.</p> : null}
-          {file.diffSkipped ? <p className="m-0 text-dim">Diff not loaded, this turn changed many files.</p> : null}
-        </div>
-      ) : null}
+      <AnimatePresence initial={false}>
+        {open ? (
+          // Each hunk as the driver reported it, in order. Four calls into one file are
+          // four boxes, because merging them would invent lines nobody wrote.
+          <Fold key="diff">
+            <div className="flex flex-col gap-1 pt-1 pb-2" style={{ paddingLeft: indent }}>
+              {file.edits.map((edit, index) => (
+                <DiffBody key={`${file.raw}-${index}`} edit={edit} />
+              ))}
+              {file.diffTruncated ? <p className="m-0 text-warn">Part of this diff was too large to show.</p> : null}
+              {file.diffSkipped ? <p className="m-0 text-dim">Diff not loaded, this turn changed many files.</p> : null}
+            </div>
+          </Fold>
+        ) : null}
+      </AnimatePresence>
     </>
+  )
+}
+
+/**
+ * What a click on this card unfolds or folds away, easing its height so the rows and
+ * bubbles under it slide. Only clicks open and close these, so the mount and unmount
+ * can carry the motion; the `AnimatePresence initial={false}` around each one keeps a
+ * card that renders already open still. Spacing sits inside as padding, so a closed
+ * fold leaves no gap behind.
+ *
+ * `paired` is for two folds trading places on one click. They ride the same curve both
+ * ways, so their heights add up to one steady ease between the two; a quicker exit
+ * under a slower entry would let the card swell past both and settle back.
+ */
+function Fold({ children, paired = false }: { children: ReactNode; paired?: boolean }) {
+  const reduce = useReducedMotion() ?? false
+  return (
+    <motion.div
+      className="overflow-hidden"
+      initial={reduce ? false : { height: 0, opacity: 0 }}
+      animate={{ height: 'auto', opacity: 1 }}
+      exit={reduce ? { opacity: 0, transition: INSTANT } : { height: 0, opacity: 0, transition: paired ? DISCLOSURE : DISCLOSURE_OUT }}
+      transition={reduce ? INSTANT : DISCLOSURE}
+    >
+      {children}
+    </motion.div>
   )
 }
 
@@ -307,8 +351,9 @@ function Stat({ added, removed, className = '' }: { added: number; removed: numb
   if (added === 0 && removed === 0) return null
   return (
     <span className={`flex flex-none items-center gap-2 tabular-nums ${className}`}>
-      {added === 0 ? null : <span className="text-ok">+{added}</span>}
-      {removed === 0 ? null : <span className="text-danger">−{removed}</span>}
+      {/* Hidden at zero rather than unmounted, so a count that starts mid-turn pops in too. */}
+      <span hidden={added === 0} className="text-ok"><PopDigits value={added} prefix="+" /></span>
+      <span hidden={removed === 0} className="text-danger"><PopDigits value={removed} prefix="−" /></span>
     </span>
   )
 }

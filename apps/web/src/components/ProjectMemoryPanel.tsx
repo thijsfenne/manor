@@ -1,8 +1,11 @@
 import { ArrowLeft01Icon, BubbleChatIcon, Cancel01Icon, CheckmarkSquare02Icon, File01Icon, RefreshIcon, SquareIcon } from '@hugeicons/core-free-icons'
 import { NOTE_MARKER, type ContextFile, type ProjectMemoryScope, type ServerMessage } from '@manor/contracts'
-import { Fragment, useEffect, useMemo, useState, type ComponentPropsWithoutRef, type CSSProperties } from 'react'
+import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
+import { Fragment, useEffect, useMemo, useState, type ComponentPropsWithoutRef, type CSSProperties, type ReactNode } from 'react'
 import type { Components } from 'react-markdown'
 import { messageTime } from '../messageMeta'
+import { INSTANT, LINE_REVEAL, LINE_REVEAL_FROM, LINE_REVEAL_REST, LINE_SETTLE_OUT } from '../motion'
+import { fileLines, lineKeys, type FileLine } from '../projectFileLines'
 import type { RequestEvents } from '../useRequest'
 import type { ConnectionStatus } from '../useWorkspace'
 import { ChatSummaryView, useChatSummary } from './AgentMemory'
@@ -77,6 +80,8 @@ interface Props {
   onLoadSummary?: (chatId: string, requestId: string) => boolean
   /** Opens the Session a notes.md row belongs to. */
   onOpenSession?: (chatId: string) => void
+  /** Changes when the project thread writes or undoes a line, so the open panel reloads and shows it. */
+  refreshKey?: string
   overlay?: boolean
   revealed?: boolean
   phone?: boolean
@@ -98,6 +103,7 @@ export function ProjectMemoryPanel({
   summaryChatId,
   onLoadSummary,
   onOpenSession,
+  refreshKey,
   overlay = false,
   revealed = true,
   phone = false,
@@ -116,7 +122,9 @@ export function ProjectMemoryPanel({
       setState({ kind: 'error', message: 'Connect to Manor to load project memory.' })
       return
     }
-    setState({ kind: 'loading' })
+    // A reload keeps what is on screen, so the lines that stayed stay mounted and only
+    // what the thread changed moves.
+    setState((current) => current.kind === 'ready' ? current : { kind: 'loading' })
     const requestId = crypto.randomUUID()
     const timer = window.setTimeout(() => setState({ kind: 'error', message: 'Loading project memory took too long. Try again.' }), 15_000)
     const unsubscribe = requestEvents.subscribe((response) => {
@@ -134,7 +142,7 @@ export function ProjectMemoryPanel({
       setState({ kind: 'error', message: 'Could not load project memory. Try again.' })
     }
     return () => { window.clearTimeout(timer); unsubscribe() }
-  }, [projectId, status, requestEvents, onLoad, revision])
+  }, [projectId, status, requestEvents, onLoad, revision, refreshKey])
 
   useEffect(() => {
     if (status === 'live') onLoadUserFiles?.()
@@ -174,7 +182,9 @@ export function ProjectMemoryPanel({
   const detailKey = summaryOpen ? SUMMARY_KEY : selected?.path ?? 'list'
   const selectedBody = selected === null ? '' : projectMemoryBody(selected.content)
   // The thread's notes.md reads as rows: their ages live on the server, not in the file.
-  const noteRows = selected !== null && !selected.path.startsWith(USER_KEY) && fileName(selected.path) === 'notes.md' ? memory?.noteRows : undefined
+  const threadFile = selected !== null && !selected.path.startsWith(USER_KEY) && THREAD_FILE_NAMES.has(fileName(selected.path))
+  const noteRows = threadFile && fileName(selected.path) === 'notes.md' ? memory?.noteRows : undefined
+  const lines = useMemo(() => threadFile ? fileLines(selectedBody) : undefined, [threadFile, selectedBody])
   const memoryLinks = useMemo<Components>(() => ({
     a: ({ href, children }) => {
       if (href !== undefined && /^https?:\/\//i.test(href)) return <ExternalLink href={href}>{children}</ExternalLink>
@@ -342,9 +352,11 @@ export function ProjectMemoryPanel({
             {noteRows === undefined && /^#\s/.test(selectedBody) ? null : (
               <h1 className="mt-0 mb-2 text-[16px] leading-snug font-medium tracking-[-0.01em] text-text">{title}</h1>
             )}
-            {noteRows === undefined
-              ? <Markdown text={selectedBody} variant="panel" components={memoryLinks} />
-              : <NoteRows rows={noteRows} onOpenSession={onOpenSession} />}
+            {noteRows !== undefined
+              ? <NoteRows rows={noteRows} onOpenSession={onOpenSession} />
+              : lines !== undefined
+                ? <FileLines lines={lines} components={memoryLinks} />
+                : <Markdown text={selectedBody} variant="panel" components={memoryLinks} />}
           </article>
         )}
       </div>
@@ -398,41 +410,90 @@ function SelectedBadge() {
  * and how long an open row has stood. A done row fades until Manor archives it.
  */
 function NoteRows({ rows, onOpenSession }: { rows: NonNullable<Memory['noteRows']>; onOpenSession?: ((chatId: string) => void) | undefined }) {
-  if (rows.length === 0) return <p className="m-0 text-dim">No notes yet.</p>
+  // Two Sessions can share a status text, so a row is its Session and its text.
+  const keys = lineKeys(rows.map((row) => `${row.session?.chatId ?? ''} ${row.text}`))
   return (
-    <ol aria-label="Notes" className="m-0 flex list-none flex-col gap-3 p-0">
-      {rows.map((row, index) => (
-        <li key={index} className={`flex min-w-0 items-start gap-2 ${row.done === true ? 'opacity-50' : ''}`}>
-          {row.done === undefined ? <span className="w-[15px] flex-none" /> : (
-            <Icon
-              icon={row.done ? CheckmarkSquare02Icon : SquareIcon}
-              size={15}
-              className="mt-[3px] flex-none text-dim"
-              {...{ role: 'img', 'aria-label': row.done ? 'Done' : 'Open' }}
-            />
-          )}
-          <div className="flex min-w-0 flex-1 flex-col items-start gap-1">
-            <span className={`[overflow-wrap:anywhere] ${row.done === true ? 'line-through decoration-dim' : ''}`}>{row.text}</span>
-            {row.session === undefined && row.age === undefined ? null : (
-              <span className="flex min-w-0 flex-wrap items-center gap-1.5">
-                {row.session === undefined ? null : onOpenSession === undefined ? (
-                  <span className="max-w-full truncate rounded-chip border border-line px-1.5 py-0.5 text-meta text-muted">{row.session.title}</span>
-                ) : (
-                  <button
-                    type="button"
-                    title={`Open the Session ${row.session.title}`}
-                    className="max-w-full cursor-pointer truncate rounded-chip border border-line bg-transparent px-1.5 py-0.5 text-meta text-muted [font-family:inherit] hover:border-dim hover:text-text"
-                    onClick={() => onOpenSession(row.session!.chatId)}
-                  >
-                    {row.session.title}
-                  </button>
+    // Rows pad below instead of a gap, so a row folding in or out carries its own spacing.
+    // The list stays mounted when empty, so the last row still slides away above the empty text.
+    <>
+      <ol aria-label="Notes" className={`m-0 list-none p-0 ${rows.length === 0 ? '' : '-mb-3'}`}>
+        <AnimatePresence initial={false}>
+          {rows.map((row, index) => (
+            <WrittenLine key={keys[index]} as="li">
+              <div className={`flex min-w-0 items-start gap-2 pb-3 ${row.done === true ? 'opacity-50' : ''}`}>
+                {row.done === undefined ? <span className="w-[15px] flex-none" /> : (
+                  <Icon
+                    icon={row.done ? CheckmarkSquare02Icon : SquareIcon}
+                    size={15}
+                    className="mt-[3px] flex-none text-dim"
+                    {...{ role: 'img', 'aria-label': row.done ? 'Done' : 'Open' }}
+                  />
                 )}
-                {row.age === undefined ? null : <span className="whitespace-nowrap rounded-chip bg-raised px-1.5 py-0.5 text-meta text-dim">{row.age}</span>}
-              </span>
-            )}
+                <div className="flex min-w-0 flex-1 flex-col items-start gap-1">
+                  <span className={`[overflow-wrap:anywhere] ${row.done === true ? 'line-through decoration-dim' : ''}`}>{row.text}</span>
+                  {row.session === undefined && row.age === undefined ? null : (
+                    <span className="flex min-w-0 flex-wrap items-center gap-1.5">
+                      {row.session === undefined ? null : onOpenSession === undefined ? (
+                        <span className="max-w-full truncate rounded-chip border border-line px-1.5 py-0.5 text-meta text-muted">{row.session.title}</span>
+                      ) : (
+                        <button
+                          type="button"
+                          title={`Open the Session ${row.session.title}`}
+                          className="max-w-full cursor-pointer truncate rounded-chip border border-line bg-transparent px-1.5 py-0.5 text-meta text-muted [font-family:inherit] hover:border-dim hover:text-text"
+                          onClick={() => onOpenSession(row.session!.chatId)}
+                        >
+                          {row.session.title}
+                        </button>
+                      )}
+                      {row.age === undefined ? null : <span className="whitespace-nowrap rounded-chip bg-raised px-1.5 py-0.5 text-meta text-dim">{row.age}</span>}
+                    </span>
+                  )}
+                </div>
+              </div>
+            </WrittenLine>
+          ))}
+        </AnimatePresence>
+      </ol>
+      {rows.length === 0 ? <p className="m-0 text-dim">No notes yet.</p> : null}
+    </>
+  )
+}
+
+/**
+ * preferences.md, or a notes.md without parsed rows, drawn line by line so a line the
+ * thread adds rises in and a line it removes slides away. Each line is its own small
+ * document, so a bullet still wears its bullet.
+ */
+function FileLines({ lines, components }: { lines: readonly FileLine[]; components: Components }) {
+  return (
+    <AnimatePresence initial={false}>
+      {lines.map((line) => (
+        <WrittenLine key={line.key}>
+          <div className={line.item ? 'pb-1' : 'pb-[0.75em]'}>
+            <Markdown text={line.text} variant="panel" components={components} />
           </div>
-        </li>
+        </WrittenLine>
       ))}
-    </ol>
+    </AnimatePresence>
+  )
+}
+
+/**
+ * One line of a thread file. Mounted inside `AnimatePresence initial={false}`, so the
+ * lines a panel opens with stand still and only a line written while it is open moves.
+ */
+function WrittenLine({ as = 'div', children }: { as?: 'div' | 'li'; children: ReactNode }) {
+  const reduce = useReducedMotion() ?? false
+  const Line = as === 'li' ? motion.li : motion.div
+  return (
+    <Line
+      className="min-w-0 overflow-hidden"
+      initial={reduce ? false : LINE_REVEAL_FROM}
+      animate={LINE_REVEAL_REST}
+      exit={reduce ? { opacity: 0, transition: INSTANT } : LINE_SETTLE_OUT}
+      transition={reduce ? INSTANT : LINE_REVEAL}
+    >
+      {children}
+    </Line>
   )
 }

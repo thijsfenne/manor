@@ -2,7 +2,7 @@ import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type
 import { DEFAULT_USER_PROFILE, isFolder, isOpenRoom, NOTE_AI_DEFAULTS, type Chat, type NoteQuote, type PageContextAttachment, type RepoFileApp } from '@manor/contracts'
 import type { useWorkspace } from '../useWorkspace'
 import { chatRoster } from '../chatRoster'
-import { lastTurnSelectedMemoryPaths, messageTime } from '../messageMeta'
+import { lastTurnSelectedMemoryPaths, messageTime, projectWritesKey } from '../messageMeta'
 import { isProjectThread, participantIds, repoListingKey, roomOf, rowsOf, runtimeStartedAgentIds, sessionLiveOf, sessionReadyRow, subagentSummaryOf, threadOf, wholeRoster, workConfirmTitle, type TurnRow } from '../state'
 import { runsByRoutine as groupRunsByRoutine } from '../routines'
 import { desktopBrowser } from '../desktopBrowser'
@@ -109,6 +109,7 @@ export function ChatPanelRegion({
   const runsByRoutine = useMemo(() => groupRunsByRoutine(workspace.chats, workspace.routines), [workspace.chats, workspace.routines])
   const rows = useMemo(() => rowsOf(thread, open.kind), [thread, open.kind])
   const usedMemoryPaths = useMemo(() => new Set(lastTurnSelectedMemoryPaths(rows)), [rows])
+  const memoryWrites = useMemo(() => projectWritesKey(thread.events), [thread.events])
   const hasRepo = chatHasRepo(workspace, open)
   const helpers = shownSubagents(
     open.id,
@@ -615,6 +616,7 @@ export function ChatPanelRegion({
         requestEvents={manor.requestEvents}
         onLoad={manor.getProjectMemory}
         onOpenSession={onOpenChat}
+        refreshKey={memoryWrites}
         overlay={dock.overlay}
         revealed={dock.revealed}
         phone={phone}

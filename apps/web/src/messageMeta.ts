@@ -95,3 +95,20 @@ export function lastTurnSelectedMemoryPaths(
   }
   return paths
 }
+
+/**
+ * Names the state of a chat's project file writes: it changes when the thread writes a
+ * line and when a write is undone, which is when an open Context panel reloads.
+ */
+export function projectWritesKey(
+  events: ReadonlyArray<{ id: string; type: string; projectFileWrite?: { undone?: true } }>,
+): string {
+  let last = ''
+  let undone = 0
+  for (const event of events) {
+    if (event.type !== 'system_note' || event.projectFileWrite === undefined) continue
+    last = event.id
+    if (event.projectFileWrite.undone === true) undone += 1
+  }
+  return `${last}:${undone}`
+}

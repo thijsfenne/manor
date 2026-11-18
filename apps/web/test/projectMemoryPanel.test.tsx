@@ -1,7 +1,7 @@
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ProjectMemoryPanel, projectMemoryBody, projectMemoryTitles } from '../src/components/ProjectMemoryPanel'
-import { lastTurnSelectedMemoryPaths, selectedMemoryPaths } from '../src/messageMeta'
+import { lastTurnSelectedMemoryPaths, projectWritesKey, selectedMemoryPaths } from '../src/messageMeta'
 import type { RequestEvents, RequestResponse } from '../src/useRequest'
 
 let panel: ReactTestRenderer
@@ -44,7 +44,7 @@ const emit = (response: RequestResponse) => act(() => { for (const listener of l
 
 beforeEach(() => {
   vi.useFakeTimers()
-  vi.stubGlobal('window', { setTimeout, clearTimeout })
+  vi.stubGlobal('window', { setTimeout, clearTimeout, addEventListener: () => {}, removeEventListener: () => {} })
   listeners = new Set()
   events = { subscribe: (listener) => { listeners.add(listener); return () => { listeners.delete(listener) } } }
   load.mockReset().mockReturnValue(true)
@@ -280,6 +280,35 @@ describe('notes detail', () => {
     expect(panel.root.findByProps({ 'aria-label': 'Done' })).toBeDefined()
     act(() => panel.root.findByProps({ title: 'Open the Session Export button' }).props.onClick())
     expect(open).toHaveBeenCalledWith('chat_9')
+  })
+})
+
+describe('a thread write while the panel is open', () => {
+  const withPreferences = (requestId: string, lines: string) => {
+    const response = reply(requestId)
+    response.files.push({ path: '/memory/manor/preferences.md', kind: 'file', modifiedAt: 2, content: `# Preferences for Manor\n\n${lines}` })
+    return response
+  }
+
+  it('reloads on the next write and keeps the open file on screen while it does', () => {
+    act(() => panel.update(<ProjectMemoryPanel {...props()} refreshKey="w1:0" />))
+    emit(withPreferences(load.mock.calls.at(-1)![1], '- First rule.'))
+    act(() => panel.root.findByProps({ title: '/memory/manor/preferences.md' }).props.onClick())
+    const calls = load.mock.calls.length
+    act(() => panel.update(<ProjectMemoryPanel {...props()} refreshKey="w2:0" />))
+    expect(load).toHaveBeenCalledTimes(calls + 1)
+    expect(content()).toContain('First rule.')
+    expect(content()).not.toContain('Loading project memory')
+    emit(withPreferences(load.mock.calls.at(-1)![1], '- First rule.\n- Second rule.'))
+    expect(content()).toContain('Second rule.')
+    expect(content()).toContain('Back to context')
+  })
+
+  it('names the writes by the last one and how many were undone', () => {
+    const note = (id: string, undone?: true) => ({ id, type: 'system_note', projectFileWrite: undone === undefined ? {} : { undone } })
+    expect(projectWritesKey([{ id: 'u1', type: 'user_message' }])).toBe(':0')
+    expect(projectWritesKey([note('a'), note('b')])).toBe('b:0')
+    expect(projectWritesKey([note('a', true), note('b')])).toBe('b:1')
   })
 })
 

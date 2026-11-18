@@ -10,6 +10,7 @@ import { Icon } from '../Icon'
 import { AppMark, RepoHostMark } from '../AppMarks'
 import { APP_LABELS } from '../RepoFileOpenMenu'
 import { Button } from '../ui/Button'
+import { PopDigits } from '../ui/PopDigits'
 import { PANEL_ROW_ARROW, PANEL_ROW_HOVER } from '../ui/dockPanel'
 import { ContextMenu } from '../ui/ContextMenu'
 import { CommitDialog } from './CommitDialog'
@@ -255,8 +256,9 @@ function ChangesRow({ repo, open, onToggle }: { repo: SessionRepoReply | undefin
         <span className="ml-auto flex-none tabular-nums text-warn">{plural(files, 'file')}<span className="sr-only"> waiting for Confirm</span></span>
       ) : (
         <span className="ml-auto flex flex-none items-center gap-2 tabular-nums">
-          {added === 0 ? null : <span className="text-ok">+{added}</span>}
-          {removed === 0 ? null : <span className="text-danger">−{removed}</span>}
+          {/* Hidden at zero rather than unmounted, so a count that starts mid-turn pops in too. */}
+          <span hidden={added === 0} className="text-ok"><PopDigits value={added} prefix="+" /></span>
+          <span hidden={removed === 0} className="text-danger"><PopDigits value={removed} prefix="−" /></span>
           {added === 0 && removed === 0 ? <span className="text-dim">{files === 0 ? 'None' : plural(files, 'file')}</span> : null}
         </span>
       )}

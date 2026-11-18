@@ -122,6 +122,33 @@ export const TEXT_SWAP_BELOW = { opacity: 0, y: 4, filter: 'blur(2px)' }
 export const TEXT_SWAP_REST = { opacity: 1, y: 0, filter: 'blur(0px)' }
 export const TEXT_SWAP_ABOVE = { opacity: 0, y: -4, filter: 'blur(2px)' }
 
+/**
+ * `--ease-overshoot` in `styles.css`, restated as control points like `EASE_OUT`. The
+ * two are one curve and move together.
+ */
+export const EASE_OVERSHOOT = [0.34, 1.36, 0.64, 1] as const
+
+/**
+ * A digit of a live count landing as the number ticks. Only the digits that changed
+ * move; they come up from below when the count grows and down from above when it
+ * shrinks, and the small overshoot is what makes a ticking total read as counting
+ * rather than flickering.
+ */
+export const DIGIT_POP: Transition = { duration: 0.3, ease: EASE_OVERSHOOT, opacity: { duration: 0.16 } }
+export const DIGIT_POP_TRAVEL = 6
+export const DIGIT_POP_REST = { opacity: 1, y: 0, filter: 'blur(0px)' }
+
+/**
+ * A line the project thread just wrote into one of its files, rising into place under
+ * a short blur, one line and no stagger. The row opens its own height on the same
+ * move, so the lines under it slide down instead of jumping.
+ */
+export const LINE_REVEAL: Transition = { duration: 0.32, ease: EASE_TRAVEL, opacity: { duration: 0.2 } }
+export const LINE_REVEAL_FROM = { height: 0, opacity: 0, y: 8, filter: 'blur(3px)' }
+export const LINE_REVEAL_REST = { height: 'auto', opacity: 1, y: 0, filter: 'blur(0px)' }
+/** The line leaving: the settled inbox row's slide aside, its height closing with it. */
+export const LINE_SETTLE_OUT = { height: 0, opacity: 0, x: 12, scale: 0.98, transition: { duration: 0.14, ease: 'easeIn' } } as const
+
 export const LIST_VARIANTS: Variants = {
   hidden: {},
   show: { transition: { staggerChildren: 0.035, delayChildren: 0.05 } },
