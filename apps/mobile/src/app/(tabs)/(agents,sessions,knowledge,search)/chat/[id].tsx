@@ -1399,10 +1399,12 @@ function LiveTranscript({
 
   return (
     <KeyboardAwareLegendList
-      // Short threads sit at the bottom, long ones open there, and the end stays
-      // pinned while a reply streams or a message lands, as long as the user is near
-      // it. Rows keep their own fold state, so they are not recycled.
-      alignItemsAtEnd
+      // Short chats sit at the bottom, except a Session, which reads from its brief down
+      // and starts under the header. Long ones open at the end, and the end stays pinned
+      // while a reply streams or a message lands, as long as the user is near it: a short
+      // Session counts as at its end, so it starts following the moment it overflows.
+      // Rows keep their own fold state, so they are not recycled.
+      alignItemsAtEnd={chatKind !== 'project' || projectThread}
       contentContainerStyle={[styles.feed, { paddingTop: topInset }]}
       contentInsetEndAdjustment={contentInsetEndAdjustment}
       data={pageRows}

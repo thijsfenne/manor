@@ -1122,6 +1122,42 @@ function reply(chatId, agentId, text, images = [], quotes = []) {
   if (chatId === 'chat-thread-stilte') at(15_000, () => proposeLive(id, record))
 }
 
+/**
+ * The accepted `Fix the date labels` Session starts its turn when the phone first opens it,
+ * and says nothing for 12s, about as long as a Maestro tap takes to return, so the short
+ * start is still on screen. Then it writes a line and a read every 3s for 72s and outgrows
+ * the screen after about four of them.
+ */
+const workOnOpen = new Map()
+function workUntilOverflow(chatId, agentId) {
+  const turnId = `turn-${chatId}`
+  const record = (event) => {
+    snapshots[chatId] = [...(snapshots[chatId] ?? []), event]
+    broadcast({ type: 'event', chatId, event })
+  }
+  const steps = 24
+  // Listed while it runs, so a phone that opens the chat again still sees it working.
+  setTimeout(() => {
+    const startedAt = Date.now()
+    activeTurns[chatId] = { activeTurn: { turnId, agentId, startedAt } }
+    broadcast({ type: 'turn_state', chatId, turnId, agentId, state: 'running', startedAt })
+  }, 300)
+  for (let step = 1; step <= steps; step += 1) {
+    setTimeout(() => {
+      const id = `${turnId}-${step}`
+      record({ id: `${id}-m`, ts: Date.now(), type: 'agent_message', turnId, agentId, messageId: `${id}-m`, text: `Step ${step}. Checking the labels in dateLabels${step}.ts around midnight.` })
+      record({ id: `${id}-t`, ts: Date.now(), type: 'tool_use', turnId, agentId, toolCallId: `${id}-c`, tool: 'Read', subject: `dateLabels${step}.ts`, detail: `dateLabels${step}.ts` })
+      setTimeout(() => record({ id: `${id}-r`, ts: Date.now(), type: 'tool_result', turnId, agentId, toolCallId: `${id}-c`, outcome: 'success' }), 400)
+    }, 12_000 + step * 3_000)
+  }
+  setTimeout(() => {
+    record({ id: `${turnId}-reply`, ts: Date.now(), type: 'agent_message', turnId, agentId, messageId: `${turnId}-reply`, text: 'The labels hold across midnight in every file.' })
+    record({ id: `${turnId}-done`, ts: Date.now(), type: 'turn_result', turnId, agentId })
+    delete activeTurns[chatId]
+    broadcast({ type: 'turn_state', chatId, turnId, agentId, state: 'done' })
+  }, 12_000 + (steps + 1) * 3_000)
+}
+
 // Sessions the Stilte thread proposed during this run, newest last.
 const liveProposals = []
 function proposeLive(id, record) {
@@ -1782,6 +1818,11 @@ server.on('connection', (socket) => {
     }
     if (message.type === 'open_chat' && snapshots[message.chatId] !== undefined) {
       send(socket, { type: 'snapshot', chatId: message.chatId, events: snapshots[message.chatId], usage: {}, overrides: overrides.get(message.chatId) ?? {}, ...activeTurns[message.chatId] })
+      const agentId = workOnOpen.get(message.chatId)
+      if (agentId !== undefined) {
+        workOnOpen.delete(message.chatId)
+        workUntilOverflow(message.chatId, agentId)
+      }
       return
     }
     // A subagent's question, answered from its parent: it leaves the card there.
@@ -1842,6 +1883,7 @@ server.on('connection', (socket) => {
       proposed.workChatId = workChatId
       send(socket, directory)
       send(socket, { type: 'ack', requestId: message.requestId, workChatId })
+      if (proposed.id === 'handoff-labels') workOnOpen.set(workChatId, message.mode === 'single' ? '__single__' : proposed.leadAgentId)
       return
     }
     // Request changes is only acked; the log line shows what reached the Session's request.
