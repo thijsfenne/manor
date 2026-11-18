@@ -2,7 +2,7 @@ import { WorkHandoffCard } from '@/components/WorkHandoffCard'
 import { Badge } from '@/components/Badge'
 import { KickoffCard } from '@/components/KickoffCard'
 import { FOOTER_GAP, KeyboardFooter, useFooterPadding } from '@/components/KeyboardFooter'
-import { WakeNotices } from '@/components/SubagentRow'
+import { WakeNotices, WakeText } from '@/components/SubagentRow'
 import { SubagentDirectory, SubagentLaunchesContext, type SubagentLaunches } from '@/lib/subagentContext'
 import { WorkDecisionDock } from '@/components/WorkDecisionDock'
 import { openWorkChanges, useDockedWorkChanges, workChangesDockable } from '@/components/WorkResultBody'
@@ -19,7 +19,6 @@ import { liveSessionContext, singleWorkContext } from '@manor/client-runtime/con
 import { normalizeComposerLists } from '@manor/client-runtime/composer-formatting'
 import { chatCommandContext } from '@manor/client-runtime/chat-commands'
 import { quoteNamesAuthor } from '@manor/client-runtime/message-quotes'
-import { wakeLine } from '@manor/client-runtime/turn-labels'
 import { chatSubagents, chatWaitsOnBackground, dmWorking, runningSubagents } from '@manor/client-runtime/turn-trace'
 import { chatFallbackTargets, composerRecipients, composerShowsRecipients, replyFallbackTargets, roomAgents } from '@manor/client-runtime/mentions'
 import { chatChangedFiles, resolveMarkdownRepoLink } from '@manor/client-runtime/changed-files'
@@ -1595,7 +1594,7 @@ const TranscriptRow = memo(function TranscriptRowBody(props: TranscriptRowProps)
       ? <Text style={styles.note}>{eventRow.event.routineName ?? 'Routine'} started{routineLateNote(eventRow.event)}</Text>
       : eventRow.event.source === 'background_wake'
         // A DM keeps the compact line; helper cards are Session work.
-        ? bubbleReplies ? <Text style={styles.note}>{wakeLine(eventRow.event.wakeItems ?? [])}</Text> : <WakeNotices items={eventRow.event.wakeItems ?? []} ts={eventRow.event.ts} />
+        ? bubbleReplies ? <WakeText items={eventRow.event.wakeItems ?? []} /> : <WakeNotices items={eventRow.event.wakeItems ?? []} ts={eventRow.event.ts} />
       : brief !== ''
         ? <KickoffCard agents={agents} text={brief} images={eventRow.event.images ?? []} files={eventRow.event.files ?? []} />
       : eventRow.event.source === 'project_thread'

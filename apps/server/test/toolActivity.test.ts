@@ -299,6 +299,23 @@ describe('failed tool error excerpt', () => {
       .toContainEqual({ type: 'tool_result', toolCallId: 'call-b', outcome: 'error', error: 'Error: build failed' })
   })
 
+  it('names an ended Claude background command by its launch description, not its command', () => {
+    const parser = new StreamParser(true, true)
+    const ended: { title: string }[] = []
+    parser.onBackgroundEnded = (item) => ended.push(item)
+    const line = (value: object) => JSON.stringify(value)
+    const command = 'for i in $(seq 1 40); do node launch.mjs; done'
+    parser.handle(line({ type: 'assistant', message: { id: 'm', content: [
+      { type: 'tool_use', id: 'call-d', name: 'Bash', input: { command, description: 'Retry the phone launch', run_in_background: true } },
+      { type: 'tool_use', id: 'call-n', name: 'Bash', input: { command: 'pnpm dev', run_in_background: true } },
+    ] } }))
+    parser.handle(line({ type: 'system', subtype: 'task_started', task_id: 'd1', tool_use_id: 'call-d', description: command, is_backgrounded: true, task_type: 'local_bash' }))
+    parser.handle(line({ type: 'system', subtype: 'task_started', task_id: 'n1', tool_use_id: 'call-n', description: 'pnpm dev', is_backgrounded: true, task_type: 'local_bash' }))
+    parser.handle(line({ type: 'system', subtype: 'task_notification', task_id: 'd1', tool_use_id: 'call-d', status: 'completed' }))
+    parser.handle(line({ type: 'system', subtype: 'task_notification', task_id: 'n1', tool_use_id: 'call-n', status: 'completed' }))
+    expect(ended.map((item) => item.title)).toEqual(['Retry the phone launch', 'pnpm dev'])
+  })
+
   it('redacts a multiline search pattern before its label is flattened', () => {
     const redactBlock = (value: string) => value.replaceAll('one\ntwo', '[redacted]')
     expect(redactToolActivity(describeCommand("rg 'one\ntwo' src"), redactBlock).subject).not.toMatch(/one|two/)

@@ -415,10 +415,67 @@ export function elapsedLabel(startedAt: number | undefined, now: number): string
 }
 
 /**
- * The compact line a wake row shows: what ended, by its own title. A wake is a turn
- * The user did not start, so the line says why the persona speaks again.
+ * The quiet rows a wake shows, one string per row: what ended, in words. One row per item
+ * for one or two items, one counted row for more, so a wake never takes more than two.
+ * Each item is named by the description its launch carried; a raw shell command (an older
+ * row, or a driver that gives commands no description) is cut down to its program and
+ * first argument. The full command stays on the launch's own tool row.
  */
-export function wakeLine(items: readonly { title: string; state: 'done' | 'failed' | 'stopped' }[]): string {
-  if (items.length === 0) return 'Background work ended'
-  return items.map((item) => `\u201c${item.title}\u201d ${item.state === 'done' ? 'finished' : item.state}`).join(', ')
+export function wakeLines(items: readonly { title: string; state: 'done' | 'failed' | 'stopped' }[]): readonly string[] {
+  if (items.length === 0) return ['Background work ended']
+  if (items.length <= 2) return items.map((item) => `Background task ${WAKE_VERB[item.state]}: ${wakeLabel(item.title)}`)
+  const failed = items.filter((item) => item.state === 'failed').length
+  const [first] = items
+  if (first !== undefined && items.every((item) => item.state === first.state)) return [`${items.length} background tasks ${WAKE_VERB[first.state]}`]
+  return [`${items.length} background tasks ended${failed === 0 ? '' : `, ${failed} failed`}`]
+}
+
+const WAKE_VERB = { done: 'finished', failed: 'failed', stopped: 'stopped' } as const
+const WAKE_LABEL_MAX = 60
+
+function wakeLabel(title: string): string {
+  const trimmed = title.trim()
+  const label = looksLikeCommand(trimmed) ? commandGist(trimmed)
+    // A sentence reads on after the colon; an acronym or a name keeps its capitals.
+    : /^[A-Z][a-z]/.test(trimmed) ? `${trimmed[0]!.toLowerCase()}${trimmed.slice(1)}` : trimmed
+  return label.length > WAKE_LABEL_MAX ? `${label.slice(0, WAKE_LABEL_MAX - 1).trimEnd()}\u2026` : label
+}
+
+/**
+ * Shell syntax, a path as the first word, or an interpreter running a script path. A lone
+ * `&` stays prose, so `Build & test the app` keeps its words, and so does `node upgrade notes`.
+ */
+const looksLikeCommand = (text: string): boolean =>
+  /[;|>`\n]|&&|\$\(/.test(text) || /^[^\s/]*\//.test(text) || /^(\S+)\s+\S*[/.]\S/.test(text) && INTERPRETERS.has(text.split(/\s/, 1)[0] ?? '')
+
+/** Words that only shape a script: a loop header, a condition, an assignment. */
+const SHELL_KEYWORDS = new Set(['while', 'until', 'if', 'then', 'else', 'elif', 'do', 'done', 'fi', 'esac', '!', '{', '}', 'time', 'sudo', 'env', 'exec', 'nohup'])
+/** Programs that wait, print or filter around the real work, never the work itself. */
+const SHELL_FILLER = new Set(['seq', 'sleep', 'echo', 'printf', 'true', 'false', 'cd', 'export', 'grep', 'tail', 'head', 'cat', 'test', '[', '[[', 'wc', 'sort', 'set', 'read', 'break', 'continue', 'exit', 'return', 'local', 'wait', 'tee'])
+/** Programs whose script, not themselves, says what runs. */
+const INTERPRETERS = new Set(['node', 'python', 'python3', 'bash', 'sh', 'zsh', 'ruby', 'deno', 'bun', 'tsx'])
+
+const baseName = (path: string): string => path.split('/').filter(Boolean).pop() ?? path
+
+/**
+ * The first program in a command that does real work, with its first argument:
+ * `control.mjs launch`. A command of only filler falls back to its first program.
+ */
+function commandGist(command: string): string {
+  // Codex runs every command as `/bin/zsh -lc '<script>'`; the script is the command.
+  const script = /^\/bin\/(?:ba|z)?sh\s+-lc\s+(['"])([\s\S]*?)\1?$/.exec(command)?.[2] ?? command
+  let fallback: string | undefined
+  for (const segment of script.split(/\$\(|`|\)|&&|\|\||[;|&\n]/)) {
+    const words = segment.trim().split(/\s+/).map((word) => word.replace(/^['"]+|['"]+$/g, '')).filter((word) => word !== '')
+    if (words[0] === 'for' || words[0] === 'case') continue
+    const at = words.findIndex((word) => !SHELL_KEYWORDS.has(word) && !/^\w+=/.test(word))
+    const program = at === -1 ? undefined : words[at]
+    if (program === undefined) continue
+    const args = words.slice(at + 1).filter((word) => !word.startsWith('-') && !/^\d*[<>]/.test(word))
+    const [named = program, ...rest] = INTERPRETERS.has(baseName(program)) && args.length > 0 ? args : [program, ...args]
+    const gist = [baseName(named), ...rest.slice(0, 1).map(baseName)].join(' ')
+    if (!SHELL_FILLER.has(baseName(program))) return gist
+    fallback ??= gist
+  }
+  return fallback ?? baseName(script.trim().split(/\s+/)[0] ?? script)
 }

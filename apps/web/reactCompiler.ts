@@ -118,7 +118,7 @@ export const PURE_MODULES: Readonly<Record<string, { file: string; functions: re
     file: 'src/turnLabels.ts',
     functions: [
       'currentLabel', 'elapsedLabel', 'isEditTool', 'isReadTool', 'isSearchTool', 'isShellTool',
-      'wakeLine', 'workSummary', 'workedLabel',
+      'wakeLines', 'workSummary', 'workedLabel',
     ],
   },
   runtimeChoices: {

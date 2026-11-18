@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { ToolStep } from '../src/state'
-import { currentLabel, isEditTool, settledLabel, workSummary } from '../src/turnLabels'
+import { currentLabel, isEditTool, settledLabel, wakeLines, workSummary } from '../src/turnLabels'
 
 const step = (tool: string): ToolStep =>
   ({ kind: 'tool', key: 'k', tool, status: 'done' }) as ToolStep
@@ -104,5 +104,36 @@ describe('shell and Manor tool rows', () => {
     expect(currentLabel({ ...step('mcp__manor__task_result'), status: 'running' })).toBe('Checking on a helper')
     expect(settledLabel({ ...step('mcp__manor__deliver_file'), detail: '/tmp/out/report.html' })).toBe('Delivered report.html')
     expect(settledLabel(step('mcp__unknown__thing'))).toBe('Used MCP unknown.thing')
+  })
+})
+
+describe('wakeLines', () => {
+  const wakeLine = (items: Parameters<typeof wakeLines>[0]) => wakeLines(items).join('\n')
+  const loop = 'for i in $(seq 1 40); do out=$(node .cursor/skills/verify-manor-mobile/control-manor-mobile.mjs launch 2>&1); if echo "$out" | grep -q "is held by a verify run"; then sleep 30; else echo "$out" | tail'
+
+  it('names a task by the description its launch gave', () => {
+    expect(wakeLine([{ title: 'Retry the phone launch until the port is free', state: 'done' }]))
+      .toBe('Background task finished: retry the phone launch until the port is free')
+    expect(wakeLine([{ title: 'PR checks', state: 'failed' }])).toBe('Background task failed: PR checks')
+  })
+
+  it('cuts a raw command down to its program and first argument', () => {
+    expect(wakeLine([{ title: loop, state: 'done' }])).toBe('Background task finished: control-manor-mobile.mjs launch')
+    expect(wakeLine([{ title: 'cd apps/web && pnpm exec vitest run', state: 'stopped' }])).toBe('Background task stopped: pnpm exec')
+    expect(wakeLine([{ title: 'sleep 600', state: 'done' }])).toBe('Background task finished: sleep 600')
+    expect(wakeLine([{ title: `/bin/zsh -lc '${loop}`, state: 'done' }])).toBe('Background task finished: control-manor-mobile.mjs launch')
+    expect(wakeLine([{ title: 'node scripts/dev/serve.mjs start --verbose', state: 'done' }])).toBe('Background task finished: serve.mjs start')
+  })
+
+  it('keeps a description with an ampersand or a program name as prose', () => {
+    expect(wakeLine([{ title: 'Build & test the app', state: 'done' }])).toBe('Background task finished: build & test the app')
+    expect(wakeLine([{ title: 'node upgrade notes', state: 'done' }])).toBe('Background task finished: node upgrade notes')
+  })
+
+  it('keeps several tasks to at most two lines', () => {
+    expect(wakeLine([{ title: loop, state: 'done' }, { title: 'Draft the figure', state: 'failed' }]))
+      .toBe('Background task finished: control-manor-mobile.mjs launch\nBackground task failed: draft the figure')
+    expect(wakeLine([{ title: 'a', state: 'done' }, { title: 'b', state: 'done' }, { title: loop, state: 'done' }])).toBe('3 background tasks finished')
+    expect(wakeLine([{ title: 'a', state: 'done' }, { title: 'b', state: 'failed' }, { title: 'c', state: 'stopped' }])).toBe('3 background tasks ended, 1 failed')
   })
 })

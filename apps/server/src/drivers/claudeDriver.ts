@@ -650,6 +650,8 @@ export class StreamParser {
    * receipt; its row settles from the task's `task_notification` instead.
    */
   private readonly backgroundCalls = new Set<string>()
+  /** The one-line description a background shell launch gave, until its task starts and takes it as its title. */
+  private readonly launchDescriptions = new Map<string, string>()
   /**
    * SendMessage calls held back until the CLI says what they did. A `task_started`
    * carrying the call's id means it resumed a finished agent, which then shows as that
@@ -713,6 +715,7 @@ export class StreamParser {
   stopOpenBackground(): RuntimeEvent[] {
     const open = [...this.backgroundCalls]
     this.backgroundCalls.clear()
+    this.launchDescriptions.clear()
     for (const toolCallId of open) this.subagentToolCalls.delete(toolCallId)
     return open.map((toolCallId) => ({ type: 'tool_result', toolCallId, outcome: 'stopped' }))
   }
@@ -900,7 +903,11 @@ export class StreamParser {
         const taskId = asString(parsed['task_id'])
         if (subtype === 'task_started' && taskId !== undefined && parsed['is_backgrounded'] === true
           && parsed['owned_by_subagent'] !== true && (asNumber(parsed['spawn_depth']) ?? 1) <= 1) {
-          const title = asString(parsed['description']) ?? taskId
+          const launch = asString(parsed['tool_use_id'])
+          const described = launch === undefined ? undefined : this.launchDescriptions.get(launch)
+          if (launch !== undefined) this.launchDescriptions.delete(launch)
+          // A shell task's own description is its command; the launch's description is the readable name.
+          const title = described ?? asString(parsed['description']) ?? taskId
           const agent = asString(parsed['task_type']) === 'local_agent'
           this.backgroundTasks.set(taskId, { title, kind: agent ? 'agent' : 'command' })
           this.vanishedTasks.delete(taskId)
@@ -1051,6 +1058,9 @@ export class StreamParser {
           if (background) {
             this.backgroundCalls.add(toolCallId)
             this.turnRows.add(toolCallId)
+            // Kept as written: the wake redacts it by exact match.
+            const description = SHELL_TOOL.test(tool) && isRecord(block['input']) ? asString(block['input']['description']) : undefined
+            if (description !== undefined && description.trim() !== '') this.launchDescriptions.set(toolCallId, description)
           }
           if (this.followsBackground && toolCallId !== undefined && tool === 'SendMessage') {
             this.heldMessages.set(toolCallId, { type: 'tool_use', toolCallId, ...describeTool(tool, block['input']) })
@@ -1103,6 +1113,7 @@ export class StreamParser {
             this.onBackgroundAck?.(toolCallId)
             if (block['is_error'] !== true) continue
             this.backgroundCalls.delete(toolCallId)
+            this.launchDescriptions.delete(toolCallId)
           }
           const held = this.heldMessages.get(toolCallId)
           if (held !== undefined) {

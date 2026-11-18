@@ -5,7 +5,7 @@ import { DISCLOSURE } from '../motion'
 import { AlertCircleIcon, ArrowDown01Icon, Clock01Icon, MinusSignIcon, RefreshIcon, TaskDone01Icon, Tick02Icon, Undo02Icon } from '@hugeicons/core-free-icons'
 import { ROUTINE_LATE_AFTER_MS, eventImageSource, imageRefSpans, projectFileWriteDetail, projectFileWriteLabel, type EventImage, type ProjectFileWrite } from '@manor/contracts'
 import type { AgentConfig, EventDocument, FileAttachment, InlineQuote, MessageQuote, MessageReply, NoteQuote, PageContextAttachment, SkillConfig, WakeItem } from '@manor/contracts'
-import { wakeLine } from '../turnLabels'
+import { wakeLines } from '../turnLabels'
 import { fileWriteGroups, type MessageQuoteSource, type PendingDocument } from '@manor/client-runtime/state'
 import { describeBytes, utf8Size } from '@manor/client-runtime/attachments'
 import type { BubbleTint } from '@manor/client-runtime/avatar-bubble'
@@ -607,9 +607,11 @@ export function WakeLine({ items }: { items: readonly WakeItem[] }) {
   const failed = items.some((item) => item.state === 'failed')
   return (
     <div className="flex justify-center">
-      <span className="flex items-center gap-1.5 px-3 py-0.5 text-[12px] text-dim">
-        <Icon icon={failed ? AlertCircleIcon : TaskDone01Icon} size={12} />
-        <span>{wakeLine(items)}</span>
+      <span className="flex max-w-full min-w-0 items-start gap-1.5 px-3 py-0.5 text-[12px] text-dim">
+        <Icon icon={failed ? AlertCircleIcon : TaskDone01Icon} size={12} className="mt-[3px] flex-none" />
+        <span className="flex min-w-0 flex-col">
+          {wakeLines(items).map((line, index) => <span key={index} className="truncate">{line}</span>)}
+        </span>
       </span>
     </div>
   )

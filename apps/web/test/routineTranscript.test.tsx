@@ -139,7 +139,7 @@ describe('a background wake in the transcript', () => {
         wakeItems: [{ toolCallId: 'tc1', taskId: 'task_9', title: 'Anti-slop review', state: 'done', driver: 'codex', model: 'gpt' }],
       }, 1),
     ])
-    expect(html).toContain('“Anti-slop review” finished')
+    expect(html).toContain('Background task finished: anti-slop review')
     expect(html).not.toContain('<button')
     expect(html).not.toContain('Background work you started')
     expect(html).not.toContain('RAW-ANSWER')

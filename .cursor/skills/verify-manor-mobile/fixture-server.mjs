@@ -843,7 +843,12 @@ const snapshots = {
     { id: 'k6', ts: now - 40_000, type: 'tool_result', turnId: 'turn-k1', agentId: 'agent-marlow', toolCallId: 'subagent_count', outcome: 'success', output: 'There are 4 files.' },
     { id: 'k7', ts: now - 40_000, type: 'user_message', source: 'background_wake', mentions: [],
       text: 'Background work you started has ended. Sam has not sent anything new.',
-      wakeItems: [{ toolCallId: 'subagent_count', taskId: 'child-count', title: 'Count the files', state: 'done', driver: 'codex', model: 'gpt-6.1-sol' }] },
+      wakeItems: [
+        { toolCallId: 'subagent_count', taskId: 'child-count', title: 'Count the files', state: 'done', driver: 'codex', model: 'gpt-6.1-sol' },
+        // Background shell commands with no launch row: one named by its description, one by a raw loop.
+        { toolCallId: 'bash-retry', title: 'Retry the phone launch until the port is free', state: 'done' },
+        { toolCallId: 'bash-loop', title: 'for i in $(seq 1 360); do out=$(node .cursor/skills/verify-manor-mobile/control-manor-mobile.mjs launch 2>&1); if echo "$out" | grep -q "is held"; then sleep 5; fi; done', state: 'done' },
+      ] },
     { id: 'k8', ts: now - 38_000, type: 'agent_message', turnId: 'turn-k2', agentId: 'agent-marlow', messageId: 'k-m2', text: 'Count the files finished: 4 files. The logs are still being read.' },
     { id: 'k9', ts: now - 38_000, type: 'turn_result', turnId: 'turn-k2', agentId: 'agent-marlow' },
   ],

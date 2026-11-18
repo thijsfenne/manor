@@ -1,7 +1,7 @@
 import ArrowRight01Icon from '@hugeicons/core-free-icons/ArrowRight01Icon'
 import { HugeiconsIcon } from '@hugeicons/react-native'
 import type { ToolStep, TurnActivity } from '@manor/client-runtime/state'
-import { wakeLine } from '@manor/client-runtime/turn-labels'
+import { wakeLines } from '@manor/client-runtime/turn-labels'
 import { WAKE_NOTICE, launchDriver, subagentElapsed, subagentRowModel, subagentSteps, subagentStepState, type SubagentRowModel, type SubagentState } from '@manor/client-runtime/turn-trace'
 import type { WakeItem } from '@manor/contracts'
 import { useEffect, useState } from 'react'
@@ -133,7 +133,7 @@ export function WakeNotices({ items, ts }: { items: readonly WakeItem[]; ts: num
     return launch === undefined ? [] : [{ item, launch }]
   })
   const rest = items.filter((item) => !known.some((entry) => entry.item === item))
-  if (known.length === 0) return <Text style={styles.wake}>{wakeLine(items)}</Text>
+  if (known.length === 0) return <WakeText items={items} />
   const open = launches?.open
   return (
     <View style={styles.rows}>
@@ -151,7 +151,16 @@ export function WakeNotices({ items, ts }: { items: readonly WakeItem[]; ts: num
           />
         )
       })}
-      {rest.length === 0 ? null : <Text style={styles.wake}>{wakeLine(rest)}</Text>}
+      {rest.length === 0 ? null : <WakeText items={rest} />}
+    </View>
+  )
+}
+
+/** A wake's quiet rows, one line each, so a long name never pushes the next one out of sight. */
+export function WakeText({ items }: { items: readonly WakeItem[] }) {
+  return (
+    <View>
+      {wakeLines(items).map((line, index) => <Text key={index} style={styles.wake} numberOfLines={1}>{line}</Text>)}
     </View>
   )
 }
