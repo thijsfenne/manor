@@ -87,7 +87,6 @@ function SubagentFacts({ subagent: { step }, state, summary, starter, below }: P
   const launch = step.subagent
   const driver = summary?.driver ?? launchDriver(launch)
   const runtime = subagentRuntime(driver, summary?.model ?? launch?.model, summary?.effort ?? launch?.effort)
-  const role = summary?.role ?? launch?.role
   // Why it ended, once that is the news: a done or running helper has nothing to explain.
   const why = state === 'running' || state === 'done' ? undefined : summary?.reason
   return (
@@ -100,14 +99,11 @@ function SubagentFacts({ subagent: { step }, state, summary, starter, below }: P
           {driver === undefined ? NOT_REPORTED : runtime === undefined ? providerName(driver) : [runtime.model, runtime.effort].filter(Boolean).join(', ')}
         </Badge>
       </div>
-      {role === undefined && why === undefined ? null : (
+      {why === undefined ? null : (
         <dl className="m-0 grid grid-cols-[6.5rem_minmax(0,1fr)] gap-x-3 gap-y-1.5">
-          {role === undefined ? null : <Fact label="Role"><span className="[overflow-wrap:anywhere]">{role}</span></Fact>}
-          {why === undefined ? null : (
-            <Fact label={state === 'failed' ? 'Why it failed' : 'Why it stopped'}>
-              <span className="[overflow-wrap:anywhere]">{why}</span>
-            </Fact>
-          )}
+          <Fact label={state === 'failed' ? 'Why it failed' : 'Why it stopped'}>
+            <span className="[overflow-wrap:anywhere]">{why}</span>
+          </Fact>
         </dl>
       )}
     </div>
@@ -160,6 +156,7 @@ function ChildConversation(props: SubagentViewProps & { childId: string }) {
           showSpeakers={false}
           connected={connected}
           onOpenSubagents={onOpenChild}
+          taskRole={summary?.role ?? subagent.step.subagent?.role}
           leading={<SubagentFacts subagent={subagent} state={state} summary={summary} starter={starter} below="-mb-[22px]" />}
           emptyNote="Nothing in this thread yet."
           held={covered}
@@ -187,6 +184,7 @@ function ProviderRecord(props: SubagentViewProps) {
   const { subagent, state, summary, starter } = props
   const { step, steps } = subagent
   const launch = step.subagent
+  const role = summary?.role ?? launch?.role
   const now = state === 'running' ? subagentNow(steps) : undefined
   const headerInBar = useTopBarSlot() !== null
   return (
@@ -202,8 +200,12 @@ function ProviderRecord(props: SubagentViewProps) {
               {launch?.driver === undefined ? 'The provider' : providerName(launch.driver)} ran this helper inside its own turn, so Manor has its brief, its steps and its result, not its conversation.
             </p>
             <Section title="Brief">
-              {launch?.prompt === undefined ? <p className="m-0 text-dim">{NOT_REPORTED}</p> : (
-                <div className="rounded-xl bg-surface-2/45 px-3 py-2.5 leading-[1.55]"><Markdown text={launch.prompt} /></div>
+              {launch?.prompt === undefined && role === undefined ? <p className="m-0 text-dim">{NOT_REPORTED}</p> : (
+                <div className="rounded-xl bg-surface-2/45 px-3 py-2.5 leading-[1.55]">
+                  {role === undefined ? null : <p className="m-0 text-muted [overflow-wrap:anywhere]">{role}</p>}
+                  {role === undefined || launch?.prompt === undefined ? null : <hr className="my-2 border-0 border-t border-line" />}
+                  {launch?.prompt === undefined ? <p className="m-0 mt-2 text-dim">{NOT_REPORTED}</p> : <Markdown text={launch.prompt} />}
+                </div>
               )}
             </Section>
             <Section title="Steps">

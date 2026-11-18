@@ -76,7 +76,6 @@ function Fact({ label, children }: { label: string; children: ReactNode }) {
 function SubagentFacts({ subagent: { step, agentId }, state, summary, agents, below }: Pick<SubagentConversationProps, 'subagent' | 'state' | 'summary' | 'agents'> & { below: number }) {
   const driver = summary?.driver ?? launchDriver(step.subagent)
   const runtime = subagentRuntime(driver, summary?.model ?? step.subagent?.model, summary?.effort ?? step.subagent?.effort)
-  const role = summary?.role ?? step.subagent?.role
   // Why it ended, once that is the news: a done or running helper has nothing to explain.
   const why = state === 'running' || state === 'done' ? undefined : summary?.reason
   const starter = agents.find((agent) => agent.id === agentId)
@@ -90,7 +89,6 @@ function SubagentFacts({ subagent: { step, agentId }, state, summary, agents, be
           {runtime === undefined ? (driver === undefined ? NOT_REPORTED : 'Its provider') : [runtime.model, runtime.effort].filter(Boolean).join(', ')}
         </Badge>
       </View>
-      {role === undefined ? null : <Fact label="Role"><Text style={styles.factText}>{role}</Text></Fact>}
       {why === undefined ? null : (
         <Fact label={state === 'failed' ? 'Why it failed' : 'Why it stopped'}><Text selectable style={styles.factText}>{why}</Text></Fact>
       )}
@@ -142,14 +140,15 @@ function SubagentBar({ subagent: { step }, state, summary, onOpenParent }: Pick<
  * closes it. It reads the live thread, so a streamed frame renders this list and not the screen.
  */
 function ChildConversation(props: SubagentConversationProps & { childId: string; top: number; bottom: number }) {
-  const { childId, agents, connected, onOpenChild, top, bottom } = props
+  const { childId, agents, connected, onOpenChild, top, bottom, summary, subagent } = props
+  const role = summary?.role ?? subagent.step.subagent?.role
   const thread = useLiveThread(childId)
   const rows = useMemo(() => rowsOf(thread), [thread])
   const last = rows.at(-1)?.key
   const covered = useScreenCovered()
   // What a row draws besides its own data: the list redraws a mounted row only when its
   // item or this changes, so the connection dropping or a newer row has to be named here.
-  const rowContext = useMemo(() => ({ agents, connected, last, onOpenChild }), [agents, connected, last, onOpenChild])
+  const rowContext = useMemo(() => ({ agents, connected, last, onOpenChild, role }), [agents, connected, last, onOpenChild, role])
   return (
     <TranscriptCovered.Provider value={covered}>
     <LegendList
@@ -164,21 +163,21 @@ function ChildConversation(props: SubagentConversationProps & { childId: string;
       maintainScrollAtEnd={covered ? false : { animated: false, on: { dataChange: true, itemLayout: true } }}
       maintainScrollAtEndThreshold={0.15}
       recycleItems={false}
-      renderItem={({ item }) => <ChildRow agents={agents} connected={connected} latest={item.key === last} onOpenChild={onOpenChild} row={item} />}
+      renderItem={({ item }) => <ChildRow agents={agents} connected={connected} latest={item.key === last} onOpenChild={onOpenChild} role={role} row={item} />}
     />
     </TranscriptCovered.Provider>
   )
 }
 
-function ChildRow({ row, agents, connected, latest, onOpenChild }: { row: Row; agents: AgentConfig[]; connected: boolean; latest: boolean; onOpenChild: (toolCallId: string) => void }) {
+function ChildRow({ row, agents, connected, latest, onOpenChild, role }: { row: Row; agents: AgentConfig[]; connected: boolean; latest: boolean; onOpenChild: (toolCallId: string) => void; role: string | undefined }) {
   if (row.kind === 'turn') return <View style={styles.row}><Turn agents={agents} connected={connected} latest={latest} onOpenSubagent={onOpenChild} showSpeaker={false} turn={row} /></View>
   if (row.kind !== 'event') return null
   const { event } = row
-  // The task opens the thread as a handoff card, like a Session's brief; the facts above say who started it.
+  // The task opens the thread as a handoff card, like a Session's brief; the facts above say who started it and the card carries the role.
   if (event.type === 'user_message') return (
     <View style={styles.row}>
       {event.source === 'subagent_task'
-        ? <KickoffCard agents={agents} files={event.files ?? []} images={event.images ?? []} text={messageBrief(event)} />
+        ? <KickoffCard agents={agents} files={event.files ?? []} images={event.images ?? []} role={role} text={messageBrief(event)} />
         : <RelayedAgentMessage agents={agents} event={event} />}
     </View>
   )
@@ -200,14 +199,17 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
  * this shows what the launch row holds and says so, rather than dressing it up as a thread.
  */
 function ProviderRecord(props: SubagentConversationProps & { top: number; bottom: number }) {
-  const { subagent: { step, steps }, state, agents, top, bottom } = props
+  const { subagent: { step, steps }, state, summary, agents, top, bottom } = props
   const launch = step.subagent
+  const role = summary?.role ?? launch?.role
   const now = state === 'running' ? subagentNow(steps) : undefined
   return (
     <ScrollView contentContainerStyle={[styles.record, { paddingTop: top, paddingBottom: bottom }]}>
       <SubagentFacts {...props} below={spacing.lg} />
       <Text style={styles.detail}>Its provider ran this helper inside its own turn, so Manor has its brief, its steps and its result, not its conversation.</Text>
       <Section title="Brief">
+        {role === undefined ? null : <Text style={styles.detail}>{role}</Text>}
+        {role === undefined || launch?.prompt === undefined ? null : <View style={styles.divider} />}
         {launch?.prompt === undefined ? <Text style={styles.detail}>{NOT_REPORTED}</Text> : <Markdown agents={agents} text={launch.prompt} />}
       </Section>
       <Section title="Steps">
@@ -237,6 +239,7 @@ const styles = StyleSheet.create({
   factLabel: { width: 92, color: colors.dim, fontFamily: fonts.sans, fontSize: 13, lineHeight: 19 },
   factValue: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 6 },
   factText: { flexShrink: 1, color: colors.muted, fontFamily: fonts.sans, fontSize: 13, lineHeight: 19 },
+  divider: { height: StyleSheet.hairlineWidth, marginVertical: spacing.sm, backgroundColor: colors.line },
   section: { gap: spacing.xs },
   sectionLabel: { color: colors.dim, fontFamily: fonts.sans, fontSize: 13, lineHeight: 18 },
   detail: { color: colors.muted, fontFamily: fonts.sans, fontSize: 14, lineHeight: 20 },

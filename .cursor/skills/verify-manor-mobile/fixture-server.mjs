@@ -423,6 +423,9 @@ for (const session of notesSessions) {
 directory.backgroundChatIds = [...(directory.backgroundChatIds ?? []), 'chat-notes-build']
 
 // The two children of `chat-background-wake` and the one the running child started itself.
+// One helper with a role and a task long enough to fold, which a child's card shows above a divider.
+const LOGS_ROLE = 'You are a skeptical, read-only log reader. Do not edit files, do not start subagents.'
+const LOGS_TASK = 'Read the logs of the last seven days in the git worktree at /tmp/manor-mobile-verify/worktree. Group the errors by service, count each group, and report the three most frequent ones with one example line each. Then compare each count with the week before and note anything that is new. List every file you read so the lead can check your sources, keep each example line to one sentence, and mark any group you could not read completely. Do not modify any file.'
 const childOf = (id, toolCallId, title, parentChatId, turnId, depth, rest) => ({
   id, parentChatId, title, toolCallId, turnId, depth, agentId: 'agent-marlow', driver: 'codex', model: 'gpt-6.1-sol', effort: 'high', startedAt: Date.now() - 89_000, ...rest,
 })
@@ -818,7 +821,7 @@ const snapshots = {
     { id: 'cc5', ts: now - 40_000, type: 'turn_result', turnId: 'turn-count', agentId: 'agent-marlow' },
   ],
   'child-logs': [
-    { id: 'cl1', ts: now - 88_000, type: 'user_message', source: 'subagent_task', authorAgentId: 'agent-marlow', mentions: [], text: 'Read the logs.' },
+    { id: 'cl1', ts: now - 88_000, type: 'user_message', source: 'subagent_task', authorAgentId: 'agent-marlow', mentions: [], text: LOGS_TASK },
     { id: 'cl2', ts: now - 80_000, type: 'tool_use', turnId: 'turn-logs', agentId: 'agent-marlow', toolCallId: 'subagent_grep', tool: 'spawn_subagent',
       subject: 'Search the errors', subagent: { title: 'Search the errors', prompt: 'Search the errors.', model: 'gpt-6.1-sol', effort: 'high', driver: 'codex', childChatId: 'child-grep' } },
     { id: 'cl3', ts: now - 60_000, type: 'tool_result', turnId: 'turn-logs', agentId: 'agent-marlow', toolCallId: 'subagent_grep', outcome: 'error', output: 'The provider dropped the connection.' },
@@ -834,7 +837,7 @@ const snapshots = {
     { id: 'k2', ts: now - 89_000, type: 'tool_use', turnId: 'turn-k1', agentId: 'agent-marlow', toolCallId: 'subagent_count', tool: 'spawn_subagent',
       subject: 'Count the files', subagent: { title: 'Count the files', prompt: 'Count the files.', model: 'gpt-6.1-sol', effort: 'high', driver: 'codex', childChatId: 'child-count' } },
     { id: 'k3', ts: now - 88_000, type: 'tool_use', turnId: 'turn-k1', agentId: 'agent-marlow', toolCallId: 'subagent_logs', tool: 'spawn_subagent',
-      subject: 'Read the logs', subagent: { title: 'Read the logs', prompt: 'Read the logs.', model: 'gpt-6.1-sol', effort: 'high', driver: 'codex', childChatId: 'child-logs' } },
+      subject: 'Read the logs', subagent: { title: 'Read the logs', prompt: LOGS_TASK, role: LOGS_ROLE, model: 'gpt-6.1-sol', effort: 'high', driver: 'codex', childChatId: 'child-logs' } },
     { id: 'k4', ts: now - 87_000, type: 'agent_message', turnId: 'turn-k1', agentId: 'agent-marlow', messageId: 'k-m1', text: 'Started two helpers in the background.' },
     { id: 'k5', ts: now - 87_000, type: 'turn_result', turnId: 'turn-k1', agentId: 'agent-marlow' },
     { id: 'k6', ts: now - 40_000, type: 'tool_result', turnId: 'turn-k1', agentId: 'agent-marlow', toolCallId: 'subagent_count', outcome: 'success', output: 'There are 4 files.' },

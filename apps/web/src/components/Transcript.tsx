@@ -159,6 +159,8 @@ interface TranscriptProps {
   leading?: ReactNode
   /** The row of an isolated Session's first brief, which names the branch above itself. */
   isolation?: { rowKey: string; branch: string }
+  /** The role a helper was given, shown muted at the top of its task card. */
+  taskRole?: string
   /**
    * Where this transcript is being read. The stage centres a 780px column inside a
    * scroller that spans the window and leaves room for the composer's fade; a panel
@@ -274,6 +276,7 @@ export function Transcript({
   held = false,
   leading,
   isolation,
+  taskRole,
   variant = 'stage',
   denseText = false,
   emptyNote,
@@ -717,6 +720,7 @@ export function Transcript({
         onOpenQuoteSource={stableOpenQuoteSource}
         {...(unannouncedHere === undefined ? {} : { unannounced: unannouncedHere })}
         {...(isolation?.rowKey === row.key ? { isolatedBranch: isolation.branch } : {})}
+        {...(taskRole === undefined ? {} : { taskRole })}
       />
     ) : row.kind === 'work_handoff' ? (
       <div className={bubbleReplies ? 'min-w-0 max-w-bubble' : 'contents'}>
@@ -931,16 +935,23 @@ function JumpToLatest({ shown, panel, onJump }: { shown: boolean; panel: boolean
  * lines like a long message so the thread starts on the work rather than under a wall of
  * text. An agent wrote it, so it reads as markdown with the personas it names as chips,
  * a step below the messages' size so it does not outweigh them. The breadcrumb already
- * names the project.
+ * names the project. A helper's task card also carries its role above a divider.
  */
-function KickoffCard({ text, agents, images = [], files = [], branch }: { text: string; agents: AgentConfig[]; images?: EventImage[]; files?: FileAttachment[]; branch?: string }) {
+function KickoffCard({ text, agents, images = [], files = [], branch, role }: { text: string; agents: AgentConfig[]; images?: EventImage[]; files?: FileAttachment[]; branch?: string; role?: string }) {
   const { plugins, components } = useAgentMentions(agents)
   const card = (
     <div className="flex min-w-0 flex-col gap-2 rounded-xl border border-line bg-composer-tray px-4 py-3">
       <KickoffAttachments images={images} files={files} />
       {/* The size sits outside the clamp so its line unit is the brief's own. */}
       <div className="min-w-0 text-[length:calc(var(--msg-size,16px)-1px)]">
-        <ClampedMessage clamp lines={KICKOFF_LINES}>
+        <ClampedMessage clamp lines={role === undefined ? KICKOFF_LINES : KICKOFF_LINES + ROLE_LINES}>
+          {/* A helper's role leads the task inside the clamp, so a folded card shows both. */}
+          {role === undefined ? null : (
+            <>
+              <p className="m-0 text-muted [overflow-wrap:anywhere]">{role}</p>
+              <hr className="my-2 border-0 border-t border-line" />
+            </>
+          )}
           <Markdown text={text} plugins={plugins} components={components} />
         </ClampedMessage>
       </div>
@@ -964,6 +975,8 @@ function KickoffCard({ text, agents, images = [], files = [], branch }: { text: 
 
 /** How much of a brief shows before Show more: the problem statement, not the whole plan. */
 const KICKOFF_LINES = 5
+/** Lines a helper's role adds to the fold, so the task keeps its own five under it. */
+const ROLE_LINES = 3
 
 /** Memoised like `TurnRow`: a streamed token re-renders the transcript, never a finished message. */
 const EventRow = memo(function EventRow({
@@ -979,6 +992,7 @@ const EventRow = memo(function EventRow({
   onOpenQuoteSource,
   unannounced,
   isolatedBranch,
+  taskRole,
 }: {
   row: Extract<Row, { kind: 'event' }>
   agents: AgentConfig[]
@@ -993,6 +1007,8 @@ const EventRow = memo(function EventRow({
   unannounced?: readonly UnannouncedConsultation[]
   /** An isolated Session's first brief: the branch shown above it. */
   isolatedBranch?: string
+  /** A helper's role, which its task card carries above the task. */
+  taskRole?: string
 }) {
   const event = row.event
   const answerChange = useContext(AnswerChange)
@@ -1034,7 +1050,7 @@ const EventRow = memo(function EventRow({
       ) : event.source === 'subagent_task' ? (
         // A helper's view opens on its task as a handoff card, like a Session's brief.
         // The facts above it already say who started it and on what.
-        <KickoffCard text={messageBrief(event)} agents={agents} images={event.images ?? []} files={event.files ?? []} />
+        <KickoffCard text={messageBrief(event)} agents={agents} images={event.images ?? []} files={event.files ?? []} {...(taskRole === undefined ? {} : { role: taskRole })} />
       ) : event.source === 'agent_relay' ? (
         <RelayedAgentMessage event={event} agents={agents} />
       ) : row.confirmTasks !== undefined ? (

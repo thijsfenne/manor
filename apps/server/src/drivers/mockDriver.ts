@@ -232,15 +232,16 @@ interface MockDelegation {
   wait: boolean
   /** "review subagent …" marks the child as a code reviewer. */
   review: boolean
+  role?: string
 }
 
-const DELEGATION = /\b(background\s+)?(review\s+)?subagent\s+(\S+)\s+(low|medium|high|xhigh|max):\s*([\s\S]+)/i
+const DELEGATION = /\b(background\s+)?(review\s+)?subagent\s+(\S+)\s+(low|medium|high|xhigh|max)(?:\s+role\s+"([^"]+)")?:\s*([\s\S]+)/i
 
 /**
  * "subagent gpt-6.1-sol high: <task>" runs the real delegate broker end to end, so a
  * child thread, its sidebar row and its result can be checked without a provider. A
  * task that itself starts with that form makes the child delegate once more, which
- * Settings must allow. "review subagent …" starts it as a code reviewer. Several lines
+ * Settings must allow. `role "<text>"` before the colon gives it a role. "review subagent …" starts it as a code reviewer. Several lines
  * in that form start one child each, in order, so parallel children and their one
  * wake can be checked.
  */
@@ -256,7 +257,8 @@ function delegationsFor(input: TurnInput): MockDelegation[] {
   return (lines.length > 1 ? lines : [message.text]).flatMap((text) => {
     const match = DELEGATION.exec(text)
     return match === null ? [] : [{
-      brokerUrl, capability, model: match[3]!, effort: match[4]!.toLowerCase(), task: match[5]!.trim(), wait: match[1] === undefined, review: match[2] !== undefined,
+      brokerUrl, capability, model: match[3]!, effort: match[4]!.toLowerCase(), task: match[6]!.trim(), wait: match[1] === undefined, review: match[2] !== undefined,
+      ...(match[5] === undefined ? {} : { role: match[5] }),
     }]
   })
 }
@@ -860,7 +862,7 @@ async function delegate(delegation: MockDelegation, request: typeof fetch, signa
   const response = await request(delegation.brokerUrl, {
     method: 'POST',
     headers: { 'content-type': 'application/json', 'x-manor-user-input-capability': delegation.capability },
-    body: JSON.stringify({ action: 'delegate_task', task: delegation.task, model: delegation.model, effort: delegation.effort, wait: delegation.wait, ...(delegation.review ? { review: true } : {}) }),
+    body: JSON.stringify({ action: 'delegate_task', task: delegation.task, model: delegation.model, effort: delegation.effort, wait: delegation.wait, ...(delegation.role === undefined ? {} : { role: delegation.role }), ...(delegation.review ? { review: true } : {}) }),
     signal,
   })
   const body = await response.json() as { report?: { status?: string; result?: string; reason?: string; title?: string }; error?: string }
