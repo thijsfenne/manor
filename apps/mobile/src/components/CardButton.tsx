@@ -1,14 +1,21 @@
-import { Pressable, StyleSheet, type StyleProp, type ViewStyle } from 'react-native'
-import { colors, fonts, radius, spacing } from '@/theme'
+import { Pressable, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native'
+import { colors, fonts, glassTints, radius, spacing, useScheme } from '@/theme'
+import { GlassPressable } from './GlassPressable'
 import { Text } from './Text'
+import { useGlassSettle } from './useGlassSettle'
 
 export type CardButtonVariant = 'primary' | 'secondary' | 'quiet'
 
 /**
  * Every button on a phone card (proposal, result, ask, permission, secret, mail and
- * Slack draft): a capsule 40pt high. `primary` is the card's one decision, filled;
- * `secondary` sits on a sheer fill that reads on a flat card and on glass alike;
- * `quiet` is text only. Pass `style` for layout (`flex`, margins), never for looks.
+ * Slack draft): a capsule 40pt high. `primary` is the card's one decision, on tinted
+ * Liquid Glass; `secondary` is clear glass; `quiet` is text only. Where glass is
+ * missing both fall back to the flat fills below. Pass `style` for layout (`flex`,
+ * margins), never for looks.
+ *
+ * The glass is its own native view, so it must never sit inside a Pressable or under
+ * a parent whose opacity animates: it renders flat there. Keep a card's button row
+ * out of fading wrappers. See `useGlassSettle` for the one re-creation it gets.
  */
 export function CardButton({
   label,
@@ -30,18 +37,42 @@ export function CardButton({
   style?: StyleProp<ViewStyle>
   onPress: () => void
 }) {
+  const scheme = useScheme()
+  const settled = useGlassSettle(variant !== 'quiet')
+  const face = <Text numberOfLines={1} style={[styles.label, LABELS[variant]]}>{label}</Text>
+
+  if (variant === 'quiet') {
+    return (
+      <Pressable
+        accessibilityRole="button"
+        {...(accessibilityLabel === undefined ? {} : { accessibilityLabel })}
+        {...(accessibilityHint === undefined ? {} : { accessibilityHint })}
+        accessibilityState={{ disabled, busy }}
+        disabled={disabled}
+        onPress={onPress}
+        style={({ pressed }) => [styles.base, styles.quiet, disabled && styles.disabled, pressed && styles.pressed, style]}
+      >
+        {face}
+      </Pressable>
+    )
+  }
+
+  const primary = variant === 'primary'
   return (
-    <Pressable
-      accessibilityRole="button"
-      {...(accessibilityLabel === undefined ? {} : { accessibilityLabel })}
+    <GlassPressable
+      key={settled}
       {...(accessibilityHint === undefined ? {} : { accessibilityHint })}
+      accessibilityLabel={accessibilityLabel ?? label}
       accessibilityState={{ disabled, busy }}
       disabled={disabled}
+      fallbackColor={primary ? colors.text : colors.chip}
+      fallbackStyle={styles.flat}
       onPress={onPress}
-      style={({ pressed }) => [styles.base, FILLS[variant], disabled && styles.disabled, pressed && styles.pressed, style]}
+      style={style}
+      {...(primary ? { tintColor: glassTints.primary[scheme] } : {})}
     >
-      <Text numberOfLines={1} style={[styles.label, LABELS[variant]]}>{label}</Text>
-    </Pressable>
+      <View style={styles.base}>{face}</View>
+    </GlassPressable>
   )
 }
 
@@ -50,12 +81,9 @@ const styles = StyleSheet.create({
   label: { fontFamily: fonts.sans, fontSize: 14, fontWeight: '500' },
   disabled: { opacity: 0.45 },
   pressed: { opacity: 0.7 },
-})
-
-const FILLS = StyleSheet.create({
-  primary: { backgroundColor: colors.text },
-  secondary: { backgroundColor: colors.chip },
-  quiet: { backgroundColor: 'transparent', paddingHorizontal: spacing.sm + 2 },
+  quiet: { paddingHorizontal: spacing.sm + 2 },
+  // The flat fallback keeps the earlier borderless fills.
+  flat: { borderWidth: 0 },
 })
 
 const LABELS = StyleSheet.create({

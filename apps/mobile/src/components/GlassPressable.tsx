@@ -4,6 +4,7 @@ import { StyleSheet, TouchableWithoutFeedback, View, type AccessibilityRole, typ
 import { GlassSurface, LIQUID_GLASS_AVAILABLE } from '@/components/GlassSurface'
 
 interface GlassPressableProps {
+  accessibilityHint?: string
   accessibilityLabel: string
   accessibilityRole?: AccessibilityRole
   accessibilityState?: AccessibilityState
@@ -27,6 +28,7 @@ interface GlassPressableProps {
 
 /** A native interactive glass surface with one shared touch and fallback treatment. */
 export function GlassPressable({
+  accessibilityHint,
   accessibilityLabel,
   accessibilityRole = 'button',
   accessibilityState,
@@ -48,6 +50,7 @@ export function GlassPressable({
     // a native wrapper. GlassSurface forwards those responder/accessibility props
     // to GlassView, so SDK 57's interactive material owns the hold and morph.
     <TouchableWithoutFeedback
+      accessibilityHint={accessibilityHint}
       accessibilityLabel={accessibilityLabel}
       accessibilityRole={accessibilityRole}
       accessibilityState={accessibilityState}

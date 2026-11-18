@@ -41,8 +41,9 @@ export function WorkDecisionDock({ rows, inView, agents, onReject, onReveal, onR
   return (
     // Rises rather than fades: an opacity ancestor turns the glass flat for good.
     <Animated.View entering={glassRise} exiting={glassSink} style={styles.dock}>
-      {/* Glass like the cards it pins (2026-11-17). Accept and Confirm keep a solid fill
-          on it, so they stay easy to find on the light canvas (too faint on 2026-10-12). */}
+      {/* Glass like the cards it pins (2026-11-17). Accept and Confirm are tinted glass
+          (2026-11-18, reversing the solid fill of 2026-10-12), so they stay the clear
+          decision on the light canvas. */}
       <GlassSurface radius={radius.panel} fallbackStyle={styles.fallback}>
         <FadingScrollView
           accessibilityLabel="Needs you"

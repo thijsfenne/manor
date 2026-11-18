@@ -17,8 +17,10 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import Animated, { FadeIn, useReducedMotion } from 'react-native-reanimated'
 
 import { GlassIconButton } from '@/components/GlassIconButton'
+import { GlassPressable } from '@/components/GlassPressable'
 import { Markdown } from '@/components/Markdown'
 import { Text } from '@/components/Text'
+import { useGlassSettle } from '@/components/useGlassSettle'
 import { serverMediaUri } from '@/lib/config'
 import { FILE_GONE, fileFailure, saveToShareSheet } from '@/lib/fileSave'
 import { colors, fonts, radius, spacing, squircle } from '@/theme'
@@ -270,19 +272,24 @@ function FileCard({ file, uri, note }: { file: DmFile; uri: string | undefined; 
   )
 }
 
+/** Liquid Glass like every card button on the phone; a flat fill where glass is missing. */
 function CardButton({ label, icon, busy, disabled, onPress }: { label: string; icon: typeof File01Icon; busy: boolean; disabled: boolean; onPress: () => void }) {
+  const settled = useGlassSettle()
   return (
-    <Pressable
+    <GlassPressable
+      key={settled}
       accessibilityLabel={label}
-      accessibilityRole="button"
       accessibilityState={{ busy, disabled }}
       disabled={disabled}
+      fallbackColor={colors.fill}
+      fallbackStyle={styles.cardButtonFlat}
       onPress={onPress}
-      style={({ pressed }) => [styles.cardButton, pressed && styles.pressed, disabled && !busy && styles.disabled]}
     >
-      <HugeiconsIcon color={colors.text} icon={icon} size={17} strokeWidth={1.8} />
-      <Text style={styles.cardButtonText}>{busy ? '…' : label}</Text>
-    </Pressable>
+      <View style={styles.cardButton}>
+        <HugeiconsIcon color={colors.text} icon={icon} size={17} strokeWidth={1.8} />
+        <Text style={styles.cardButtonText}>{busy ? '…' : label}</Text>
+      </View>
+    </GlassPressable>
   )
 }
 
@@ -315,9 +322,8 @@ const styles = StyleSheet.create({
   cardMeta: { color: colors.muted, fontFamily: fonts.sans, fontSize: 13, textAlign: 'center' },
   cardFacts: { flexDirection: 'row', gap: spacing.sm, justifyContent: 'center' },
   cardActions: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.md },
-  cardButton: { alignItems: 'center', backgroundColor: colors.fill, borderRadius: radius.round, flexDirection: 'row', gap: spacing.xs, minHeight: 44, paddingHorizontal: spacing.lg },
+  cardButton: { alignItems: 'center', flexDirection: 'row', gap: spacing.xs, minHeight: 44, paddingHorizontal: spacing.lg },
+  cardButtonFlat: { borderWidth: 0 },
   cardButtonText: { color: colors.text, fontFamily: fonts.sans, fontSize: 15, fontWeight: '500' },
   cardError: { color: colors.warning, fontFamily: fonts.sans, fontSize: 12, textAlign: 'center' },
-  pressed: { opacity: 0.7 },
-  disabled: { opacity: 0.5 },
 })

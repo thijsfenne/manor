@@ -139,7 +139,7 @@ export function OutboundDraftBubble({ draft, connected = true, actions = {}, unf
         ) : undefined}
       />
       {!expanded ? null : (
-        <Animated.View entering={FADE_IN} exiting={FADE_OUT} style={styles.content}>
+        <Animated.View entering={FADE_IN} exiting={FADE_OUT} style={[styles.content, !open && styles.contentLast]}>
           {draft.thread === undefined ? null : (
             <ThreadQuote thread={draft.thread} {...(readable ? { onMore: showThread } : {})} />
           )}
@@ -218,34 +218,35 @@ export function OutboundDraftBubble({ draft, connected = true, actions = {}, unf
           ) : closed?.outcome === 'submitted' && closed.delivery !== 'delivered' ? (
             <Text style={styles.note}>Saved in this chat. Nothing was sent.</Text>
           ) : null}
-          {!open ? null : (
-            <View style={styles.actions}>
-              {threadVerbs ? (
-                <>
-                  {onSnooze === undefined ? null : (
-                    <CardButton variant="quiet" accessibilityLabel="Answer tomorrow" disabled={!connected} label="Later" onPress={() => onSnooze(draft.draftId, snoozeUntilTomorrow())} />
-                  )}
-                  {onIgnore === undefined ? null : (
-                    <CardButton variant="quiet" accessibilityLabel="Ignore this thread" disabled={!connected} label="Ignore" onPress={() => onIgnore(draft.draftId)} />
-                  )}
-                </>
-              ) : onDiscard === undefined ? null : (
-                <CardButton variant="quiet" accessibilityLabel="Discard draft" disabled={!connected} label="Discard" onPress={() => onDiscard(draft.draftId)} />
-              )}
-              <CardButton
-                accessibilityLabel="Send"
-                disabled={!canSubmit}
-                label="Send"
-                onPress={() => {
-                  if (!canSubmit || onSubmit === undefined) return
-                  if (gmail) onSubmit(draft.draftId, body, subjectEditable ? subject : undefined, editedRichText, cc)
-                  else onSubmit(draft.draftId, body, undefined, editedRichText)
-                }}
-                variant="primary"
-              />
-            </View>
-          )}
         </Animated.View>
+      )}
+      {/* Outside the fading wrapper: glass under an animated opacity renders flat. */}
+      {!expanded || !open ? null : (
+        <View style={styles.actions}>
+          {threadVerbs ? (
+            <>
+              {onSnooze === undefined ? null : (
+                <CardButton variant="quiet" accessibilityLabel="Answer tomorrow" disabled={!connected} label="Later" onPress={() => onSnooze(draft.draftId, snoozeUntilTomorrow())} />
+              )}
+              {onIgnore === undefined ? null : (
+                <CardButton variant="quiet" accessibilityLabel="Ignore this thread" disabled={!connected} label="Ignore" onPress={() => onIgnore(draft.draftId)} />
+              )}
+            </>
+          ) : onDiscard === undefined ? null : (
+            <CardButton variant="quiet" accessibilityLabel="Discard draft" disabled={!connected} label="Discard" onPress={() => onDiscard(draft.draftId)} />
+          )}
+          <CardButton
+            accessibilityLabel="Send"
+            disabled={!canSubmit}
+            label="Send"
+            onPress={() => {
+              if (!canSubmit || onSubmit === undefined) return
+              if (gmail) onSubmit(draft.draftId, body, subjectEditable ? subject : undefined, editedRichText, cc)
+              else onSubmit(draft.draftId, body, undefined, editedRichText)
+            }}
+            variant="primary"
+          />
+        </View>
       )}
       {draft.thread === undefined || !readable ? null : (
         <ThreadSheet draft={draft} onClose={closeThread} onDismiss={resumeEditing} open={threadOpen} reply={threads?.[draft.draftId]} />
@@ -424,7 +425,8 @@ const styles = StyleSheet.create({
   headerStatus: { flexShrink: 1, color: colors.muted, fontFamily: fonts.sans, fontSize: 15 },
   headerDanger: { color: colors.danger },
   headerToggle: { marginLeft: 'auto', width: 28, height: 28, alignItems: 'center', justifyContent: 'center' },
-  content: { gap: spacing.sm, paddingHorizontal: spacing.lg, paddingBottom: spacing.lg },
+  content: { gap: spacing.sm, paddingHorizontal: spacing.lg },
+  contentLast: { paddingBottom: spacing.lg },
   fields: { marginBottom: spacing.xs },
   field: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.line, paddingVertical: 10 },
   fieldLabel: { width: 44, color: colors.muted, fontFamily: fonts.sans, fontSize: 15 },
@@ -443,7 +445,7 @@ const styles = StyleSheet.create({
   // No box and no fixed frame: the input grows with the mail instead of scrolling inside a transcript row.
   bodyInput: { minHeight: 96, padding: 0, color: colors.text, fontFamily: fonts.sans, fontSize: 16, letterSpacing: tracking.body, lineHeight: 23, textAlignVertical: 'top' },
   body: { color: colors.text, fontFamily: fonts.sans, fontSize: 16, lineHeight: 23 },
-  actions: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', flexWrap: 'wrap', gap: spacing.xs, marginTop: spacing.xs },
+  actions: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', flexWrap: 'wrap', gap: spacing.xs, marginTop: spacing.sm + spacing.xs, paddingHorizontal: spacing.lg, paddingBottom: spacing.lg },
   failure: { color: colors.danger, fontFamily: fonts.sans, fontSize: 13, lineHeight: 18 },
   note: { color: colors.dim, fontFamily: fonts.sans, fontSize: 13, lineHeight: 18 },
   sheetContent: { gap: spacing.md, paddingHorizontal: spacing.lg, paddingBottom: spacing.xl },
