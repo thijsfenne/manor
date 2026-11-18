@@ -126,7 +126,7 @@ function RoutinesList() {
       ListHeaderComponent={
         <View style={styles.header}>
           {workspace.hasRoutines ? (
-            <SegmentedControl label="Task type" options={KINDS} value={kind} onChange={setPickedKind} />
+            <SegmentedControl fill label="Task type" options={KINDS} value={kind} onChange={setPickedKind} />
           ) : null}
           <Text style={styles.intro}>Run tasks on a schedule or whenever you need them.</Text>
           {error === null ? null : <Text accessibilityRole="alert" style={styles.error}>{error}</Text>}

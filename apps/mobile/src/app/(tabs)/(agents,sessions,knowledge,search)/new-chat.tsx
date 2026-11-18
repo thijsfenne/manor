@@ -750,7 +750,7 @@ function ChatDraft({
             tint={noProject ? undefined : project?.color}
           />
           <View style={styles.modeRow}>
-            <SegmentedControl disabled={submitting} label="Chat mode" onChange={onModeChange} options={MODES} value={mode} />
+            <SegmentedControl disabled={submitting} fill label="Chat mode" onChange={onModeChange} options={MODES} value={mode} />
             {/* What the session runs on, with Auto at the far right of the same row:
                 the Mac puts Auto beside the picker it collapses. */}
             <View style={styles.runtimeRow}>

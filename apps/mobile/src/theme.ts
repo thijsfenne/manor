@@ -23,6 +23,9 @@ export const colors = {
   dim: adaptive('#616773', '#8a8f98'),
   line: adaptive('rgba(0, 0, 0, 0.11)', 'rgba(255, 255, 255, 0.08)'),
   fill: adaptive('#e8eaee', '#26262b'),
+  // The marker under the selected segment of a switch. Light needs a clear step darker than
+  // the track (`surface2`) it slides on; dark equals `fill`.
+  segment: adaptive('#d3d7de', '#26262b'),
   // Outgoing clouds. Light sits one notch darker than the incoming cloud,
   // at the AA floor for `dim`. Dark equals `fill` so the night room does not move.
   userBubble: adaptive('#e3e5e9', '#26262b'),

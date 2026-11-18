@@ -57,7 +57,7 @@ function PluginsRoom() {
   return (
     <ScrollView contentContainerStyle={styles.page}>
       <View style={styles.head}>
-        <SegmentedControl label="Plugin section" options={SECTIONS} value={section} onChange={setSection} />
+        <SegmentedControl fill label="Plugin section" options={SECTIONS} value={section} onChange={setSection} />
         <Text style={styles.intro}>{INTRO[section]}</Text>
       </View>
       {section === 'connectors' ? <Connectors /> : section === 'skills' ? <Skills /> : <Suggestions />}

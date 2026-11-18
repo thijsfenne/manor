@@ -70,7 +70,7 @@ export function FileLibrary({ name, files, agents, onShowInChat }: {
   return (
     <>
       <ScrollView contentContainerStyle={styles.list}>
-        <SegmentedControl label="Filter" onChange={setFilter} options={DM_FILE_FILTERS} value={filter} />
+        <SegmentedControl fill label="Filter" onChange={setFilter} options={DM_FILE_FILTERS} value={filter} />
         {filter !== 'all' && groups.length === 0 ? (
           <Text style={styles.filterEmpty}>{DM_FILTER_EMPTY[filter]}</Text>
         ) : groups.map((group) => {
