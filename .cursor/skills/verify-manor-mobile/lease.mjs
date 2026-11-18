@@ -28,6 +28,14 @@ export const DEFAULT_LEASE_PATH = join(homedir(), '.manor', 'verify-mobile.lease
 export const DEFAULT_STALL_MS = 40 * 60 * 1000
 /** How long a holder may leave the simulator undriven before a waiting launch has it stopped. */
 export const DEFAULT_IDLE_MS = 5 * 60 * 1000
+/**
+ * How long a run may sit undriven with nobody queued before its own idle watch shuts the
+ * simulator, Metro and the fixture down. Longer than DEFAULT_IDLE_MS: a waiting launch takes the
+ * simulator at 5 minutes, and this only frees the RAM when nobody wants it.
+ */
+export const DEFAULT_SHUTDOWN_IDLE_MS = 10 * 60 * 1000
+/** How often an idle watch looks again while a queue or a handover keeps it from shutting down. */
+const WATCH_POLL_MS = 30_000
 
 /** Longer than the longest honest command, a launch that builds the dev client; a command running longer no longer counts as use. */
 export const ACTIVE_MAX_MS = 30 * 60 * 1000
@@ -68,7 +76,7 @@ export function readLease(path) {
 }
 
 /** Whether a recorded `{ pid, start }` is still that same process. */
-const alive = ({ pid, start }, startOf) => Boolean(start) && startOf(pid) === start
+export const alive = ({ pid, start }, startOf = processStart) => Boolean(start) && startOf(pid) === start
 
 /**
  * Why a holder no longer owns the simulator: 'checkout-gone' when the folder it was started
@@ -172,13 +180,15 @@ export function holderIdleMs(holder, { startOf = processStart, now = Date.now } 
  * and no other live process is already handing it over; it then records the caller as
  * `holder.yielding`, after which markUse refuses that run, so no drive command starts under the
  * cleanup. A yielding process that died (a cleanup that crashed) is taken over without asking
- * the idle question again.
+ * the idle question again. With `ifUnqueued` (the idle watch's shutdown, which frees RAM for nobody)
+ * a live waiter also refuses it: the queue gets the simulator through its own launch instead.
  */
-export function yieldIfIdle(path, runId, idleMs, { pid = process.pid, startOf = processStart, now = Date.now } = {}) {
+export function yieldIfIdle(path, runId, idleMs, { pid = process.pid, startOf = processStart, now = Date.now, ifUnqueued = false } = {}) {
   return withLock(path, () => {
     const lease = readLease(path)
     const holder = lease.holder
     if (holder?.runId !== runId) return false
+    if (ifUnqueued && lease.waiters.some((waiter) => alive(waiter, startOf))) return false
     if (holder.yielding) {
       if (holder.yielding.pid !== pid && alive(holder.yielding, startOf)) return false
     } else if (holderIdleMs(holder, { startOf, now }) <= idleMs) {
@@ -188,6 +198,22 @@ export function yieldIfIdle(path, runId, idleMs, { pid = process.pid, startOf = 
     writeLease(path, lease)
     return true
   })
+}
+
+/**
+ * What the idle watch of run `runId` does next, from the lease as stored:
+ * `stop` when the run no longer holds the lease (cleaned up, handed over or reclaimed), so nothing
+ * of it is left to watch; `shutdown` once it has been undriven longer than `idleMs` with nobody
+ * queued; otherwise `wait` for `ms`. A live waiter or a live handover never shuts it down.
+ */
+export function idleWatchVerdict(lease, runId, idleMs, { startOf = processStart, now = Date.now } = {}) {
+  const holder = lease.holder
+  if (holder?.runId !== runId) return { action: 'stop' }
+  // A handover whose cleanup died is no handover: yieldIfIdle takes it over once the run is idle.
+  if ((holder.yielding && alive(holder.yielding, startOf)) || lease.waiters.some((waiter) => alive(waiter, startOf))) return { action: 'wait', ms: WATCH_POLL_MS }
+  const idle = holderIdleMs(holder, { startOf, now })
+  if (idle > idleMs) return { action: 'shutdown' }
+  return { action: 'wait', ms: Math.max(1000, idleMs - idle + 1) }
 }
 
 /** Frees the lease at cleanup. Only the run that holds it can; the queue stays. */

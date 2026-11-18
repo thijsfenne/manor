@@ -4,7 +4,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { after, describe, it } from 'node:test'
-import { ACTIVE_MAX_MS, addPids, describeHolder, holderIdleMs, holderStale, markUse, processStart, readLease, release, tryAcquire, waitForLease, yieldIfIdle } from './lease.mjs'
+import { ACTIVE_MAX_MS, addPids, describeHolder, holderIdleMs, holderStale, idleWatchVerdict, markUse, processStart, readLease, release, tryAcquire, waitForLease, yieldIfIdle } from './lease.mjs'
 
 const LEASE_URL = new URL('./lease.mjs', import.meta.url).href
 const folders = []
@@ -336,6 +336,76 @@ describe('lease', () => {
     await kill(cleanup)
     tryAcquire(path, me('A', checkout, detached().pid))
     assert.equal(markUse(path, 'A'), true)
+  })
+
+  describe('idle watch', () => {
+    const TEN = 10 * 60_000
+
+    it('shuts a run down once it is undriven past the limit with nobody queued', () => {
+      const { path, checkout } = fresh()
+      tryAcquire(path, me('A', checkout, detached().pid), { now: () => 1000 })
+      assert.deepEqual(idleWatchVerdict(readLease(path), 'A', TEN, { now: () => 1000 + TEN }), { action: 'wait', ms: 1000 }, 'at the limit, not past it')
+      assert.deepEqual(idleWatchVerdict(readLease(path), 'A', TEN, { now: () => 1000 + 4 * 60_000 }), { action: 'wait', ms: TEN - 4 * 60_000 + 1 }, 'sleeps the rest of the limit')
+      assert.deepEqual(idleWatchVerdict(readLease(path), 'A', TEN, { now: () => 1001 + TEN }), { action: 'shutdown' })
+    })
+
+    it('never shuts down a run that has a command running', async () => {
+      const { path, checkout } = fresh()
+      tryAcquire(path, me('A', checkout, detached().pid), { now: () => 1000 })
+      const command = detached()
+      markUse(path, 'A', { pid: command.pid, now: () => 1000 })
+      assert.equal(idleWatchVerdict(readLease(path), 'A', TEN, { now: () => 1000 + 2 * TEN }).action, 'wait')
+      await kill(command)
+      assert.equal(idleWatchVerdict(readLease(path), 'A', TEN, { now: () => 1000 + 2 * TEN }).action, 'shutdown')
+    })
+
+    it('leaves a queued lease to the queue, and counts a dead waiter as nobody', async () => {
+      const { path, checkout } = fresh()
+      tryAcquire(path, me('A', checkout, detached().pid), { now: () => 1000 })
+      const waiter = detached()
+      tryAcquire(path, me('B', checkout, waiter.pid))
+      assert.equal(idleWatchVerdict(readLease(path), 'A', TEN, { now: () => 1000 + 2 * TEN }).action, 'wait')
+      await kill(waiter)
+      assert.equal(idleWatchVerdict(readLease(path), 'A', TEN, { now: () => 1000 + 2 * TEN }).action, 'shutdown')
+    })
+
+    it('stops watching a run that no longer holds the lease', () => {
+      const { path, checkout } = fresh()
+      const late = { now: () => 1000 + 2 * TEN }
+      assert.equal(idleWatchVerdict(readLease(path), 'A', TEN, late).action, 'stop', 'nobody holds it')
+      tryAcquire(path, me('B', checkout, detached().pid), { now: () => 1000 })
+      assert.equal(idleWatchVerdict(readLease(path), 'A', TEN, late).action, 'stop', 'another run holds it: its simulator is not ours')
+    })
+
+    it('leaves a handover in progress to the cleanup that started it', () => {
+      const { path, checkout } = fresh()
+      tryAcquire(path, me('A', checkout, detached().pid), { now: () => 1000 })
+      yieldIfIdle(path, 'A', 0, { pid: detached().pid, now: () => 2000 })
+      assert.equal(idleWatchVerdict(readLease(path), 'A', TEN, { now: () => 1000 + 2 * TEN }).action, 'wait')
+    })
+
+    it('takes over a handover whose cleanup died instead of waiting on it forever', async () => {
+      const { path, checkout } = fresh()
+      tryAcquire(path, me('A', checkout, detached().pid), { now: () => 1000 })
+      const cleanup = detached()
+      yieldIfIdle(path, 'A', 0, { pid: cleanup.pid, now: () => 2000 })
+      const late = { now: () => 1000 + 2 * TEN }
+      assert.equal(idleWatchVerdict(readLease(path), 'A', TEN, late).action, 'wait', 'the cleanup is alive')
+      await kill(cleanup)
+      assert.equal(idleWatchVerdict(readLease(path), 'A', TEN, late).action, 'shutdown')
+    })
+
+    it('has yieldIfIdle refuse a shutdown while someone queues, and take it once they are gone', async () => {
+      const { path, checkout } = fresh()
+      tryAcquire(path, me('A', checkout, detached().pid), { now: () => 1000 })
+      const waiter = detached()
+      tryAcquire(path, me('B', checkout, waiter.pid))
+      const now = () => 1000 + 2 * TEN
+      assert.equal(yieldIfIdle(path, 'A', TEN, { pid: detached().pid, now, ifUnqueued: true }), false)
+      assert.equal(readLease(path).holder.yielding, undefined)
+      await kill(waiter)
+      assert.equal(yieldIfIdle(path, 'A', TEN, { pid: detached().pid, now, ifUnqueued: true }), true)
+    })
   })
 
   it('describes the holder for a waiting message', () => {

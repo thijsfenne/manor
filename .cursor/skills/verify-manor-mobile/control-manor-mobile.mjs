@@ -25,7 +25,7 @@ import { fileURLToPath } from 'node:url'
 import { setTimeout as sleep } from 'node:timers/promises'
 import { randomUUID } from 'node:crypto'
 import { chatRunning, cwdOf, describeAge, envOf, groupMembers, parseElapsed, resolveOwner, staleReason, staleVerdict, stopGroup } from '../verify-manor/stale-run.mjs'
-import { DEFAULT_IDLE_MS, DEFAULT_LEASE_PATH, DEFAULT_STALL_MS, addPids, describeHolder, holderIdleMs, leaveQueue, markUse, readLease, release, tryAcquire, waitForLease, yieldIfIdle } from './lease.mjs'
+import { DEFAULT_IDLE_MS, DEFAULT_LEASE_PATH, DEFAULT_SHUTDOWN_IDLE_MS, DEFAULT_STALL_MS, addPids, alive, describeHolder, holderIdleMs, idleWatchVerdict, leaveQueue, markUse, processStart, readLease, release, tryAcquire, waitForLease, yieldIfIdle } from './lease.mjs'
 
 const SKILL_DIR = dirname(fileURLToPath(import.meta.url))
 const REPO_ROOT = resolve(SKILL_DIR, '../../..')
@@ -45,7 +45,7 @@ const AUTH_ON = process.env.MANOR_MOBILE_VERIFY_AUTH === 'on'
 // Visible once the first screen has rendered: the house chrome, or the gate when auth is on.
 const READY_LABEL = AUTH_ON ? 'Welcome home' : 'Open menu'
 // One run at a time owns the simulator and the fixed ports; another lease file is for testing the lease itself.
-const LEASE_PATH = process.env.MANOR_MOBILE_VERIFY_LEASE ?? DEFAULT_LEASE_PATH
+const LEASE_PATH = resolve(process.env.MANOR_MOBILE_VERIFY_LEASE ?? DEFAULT_LEASE_PATH)
 /** A duration override from the environment; unset, blank, negative or not a number gives `fallback`. */
 const envMs = (name, fallback) => {
   const ms = process.env[name]?.trim() ? Number(process.env[name]) : NaN
@@ -55,6 +55,10 @@ const envMs = (name, fallback) => {
 const STALL_MS = envMs('MANOR_MOBILE_VERIFY_STALL_MS', DEFAULT_STALL_MS)
 // A holder left undriven this long gives the simulator to a waiting launch, even while its chat works.
 const IDLE_MS = envMs('MANOR_MOBILE_VERIFY_IDLE_MS', DEFAULT_IDLE_MS)
+// A run undriven this long with nobody queued has its simulator, Metro and fixture shut down by its idle watch.
+const SHUTDOWN_IDLE_MS = envMs('MANOR_MOBILE_VERIFY_SHUTDOWN_MS', DEFAULT_SHUTDOWN_IDLE_MS)
+// The longest the idle watch sleeps, so it ends soon after its run is cleaned up or its checkout removed.
+const WATCH_MAX_SLEEP_MS = 60_000
 const MAC_BLOCKER =
   'blocked: this worker cannot run an iOS Simulator. Need a Mac cloud worker / private Mac worker (Xcode + Simulator). Linux, Expo web, and browser screenshots are not mobile proof.'
 
@@ -925,6 +929,7 @@ async function cmdLaunch() {
   if (!markUse(LEASE_PATH, runId)) {
     fail('This checkout\'s phone verify run is being handed to a waiting run after it sat idle. Run `launch` again in a few seconds; it waits its turn.')
   }
+  armIdleWatch(runId)
   let reclaimedLease
   if (lease.reclaimed) {
     const why = lease.reclaimed.reason === 'checkout-gone' ? 'its checkout no longer exists' : 'its processes are gone'
@@ -938,7 +943,16 @@ async function cmdLaunch() {
       // A lease that moved on is the next run's, and one in a handover is that cleanup's to release.
       if (!markUse(LEASE_PATH, runId)) return
       const state = loadState()
-      if (!pidAlive(state.fixturePid) && !pidAlive(state.metroPid)) release(LEASE_PATH, runId)
+      if (!pidAlive(state.fixturePid) && !pidAlive(state.metroPid)) {
+        // Nothing of this run is left to need a device it booted, and the idle watch has no lease to go on: shut it down before others may adopt it.
+        if (state.claimedSimulator && state.simulatorUdid) {
+          try { simctl('shutdown', state.simulatorUdid) } catch { /* not booted any more */ }
+          // The claim ends with the boot: a later retry must not shut down a device somebody else booted.
+          const { claimedSimulator, simulatorUdid, ...rest } = loadState()
+          saveState(rest)
+        }
+        release(LEASE_PATH, runId)
+      }
     } catch { /* once this launcher is gone, the next in line takes over a lease nothing keeps alive */ }
   })
   // A run starting afresh is as old as this moment, not as the launch that once queued for it.
@@ -957,6 +971,50 @@ async function cmdLaunch() {
   await waitForMetro()
   await launchAndWait(udid)
   console.log(JSON.stringify({ ok: true, fixture: FIXTURE_WS, udid, bundleId: BUNDLE_ID, ...(stoppedStale.length === 0 ? {} : { stoppedStale }), ...(reclaimedLease ? { reclaimedLease } : {}) }, null, 2))
+}
+
+/**
+ * Starts the detached idle watch of this run unless one already runs: it is what shuts the
+ * simulator down when no Session is left to call `cleanup`. It outlives the launcher like the
+ * fixture and Metro do, takes no part in the lease, and ends by itself once the run is gone.
+ */
+function armIdleWatch(runId) {
+  const state = loadState()
+  if (state.idleWatch && alive(state.idleWatch)) return
+  const child = spawn(process.execPath, [join(SKILL_DIR, 'control-manor-mobile.mjs'), 'idle-watch', '--run', runId], {
+    cwd: SKILL_DIR,
+    // The watcher starts in another folder, so it gets the lease path as launch resolved it.
+    env: { ...process.env, MANOR_MOBILE_VERIFY_LEASE: LEASE_PATH },
+    detached: true,
+    stdio: 'ignore',
+  })
+  child.unref()
+  const idleWatch = { pid: child.pid, start: processStart(child.pid) }
+  saveState({ ...loadState(), idleWatch })
+}
+
+/**
+ * The idle watch: sleeps until the run could be idle for SHUTDOWN_IDLE_MS, then asks the run's own
+ * `cleanup --idle-after` to stop it. Everything is decided by the lease (see idleWatchVerdict) and
+ * again, atomically, inside that cleanup, so a run driven meanwhile or a launch queued meanwhile
+ * keeps its simulator. Ends once this checkout's run is no longer the one it watches, which it
+ * notices within WATCH_MAX_SLEEP_MS, also when the checkout was removed. Nothing signals it.
+ */
+async function cmdIdleWatch() {
+  const runId = flag('--run')
+  // A state file caught mid-write reads as still ours; the next look settles it.
+  const watching = () => { try { return loadState().runId === runId } catch { return true } }
+  while (runId && watching()) {
+    const verdict = idleWatchVerdict(readLease(LEASE_PATH), runId, SHUTDOWN_IDLE_MS)
+    if (verdict.action === 'stop') return
+    if (verdict.action === 'shutdown') {
+      cleanupIn(SKILL_DIR, runId, ['--idle', '--idle-after', String(SHUTDOWN_IDLE_MS)])
+      // A cleanup that left the run alone (driven again, or a queue appeared) is asked again after a pause.
+      await sleep(5000)
+      continue
+    }
+    await sleep(Math.min(verdict.ms, WATCH_MAX_SLEEP_MS))
+  }
 }
 
 /** Records a process launch just started on the lease, so the run keeps it after the launcher exits. */
@@ -1228,8 +1286,10 @@ function cmdCleanup() {
   // With `--idle` the run must still hold the lease and be undriven for IDLE_MS, decided once
   // and under the lease lock: from then on its drive commands are refused, so there is nothing
   // to ask again, and a second cleanup for the same run is left out.
+  // `--idle-after <ms>` is the idle watch asking, with its own limit, and then a queue also keeps the run.
   const idleOnly = expected !== undefined && process.argv.includes('--idle')
-  if (idleOnly && !yieldIfIdle(LEASE_PATH, expected, IDLE_MS)) {
+  const idleAfter = flag('--idle-after') === undefined ? IDLE_MS : Number(flag('--idle-after'))
+  if (idleOnly && !yieldIfIdle(LEASE_PATH, expected, idleAfter, { ifUnqueued: flag('--idle-after') !== undefined })) {
     console.log('left alone: that run is no longer stale.')
     return
   }
@@ -1297,6 +1357,7 @@ const commands = {
   snapshot: async () => cmdSnapshot(),
   'wait-settle': async () => cmdWait(),
   cleanup: async () => cmdCleanup(),
+  'idle-watch': cmdIdleWatch,
 }
 
 if (!command || !commands[command]) {

@@ -50,7 +50,7 @@ node .cursor/skills/verify-manor-mobile/control-manor-mobile.mjs launch
 
 Ready when `launch` exits 0: screenshots taken now show the Agents tab, not the splash. Its title is `Agents`.
 
-**One run at a time.** Every checkout shares one simulator and the fixed ports, so one run at a time owns them through a machine-wide lease (`~/.manor/verify-mobile.lease.json`). `launch` queues for it in arrival order and prints its place, who holds it and since when (`chat 1a2b3c4d, checkout /path, since 14:02 (12 minutes)`). A holder whose processes are all gone, or whose checkout was removed, is taken over (`reclaimedLease` in the JSON). The stale rule below still applies to an abandoned holder that is alive. A run that has not been driven for 5 minutes (`MANOR_MOBILE_VERIFY_IDLE_MS`) gives the simulator to a waiting launch through its own `cleanup`, even while its chat is still working; a command that is running counts as use, so a long `launch` is safe, though a command that hangs longer than 30 minutes no longer counts as use. So do the verification round in one go. `launch` waits as long as the queue moves or the run in front is being used, with no total limit, so with several chats waiting it can take an hour or more. Run it like this:
+**One run at a time.** Every checkout shares one simulator and the fixed ports, so one run at a time owns them through a machine-wide lease (`~/.manor/verify-mobile.lease.json`). `launch` queues for it in arrival order and prints its place, who holds it and since when (`chat 1a2b3c4d, checkout /path, since 14:02 (12 minutes)`). A holder whose processes are all gone, or whose checkout was removed, is taken over (`reclaimedLease` in the JSON). The stale rule below still applies to an abandoned holder that is alive. A run that has not been driven for 5 minutes (`MANOR_MOBILE_VERIFY_IDLE_MS`) gives the simulator to a waiting launch through its own `cleanup`, even while its chat is still working; a command that is running counts as use, so a long `launch` is safe, though a command that hangs longer than 30 minutes no longer counts as use. So do the verification round in one go. A run that nobody drives and nobody queues for is shut down after 10 minutes (`MANOR_MOBILE_VERIFY_SHUTDOWN_MS`) by its own detached idle watch, which `launch` starts: it stops Metro and the fixture and shuts the Simulator down when this run booted it, so a finished chat that never ran `cleanup` no longer leaves 9 GB of RAM in use. A `launch` that ends with nothing of its run left alive shuts down the Simulator it booted the same way. The next `launch` boots it again. `launch` waits as long as the queue moves or the run in front is being used, with no total limit, so with several chats waiting it can take an hour or more. Run it like this:
 
 1. Start `launch` as a background command when the shell tool can do that, otherwise with the longest timeout it allows. Keep that one job: wait for it to finish, then read its final output and exit status. Do not start a second `launch` beside it.
 2. Ready is exit 0 and the JSON with `"ok": true`. Until then, run no drive commands.
@@ -177,7 +177,7 @@ If doctor exits 2, write `evidence/<feature>/PROOF-BLOCKED.md` with the doctor J
 node .cursor/skills/verify-manor-mobile/control-manor-mobile.mjs cleanup
 ```
 
-Kills only the fixture and Metro **this run started**. Shuts down a Simulator only if this run booted it, and releases the phone verify lease. Never kill by process name. Never touch 43179. Evidence is not deleted. Always run it when the verification round is done: it frees the simulator for waiting runs at once instead of after 5 idle minutes.
+Kills only the fixture and Metro **this run started**. Shuts down a Simulator only if this run booted it, and releases the phone verify lease. Never kill by process name. Never touch 43179. Evidence is not deleted. Always run it when the verification round is done: it frees the simulator for waiting runs at once instead of after 5 idle minutes, and the RAM instead of after 10.
 
 After a failed iteration, run cleanup before the next launch so 43182 and Metro 8088 are not stranded. Then confirm the evidence files still exist.
 
@@ -218,6 +218,7 @@ brew install openjdk@21
 | `screenshot --path <file.png>` | `simctl` PNG plus `<file>.preview.png` at 400px wide; prints both as JSON |
 | `wait-settle [--ms 800]` | Plain pause |
 | `cleanup` | Tear down what launch claimed and release the lease |
+| `idle-watch --run <id>` | Started by `launch`, never by hand: sleeps until the run is idle for the shutdown limit, then runs `cleanup --idle --idle-after <ms>`, which refuses while anyone queues or the run was driven again. Ends by itself within a minute of the run being gone |
 
 There is no scroll, swipe or back-gesture command; go back through a visible control such as `Terug`. Quote values with spaces.
 
@@ -234,4 +235,5 @@ Environment: set the same variables on `launch` and on every later command of th
 | `MANOR_MOBILE_VERIFY_BUNDLE_TIMEOUT_MS` / `MANOR_MOBILE_VERIFY_RENDER_TIMEOUT_MS` | Wait budgets, 240000 / 180000 |
 | `MANOR_MOBILE_VERIFY_STALL_MS` | How long `launch` waits without progress before it exits 3: for the lease, a run in front that is neither used nor given up; for a fixed port, the same listener. 2400000 (40 minutes) |
 | `MANOR_MOBILE_VERIFY_IDLE_MS` | How long a lease holder may go undriven before a waiting `launch` has it cleaned up, 300000 (5 minutes) |
+| `MANOR_MOBILE_VERIFY_SHUTDOWN_MS` | How long a run may go undriven with nobody queued before its idle watch shuts down the Simulator (only one this run booted), Metro and the fixture, 600000 (10 minutes). Read by the watch at `launch`, so `cleanup` and `launch` to change it |
 | `MANOR_MOBILE_VERIFY_LEASE=<file>` | Another lease file, only for testing the lease itself; never to get around it |
