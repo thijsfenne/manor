@@ -1,12 +1,17 @@
 import { randomUUID } from 'node:crypto'
 import type { DatabaseSync } from 'node:sqlite'
-import { planProgress, searchWords, type EventSync, type PlanProgress, type SearchMessageHit, type ThreadEvent } from '@manor/contracts'
+import { planProgress, searchWords, type ConfirmRequest, type EventSync, type PlanProgress, type SearchMessageHit, type ThreadEvent } from '@manor/contracts'
 import type { SkillBundleFile, UnresolvedOutboundSubmission } from '../store.js'
 import { previewLine } from './previewLine.js'
 import { foldUsageEvent, usageRunKey, type UsageRun } from '../usageReport.js'
 import { SqliteRecords } from './sqliteDatabase.js'
 
-type Metadata = { preview: string | null; participants: Record<string, number>; plan?: PlanProgress }
+/**
+ * The newest tasks card of a chat: a plan the agent published (`plan`) or Confirm's commit
+ * request (`confirm`, whose steps follow Git and are counted when the row is read). One
+ * replaces the other, so the row follows whichever card the transcript shows last.
+ */
+type Metadata = { preview: string | null; participants: Record<string, number>; plan?: PlanProgress; confirm?: { eventId: string; request: ConfirmRequest } }
 
 /** How many rewrites of one chat stay nameable. A client further behind gets the whole thread. */
 const REWRITE_LOG = 256
@@ -74,9 +79,14 @@ export class SqliteTranscript {
     const line = previewLine(event)
     if (line !== undefined) meta.preview = line
     // A card with no lines draws nothing, so it leaves no count either.
+    // A blank plan draws no card, so Confirm's stays the newest one that shows.
     if (event.type === 'todo_update') {
       if (event.todos.length === 0) delete meta.plan
-      else meta.plan = planProgress(event.todos)
+      else { meta.plan = planProgress(event.todos); delete meta.confirm }
+    }
+    if (event.type === 'user_message' && event.confirmRequest !== undefined) {
+      delete meta.plan
+      meta.confirm = { eventId: event.id, request: event.confirmRequest }
     }
     this.metadata.set(chatId, meta)
     if (event.type === 'outbound_draft_submission') this.outbound.set(JSON.stringify([chatId, event.draftId]), { chatId, event })
@@ -126,9 +136,13 @@ export class SqliteTranscript {
     return Object.entries(this.metadata.get(chatId)?.participants ?? {}).sort(([, a], [, b]) => b - a).map(([id]) => id)
   }
   /** What a chat's listing row says about its transcript, from one metadata read. */
-  summary(chatId: string): { preview: string | null; plan?: PlanProgress } {
+  summary(chatId: string): { preview: string | null; plan?: PlanProgress; confirm?: { eventId: string; request: ConfirmRequest } } {
     const meta = this.metadata.get(chatId)
-    return { preview: meta?.preview ?? null, ...(meta?.plan === undefined ? {} : { plan: meta.plan }) }
+    return {
+      preview: meta?.preview ?? null,
+      ...(meta?.plan === undefined ? {} : { plan: meta.plan }),
+      ...(meta?.confirm === undefined ? {} : { confirm: meta.confirm }),
+    }
   }
   unresolved(): UnresolvedOutboundSubmission[] { return [...this.outbound.values()].filter(({ event }) => event.status === 'started') }
   usageRuns(): UsageRun[] { return [...this.runs.values()] }

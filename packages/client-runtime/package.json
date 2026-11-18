@@ -5,6 +5,7 @@
   "type": "module",
   "exports": {
     "./commands": "./src/commands.ts",
+    "./confirm-tasks": "./src/confirmTasks.ts",
     "./solid-icons": "./src/solidIcons.ts",
     "./chat-commands": "./src/chatCommands.ts",
     "./connection": "./src/connection.ts",

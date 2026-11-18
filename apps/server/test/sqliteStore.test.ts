@@ -745,6 +745,37 @@ describe('durable Work proposals', () => {
     expect((await restarted.workHandoffForTarget(target))?.goalConfirmations).toEqual(current.goalConfirmations)
   })
 
+  it('counts Confirm\u2019s commit card as the newest tasks card, ticking with Git until a newer plan replaces it', async () => {
+    const { store, filename } = fixture()
+    const proposal = await pendingProposal(store)
+    const target = await workModule(store).module.accept(proposal.id)
+    const todo = (done: number) => store.appendEvent(target, { type: 'todo_update', agentId: sage.id, turnId: 't1',
+      todos: ['One', 'Two', 'Three', 'Four', 'Five'].map((text, at) => ({ text, status: at < done ? 'completed' as const : 'pending' as const })) })
+    const count = async () => (await store.listChats()).find((chat) => chat.id === target)?.planProgress
+    await todo(5)
+    expect(await count()).toEqual({ done: 5, total: 5 })
+    await store.reachWorkGoal(proposal.id, { type: 'system_note', kind: 'info', text: 'Ready.', workGoalHandoffId: proposal.id, goalReport: { result: 'Fixed.' } })
+    const ready = (await store.workHandoffForTarget(target))!
+    const repo = { path: '/tmp/wt', branch: 'manor/s', before: 'a', tree: 'b', files: [], sourcePath: '/tmp/src' }
+    await store.confirmWorkGoal(proposal.id, ready.version, { status: 'pending', operation: 'merge', repos: [repo] }, 'Commit it.',
+      { variant: 'merge', mergeInto: 'main', manor: true, worktrees: [{ branch: 'manor/s', folder: 'src', source: '/tmp/src' }] })
+    // The commit card is the newest card, so its 0/2 replaces the plan's 5/5.
+    expect(await count()).toEqual({ done: 0, total: 2 })
+    const held = (await store.workHandoffForTarget(target))!
+    await store.updateWorkCompletion(proposal.id, { ...held.goalCompletion!, committed: ['/tmp/wt'] })
+    expect(await count()).toEqual({ done: 1, total: 2 })
+    store.close()
+    const reopened = createSqliteStore({ filename })
+    opened.push(reopened)
+    expect((await reopened.listChats()).find((chat) => chat.id === target)?.planProgress).toEqual({ done: 1, total: 2 })
+    // A blank plan draws no card, so Confirm's stays the newest one.
+    await reopened.appendEvent(target, { type: 'todo_update', agentId: sage.id, turnId: 't2', todos: [] })
+    expect((await reopened.listChats()).find((chat) => chat.id === target)?.planProgress).toEqual({ done: 1, total: 2 })
+    // A plan the agent publishes afterwards is the newest card again.
+    await reopened.appendEvent(target, { type: 'todo_update', agentId: sage.id, turnId: 't2', todos: [{ text: 'Follow up', status: 'pending' }] })
+    expect((await reopened.listChats()).find((chat) => chat.id === target)?.planProgress).toEqual({ done: 0, total: 1 })
+  })
+
   it('repairs legacy stale confirmations at startup, excluding the commit request and manual Settle', async () => {
     const { store, filename } = fixture()
     const rows = new SqliteRecords<Awaited<ReturnType<Store['listWorkHandoffs']>>[number]>(store.db, 'workHandoffs')

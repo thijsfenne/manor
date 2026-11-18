@@ -1,7 +1,8 @@
 import { randomUUID } from 'node:crypto'
 import type { DatabaseSync } from 'node:sqlite'
 import { openSqlite, readTransaction, SqliteRecords, transaction } from './sqliteDatabase.js'
-import { CONFIRM_REQUEST_PREFIX, HOME_PROJECT_ID, HOME_PROJECT_NAME, PERSONA_TOOLS, SINGLE_CHAT_VOICE, modelTextOf } from '@manor/contracts'
+import { CONFIRM_REQUEST_PREFIX, HOME_PROJECT_ID, HOME_PROJECT_NAME, PERSONA_TOOLS, SINGLE_CHAT_VOICE, modelTextOf, planProgress } from '@manor/contracts'
+import { completionFor, confirmTasks } from '@manor/client-runtime/confirm-tasks'
 import { singleRuntime, singleRuntimeRequired } from '../singleChat.js'
 import { SqliteTranscript, SqliteBundles } from './sqliteTranscript.js'
 import { DEFAULT_PROJECT_COLOR, DEFAULT_PROJECT_ICON, DriverSchema, DEFAULT_SUBAGENT_POLICY, DEFAULT_USER_PROFILE, DEFAULT_HOUSE_SETTINGS, HouseSettingsSchema, ROUTINE_LEASE_MS, SIDE_CHAT_DEFAULTS, driverForModel, type SubagentPolicy, CURRENT_CHECKOUT, checkoutFromMapping, type AgentConfig, type AgentDraft, type Chat, type ChatOverride, type McpServerConfig, type Project, type ProjectIcon, type ProjectMemoryScope, type Routine, type SkillConfig, type ThreadEvent, type UserProfile, type WorkHandoff, isOpenRoom, } from '@manor/contracts'
@@ -302,9 +303,28 @@ export function createSqliteStore(options: SqliteStoreOptions): Store & {
     ...(chat.mode === 'single' ? singlePin(pins.get(`${chat.id}::${SINGLE_CHAT_VOICE.id}`)) : {}),
     checkout: checkoutFromMapping(worktrees.get(chat.id) ?? []),
   })
-  const transcriptLine = (chatId: string) => {
-    const { preview, plan } = events.summary(chatId)
-    return { lastMessagePreview: preview, ...(plan === undefined ? {} : { planProgress: plan }) }
+  /** Reads the handoffs once and groups them by Session, for a listing that asks for many chats. */
+  const handoffsByChat = (): ((chatId: string) => WorkHandoff[]) => {
+    let grouped: Map<string, WorkHandoff[]> | undefined
+    return (chatId) => {
+      if (grouped === undefined) {
+        grouped = new Map()
+        for (const row of workHandoffs.values()) if (row.workChatId !== null) grouped.set(row.workChatId, [...grouped.get(row.workChatId) ?? [], row])
+      }
+      return grouped.get(chatId) ?? []
+    }
+  }
+  const transcriptLine = (chatId: string, handoffsOf = handoffsByChat()) => {
+    const { preview, plan, confirm } = events.summary(chatId)
+    // Confirm's card ticks off with Git, not with a plan event, so its count is read now,
+    // by the rules the card itself draws by. Manor's own request has no turn to wait on.
+    const confirmed = confirm === undefined ? undefined : planProgress(confirmTasks(
+      confirm.request,
+      'running',
+      completionFor(handoffsOf(chatId), confirm.eventId),
+    ))
+    const progress = confirmed ?? plan
+    return { lastMessagePreview: preview, ...(progress === undefined ? {} : { planProgress: progress }) }
   }
   if (options.seed) {
     transaction(db, () => {
@@ -389,15 +409,18 @@ export function createSqliteStore(options: SqliteStoreOptions): Store & {
     },
     // Newest activity first, the way the database orders it, each chat carrying who
     // has worked in it — read off the transcript here, off `chat_participants` there.
-    listChats: () => [...chats.values()]
-      .sort((a, b) => b.lastMessageAt - a.lastMessageAt)
-      // Invited beats spoken: a dm or a group already knows who is in it, so its
-      // avatars are complete from the moment it is made.
-      .map((chat) => withCheckout({
-      ...chat,
-      agentIds: isOpenRoom(chat) ? participantsOf(chat.id) : [...chat.memberIds],
-      ...transcriptLine(chat.id),
-    })),
+    listChats: () => {
+      const handoffsOf = handoffsByChat()
+      return [...chats.values()]
+        .sort((a, b) => b.lastMessageAt - a.lastMessageAt)
+        // Invited beats spoken: a dm or a group already knows who is in it, so its
+        // avatars are complete from the moment it is made.
+        .map((chat) => withCheckout({
+        ...chat,
+        agentIds: isOpenRoom(chat) ? participantsOf(chat.id) : [...chat.memberIds],
+        ...transcriptLine(chat.id, handoffsOf),
+      }))
+    },
     createProject: (name, repoPaths, icon, color, memoryScope) => addProject(name, repoPaths, icon, color, memoryScope),
     createChat: (draft) => addChat(draft),
     pairChatFor: (firstAgentId, secondAgentId) => addChat({ kind: 'pair', memberIds: [firstAgentId, secondAgentId] }),

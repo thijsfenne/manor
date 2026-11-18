@@ -39,6 +39,7 @@ import type {
   ContextFiles,
 } from '@manor/contracts'
 import { DEFAULT_PROJECT_COLOR, DEFAULT_PROJECT_ICON, HOME_PROJECT_ID, MAX_SESSION_DIFF_FILES, isModelOnlyMessage, planProgress, splitUserMessage, withQuoteExcerpts, type DmFile, type SessionRepo } from '@manor/contracts'
+import { confirmTasks } from './confirmTasks'
 import { plainPreview } from './plainPreview'
 import { NO_REMINDERS_YET, reduceReminders, type RemindersState } from './reminders'
 import { IDLE, withActivity, type ChatActivity } from './activityState'
@@ -776,7 +777,11 @@ const withLiveChat = (chats: Chat[], chatId: string, event: ThreadEvent): Chat[]
     const lastMessagePreview =
       spoken !== null && event.ts >= chat.lastMessageAt ? spoken : chat.lastMessagePreview
     // The same guard for the tasks card: a replayed older snapshot may not move the count back.
-    const progress = event.type !== 'todo_update' || event.ts < chat.lastMessageAt ? chat.planProgress : event.todos.length === 0 ? undefined : planProgress(event.todos)
+    // Confirm's commit request is a tasks card too, and starts at none of its steps done.
+    const progress = event.ts < chat.lastMessageAt ? chat.planProgress
+      : event.type === 'todo_update' ? event.todos.length === 0 ? undefined : planProgress(event.todos)
+      : event.type === 'user_message' && event.confirmRequest !== undefined ? planProgress(confirmTasks(event.confirmRequest, 'pending'))
+      : chat.planProgress
     const planMoved = progress !== chat.planProgress && (progress?.done !== chat.planProgress?.done || progress?.total !== chat.planProgress?.total)
     if (
       lastMessageAt === chat.lastMessageAt &&

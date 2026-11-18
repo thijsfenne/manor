@@ -1542,4 +1542,15 @@ describe('the tasks progress on a chat', () => {
     state = reduce(state, todo(4))
     expect(state.chats[0]?.planProgress).toBeUndefined()
   })
+
+  it('counts Confirm\u2019s commit request as the newest card, at none of its steps done', () => {
+    let state = reduce({ ...emptyWorkspace, chats: [chat] }, todo(2, 'completed', 'completed', 'completed', 'completed', 'completed'))
+    expect(state.chats[0]?.planProgress).toEqual({ done: 5, total: 5 })
+    state = reduce(state, {
+      type: 'event', chatId: 'session_1',
+      event: { id: 'evt_9', ts: 5, type: 'user_message', text: '', mentions: [],
+        confirmRequest: { variant: 'merge', mergeInto: 'main', worktrees: [{ branch: 'manor/s', folder: 'src' }] } },
+    })
+    expect(state.chats[0]?.planProgress).toEqual({ done: 0, total: 2 })
+  })
 })
