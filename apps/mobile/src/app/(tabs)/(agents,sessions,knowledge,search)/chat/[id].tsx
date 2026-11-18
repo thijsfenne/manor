@@ -1385,6 +1385,8 @@ function LiveTranscript({
   const isolatedBranch = chat?.kind === 'project' && chat.checkout.mode === 'worktree' ? chat.checkout.branch ?? undefined : undefined
   const opening = isolatedBranch === undefined ? undefined : rows.find((row) => row.kind === 'event' && row.event.type === 'user_message')
   const kickoffKey = opening?.kind === 'event' && opening.event.type === 'user_message' && opening.event.source === 'work_handoff' ? opening.key : undefined
+  // A side chat runs no skill, so its bubbles draw `$word` as text, as its composer does.
+  const skills = chatKind === 'side' ? NO_SKILLS : workspace.skills
   /**
    * What a row draws besides its own data. The list redraws a mounted row only when its
    * item or this object changes, never because `renderItem` did, so a value a row reads
@@ -1393,8 +1395,8 @@ function LiveTranscript({
    * on. Everything in it holds still through a streamed frame.
    */
   const rowContext = useMemo(
-    () => ({ openBundles, connected, links, draftActions, repoFiles, latestTurnKey, agents, around, project, userBubbleTint, isolatedBranch, kickoffKey }),
-    [openBundles, connected, links, draftActions, repoFiles, latestTurnKey, agents, around, project, userBubbleTint, isolatedBranch, kickoffKey],
+    () => ({ openBundles, connected, links, draftActions, repoFiles, latestTurnKey, agents, around, project, userBubbleTint, isolatedBranch, kickoffKey, skills }),
+    [openBundles, connected, links, draftActions, repoFiles, latestTurnKey, agents, around, project, userBubbleTint, isolatedBranch, kickoffKey, skills],
   )
 
   return (
@@ -1451,6 +1453,7 @@ function LiveTranscript({
           {...(userBubbleTint === undefined ? {} : { userBubbleTint })}
           showSpeaker={!singleChat}
           quoteAuthors={chat !== null && quoteNamesAuthor(chat, projectThread)}
+          skills={skills}
           {...(projectThread && project !== undefined ? { threadProject: project } : {})}
           pinPlan={chatKind === 'project' && !projectThread}
           {...(isolatedBranch === undefined || item.key !== kickoffKey ? {} : { isolatedBranch })}
@@ -1510,6 +1513,8 @@ interface TranscriptRowProps {
   userBubbleTint?: BubbleTint
   showSpeaker: boolean
   quoteAuthors: boolean
+  /** The skills a `$slug` he wrote may name, drawn as skill pills in his bubble. */
+  skills: readonly SkillConfig[]
   threadProject?: NonNullable<ReturnType<typeof useWorkspace>['workspace']['projects'][number]>
   compactUser: boolean
   onReply?: (reply: MessageReply) => void
@@ -1561,6 +1566,7 @@ const TranscriptRow = memo(function TranscriptRowBody(props: TranscriptRowProps)
     userBubbleTint,
     showSpeaker,
     quoteAuthors,
+    skills,
     threadProject,
     compactUser,
     onReply,
@@ -1624,6 +1630,7 @@ const TranscriptRow = memo(function TranscriptRowBody(props: TranscriptRowProps)
       : <Bubble
           agents={agents}
           quoteAuthors={quoteAuthors}
+          skills={skills}
           {...(userBubbleTint === undefined ? {} : { tint: userBubbleTint })}
           files={eventRow.event.files ?? []}
           documents={eventRow.event.documents ?? []}
@@ -1659,7 +1666,7 @@ const TranscriptRow = memo(function TranscriptRowBody(props: TranscriptRowProps)
   }
   const content = (() => {
   if (row.kind === 'pending') {
-    return <Bubble agents={agents} dim quoteAuthors={quoteAuthors} files={row.files} {...(row.documents === undefined ? {} : { documents: row.documents })} images={row.images} text={row.text} {...(row.replyTo === undefined ? {} : { replyTo: row.replyTo })} {...(row.quotes === undefined ? {} : { quotes: row.quotes })} onOpenQuoteSource={onOpenQuoteSource} />
+    return <Bubble agents={agents} dim quoteAuthors={quoteAuthors} skills={skills} files={row.files} {...(row.documents === undefined ? {} : { documents: row.documents })} images={row.images} text={row.text} {...(row.replyTo === undefined ? {} : { replyTo: row.replyTo })} {...(row.quotes === undefined ? {} : { quotes: row.quotes })} onOpenQuoteSource={onOpenQuoteSource} />
   }
   if (row.kind === 'thread_bundle') {
     // Each item draws as it would stand on its own; none of the row's own spacing or stamps.
@@ -1851,7 +1858,7 @@ function ConsultationExcerpt({ question, replyPending }: { question: string; rep
 const NO_INLINE_QUOTES: readonly InlineQuote[] = []
 
 /** `tint` fills a DM bubble with the face he is talking to; its chips read the same tint. A dimmed (pending) bubble stays grey so its fade cannot pull the tinted ink below AA. */
-function Bubble({ text, images, agents, files = [], documents = [], replyTo, quote, noteQuote, quotes = NO_INLINE_QUOTES, sourceEventId, onQuoteSource, onOpenQuoteSource, dim = false, tint, quoteAuthors = false, repo }: { text: string; images: readonly EventImage[]; agents: readonly AgentConfig[]; files?: readonly FileAttachment[]; documents?: readonly (EventDocument | PendingDocument)[]; replyTo?: MessageReply; quote?: MessageQuote; noteQuote?: NoteQuote; quotes?: readonly InlineQuote[]; sourceEventId?: string; onQuoteSource?: (source: QuoteSelectionSource) => void; onOpenQuoteSource?: (eventId: string) => void; dim?: boolean; tint?: BubbleTint; quoteAuthors?: boolean
+function Bubble({ text, images, agents, files = [], documents = [], replyTo, quote, noteQuote, quotes = NO_INLINE_QUOTES, sourceEventId, onQuoteSource, onOpenQuoteSource, dim = false, tint, quoteAuthors = false, skills, repo }: { text: string; images: readonly EventImage[]; agents: readonly AgentConfig[]; files?: readonly FileAttachment[]; documents?: readonly (EventDocument | PendingDocument)[]; replyTo?: MessageReply; quote?: MessageQuote; noteQuote?: NoteQuote; quotes?: readonly InlineQuote[]; sourceEventId?: string; onQuoteSource?: (source: QuoteSelectionSource) => void; onOpenQuoteSource?: (eventId: string) => void; dim?: boolean; tint?: BubbleTint; quoteAuthors?: boolean; skills: readonly SkillConfig[]
   /** The chat's repo listing, so a file path he wrote opens in Files. */
   repo?: RepoLinks }) {
   // A message that refers to its pictures by number shows those numbers; older ones stay as they were.
@@ -1877,6 +1884,7 @@ function Bubble({ text, images, agents, files = [], documents = [], replyTo, quo
               {...(repo === undefined ? {} : { links: { repo } })}
               text={normalizeComposerLists(text)}
               sent={{
+                skills,
                 ...(numbered ? { imageCount: images.length, onOpenImage: setOpenImage } : {}),
                 ...(quotes.length === 0 ? {} : { quotes, onOpenQuote: setOpenQuote }),
                 ...(sourceEventId === undefined ? {} : {

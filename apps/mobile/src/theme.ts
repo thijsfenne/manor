@@ -42,6 +42,8 @@ export const colors = {
   busyWash: adaptive('rgba(17, 85, 204, 0.14)', 'rgba(74, 158, 255, 0.18)'),
   // The Mac's `--color-skill`: the one chromatic mark a skill or a cleared suggestion wears.
   skill: adaptive('#7c4ddb', '#a78bfa'),
+  // `skill` at 20%, the Mac's skill chip ground: a skill pill in a sent message.
+  skillWash: adaptive('rgba(124, 77, 219, 0.2)', 'rgba(167, 139, 250, 0.2)'),
   // The Mac's `--color-worktree`: a Session that works in its own git worktree.
   worktree: adaptive('#7c4ddb', '#a78bfa'),
   // A diff's line tints: `ok` and `danger` at 15%, the same mix the Mac paints, so a

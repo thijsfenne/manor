@@ -48,6 +48,7 @@ export function SkillChip({ skill }: { skill: SkillConfig }) {
     <span
       title={skill.description}
       data-inline-chip
+      data-skill-chip
       className="mx-[1px] inline-flex max-w-full items-center gap-1 rounded-full bg-[color-mix(in_srgb,var(--color-skill)_20%,transparent)] py-[3px] pr-[7px] pl-[5px] align-middle text-[0.92em] leading-none font-medium whitespace-normal text-[var(--color-skill)]"
     >
       <Icon icon={BoxIcon} size={13} className="flex-none text-[var(--color-skill)]" />

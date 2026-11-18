@@ -1,9 +1,10 @@
 import CheckmarkSquare02Icon from '@hugeicons/core-free-icons/CheckmarkSquare02Icon'
+import BoxIcon from '@hugeicons/core-free-icons/BoxIcon'
 import File01Icon from '@hugeicons/core-free-icons/File01Icon'
 import Globe02Icon from '@hugeicons/core-free-icons/Globe02Icon'
 import SquareIcon from '@hugeicons/core-free-icons/SquareIcon'
 import { HugeiconsIcon } from '@hugeicons/react-native'
-import { faviconSource, imageRefSpans, markdownImageSource, mentionSpans, quoteExcerpt, quoteRefSpans, webLinkOrigin, type AgentConfig, type InlineQuote } from '@manor/contracts'
+import { faviconSource, imageRefSpans, markdownImageSource, mentionSpans, quoteExcerpt, quoteRefSpans, webLinkOrigin, type AgentConfig, type InlineQuote, type SkillConfig } from '@manor/contracts'
 import { personaOf } from '@manor/client-runtime/state'
 import { readWikilink } from '@manor/client-runtime/vault-notes'
 import { Image } from 'expo-image'
@@ -96,6 +97,8 @@ export interface SentMessage {
   /** What its `[Quote #n]` references stand for: each is drawn as a pill with the opening words. */
   quotes?: readonly InlineQuote[]
   onOpenQuote?: (index: number) => void
+  /** The skills a `$slug` in the text may name: a known one is drawn as a skill pill. */
+  skills?: readonly SkillConfig[]
 }
 
 /** A reference in a sent message's text: a picture or a quote it carries, by number. */
@@ -684,15 +687,21 @@ function Mentions({ text, agents }: { text: string; agents: readonly AgentConfig
   }
   const byName = new Map(agents.map((agent) => [agent.name.toLowerCase(), agent]))
   const destination = (handle: string) => sent && (handle === 'browser' || handle === 'work')
-  const spans = mentionSpans(text).filter((span) => byName.has(span.handle.toLowerCase()) || destination(span.handle.toLowerCase()))
+  const spans: { start: number; handle: string; skill?: SkillConfig }[] = [
+    ...mentionSpans(text).filter((span) => byName.has(span.handle.toLowerCase()) || destination(span.handle.toLowerCase())),
+    ...skillSpans(text, message?.skills ?? []),
+  ].sort((a, b) => a.start - b.start)
   if (spans.length === 0) return text
   const out: ReactNode[] = []
   let last = 0
   for (const span of spans) {
+    if (span.start < last) continue
     const handle = span.handle.toLowerCase()
     if (span.start > last) out.push(text.slice(last, span.start))
     const agent = byName.get(handle)
-    if (agent !== undefined) {
+    if (span.skill !== undefined) {
+      out.push(<InlinePill key={span.start} label={span.skill.name} title={span.skill.description} tone="skill" />)
+    } else if (agent !== undefined) {
       const persona = personaOf([...agents], agent.id)
       out.push(<Text key={span.start} style={[styles.mention, { color: tint?.ink ?? persona.color }]}>@{agent.name}</Text>)
     } else {
@@ -702,6 +711,21 @@ function Mentions({ text, agents }: { text: string; agents: readonly AgentConfig
   }
   if (last < text.length) out.push(text.slice(last))
   return <Fragment>{out}</Fragment>
+}
+
+/** A `$slug` at a word start, as the Mac's composer and sent bubble read it. */
+const SKILL_TOKEN = /(?<![\p{L}\p{N}_-])\$(\S+)/gu
+const TRAILING_PUNCTUATION = /[.,;:!?)\]}'"]+$/
+
+/** The `$slug` tokens in `text` that name one of `skills`; any other `$word` stays text. */
+function skillSpans(text: string, skills: readonly SkillConfig[]) {
+  if (skills.length === 0 || !text.includes('$')) return []
+  const byId = new Map(skills.map((skill) => [skill.id, skill]))
+  return [...text.matchAll(SKILL_TOKEN)].flatMap((match) => {
+    const handle = (match[1] ?? '').replace(TRAILING_PUNCTUATION, '')
+    const skill = byId.get(handle.toLowerCase())
+    return skill === undefined ? [] : [{ start: match.index, handle, skill }]
+  })
 }
 
 /** Inline code up to this length fits one pill line; longer code stays wrapping text. */
@@ -721,8 +745,8 @@ function filePathName(code: string): string | null {
 
 /**
  * A rounded chip inside a sentence: short code (`code`), a file path by its name (`file`), a
- * destination handle (`chip`), or a picture or quote the message carries (`carried`, blue as on
- * desktop). An inline view like `SourcePill`, because nested text draws no rounded corners on
+ * destination handle (`chip`), a picture or quote the message carries (`carried`, blue as on
+ * desktop), or a skill it runs (`skill`, purple as in the Mac's composer and sent bubble). An inline view like `SourcePill`, because nested text draws no rounded corners on
  * iOS. On a tinted bubble every tone takes the bubble's wash and ink, so it keeps contrast on
  * any face or project colour.
  */
@@ -730,17 +754,19 @@ function InlinePill({ label, title = label, tone, onPress }: {
   label: string
   /** The whole thing the pill stands for, for VoiceOver, when the label is cut down. */
   title?: string
-  tone: 'code' | 'chip' | 'carried' | 'file'
+  tone: 'code' | 'chip' | 'carried' | 'file' | 'skill'
   onPress?: () => void
 }) {
   const tint = useBubbleTint()
   const sent = useContext(SentContext) !== undefined
-  // In his own grey bubble every pill is blue like a quote; in agent prose they stay grey.
-  const blue = tint === undefined && sent
+  // In his own grey bubble every pill but a skill's is blue like a quote; in agent prose they
+  // stay grey. A skill keeps its own purple, the way a persona keeps its face colour.
+  const blue = tint === undefined && sent && tone !== 'skill'
   const box = [styles.pill, PILL_FILL[tone], blue && PILL_FILL.carried, tint && { backgroundColor: tint.wash }]
   const text = (
     <>
       {tone === 'file' ? <HugeiconsIcon color={tint?.ink ?? (blue ? colors.busy : colors.muted)} icon={File01Icon} size={12} strokeWidth={1.8} /> : null}
+      {tone === 'skill' ? <HugeiconsIcon color={tint?.ink ?? colors.skill} icon={BoxIcon} size={12} strokeWidth={1.8} /> : null}
       <Text numberOfLines={1} style={[styles.pillText, PILL_TEXT[tone], blue && styles.pillTextBlue, tint && { color: tint.ink }]}>{label}</Text>
     </>
   )
@@ -762,6 +788,7 @@ const PILL_FILL = StyleSheet.create({
   file: { backgroundColor: colors.chip, gap: 4 },
   chip: { backgroundColor: colors.chip },
   carried: { backgroundColor: colors.busyWash },
+  skill: { backgroundColor: colors.skillWash, gap: 4 },
 })
 
 const PILL_TEXT = StyleSheet.create({
@@ -769,6 +796,7 @@ const PILL_TEXT = StyleSheet.create({
   file: {},
   chip: { fontWeight: '500' },
   carried: { color: colors.busy, fontWeight: '500' },
+  skill: { color: colors.skill, fontWeight: '500' },
 })
 
 /** The `small` reading size, two points down with the headings the same steps above it. */

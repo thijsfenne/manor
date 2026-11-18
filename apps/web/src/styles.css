@@ -1394,14 +1394,14 @@ input:focus-visible + .checkbox-box {
   background-color: color-mix(in srgb, var(--bubble-wash), black 14%);
 }
 
-/* The typed text of a grey user bubble: every chip but a persona's, and inline code, reads
-   blue like a quote, so what the user pointed at stands out as one kind of thing. A persona
-   chip keeps the colour of the face it names. Unlayered so it beats the chips' own colours. */
-.bubble-plain [data-inline-chip]:not([data-agent-chip]),
+/* The typed text of a grey user bubble: every chip but a persona's or a skill's, and inline
+   code, reads blue like a quote, so what the user pointed at stands out as one kind of thing.
+   A persona chip keeps the colour of the face it names, a skill chip the purple it wore in the
+   composer. Unlayered so it beats the chips' own colours. */
+.bubble-plain [data-inline-chip]:not([data-agent-chip], [data-skill-chip]),
 .bubble-plain :not(pre) > code {
   --color-text: var(--color-busy);
   --color-muted: var(--color-busy);
-  --color-skill: var(--color-busy);
   background-color: color-mix(in srgb, var(--color-busy) 18%, transparent);
   color: var(--color-busy);
 }
