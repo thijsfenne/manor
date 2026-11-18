@@ -1817,7 +1817,9 @@ server.on('connection', (socket) => {
       : undefined
     if (proposed !== undefined) {
       const workChatId = `chat-${proposed.id}`
-      directory.chats.push({ ...chat({ id: workChatId, projectId: proposed.projectId, title: proposed.title, preview: 'Session started.', minutesAgo: 0 }), mode: message.mode })
+      // An Accept with the Worktree box ticked isolates the Session, on a branch named after it.
+      const checkout = message.checkout?.mode === 'worktree' ? { mode: 'worktree', branch: `manor/${proposed.id.slice(-8)}` } : undefined
+      directory.chats.push({ ...chat({ id: workChatId, projectId: proposed.projectId, title: proposed.title, preview: 'Session started.', minutesAgo: 0 }), mode: message.mode, ...(checkout === undefined ? {} : { checkout }) })
       // The Session opens on its kickoff, written in markdown the way a brief is and long
       // enough to fold. Single stores the server's model-facing preamble first, which the
       // card must hide.

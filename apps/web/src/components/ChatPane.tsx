@@ -317,6 +317,13 @@ export function ChatPane({
   }
   // Without streamed text: the docks, the question card and Stop read structure only.
   const rows = projectRows(thread)
+  // An isolated Session names its branch above its opening brief, which a later `/goal` brief is not.
+  const firstUser = chat.checkout.mode === 'worktree' && chat.checkout.branch !== null
+    ? rows.find((row) => row.kind === 'event' && row.event.type === 'user_message')
+    : undefined
+  const isolation = firstUser?.kind === 'event' && firstUser.event.type === 'user_message' && firstUser.event.source === 'work_handoff' && chat.checkout.branch !== null
+    ? { rowKey: firstUser.key, branch: chat.checkout.branch }
+    : undefined
   // Through a string, so the composer keeps its Stop while the running rows change per token.
   const runningKey = rows.flatMap((row) => row.kind === 'turn' && row.live?.state === 'running' ? [row.turnId] : []).join('\0')
   const runningTurnIds = runningKey === '' ? NO_IDS : runningKey.split('\0')
@@ -667,6 +674,7 @@ export function ChatPane({
             {...(onAddToSideChat === undefined || chat.kind === 'pair' ? {} : { onAddToSideChat })}
             {...(canBrowseFiles && composerFiles !== undefined ? { repoFiles: composerFiles.files, onOpenFile } : {})}
             {...(subagentStage === undefined ? {} : { onOpenSubagents: subagentStage.open })}
+            {...(isolation === undefined ? {} : { isolation })}
             held={levels.length > 0}
             connected={status === 'live'}
             draftActions={outboundActions}

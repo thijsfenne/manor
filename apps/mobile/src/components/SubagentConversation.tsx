@@ -10,6 +10,7 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
+import { Badge } from '@/components/Badge'
 import { CHAT_HEADER_HEIGHT } from '@/components/ChatHeader'
 import { EdgeScrim } from '@/components/EdgeScrim'
 import { GlassSurface } from '@/components/GlassSurface'
@@ -82,14 +83,12 @@ function SubagentFacts({ subagent: { step, agentId }, state, summary, agents, be
   return (
     <View style={[styles.facts, { marginBottom: below }]}>
       <View style={styles.badges}>
-        <View style={styles.badge}>
-          <HugeiconsIcon color={colors.muted} icon={Clock01Icon} size={12} strokeWidth={1.7} />
-          <Text numberOfLines={1} style={styles.badgeText}>{starter === undefined ? startedAt(step.startedAt) : `${starter.name} at ${startedAt(step.startedAt)}`}</Text>
-        </View>
-        <View style={styles.badge}>
-          {driver === undefined ? null : <ProviderMark driver={driver} size={12} />}
-          <Text numberOfLines={1} style={styles.badgeText}>{runtime === undefined ? (driver === undefined ? NOT_REPORTED : 'Its provider') : [runtime.model, runtime.effort].filter(Boolean).join(', ')}</Text>
-        </View>
+        <Badge mark={<HugeiconsIcon color={colors.muted} icon={Clock01Icon} size={12} strokeWidth={1.7} />}>
+          {starter === undefined ? startedAt(step.startedAt) : `${starter.name} at ${startedAt(step.startedAt)}`}
+        </Badge>
+        <Badge mark={driver === undefined ? undefined : <ProviderMark driver={driver} size={12} />}>
+          {runtime === undefined ? (driver === undefined ? NOT_REPORTED : 'Its provider') : [runtime.model, runtime.effort].filter(Boolean).join(', ')}
+        </Badge>
       </View>
       {role === undefined ? null : <Fact label="Role"><Text style={styles.factText}>{role}</Text></Fact>}
       {why === undefined ? null : (
@@ -234,8 +233,6 @@ const styles = StyleSheet.create({
   facts: { gap: 6 },
   // The when and the on-what, as the read-only chips a role badge uses.
   badges: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-  badge: { flexDirection: 'row', alignItems: 'center', gap: 5, maxWidth: '100%', borderRadius: 5, ...squircle, backgroundColor: colors.fill, paddingHorizontal: 7, paddingVertical: 3 },
-  badgeText: { flexShrink: 1, color: colors.muted, fontFamily: fonts.sans, fontSize: 13, lineHeight: 18 },
   fact: { flexDirection: 'row', gap: spacing.md },
   factLabel: { width: 92, color: colors.dim, fontFamily: fonts.sans, fontSize: 13, lineHeight: 19 },
   factValue: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 6 },

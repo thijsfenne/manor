@@ -302,7 +302,6 @@ export type WorktreeResult =
       created: ChatWorktree[]
       /** Leftovers this call `git switch`'d. Persist failure must switch them back. */
       switched: WorktreeSwitch[]
-      notices: string[]
     }
   | { ok: false; message: string }
 
@@ -376,7 +375,6 @@ export async function attachWorktrees(input: AttachWorktreesInput): Promise<Work
         mapping: await resumed(Date.now()),
         created: [],
         switched,
-        notices: [],
       }
     }
     const created = await createWorktrees({ ...input, branch }, missing.map((entry) => entry.source), branch)
@@ -389,7 +387,6 @@ export async function attachWorktrees(input: AttachWorktreesInput): Promise<Work
       mapping: [...await resumed(Date.now()), ...created.mapping],
       created: created.created,
       switched,
-      notices: created.notices,
     }
   }
 
@@ -454,14 +451,11 @@ async function createWorktrees(
   wanted: string | undefined,
 ): Promise<WorktreeResult> {
   const branch = wanted !== undefined && wanted.length > 0 ? wanted : autoBranchName(input.chatId)
-  const notices: string[] = []
   const mapping: ChatWorktree[] = []
   const createdAt = Date.now()
-  let dirtySource = false
 
   try {
     for (const source of roots) {
-      if ((await treeStatus(source)) === 'dirty') dirtySource = true
       const dest = worktreeDir(input.worktreesRoot, input.projectId, input.chatId, source)
       await mkdir(path.dirname(dest), { recursive: true })
       const base = await currentBranch(source)
@@ -479,12 +473,7 @@ async function createWorktrees(
     return { ok: false, message: `Manor could not finish the worktree: ${why}` }
   }
 
-  if (dirtySource) {
-    notices.push(
-      'Uncommitted edits in the linked folders did not come along. The worktree started from HEAD.',
-    )
-  }
-  return { ok: true, mapping, created: mapping, switched: [], notices }
+  return { ok: true, mapping, created: mapping, switched: [] }
 }
 
 async function addWorktree(source: string, dest: string, branch: string, startPoint?: string): Promise<WorktreeResult | { ok: true }> {

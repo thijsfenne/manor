@@ -73,7 +73,7 @@ type ProjectMessage = Extract<
 
 type ProjectRuntime = Pick<
   Orchestrator,
-  'activeTurn' | 'appendNote' | 'backgroundChatIds' | 'runningTurnId' | 'discard' | 'runExclusive' | 'setOverride' | 'subagents' | 'tryRunExclusive'
+  'activeTurn' | 'backgroundChatIds' | 'runningTurnId' | 'discard' | 'runExclusive' | 'setOverride' | 'subagents' | 'tryRunExclusive'
 >
 
 type OpeningMessage = NonNullable<Extract<ClientMessage, { type: 'create_chat' }>['openingMessage']>
@@ -493,7 +493,7 @@ export class ProjectModule {
           return
         }
         if (message.checkout?.mode === 'worktree') {
-          let attached: { ok: true; notices: string[] } | { ok: false; message: string }
+          let attached: { ok: true } | { ok: false; message: string }
           try {
             attached = await this.isolate(chat, message.checkout.branch)
           } catch (error: unknown) {
@@ -508,7 +508,6 @@ export class ProjectModule {
             reply({ type: 'notice', kind: 'error', text: attached.message })
             return
           }
-          await this.noteDirtySource(chat.id, attached.notices)
         }
         for (const [agentId, override] of Object.entries(message.overrides ?? {})) {
           if (!single && !this.options.agents().some((agent) => agent.id === agentId)) continue
@@ -651,7 +650,7 @@ export class ProjectModule {
             return { ok: false as const, message: 'Only a project chat can isolate onto a worktree.' }
           }
           if (message.checkout.mode === 'current') {
-            if (current.checkout.mode === 'current') return { ok: true as const, notices: [] as string[] }
+            if (current.checkout.mode === 'current') return { ok: true as const }
             return { ok: false as const, message: CHECKOUT_FROZEN }
           }
           if (current.checkout.mode === 'current') return { ok: false as const, message: CHECKOUT_FROZEN }
@@ -660,7 +659,7 @@ export class ProjectModule {
           const attached = await this.isolate(current, message.checkout.branch)
           if (!attached.ok) return attached
           await store.clearSessions([current.id])
-          return { ok: true as const, notices: attached.notices }
+          return { ok: true as const }
         })
         if (outcome.occupied) {
           reply({ type: 'notice', kind: 'error', text: CHECKOUT_BUSY })
@@ -670,7 +669,6 @@ export class ProjectModule {
           reply({ type: 'notice', kind: 'error', text: outcome.value.message })
           return
         }
-        await this.noteDirtySource(message.chatId, outcome.value.notices)
         break
       }
       case 'discard_chat_worktree': {
@@ -934,10 +932,7 @@ export class ProjectModule {
       }
       const allowed = await this.canIsolate(chat.kind, chat.projectId ?? undefined)
       if (!allowed.ok) throw new Error(allowed.message)
-      const attached = await this.isolate(chat, checkout.branch, async (notices) => {
-        await this.noteDirtySource(chatId, notices)
-        await accept()
-      })
+      const attached = await this.isolate(chat, checkout.branch, accept)
       if (!attached.ok) throw new Error(attached.message)
     })
     if (outcome.occupied) throw new Error(CHECKOUT_BUSY)
@@ -946,8 +941,8 @@ export class ProjectModule {
   private async isolate(
     chat: Chat,
     branch?: string,
-    commit?: (notices: string[]) => Promise<void>,
-  ): Promise<{ ok: true; notices: string[] } | { ok: false; message: string }> {
+    commit?: () => Promise<void>,
+  ): Promise<{ ok: true } | { ok: false; message: string }> {
     if (this.options.worktreesRoot === undefined || chat.projectId === null) {
       return { ok: false, message: 'Manor has no worktrees directory configured.' }
     }
@@ -967,7 +962,7 @@ export class ProjectModule {
       try {
         await this.options.store.replaceChatWorktrees(chat.id, attached.mapping)
         mappingSaved = true
-        await commit?.(attached.notices)
+        await commit?.()
       } catch (error: unknown) {
         // Detach before removing newly created paths; keep any pre-existing checkout.
         if (mappingSaved && previous !== undefined) {
@@ -980,7 +975,7 @@ export class ProjectModule {
         const why = error instanceof Error ? error.message : String(error)
         return { ok: false, message: `Manor could not save the worktree setup: ${why}` }
       }
-      return { ok: true, notices: attached.notices }
+      return { ok: true }
     } catch (error: unknown) {
       const why = error instanceof Error ? error.message : String(error)
       return { ok: false, message: `Manor could not isolate this chat: ${why}` }
@@ -1088,16 +1083,6 @@ export class ProjectModule {
       gitRoots: status.gitRoots,
       branches: status.branches,
     }
-  }
-
-  private async noteDirtySource(chatId: string, notices: readonly string[]): Promise<void> {
-    if (!notices.some((notice) => /uncommitted/i.test(notice))) return
-    const mapping = await this.options.store.loadChatWorktrees(chatId)
-    const branch = await liveWorktreeBranch(mapping)
-    const text = branch === null || branch.length === 0
-      ? 'Uncommitted edits in the linked folders did not come along.'
-      : `Isolated on ${branch}. Uncommitted edits in the linked folders did not come along.`
-    await this.options.orchestrator.appendNote(chatId, text).catch(() => undefined)
   }
 
   private async reconcileProjectWorktrees(

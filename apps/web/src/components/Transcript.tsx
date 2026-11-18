@@ -6,7 +6,7 @@ import { quoteFromText } from '@manor/client-runtime/message-quotes'
 import type { WorkAcceptanceOptions } from '@manor/client-runtime/commands'
 import type { BubbleTint } from '@manor/client-runtime/avatar-bubble'
 import { createPortal } from 'react-dom'
-import { CellsIcon } from '@hugeicons/core-free-icons'
+import { CellsIcon, GitBranchIcon } from '@hugeicons/core-free-icons'
 import { isLostConnectionNote, isModelOnlyMessage, type AgentConfig, type CheckoutRequest, type EventImage, type FileAttachment, type MessageQuote, type MessageReply, type Project, type SkillConfig } from '@manor/contracts'
 import { turnChangedFiles } from '../changedFiles'
 import { useLiveThread } from '../liveThread'
@@ -49,6 +49,7 @@ import { useFaceState } from '../useFaceState'
 import { SubagentLaunchesContext, type SubagentLaunches } from '../subagentContext'
 import { WakeNotices } from './SubagentRows'
 import { Icon } from './Icon'
+import { Badge } from './ui/Badge'
 import { ThreadBundle } from './ThreadBundle'
 import { AnswerChange, OTHER_ANSWER } from './bundleTile'
 import { AgentBubble, ClampedMessage, FileWriteFootnote, KickoffAttachments, ProjectFileWriteCard, RoutineLine, SystemLine, TurnHeader, UserBubble, WakeLine } from './Bubbles'
@@ -156,6 +157,8 @@ interface TranscriptProps {
   held?: boolean
   /** Stands above the first row and scrolls with the thread. */
   leading?: ReactNode
+  /** The row of an isolated Session's first brief, which names the branch above itself. */
+  isolation?: { rowKey: string; branch: string }
   /**
    * Where this transcript is being read. The stage centres a 780px column inside a
    * scroller that spans the window and leaves room for the composer's fade; a panel
@@ -270,6 +273,7 @@ export function Transcript({
   onOpenSubagents,
   held = false,
   leading,
+  isolation,
   variant = 'stage',
   denseText = false,
   emptyNote,
@@ -712,6 +716,7 @@ export function Transcript({
         {...(forwardSource === undefined ? {} : { forwardSource })}
         onOpenQuoteSource={stableOpenQuoteSource}
         {...(unannouncedHere === undefined ? {} : { unannounced: unannouncedHere })}
+        {...(isolation?.rowKey === row.key ? { isolatedBranch: isolation.branch } : {})}
       />
     ) : row.kind === 'work_handoff' ? (
       <div className={bubbleReplies ? 'min-w-0 max-w-bubble' : 'contents'}>
@@ -928,9 +933,9 @@ function JumpToLatest({ shown, panel, onJump }: { shown: boolean; panel: boolean
  * a step below the messages' size so it does not outweigh them. The breadcrumb already
  * names the project.
  */
-function KickoffCard({ text, agents, images = [], files = [] }: { text: string; agents: AgentConfig[]; images?: EventImage[]; files?: FileAttachment[] }) {
+function KickoffCard({ text, agents, images = [], files = [], branch }: { text: string; agents: AgentConfig[]; images?: EventImage[]; files?: FileAttachment[]; branch?: string }) {
   const { plugins, components } = useAgentMentions(agents)
-  return (
+  const card = (
     <div className="flex min-w-0 flex-col gap-2 rounded-xl border border-line bg-composer-tray px-4 py-3">
       <KickoffAttachments images={images} files={files} />
       {/* The size sits outside the clamp so its line unit is the brief's own. */}
@@ -939,6 +944,20 @@ function KickoffCard({ text, agents, images = [], files = [] }: { text: string; 
           <Markdown text={text} plugins={plugins} components={components} />
         </ClampedMessage>
       </div>
+    </div>
+  )
+  if (branch === undefined) return card
+  // The helper view's pill, 10px over the card like its facts sit.
+  return (
+    <div className="flex min-w-0 flex-col gap-2.5">
+      <Badge
+        className="self-start"
+        mark={<Icon icon={GitBranchIcon} size={13} className="flex-none text-worktree" />}
+        title="Isolated in its own worktree. Uncommitted edits in the linked folders did not come along."
+      >
+        {branch}
+      </Badge>
+      {card}
     </div>
   )
 }
@@ -959,6 +978,7 @@ const EventRow = memo(function EventRow({
   forwardSource,
   onOpenQuoteSource,
   unannounced,
+  isolatedBranch,
 }: {
   row: Extract<Row, { kind: 'event' }>
   agents: AgentConfig[]
@@ -971,6 +991,8 @@ const EventRow = memo(function EventRow({
   forwardSource?: string
   onOpenQuoteSource?: (eventId: string) => void
   unannounced?: readonly UnannouncedConsultation[]
+  /** An isolated Session's first brief: the branch shown above it. */
+  isolatedBranch?: string
 }) {
   const event = row.event
   const answerChange = useContext(AnswerChange)
@@ -1008,7 +1030,7 @@ const EventRow = memo(function EventRow({
         // Manor's wake of the thread: `projectThreadFeed` drops it, and it never reads as the user's bubble.
         null
       ) : event.source === 'work_handoff' ? (
-        <KickoffCard text={messageBrief(event)} agents={agents} images={event.images ?? []} files={event.files ?? []} />
+        <KickoffCard text={messageBrief(event)} agents={agents} images={event.images ?? []} files={event.files ?? []} {...(isolatedBranch === undefined ? {} : { branch: isolatedBranch })} />
       ) : event.source === 'subagent_task' ? (
         // A helper's view opens on its task as a handoff card, like a Session's brief.
         // The facts above it already say who started it and on what.

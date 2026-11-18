@@ -14,6 +14,8 @@ interface BadgeProps {
   tint?: string
   /** Sits inside a 12px line of meta text without growing it. */
   size?: 'default' | 'inline'
+  /** Native hover text for what the label alone leaves out. */
+  title?: string
   className?: string
   children: ReactNode
 }
@@ -26,10 +28,11 @@ interface BadgeProps {
  * so: at this size a border reads as "attached to the thing above it" where a fill
  * reads as "you can press this". A tinted badge trades the outline for its colour.
  */
-export function Badge({ icon, mark, tint, size = 'default', className = '', children }: BadgeProps) {
+export function Badge({ icon, mark, tint, size = 'default', title, className = '', children }: BadgeProps) {
   const inline = size === 'inline'
   return (
     <span
+      title={title}
       className={`inline-flex min-w-0 max-w-full items-center rounded-chip text-meta ${
         inline ? 'gap-1 py-px pr-1.5 pl-1 font-medium' : 'gap-1.5 px-2 py-1'
       } ${tint === undefined ? 'border border-line bg-surface-2 text-muted' : 'text-text'} ${className}`}

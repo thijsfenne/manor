@@ -388,11 +388,11 @@ describe('ManorService worktrees', () => {
     expect(broadcast.filter((message) => message.type === 'directory').length).toBeGreaterThan(0)
   })
 
-  it('writes a dirty-source system_note instead of a fading notice', async () => {
+  it('says nothing in the transcript about a dirty source; the client draws the branch pill', async () => {
     const source = repo()
     writeFileSync(path.join(source, 'wip.txt'), 'uncommitted\n')
     const worktreesRoot = mkdtempSync(path.join(os.tmpdir(), 'manor-wt-root-'))
-    const { store, manor, replies, reply, broadcast } = harness(worktreesRoot)
+    const { store, manor, replies, reply } = harness(worktreesRoot)
     const [project] = await store.listProjects()
     await store.updateProject(project!.id, project!.name, [source])
 
@@ -404,20 +404,9 @@ describe('ManorService worktrees', () => {
     expect(created?.type).toBe('chat_created')
     if (created?.type !== 'chat_created') return
     const events = await store.loadEvents(created.chatId)
-    const note = events.find((event) => event.type === 'system_note')
-    expect(note).toMatchObject({ type: 'system_note', kind: 'info' })
-    expect(note?.type === 'system_note' ? note.text : '').toMatch(/Isolated on manor\//)
-    expect(note?.type === 'system_note' ? note.text : '').toMatch(/Uncommitted edits/)
-    expect(
-      replies.some(
-        (message) => message.type === 'notice' && message.kind === 'info' && /uncommitted/i.test(message.text),
-      ),
-    ).toBe(false)
-    expect(
-      broadcast.some(
-        (message) => message.type === 'event' && message.event.type === 'system_note' && message.chatId === created.chatId,
-      ),
-    ).toBe(true)
+    expect(events.some((event) => event.type === 'system_note')).toBe(false)
+    expect(replies.some((message) => message.type === 'notice' && /uncommitted/i.test(message.text))).toBe(false)
+    expect((await store.getChat(created.chatId))?.checkout).toMatchObject({ mode: 'worktree', branch: expect.stringMatching(/^manor\//) })
   })
 
   it('lists, reads and writes through the chat remap, and leaves the other chat on the source', async () => {

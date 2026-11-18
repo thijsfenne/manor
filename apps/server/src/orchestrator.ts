@@ -1091,7 +1091,7 @@ export class Orchestrator {
     return this.enqueue(this.runtimeFor(chatId), fn)
   }
 
-  /** A standing line in the transcript. Isolation notices go here, not through a toast. */
+  /** A standing line in the transcript, such as a routine's note, not a toast. */
   async appendNote(chatId: string, text: string): Promise<void> {
     await this.append(this.runtimeFor(chatId), chatId, {
       type: 'system_note',

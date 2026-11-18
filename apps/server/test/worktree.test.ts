@@ -106,7 +106,7 @@ it('reads a linked worktree HEAD through its .git pointer', async () => {
 })
 
 describe('attachWorktrees', () => {
-  it('creates from HEAD, copies include files, and notices a dirty source', async () => {
+  it('creates from HEAD, copies include files, and leaves a dirty source behind', async () => {
     const source = repo('manor-wt-src-', {
       'README.md': 'hi\n',
       '.gitignore': '.env\nnode_modules\n',
@@ -125,7 +125,6 @@ describe('attachWorktrees', () => {
     if (!result.ok) return
     expect(result.mapping).toHaveLength(1)
     expect(result.mapping[0]?.branch).toBe(autoBranchName('chat_1'))
-    expect(result.notices.some((notice) => /uncommitted/i.test(notice))).toBe(true)
     expect(readFileSync(path.join(result.mapping[0]!.worktreePath, 'README.md'), 'utf8')).toBe('hi\n')
     expect(existsSync(path.join(result.mapping[0]!.worktreePath, 'dirty.txt'))).toBe(false)
     expect(readFileSync(path.join(result.mapping[0]!.worktreePath, '.env'), 'utf8')).toBe('SECRET=nothing-real\n')

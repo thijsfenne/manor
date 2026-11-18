@@ -1,4 +1,5 @@
 import { WorkHandoffCard } from '@/components/WorkHandoffCard'
+import { Badge } from '@/components/Badge'
 import { KickoffCard } from '@/components/KickoffCard'
 import { KeyboardFooter, useFooterPadding } from '@/components/KeyboardFooter'
 import { WakeNotices } from '@/components/SubagentRow'
@@ -7,6 +8,7 @@ import { WorkDecisionDock } from '@/components/WorkDecisionDock'
 import type { RevealPlace } from '@/components/WorkResultBody'
 import ArrowDown01Icon from '@hugeicons/core-free-icons/ArrowDown01Icon'
 import CellsIcon from '@hugeicons/core-free-icons/CellsIcon'
+import GitBranchIcon from '@hugeicons/core-free-icons/GitBranchIcon'
 import LockIcon from '@hugeicons/core-free-icons/LockIcon'
 import Undo02Icon from '@hugeicons/core-free-icons/Undo02Icon'
 import { HugeiconsIcon } from '@hugeicons/react-native'
@@ -1345,6 +1347,10 @@ function LiveTranscript({
     memoryMarks,
     stretch,
   }), [aroundMemory, consultationMarkers, dateLabels, exchanges, memoryMarks, pageRows, projectThread, stretch, unannounced, waitingOnByTurn])
+  // An isolated Session names its branch above its opening brief, which a later `/goal` brief is not.
+  const isolatedBranch = chat?.kind === 'project' && chat.checkout.mode === 'worktree' ? chat.checkout.branch ?? undefined : undefined
+  const opening = isolatedBranch === undefined ? undefined : rows.find((row) => row.kind === 'event' && row.event.type === 'user_message')
+  const kickoffKey = opening?.kind === 'event' && opening.event.type === 'user_message' && opening.event.source === 'work_handoff' ? opening.key : undefined
   /**
    * What a row draws besides its own data. The list redraws a mounted row only when its
    * item or this object changes, never because `renderItem` did, so a value a row reads
@@ -1353,8 +1359,8 @@ function LiveTranscript({
    * on. Everything in it holds still through a streamed frame.
    */
   const rowContext = useMemo(
-    () => ({ openBundles, connected, links, draftActions, repoFiles, latestTurnKey, agents, around, project, userBubbleTint }),
-    [openBundles, connected, links, draftActions, repoFiles, latestTurnKey, agents, around, project, userBubbleTint],
+    () => ({ openBundles, connected, links, draftActions, repoFiles, latestTurnKey, agents, around, project, userBubbleTint, isolatedBranch, kickoffKey }),
+    [openBundles, connected, links, draftActions, repoFiles, latestTurnKey, agents, around, project, userBubbleTint, isolatedBranch, kickoffKey],
   )
 
   return (
@@ -1411,6 +1417,7 @@ function LiveTranscript({
           quoteAuthors={chat !== null && quoteNamesAuthor(chat, projectThread)}
           {...(projectThread && project !== undefined ? { threadProject: project } : {})}
           pinPlan={chatKind === 'project' && !projectThread}
+          {...(isolatedBranch === undefined || item.key !== kickoffKey ? {} : { isolatedBranch })}
           compactUser={around.places.get(item.key)?.compactUser === true}
           latest={item.key === latestTurnKey}
           links={links}
@@ -1493,6 +1500,8 @@ interface TranscriptRowProps {
   memoryChanges?: Extract<Row, { kind: 'turn' }>['memoryChanges']
   /** In a Session: a turn's plan stands at its end. */
   pinPlan: boolean
+  /** In an isolated Session: the branch it works on, named above its brief. */
+  isolatedBranch?: string
   /** A project thread bundle: whether it stands open, and how it opens or folds. */
   bundleOpen?: boolean
   bundleOpenItems?: ReadonlySet<string>
@@ -1536,6 +1545,7 @@ const TranscriptRow = memo(function TranscriptRowBody(props: TranscriptRowProps)
     onOpenSubagent,
     memoryChanges,
     pinPlan,
+    isolatedBranch,
     bundleOpen,
     bundleOpenItems,
     onBundleOpen,
@@ -1557,7 +1567,16 @@ const TranscriptRow = memo(function TranscriptRowBody(props: TranscriptRowProps)
         // Manor's wake of the thread: `projectThreadFeed` drops it, and it never reads as his bubble.
         ? null
       : eventRow.event.source === 'work_handoff'
-        ? <KickoffCard agents={agents} text={messageBrief(eventRow.event)} images={eventRow.event.images ?? []} files={eventRow.event.files ?? []} />
+        ? (
+          <View style={styles.kickoff}>
+            {isolatedBranch === undefined ? null : (
+              <View style={styles.kickoffBadge}>
+                <Badge mark={<HugeiconsIcon color={colors.worktree} icon={GitBranchIcon} size={12} strokeWidth={1.7} />}>{isolatedBranch}</Badge>
+              </View>
+            )}
+            <KickoffCard agents={agents} text={messageBrief(eventRow.event)} images={eventRow.event.images ?? []} files={eventRow.event.files ?? []} />
+          </View>
+        )
       : eventRow.event.source === 'agent_relay'
         ? <RelayedAgentMessage agents={agents} event={eventRow.event} />
       : eventRow.confirmTasks !== undefined
@@ -1870,6 +1889,9 @@ const styles = StyleSheet.create({
   userBubbleWash: { borderRadius: radius.composer, ...squircle },
   pending: { opacity: 0.55 },
   note: { color: colors.muted, fontFamily: fonts.sans, fontSize: 13, lineHeight: 19, textAlign: 'center' },
+  // The branch chip sits 10 above its brief, the room a helper's chips leave.
+  kickoff: { gap: 10 },
+  kickoffBadge: { flexDirection: 'row' },
   noteWithAction: { alignItems: 'center', gap: 2 },
   noteAction: { color: colors.text, fontFamily: fonts.sans, fontSize: 13, lineHeight: 19, fontWeight: '500' },
   hinted: { gap: spacing.xs },
