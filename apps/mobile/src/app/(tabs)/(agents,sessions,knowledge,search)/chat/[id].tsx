@@ -12,7 +12,7 @@ import GitBranchIcon from '@hugeicons/core-free-icons/GitBranchIcon'
 import LockIcon from '@hugeicons/core-free-icons/LockIcon'
 import Undo02Icon from '@hugeicons/core-free-icons/Undo02Icon'
 import { HugeiconsIcon } from '@hugeicons/react-native'
-import { imageRefSpans, isModelOnlyMessage, isSoloRoom, placeQuotesAfterText, projectThreadOf, withQuoteExcerpts, ROUTINE_LATE_AFTER_MS, SINGLE_CHAT_VOICE, SUBAGENT_VOICE, userInputAnswerText, type AgentConfig, type EventDocument, type EventImage, type FileAttachment, type ImageAttachment, type InlineQuote, type MessageQuote, type MessageReply, type NoteQuote, type SkillConfig, type ThreadEvent } from '@manor/contracts'
+import { imageRefSpans, isModelOnlyMessage, isSoloRoom, placeQuotesAfterText, projectThreadOf, withQuoteExcerpts, ROUTINE_LATE_AFTER_MS, SINGLE_CHAT_VOICE, SUBAGENT_VOICE, userInputAnswerText, type AgentConfig, type ChatOverride, type EventDocument, type EventImage, type FileAttachment, type ImageAttachment, type InlineQuote, type MessageQuote, type MessageReply, type NoteQuote, type SkillConfig, type ThreadEvent } from '@manor/contracts'
 import type { StagedFile } from '@manor/client-runtime/attachments'
 import { avatarBubbleTint, projectBubbleTint, type BubbleTint } from '@manor/client-runtime/avatar-bubble'
 import { liveSessionContext, singleWorkContext } from '@manor/client-runtime/context-meter'
@@ -770,10 +770,19 @@ function ChatContent({ chatId }: { chatId: string | undefined }) {
   const connection = status === 'live' ? null : status === 'connecting' ? 'Connecting…' : 'Offline'
   // The composer's model chip: the one runtime that answers here. A Single Session and a
   // project thread run the anonymous voice, a DM its persona; a room with several has none.
+  const composerModelOf = (agent: AgentConfig, override: ChatOverride) => {
+    const parts = runtimeParts(agent, override, hostAuto)
+    return {
+      label: parts.model,
+      effort: parts.effort,
+      ...(isAutoPending(agent, override, hostAuto) ? {} : { driver: effectiveDriver(agent, override) }),
+      onPress: () => setSheet('model'),
+    }
+  }
   const composerModel = singleChat
-    ? { label: runtimeParts(singleVoice, singleOverride, hostAuto).model, onPress: () => setSheet('model') }
+    ? composerModelOf(singleVoice, singleOverride)
     : dmAgent !== undefined && sessionDmAgent === undefined
-      ? { label: runtimeParts(dmAgent, dmOverride, hostAuto).model, onPress: () => setSheet('model') }
+      ? composerModelOf(dmAgent, dmOverride)
       : undefined
   const subtitle = pairTitle === undefined ? (connection === null ? lead : `${lead}, ${connection}`) : (connection ?? 'Between agents')
   const topInset = insets.top + CHAT_HEADER_HEIGHT + spacing.lg

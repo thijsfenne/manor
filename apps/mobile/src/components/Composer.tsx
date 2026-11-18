@@ -1,4 +1,3 @@
-import ArrowDown01Icon from '@hugeicons/core-free-icons/ArrowDown01Icon'
 import ArrowUp02Icon from '@hugeicons/core-free-icons/ArrowUp02Icon'
 import Attachment01Icon from '@hugeicons/core-free-icons/Attachment01Icon'
 import BotIcon from '@hugeicons/core-free-icons/BotIcon'
@@ -12,7 +11,7 @@ import LeftToRightListBulletIcon from '@hugeicons/core-free-icons/LeftToRightLis
 import MessageMultiple01Icon from '@hugeicons/core-free-icons/MessageMultiple01Icon'
 import PlusSignIcon from '@hugeicons/core-free-icons/PlusSignIcon'
 import { HugeiconsIcon } from '@hugeicons/react-native'
-import { DocumentUploadSchema, ImageAttachmentSchema, FileAttachmentSchema, MAX_DOCUMENT_BYTES, MAX_MESSAGE_ATTACHMENTS, MAX_TEXT_FILE_BYTES, imageRefSpans, renumberImageRefs, snapRefDeletion, type AgentConfig, type ChatCommandContext, type ImageAttachment, type MessageQuote, type MessageReply, type SkillConfig } from '@manor/contracts'
+import { DocumentUploadSchema, ImageAttachmentSchema, FileAttachmentSchema, MAX_DOCUMENT_BYTES, MAX_MESSAGE_ATTACHMENTS, MAX_TEXT_FILE_BYTES, imageRefSpans, renumberImageRefs, snapRefDeletion, type AgentConfig, type ChatCommandContext, type DriverName, type ImageAttachment, type MessageQuote, type MessageReply, type SkillConfig } from '@manor/contracts'
 import { base64Bytes, describeBytes, documentMime, documentTooLarge, isDocumentUpload, textFileMime, utf8Size, type StagedFile } from '@manor/client-runtime/attachments'
 import { editComposerText, normalizeComposerLists } from '@manor/client-runtime/composer-formatting'
 import {
@@ -45,6 +44,8 @@ import { ContextRingButton, ContextRingCopy } from '@/components/ContextRing'
 import type { ContextMeter } from '@manor/client-runtime/context-meter'
 import { chatCommandRows, commandDraft, draftCommandRefusal, type ChatCommandRow } from '@manor/client-runtime/chat-commands'
 import { GlassSurface } from '@/components/GlassSurface'
+import { shortModelName } from '@/components/modelPillLabel'
+import { ProviderMark } from '@/components/ProviderMark'
 import { ReplyContextChip } from '@/components/ReplyContextChip'
 import { QuoteContextChip } from '@/components/QuoteContextChip'
 import { glassRise, glassSink } from '@/lib/glassMotion'
@@ -200,7 +201,7 @@ export interface ComposerProps {
    * Present where one runtime answers (a DM, a Single Session, a project thread);
    * the press opens that chat's model sheet.
    */
-  model?: { label: string; onPress: () => void }
+  model?: { label: string; driver?: DriverName; effort?: string; onPress: () => void }
 }
 
 /**
@@ -817,7 +818,7 @@ export function Composer({
             {model === undefined ? null : (
               <Pressable
                 accessibilityHint="Choose the model for this chat"
-                accessibilityLabel={`Model, ${model.label}`}
+                accessibilityLabel={`Model, ${model.label}${model.effort ? `, ${model.effort}` : ''}`}
                 accessibilityRole="button"
                 disabled={disabled}
                 hitSlop={4}
@@ -828,8 +829,11 @@ export function Composer({
                 }}
                 style={({ pressed }) => [styles.modelChip, disabled && styles.dimmed, pressed && styles.pressed]}
               >
-                <Text numberOfLines={1} style={styles.modelLabel}>{model.label}</Text>
-                <HugeiconsIcon color={colors.muted} icon={ArrowDown01Icon} size={14} strokeWidth={1.8} />
+                {model.driver === undefined ? null : <ProviderMark driver={model.driver} size={14} />}
+                <Text numberOfLines={1} style={styles.modelLabel}>
+                  {shortModelName(model.label)}
+                  {model.effort === undefined || model.effort === '' ? null : <Text style={styles.modelEffort}>{` ${model.effort}`}</Text>}
+                </Text>
               </Pressable>
             )}
             {recipients === undefined ? null : <Recipients recipients={recipients} />}
@@ -1075,8 +1079,9 @@ const styles = StyleSheet.create({
   actions: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingHorizontal: (PILL_HEIGHT - 36) / 2, paddingTop: spacing.xs, paddingBottom: (PILL_HEIGHT - 36) / 2 },
   plus: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center', borderRadius: 18, backgroundColor: colors.fill },
   plusOn: { backgroundColor: colors.chip },
-  modelChip: { minWidth: 0, flexShrink: 1, height: 36, flexDirection: 'row', alignItems: 'center', gap: spacing.xs, borderRadius: 18, backgroundColor: colors.fill, paddingLeft: spacing.md, paddingRight: spacing.sm },
+  modelChip: { minWidth: 0, flexShrink: 1, height: 36, flexDirection: 'row', alignItems: 'center', gap: spacing.xs, borderRadius: 18, backgroundColor: colors.fill, paddingHorizontal: spacing.md },
   modelLabel: { flexShrink: 1, color: colors.text, fontFamily: fonts.sans, fontSize: 14, fontWeight: '500' },
+  modelEffort: { color: colors.muted, fontWeight: '400' },
   spacer: { flex: 1 },
   send: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center', borderRadius: 18, backgroundColor: colors.text },
   sendIdle: { backgroundColor: colors.fill },
