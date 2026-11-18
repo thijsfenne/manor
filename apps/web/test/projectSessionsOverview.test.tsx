@@ -68,6 +68,23 @@ describe('the sessions overview row mark', () => {
   })
 })
 
+describe('the working row progress', () => {
+  it('shows the tasks count in place of the age and the unread dot, and nothing before a card exists', () => {
+    const [planned = '', bare = '', unread = ''] = rows([
+      row({ id: 'planned', planProgress: { done: 2, total: 7 } }),
+      row({ id: 'bare' }),
+      { ...row({ id: 'unread', planProgress: { done: 1, total: 3 } }), unread: true },
+    ])
+    expect(planned).toContain('data-plan-ring="2/7"')
+    expect(planned).toContain('>2/7<')
+    expect(planned).not.toContain('now')
+    expect(bare).not.toContain('data-plan-ring')
+    expect(bare).not.toContain('now')
+    expect(unread).toContain('data-plan-ring="1/3"')
+    expect(unread).not.toContain('bg-ok')
+  })
+})
+
 describe('the worktree mark', () => {
   it('sits left of the provider for a worktree Session and is absent in the shared checkout', () => {
     const [isolated = '', shared = ''] = rows([

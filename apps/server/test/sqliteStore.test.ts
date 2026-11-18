@@ -569,6 +569,26 @@ describe('persistent SQLite store', () => {
     expect((await store.listChats())[0]?.lastMessagePreview).toBe('Look into it')
   })
 
+  it('carries the latest tasks card as done/total on the chat, absent before one exists', async () => {
+    const { store, filename } = fixture()
+    const chat = (await store.listChats())[0]!
+    expect((await store.listChats())[0]).not.toHaveProperty('planProgress')
+    const todo = (todos: [string, 'pending' | 'in_progress' | 'completed'][]) => store.appendEvent(chat.id, {
+      type: 'todo_update', agentId: sage.id, turnId: 't1', todos: todos.map(([text, status]) => ({ text, status })),
+    })
+    await todo([['Read', 'completed'], ['Build', 'in_progress'], ['Test', 'pending']])
+    expect((await store.listChats())[0]?.planProgress).toEqual({ done: 1, total: 3 })
+    await todo([['Read', 'completed'], ['Build', 'completed'], ['Test', 'in_progress'], ['Ship', 'pending']])
+    expect((await store.listChats())[0]?.planProgress).toEqual({ done: 2, total: 4 })
+    store.close()
+    const reopened = createSqliteStore({ filename })
+    opened.push(reopened)
+    expect((await reopened.listChats())[0]?.planProgress).toEqual({ done: 2, total: 4 })
+    // A card cleared to no lines draws nothing, so it leaves no count.
+    await reopened.appendEvent(chat.id, { type: 'todo_update', agentId: sage.id, turnId: 't1', todos: [] })
+    expect((await reopened.listChats())[0]).not.toHaveProperty('planProgress')
+  })
+
   it('persists a Fast default and a Standard chat override across restart, and clears the default', async () => {
     const { store, filename } = fixture()
     const chat = (await store.listChats())[0]!

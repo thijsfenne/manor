@@ -3,8 +3,9 @@ import { CheckmarkCircle02Icon as CheckmarkCircleSolidIcon } from '@manor/client
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import { useId, useSyncExternalStore } from 'react'
 import { foldsWhenDone, isTaskFolded, planRowKeys, planStanding, planTitle, subscribeTaskFolds, toggleTaskFolded, type PlanStanding, type TaskLine } from '../state'
-import { DISCLOSURE, INSTANT, PLAN_FILL } from '../motion'
+import { DISCLOSURE, INSTANT } from '../motion'
 import { Icon } from './Icon'
+import { PlanRing } from './PlanRing'
 
 const MARK = {
   // Solid, so drawn without a stroke: one would trace the check's cut-out shut.
@@ -20,39 +21,6 @@ const MARK = {
 
 /** What the header's mark says to a screen reader. */
 const HEADER_SAID = { working: 'In progress', paused: 'Paused', blocked: 'Blocked', stopped: 'Stopped', done: 'Done' } as const satisfies Record<PlanStanding['mark'], string>
-
-/**
- * The header's mark: a ring that fills as steps finish (1/4, 2/4, ...). It never spins;
- * the current step already does. A finished plan swaps it for the same round check its
- * steps wear, and blocked keeps its alert, since a fraction cannot say a step is stuck.
- */
-function PlanRing({ done, total, muted }: { done: number; total: number; muted: boolean }) {
-  const reduce = useReducedMotion() ?? false
-  const fraction = total === 0 ? 0 : done / total
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      width={15}
-      height={15}
-      fill="none"
-      strokeWidth={3}
-      data-plan-ring={`${done}/${total}`}
-      className={`-rotate-90 ${muted ? 'text-muted' : 'text-text'}`}
-    >
-      <circle cx={12} cy={12} r={9.5} className="stroke-dim/40" />
-      <motion.circle
-        cx={12}
-        cy={12}
-        r={9.5}
-        stroke="currentColor"
-        strokeLinecap="round"
-        initial={false}
-        animate={{ pathLength: fraction, opacity: fraction > 0 ? 1 : 0 }}
-        transition={reduce ? INSTANT : PLAN_FILL}
-      />
-    </svg>
-  )
-}
 
 /**
  * A tasks card: the latest plan a turn published, or the steps Confirm asked for. A
@@ -88,7 +56,7 @@ export function TodoList({ todos, label, title, foldKey }: { todos: readonly Tas
             ? <Icon icon={AlertCircleIcon} size={15} className="text-danger" />
             : standing.mark === 'done'
               ? <Icon icon={CheckmarkCircleSolidIcon} size={15} strokeWidth={0} className="text-text" data-plan-done="" />
-              : <PlanRing done={standing.done} total={standing.total} muted={standing.mark === 'stopped'} />}
+              : <PlanRing done={standing.done} total={standing.total} className={standing.mark === 'stopped' ? 'text-muted' : 'text-text'} />}
         </span>
         <span className="min-w-0 flex-1 truncate font-medium">{heading}</span>
         <span className="flex-none text-[12px] text-muted tabular-nums">

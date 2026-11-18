@@ -302,7 +302,10 @@ export function createSqliteStore(options: SqliteStoreOptions): Store & {
     ...(chat.mode === 'single' ? singlePin(pins.get(`${chat.id}::${SINGLE_CHAT_VOICE.id}`)) : {}),
     checkout: checkoutFromMapping(worktrees.get(chat.id) ?? []),
   })
-  const previewOfChat = (chatId: string): string | null => events.preview(chatId)
+  const transcriptLine = (chatId: string) => {
+    const { preview, plan } = events.summary(chatId)
+    return { lastMessagePreview: preview, ...(plan === undefined ? {} : { planProgress: plan }) }
+  }
   if (options.seed) {
     transaction(db, () => {
       for (const agent of options.agents ?? seedAgents)
@@ -393,7 +396,7 @@ export function createSqliteStore(options: SqliteStoreOptions): Store & {
       .map((chat) => withCheckout({
       ...chat,
       agentIds: isOpenRoom(chat) ? participantsOf(chat.id) : [...chat.memberIds],
-      lastMessagePreview: previewOfChat(chat.id),
+      ...transcriptLine(chat.id),
     })),
     createProject: (name, repoPaths, icon, color, memoryScope) => addProject(name, repoPaths, icon, color, memoryScope),
     createChat: (draft) => addChat(draft),
@@ -508,7 +511,7 @@ export function createSqliteStore(options: SqliteStoreOptions): Store & {
         : withCheckout({
           ...chat,
           agentIds: isOpenRoom(chat) ? participantsOf(chat.id) : [...chat.memberIds],
-          lastMessagePreview: previewOfChat(chat.id),
+          ...transcriptLine(chat.id),
         })
     },
     setChatMembers(chatId, memberIds) {

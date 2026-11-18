@@ -9,7 +9,7 @@ import {
   Undo02Icon,
 } from '@hugeicons/core-free-icons'
 import type { Variants } from 'motion/react'
-import type { AgentConfig } from '@manor/contracts'
+import type { AgentConfig, PlanProgress } from '@manor/contracts'
 import { isArchiveExpired, type Inbox, type InboxChat, type SubagentGroup } from '../../state'
 import { ProjectBadge } from '../ProjectBadge'
 import { relativeTime } from '../../relativeTime'
@@ -22,6 +22,7 @@ import { FoldChevron, FoldItem, FoldList } from '../ui/Fold'
 import { SelectionMarker, SIDEBAR_ROW_MARKER } from '../ui/SelectionMarker'
 import { useHoverCard } from '../ui/useHoverCard'
 import { SessionMark } from './SessionMark'
+import { PlanCount } from './PlanCount'
 import { Standing } from './Standing'
 import { useSplitDragGrab } from '../SplitDrag'
 import { InboxCard } from './InboxCard'
@@ -392,6 +393,11 @@ interface RowProps {
   detail?: string
   /** What the row's open button is called, when "Open <title>" is not the whole story. */
   openLabel?: string
+  /**
+   * A Working Session's tasks progress, which stands where the age would. Null while it has
+   * no tasks card yet, and the slot then says nothing; undefined for every other row.
+   */
+  plan?: PlanProgress | null
   /** The side a quiet row's hover card opens on; the sessions overview asks for the left. */
   cardSide?: 'left' | 'right'
 }
@@ -454,11 +460,12 @@ export function LiveRow({
   onSetArchived,
   detail,
   openLabel,
+  plan,
 }: RowProps) {
   const { chat, projectName, projectColor, unread, running, waiting } = entry
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null)
   const key = `chat:${chat.id}`
-  const standingWidth = waiting ? 'w-14' : running || unread ? 'w-4' : 'w-7'
+  const standingWidth = plan !== undefined ? (plan === null ? 'w-0' : 'w-14') : waiting ? 'w-14' : running || unread ? 'w-4' : 'w-7'
   const grab = useSplitDragGrab()
   const canDrag = grab !== null && onOpenRight !== undefined && !occupied
 
@@ -517,13 +524,15 @@ export function LiveRow({
             className={`relative h-5 flex-none duration-150 ease-arrive ${standingWidth} group-hover/chat-row:w-14 group-focus-within/chat-row:w-14 [@media(hover:none)]:w-14 motion-safe:transition-[width]`}
           >
             <span className="pointer-events-none absolute inset-y-0 right-0 flex items-center justify-end text-right duration-150 ease-fade group-hover/chat-row:opacity-0 group-focus-within/chat-row:opacity-0 [@media(hover:none)]:opacity-0 motion-safe:transition-opacity">
-              <Standing
-                waiting={waiting}
-                unread={unread}
-                running={running}
-                lastMessageAt={chat.lastMessageAt}
-                now={now}
-              />
+              {plan !== undefined ? (plan === null ? null : <PlanCount plan={plan} />) : (
+                <Standing
+                  waiting={waiting}
+                  unread={unread}
+                  running={running}
+                  lastMessageAt={chat.lastMessageAt}
+                  now={now}
+                />
+              )}
             </span>
 
             {/* Archive is the right-click menu's and the hover card's, never a one-click

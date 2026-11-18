@@ -1506,6 +1506,14 @@ export const TodoItemSchema = z.object({
 })
 export type TodoItem = z.infer<typeof TodoItemSchema>
 
+/** How far a tasks card is: the lines ticked off, of all of them. Only a completed line counts. */
+export const PlanProgressSchema = z.object({ done: z.number().int().min(0), total: z.number().int().min(0) })
+export type PlanProgress = z.infer<typeof PlanProgressSchema>
+export const planProgress = (lines: readonly { status: string }[]): PlanProgress => ({
+  done: lines.filter((line) => line.status === 'completed').length,
+  total: lines.length,
+})
+
 /**
  * A complete snapshot rather than a patch. Claude and Grok publish `todos`, while
  * Codex publishes a `todo_list`; replacing the list is the one semantic all three
@@ -3319,6 +3327,9 @@ export const ChatSchema = z.object({
   // The last thing said in this chat, one line, cut short, for the sidebar. Derived on
   // every listing rather than stored, so it cannot disagree with the transcript.
   lastMessagePreview: z.string().nullable().default(null),
+  // The progress of the latest tasks card said in this chat, absent before one was. Derived
+  // like the preview, so the Sessions overview never reads a transcript for it.
+  planProgress: PlanProgressSchema.optional(),
   title: z.string(),
   // Epoch ms of the moment this thread was created. Unlike `lastMessageAt`, this
   // never moves when somebody follows up, so routine histories can keep execution

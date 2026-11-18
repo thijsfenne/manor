@@ -1,4 +1,4 @@
-import { CONFIRM_REQUEST_PREFIX, type ConfirmRequest, type ThreadEvent, type TodoItem, type WorkCompletion, type WorkHandoff } from '@manor/contracts'
+import { CONFIRM_REQUEST_PREFIX, planProgress, type ConfirmRequest, type ThreadEvent, type TodoItem, type WorkCompletion, type WorkHandoff } from '@manor/contracts'
 
 /**
  * One line of a tasks card: a task in a plan, or a step the user's Confirm asked for.
@@ -30,7 +30,7 @@ export function planStanding(tasks: readonly TaskLine[]): PlanStanding {
     : has('pending') ? 'working'
     : has('skipped') ? 'stopped'
     : 'done'
-  return { done: tasks.filter((task) => task.status === 'completed').length, total: tasks.length, mark }
+  return { ...planProgress(tasks), mark }
 }
 
 /**

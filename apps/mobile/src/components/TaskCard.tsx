@@ -9,10 +9,10 @@ import { HugeiconsIcon } from '@hugeicons/react-native'
 import { foldsWhenDone, isTaskFolded, planRowKeys, planStanding, planTitle, subscribeTaskFolds, toggleTaskFolded, type TaskLine } from '@manor/client-runtime/state'
 import { useEffect, useId, useSyncExternalStore } from 'react'
 import { Pressable, StyleSheet, View } from 'react-native'
-import Animated, { Easing, FadeIn, FadeOut, LayoutAnimationConfig, LinearTransition, ReduceMotion, cancelAnimation, useAnimatedProps, useAnimatedStyle, useSharedValue, withRepeat, withTiming } from 'react-native-reanimated'
-import Svg, { Circle } from 'react-native-svg'
+import Animated, { Easing, FadeIn, FadeOut, LayoutAnimationConfig, LinearTransition, ReduceMotion, cancelAnimation, useAnimatedStyle, useSharedValue, withRepeat, withTiming } from 'react-native-reanimated'
 
 import { DisclosureChevron } from '@/components/DisclosureChevron'
+import { PlanRing } from '@/components/PlanRing'
 import { Text } from '@/components/Text'
 import { colors, fonts, radius, spacing, squircle } from '@/theme'
 
@@ -95,43 +95,15 @@ export function TaskCard({ tasks, label = 'Tasks', title, foldKey }: { tasks: re
   )
 }
 
-const RING_RADIUS = 9.5
-const RING_LENGTH = 2 * Math.PI * RING_RADIUS
-const AnimatedCircle = Animated.createAnimatedComponent(Circle)
-
 /**
  * The header's mark: a ring that fills as steps finish (1/4, 2/4, ...). It never spins;
  * the current step already does. A finished plan swaps it for the same round check its
  * steps wear, and blocked keeps its alert, since a fraction cannot say a step is stuck.
  */
 function HeaderMark({ standing }: { standing: ReturnType<typeof planStanding> }) {
-  const fraction = standing.total === 0 ? 0 : standing.done / standing.total
-  const progress = useSharedValue(fraction)
-  useEffect(() => {
-    progress.set(withTiming(fraction, { duration: 400, easing: Easing.out(Easing.exp), reduceMotion: ReduceMotion.System }))
-  }, [fraction, progress])
-  const arc = useAnimatedProps(() => ({
-    strokeDashoffset: RING_LENGTH * (1 - progress.get()),
-    strokeOpacity: progress.get() > 0 ? 1 : 0,
-  }))
   if (standing.mark === 'blocked') return <HugeiconsIcon color={colors.danger} icon={AlertCircleIcon} size={15} strokeWidth={1.8} />
   if (standing.mark === 'done') return <HugeiconsIcon color={colors.text} icon={CheckmarkCircleSolidIcon} size={15} strokeWidth={0} />
-  return (
-    <Svg height={15} style={styles.ring} viewBox="0 0 24 24" width={15}>
-      <Circle cx={12} cy={12} fill="none" r={RING_RADIUS} stroke={colors.dim} strokeOpacity={0.4} strokeWidth={3} />
-      <AnimatedCircle
-        animatedProps={arc}
-        cx={12}
-        cy={12}
-        fill="none"
-        r={RING_RADIUS}
-        stroke={standing.mark === 'stopped' ? colors.muted : colors.text}
-        strokeDasharray={`${RING_LENGTH} ${RING_LENGTH}`}
-        strokeLinecap="round"
-        strokeWidth={3}
-      />
-    </Svg>
-  )
+  return <PlanRing done={standing.done} fill={standing.mark === 'stopped' ? colors.muted : colors.text} total={standing.total} track={colors.dim} trackOpacity={0.4} />
 }
 
 function Mark({ status }: { status: TaskLine['status'] }) {
@@ -172,7 +144,6 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
   },
   header: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  ring: { transform: [{ rotate: '-90deg' }] },
   heading: { flex: 1, color: colors.text, fontFamily: fonts.sansMedium, fontSize: 14, lineHeight: 20 },
   count: { color: colors.muted, fontFamily: fonts.sans, fontSize: 12, lineHeight: 20, fontVariant: ['tabular-nums'] },
   list: { gap: 6, paddingTop: 4 },

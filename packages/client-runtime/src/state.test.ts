@@ -1516,3 +1516,30 @@ describe('the state the lists read', () => {
     expect(listedOf(ended).activity).toBe(ended.activity)
   })
 })
+
+describe('the tasks progress on a chat', () => {
+  const chat: Chat = {
+    id: 'session_1', projectId: 'p', kind: 'project', routineId: null, parentChatId: null,
+    memberIds: [], sideModel: null, sideEffort: null, title: 'Build it',
+    lastMessagePreview: null, createdAt: 1, lastMessageAt: 1, settledAt: null,
+    archivedAt: null, agentIds: [], checkout: { mode: 'current', branch: null },
+  }
+  const todo = (ts: number, ...status: ('pending' | 'in_progress' | 'completed')[]) => ({
+    type: 'event' as const, chatId: 'session_1',
+    event: { id: `todo_${ts}`, ts, type: 'todo_update' as const, agentId: 'sage', turnId: 't1', todos: status.map((one, at) => ({ text: `Step ${at}`, status: one })) },
+  })
+
+  it('follows each tasks card as it arrives and ignores one older than the chat has seen', () => {
+    let state = reduce({ ...emptyWorkspace, chats: [chat] }, todo(2, 'in_progress', 'pending'))
+    expect(state.chats[0]?.planProgress).toEqual({ done: 0, total: 2 })
+    state = reduce(state, todo(3, 'completed', 'in_progress'))
+    expect(state.chats[0]?.planProgress).toEqual({ done: 1, total: 2 })
+    const before = state.chats
+    state = reduce(state, todo(3, 'completed', 'in_progress'))
+    expect(state.chats).toBe(before)
+    state = reduce(state, todo(1, 'pending', 'pending'))
+    expect(state.chats[0]?.planProgress).toEqual({ done: 1, total: 2 })
+    state = reduce(state, todo(4))
+    expect(state.chats[0]?.planProgress).toBeUndefined()
+  })
+})

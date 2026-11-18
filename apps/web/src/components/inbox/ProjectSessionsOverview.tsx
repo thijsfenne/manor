@@ -99,7 +99,8 @@ export function ProjectSessionsOverview({ threadId, overview, agents, onOpen, on
                     if (row.chat === null) return <ProposalRow key={row.key} row={row} now={now} onReveal={onRevealProposal} />
                     // The sidebar's own rows: live ones with Archive and Settle, settled ones
                     // as a quiet line whose card opens to the left, away from the right pane's edge.
-                    // The fold's header already says running or waiting, so the row keeps only unread and age.
+                    // The fold's header already says running or waiting, so the row keeps only unread and age,
+                    // and a Working row's age ("now", always) gives way to its tasks progress, with no unread dot: the fold already says it works.
                     // A Waiting row's detail is what it waits on (`SessionOverviewRow.line`).
                     const entry = {
                       chat: row.chat, selected: false, unread: row.unread, running: false, waiting: false,
@@ -111,7 +112,7 @@ export function ProjectSessionsOverview({ threadId, overview, agents, onOpen, on
                     }
                     return id === 'settled' || id === 'archived'
                       ? <QuietRow key={row.key} {...shared} cardSide="left" mode={id} onHoldPeek={noHold} />
-                      : <LiveRow key={row.key} {...shared} motionClass="" detail={row.line} />
+                      : <LiveRow key={row.key} {...shared} motionClass="" detail={row.line} {...(id === 'working' ? { plan: row.chat.planProgress ?? null } : {})} />
                   })}
                   {id !== 'settled' && id !== 'archived' ? null : (
                     <ShowMoreRow

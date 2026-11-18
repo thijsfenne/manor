@@ -407,6 +407,7 @@ const notesSessions = [
   }),
   notesSession('notes-build', 'Run the nightly build', 20),
   notesSession('notes-tests', 'Run the test suite', 18),
+  notesSession('notes-package', 'Package the desktop build', 16),
   notesSession('notes-colour', 'Pick the button colour', 15),
   notesSession('notes-pdf', 'Ship the PDF export', 12, {
     goalReachedAt: now - 9 * 60_000, goalReport: { result: 'PDF export renders every page.', limitations: 'Fonts fall back to the system font.' },
@@ -420,6 +421,8 @@ for (const session of notesSessions) {
   directory.chats.push(chat({ id: session.workChatId, projectId: 'project-notes', title: session.title, preview: session.task,
     minutesAgo: (now - session.createdAt) / 60_000 - 1, settledMinutesAgo: session.state === 'settled' ? 20 : null }))
 }
+// Two Working Sessions: the test run published a tasks card (2 of 7 done), the packaging turn has none yet.
+directory.chats.find((entry) => entry.id === 'chat-notes-tests').planProgress = { done: 2, total: 7 }
 // The build's shell keeps running after its turn, so the overview files it under Waiting
 // with the shell's title, and its line in the thread says Waiting.
 directory.backgroundChatIds = [...(directory.backgroundChatIds ?? []), 'chat-notes-build']
@@ -1207,6 +1210,9 @@ const activeTurns = {
   // only the directory's runningTurns says it works.
   'chat-notes-tests': {
     activeTurn: { turnId: 'turn-notes-tests', agentId: 'agent-wren', startedAt: now - 3 * 60_000 },
+  },
+  'chat-notes-package': {
+    activeTurn: { turnId: 'turn-notes-package', agentId: 'agent-wren', startedAt: now - 2 * 60_000 },
   },
 }
 // Every turn in flight, as the Mac lists them for a client that connects or reconnects.

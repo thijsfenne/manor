@@ -11,6 +11,7 @@ import { QUIET_PAGE_SIZE, readSessionOverviewUI, subscribeSessionOverviewUI, upd
 import { Pressable, ScrollView, StyleSheet, View, type ColorValue } from 'react-native'
 
 import { DisclosureChevron } from '@/components/DisclosureChevron'
+import { PlanRing } from '@/components/PlanRing'
 import { SessionMark } from '@/components/SessionMark'
 import { Text } from '@/components/Text'
 import { colors, fonts, radius, spacing, squircle } from '@/theme'
@@ -46,24 +47,35 @@ export function SessionOverviewList({ threadId, overview, agents, inset, onOpen,
   const { open: unfolded, visibleSettled } = useSyncExternalStore(subscribeSessionOverviewUI, read, read)
   const shownSettled = overview.settled.slice(0, visibleSettled)
   const moreSettled = overview.settled.length - shownSettled.length
-  const row = (entry: SessionOverviewRow, quiet: boolean) => (
-    <Pressable
-      key={entry.key}
-      accessibilityLabel={entry.chat === null ? `Show proposal ${entry.title}` : `Open ${entry.title}`}
-      accessibilityRole="button"
-      onPress={() => (entry.chat === null ? onRevealProposal(entry.key) : onOpen(entry.chat.id))}
-      style={({ pressed }) => [styles.item, pressed && styles.pressed]}
-    >
-      <View style={styles.titleRow}>
-        <Text numberOfLines={1} style={[styles.title, quiet && styles.quietTitle]}>{entry.title}</Text>
-      </View>
-      {/* The runtime mark ends the line, where the Mac's overview puts it. */}
-      <View style={styles.lineRow}>
-        {entry.line === '' ? null : <Text numberOfLines={1} style={styles.line}>{entry.line}</Text>}
-        {entry.chat === null ? null : <SessionMark agents={agents} chat={entry.chat} />}
-      </View>
-    </Pressable>
-  )
+  const row = (entry: SessionOverviewRow, quiet: boolean, working = false) => {
+    const plan = working ? entry.chat?.planProgress : undefined
+    return (
+      <Pressable
+        key={entry.key}
+        accessibilityLabel={entry.chat === null ? `Show proposal ${entry.title}` : `Open ${entry.title}`}
+        accessibilityRole="button"
+        accessibilityValue={plan === undefined ? undefined : { text: `${plan.done} of ${plan.total} tasks done` }}
+        onPress={() => (entry.chat === null ? onRevealProposal(entry.key) : onOpen(entry.chat.id))}
+        style={({ pressed }) => [styles.item, pressed && styles.pressed]}
+      >
+        <View style={styles.titleRow}>
+          <Text numberOfLines={1} style={[styles.title, quiet && styles.quietTitle]}>{entry.title}</Text>
+          {/* A working Session's tasks progress, the count its card shows; nothing before it has a card. */}
+          {plan === undefined ? null : (
+            <View style={styles.plan}>
+              <PlanRing done={plan.done} fill={colors.busy} size={14} total={plan.total} track={colors.line} />
+              <Text style={styles.planCount}>{plan.done}/{plan.total}</Text>
+            </View>
+          )}
+        </View>
+        {/* The runtime mark ends the line, where the Mac's overview puts it. */}
+        <View style={styles.lineRow}>
+          {entry.line === '' ? null : <Text numberOfLines={1} style={styles.line}>{entry.line}</Text>}
+          {entry.chat === null ? null : <SessionMark agents={agents} chat={entry.chat} />}
+        </View>
+      </Pressable>
+    )
+  }
 
   return (
     <ScrollView
@@ -95,7 +107,7 @@ export function SessionOverviewList({ threadId, overview, agents, inset, onOpen,
           </Pressable>
           {!unfolded[id] ? null
             : overview[id].length === 0 ? <Text style={styles.empty}>{hint}</Text>
-            : (id === 'settled' ? shownSettled : overview[id]).map((entry) => row(entry, id === 'settled'))}
+            : (id === 'settled' ? shownSettled : overview[id]).map((entry) => row(entry, id === 'settled', id === 'working'))}
           {id !== 'settled' || !unfolded[id] || moreSettled <= 0 ? null : (
             <Pressable
               accessibilityRole="button"
@@ -118,6 +130,8 @@ const styles = StyleSheet.create({
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   title: { flex: 1, color: colors.text, fontFamily: fonts.sans, fontSize: 15, lineHeight: 20 },
   quietTitle: { color: colors.muted },
+  plan: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  planCount: { color: colors.muted, fontFamily: fonts.sans, fontSize: 12, lineHeight: 16, fontVariant: ['tabular-nums'] },
   lineRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: spacing.sm },
   line: { flex: 1, color: colors.dim, fontFamily: fonts.sans, fontSize: 13, lineHeight: 18 },
   group: { gap: spacing.sm },
