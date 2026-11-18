@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Hardened runtime entitlements of the Manor binary. The bundled server and its
+  connectors run through this same binary (ELECTRON_RUN_AS_NODE), and macOS holds a
+  child process such as a provider CLI or remindctl to these entitlements too.
+    allow-jit                        V8 compiles JavaScript at run time.
+    personal-information.calendars   EventKit, which covers Reminders, for the remindctl fallback.
+    automation.apple-events          Scripts that agents run through osascript.
+-->
+<plist version="1.0">
+<dict>
+  <key>com.apple.security.cs.allow-jit</key>
+  <true/>
+  <key>com.apple.security.personal-information.calendars</key>
+  <true/>
+  <key>com.apple.security.automation.apple-events</key>
+  <true/>
+</dict>
+</plist>

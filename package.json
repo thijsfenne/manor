@@ -9,6 +9,7 @@
     "desktop:dev": "pnpm --filter @manor/desktop dev",
     "desktop:package": "pnpm --filter @manor/web build && pnpm --filter @manor/desktop package:mac",
     "desktop:install": "bash apps/desktop/scripts/install-mac.sh",
+    "desktop:release": "pnpm --filter @manor/desktop release:mac",
     "desktop:fresh": "bash apps/desktop/scripts/fresh-mac.sh",
     "desktop:spike": "MANOR_DESKTOP_URL=http://127.0.0.1:43180 pnpm --filter @manor/desktop dev",
     "desktop:spike-server": "VITE_MANOR_AUTH=off VITE_MANOR_WS=ws://127.0.0.1:43180/ws pnpm --filter @manor/web build && MANOR_STORE=memory MANOR_AUTH=off MANOR_DRIVER=mock MANOR_DATA_DIR=/tmp/manor-electron-spike MANOR_HOST=127.0.0.1 MANOR_PORT=43180 MANOR_WEB_DIST=../web/dist pnpm --filter @manor/server start",

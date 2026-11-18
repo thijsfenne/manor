@@ -74,6 +74,36 @@ Manor, replaces `/Applications/Manor.app` and opens it again. A failed build lea
 the installed app alone. Use it after preload or main-process changes; renderer
 changes only need `pnpm stable:restart`, which restarts the server, not the app.
 
+## Release DMG
+
+`pnpm desktop:release` builds `apps/desktop/release/Manor-<version>-arm64.dmg` for
+Apple Silicon. It reads two environment variables:
+
+- `MANOR_SIGN_IDENTITY`, a "Developer ID Application" identity in your login keychain,
+  by its SHA-1 hash, or by its name without the `Developer ID Application: ` prefix.
+  `security find-identity -v -p codesigning` lists them.
+- `MANOR_NOTARY_PROFILE`, a notarytool keychain profile made once with
+  `xcrun notarytool store-credentials <profile>`.
+
+```bash
+MANOR_SIGN_IDENTITY='<hash>' MANOR_NOTARY_PROFILE='<profile>' pnpm desktop:release
+```
+
+With both set, the app is signed with the hardened runtime and the entitlements in
+`assets/entitlements.mac.plist` (helpers get `assets/entitlements.mac.inherit.plist`),
+notarized and stapled. The DMG is then signed, notarized and stapled as well, and the
+script ends by checking both signatures and tickets, and the app with `spctl`. Keep the
+entitlements to what runs today: JIT for V8, Reminders through EventKit for the
+`remindctl` fallback, and Apple Events for scripts agents run. A child process
+such as a provider CLI counts as Manor for these checks. The usage descriptions in
+`build.mac.extendInfo` follow the same rule.
+
+When either variable is missing, the script logs which one and builds a DMG that holds
+an ad hoc signed app, the same app `pnpm desktop:package` makes. That path is for
+contributors without a certificate; the DMG is not notarized and is not for handing
+out. Neither path touches `/Applications`; `pnpm desktop:install` stays the local
+ad hoc install.
+
 ## Restarting the stable server
 
 `pnpm stable:restart` installs, builds the web app and only then swaps the launch

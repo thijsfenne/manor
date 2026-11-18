@@ -11,6 +11,7 @@
     "bundle:app": "pnpm --filter @manor/web build && node ../server/scripts/build-bundle.mjs",
     "package:mac": "pnpm bundle:app && pnpm build && electron-builder --mac dir && pnpm sign:mac",
     "sign:mac": "codesign --force --deep --sign - release/mac-arm64/Manor.app && codesign --verify --strict release/mac-arm64/Manor.app && codesign -dv release/mac-arm64/Manor.app 2>&1 | grep -q 'Identifier=com.thijsfenne.manor'",
+    "release:mac": "bash scripts/release-mac.sh",
     "dev": "pnpm build && env -u ELECTRON_RUN_AS_NODE MANOR_DESKTOP_URL=${MANOR_DESKTOP_URL:-http://localhost:5173} electron .",
     "start": "pnpm build && env -u ELECTRON_RUN_AS_NODE electron .",
     "smoke:preload": "pnpm build && env -u ELECTRON_RUN_AS_NODE electron dist/preloadSmoke.js",
@@ -64,7 +65,21 @@
       "target": "dir",
       "category": "public.app-category.productivity",
       "icon": "assets/icon.icon",
-      "identity": null
+      "identity": null,
+      "hardenedRuntime": true,
+      "entitlements": "assets/entitlements.mac.plist",
+      "entitlementsInherit": "assets/entitlements.mac.inherit.plist",
+      "extendInfo": {
+        "NSRemindersUsageDescription": "Manor reads and adds your reminders when you or an agent use Reminders.",
+        "NSRemindersFullAccessUsageDescription": "Manor reads and adds your reminders when you or an agent use Reminders.",
+        "NSAppleEventsUsageDescription": "An agent in Manor wants to control another app for a task you gave it.",
+        "NSDocumentsFolderUsageDescription": "Manor reads the folders you link to a project, and agents work in them.",
+        "NSDesktopFolderUsageDescription": "Manor reads the folders you link to a project, and agents work in them.",
+        "NSDownloadsFolderUsageDescription": "Manor reads the folders you link to a project, and agents work in them."
+      }
+    },
+    "dmg": {
+      "writeUpdateInfo": false
     }
   }
 }
