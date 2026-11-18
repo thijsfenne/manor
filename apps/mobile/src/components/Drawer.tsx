@@ -24,8 +24,13 @@ interface DrawerProps {
 /**
  * The house menu, the way a phone chat app keeps one: behind the page, revealed by
  * sliding the page aside. The page keeps its own header and its own scroll; this
- * only moves it, scales it a touch so it reads as lifted, and takes it back on a
- * tap or a swipe. It wraps the native tab bar, so the bar slides with the page.
+ * only moves it sideways and takes it back on a tap or a swipe. It wraps the native
+ * tab bar, so the bar slides with the page.
+ *
+ * The page never scales. A tab's stack measures its safe area natively inside the
+ * page, and a tab first opened from the menu measures while the page is still
+ * aside; a scaled page moves its top and bottom edges, so that stack would keep a
+ * short top inset and its header would sit under the status bar.
  */
 export function Drawer({ open, onOpenChange, menu, children, swipeEnabled = true }: DrawerProps) {
   const { width } = useWindowDimensions()
@@ -66,10 +71,7 @@ export function Drawer({ open, onOpenChange, menu, children, swipeEnabled = true
     })
 
   const page = useAnimatedStyle(() => ({
-    transform: [
-      { translateX: progress.get() * travel },
-      { scale: interpolate(progress.get(), [0, 1], [1, 0.94]) },
-    ],
+    transform: [{ translateX: progress.get() * travel }],
     borderRadius: interpolate(progress.get(), [0, 1], [0, 32]),
     ...squircle,
   }))
