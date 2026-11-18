@@ -1134,12 +1134,13 @@ export class TurnRunner {
      * claiming the turn there would only freeze the persona's current model into the
      * chat. A mock persona is skipped rather than stamped `autoResolved` on every
      * first turn in the house. A DM is skipped too: it runs on the Model its agent's
-     * settings name, the one place that model is chosen and shown.
+     * settings name, the one place that model is chosen and shown. A Browser session
+     * is skipped as well: it always runs the one model its picker names.
      */
     const autoWanted = this.options.selectAutoRuntime !== undefined &&
       (autoRequested(overrides[agent.id]) ?? agent.driver !== 'mock')
     if (autoWanted && !overrides[agent.id]?.autoResolved && !aside && room?.kind !== 'run' && room?.kind !== 'pair' && room?.kind !== 'dm' &&
-      liveSession === undefined) {
+      !browserRoom && liveSession === undefined) {
       // Read again before claiming Auto; a manual pick may arrive during preparation.
       const current = (await this.options.store.loadChatOverrides(chatId))[agent.id]
       if (autoRequested(current) !== false && !current?.autoResolved && !state.aborted && !chat.discarded) {

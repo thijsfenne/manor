@@ -437,7 +437,11 @@ export class ProjectModule {
       }
       case 'create_chat': {
         const kind = message.kind ?? 'project'
-        const single = message.mode === 'single'
+        if (kind === 'browser' && message.mode === 'house') {
+          reply({ type: 'notice', kind: 'error', text: 'Cannot create the session: a Browser session runs one model.' })
+          return
+        }
+        const single = message.mode === 'single' || kind === 'browser'
         if (single) {
           try {
             if (kind !== 'project' && kind !== 'browser') throw new Error('Single sessions must be project chats or browser sessions.')

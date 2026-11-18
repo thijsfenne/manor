@@ -38,6 +38,7 @@ const MIGRATIONS: readonly Migration[] = [
   { file: '014_home_room.sql' },
   { file: '015_relink_hidden_threads.sql' },
   { file: '016_paired_devices.sql' },
+  { file: '017_single_browser_sessions.sql' },
 ]
 
 /** The `user_version` the last migration sets. */

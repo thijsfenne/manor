@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useLayoutEffect, useRef, useState, type CSSProperties, type RefObject } from 'react'
 import { motion, useReducedMotion } from 'motion/react'
 import { ArrowDown01Icon, FlashIcon, RefreshIcon, Settings01Icon } from '@hugeicons/core-free-icons'
 import { FlashIcon as FlashSolidIcon } from '@manor/client-runtime/solid-icons'
@@ -80,6 +80,7 @@ export function RuntimeMenu({
 }: RuntimeMenuProps) {
   const hostAuto = useHostAuto()
   const rootRef = useRef<HTMLDivElement>(null)
+  const popoverRef = useRef<HTMLDivElement>(null)
   const reduce = useReducedMotion()
   const liveLabel = {
     driver: effectiveDriver(agent, override),
@@ -92,6 +93,7 @@ export function RuntimeMenu({
   const open = frozenLabel !== null
   const label = frozenLabel ?? liveLabel
   useDismiss(open, () => setFrozenLabel(null), { within: [rootRef], escape: true })
+  const fit = useFitInside(open, rootRef, popoverRef)
 
   return (
     <div ref={rootRef} className="relative min-w-0">
@@ -140,7 +142,9 @@ export function RuntimeMenu({
       </button>
 
       <Popover
+        ref={popoverRef}
         open={open}
+        {...(fit === undefined ? {} : { style: fit })}
         className={
           layout === 'split'
             ? `absolute bottom-[calc(100%+8px)] left-0 z-[6] ${SPLIT_PICKER_SHELL} ${
@@ -166,6 +170,55 @@ export function RuntimeMenu({
       </Popover>
     </div>
   )
+}
+
+/** Room kept between a shifted picker and the edge it would otherwise cross. */
+const FIT_MARGIN = 8
+
+/**
+ * Keeps a picker that hangs from its trigger's left edge inside what can show it: the
+ * window and every ancestor that clips. A trigger near the right edge, such as the
+ * Browser session's composer, would otherwise run the card off the window. Only a
+ * card that crosses an edge moves, so a picker with room renders where it always did.
+ * Widths are read from layout, not from the box on screen, which the arrival scale
+ * shrinks for its first frames.
+ */
+function useFitInside(
+  open: boolean,
+  anchorRef: RefObject<HTMLElement | null>,
+  cardRef: RefObject<HTMLElement | null>,
+): CSSProperties | undefined {
+  const [fit, setFit] = useState<CSSProperties | undefined>(undefined)
+  // The card's own width, read while no cap of ours narrows it. Kept across opens, so a
+  // card that reopens with last time's cap still knows how wide it wants to be.
+  const natural = useRef(0)
+  useLayoutEffect(() => {
+    const anchor = anchorRef.current
+    const card = cardRef.current
+    // Nothing resets on close: the card is still leaving and must not jump back.
+    if (!open || anchor === null || card === null) return
+    const measure = () => {
+      if (card.style.maxWidth === '') natural.current = card.offsetWidth
+      let left = 0
+      let right = window.innerWidth
+      for (let node = anchor.parentElement; node !== null; node = node.parentElement) {
+        if (getComputedStyle(node).overflowX === 'visible') continue
+        const box = node.getBoundingClientRect()
+        left = Math.max(left, box.left)
+        right = Math.min(right, box.right)
+      }
+      const room = right - left - 2 * FIT_MARGIN
+      const start = anchor.getBoundingClientRect().left
+      const width = Math.min(natural.current, room)
+      const shift = Math.max(left + FIT_MARGIN - start, Math.min(0, right - FIT_MARGIN - (start + width)))
+      const next = natural.current > room ? { left: shift, maxWidth: room } : shift < 0 ? { left: shift } : undefined
+      setFit((current) => current?.left === next?.left && current?.maxWidth === next?.maxWidth ? current : next)
+    }
+    measure()
+    window.addEventListener('resize', measure)
+    return () => window.removeEventListener('resize', measure)
+  }, [open, anchorRef, cardRef])
+  return fit
 }
 
 /** The split picker's card and its width, shared with the Model field of Agent settings. */

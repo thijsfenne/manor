@@ -7,7 +7,6 @@ import {
   type BrowserSessionState,
   type BrowserToolName,
   type SlackRichText,
-  type ChatMode,
   type ChatOverride,
   type CheckoutRequest,
   type Effort,
@@ -179,7 +178,7 @@ export interface Manor {
    * Starts a Browser session without moving the stage onto it. The created id lands in
    * `createdBrowserSession`, for the column beside Browser to show.
    */
-  createBrowserSession: (mode: ChatMode) => boolean
+  createBrowserSession: () => boolean
   createdBrowserSession: string | null
   /**
    * Extra chat ids to snapshot on reconnect, besides the focused open/pending
@@ -1384,8 +1383,8 @@ export function useWorkspace(url: string, auth?: WorkspaceAuth): Manor {
   )
 
   const createBrowserSession = useCallback(
-    (mode: ChatMode) => send(createChatMessage(
-      { kind: 'browser', mode }, undefined, undefined, undefined, `${BROWSER_SESSION_REQUEST}${crypto.randomUUID()}`,
+    () => send(createChatMessage(
+      { kind: 'browser' }, undefined, undefined, undefined, `${BROWSER_SESSION_REQUEST}${crypto.randomUUID()}`,
     )),
     [send],
   )

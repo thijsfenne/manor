@@ -48,7 +48,7 @@ import {
   type ThreadState,
 } from '../state'
 import type { ConnectionStatus } from '../useWorkspace'
-import { isAutoOn, withAuto } from '../runtimeChoices'
+import { isAutoOn, singleChatOverride, withAuto } from '../runtimeChoices'
 import { AskDock } from './AskCard'
 import { Composer } from './Composer'
 import { SubagentView } from './SubagentView'
@@ -58,8 +58,6 @@ import { IconButton } from './ui/IconButton'
 import type { DraftActions } from './OutboundDraftBubble'
 import { RepoFileLinkProvider } from './RepoFileLink'
 import { ComposerAutoRow } from './NewChatModeControl'
-import { RuntimeControls } from './RuntimeControls'
-import { chatRoster } from '../chatRoster'
 import type { RequestEvents } from '../useRequest'
 import type { WorkResultActions } from './WorkResultBody'
 import { SingleRuntimeControl, defaultSingleRuntime } from './SingleRuntimeControl'
@@ -408,18 +406,13 @@ export function ChatPane({
       })
     : []
   const pairTitle = pairAgents.map((agent) => agent.name).join(' and ')
-  // Through a string, so the list keeps its identity while the live turn grows token
-  // by token and the runtime pickers that take it are left alone.
-  const started = runtimeStartedAgentIds(thread)
-  const startedKey = started.join('\0')
-  const startedAgentIds = startedKey === '' ? NO_IDS : startedKey.split('\0')
+  // A Browser session never runs Auto: it always names one model, the default until
+  // picked, so a pin left on Auto from before reads as that concrete model.
+  const browserChat = chat.kind === 'browser'
+  const singleOverride = singleChatOverride(chat.kind, openSingleOverride, singleDefault)
   // No switch on a host without Auto: the picker stays open and names the model.
-  const singleCanAuto =
-    hostAuto && !started.includes(SINGLE_CHAT_VOICE.id) && openSingleOverride.autoResolved !== true
-  // A Browser session has no rail to hold the Agents roster, so its household's
-  // models are picked where the draft house chat picks them, in the composer.
-  const browserHouse = chat.kind === 'browser' && !singleChat
-  const houseAgents = browserHouse ? chatRoster(workspace.agents, chat, []) : NO_AGENTS
+  const singleCanAuto = hostAuto && !browserChat &&
+    !runtimeStartedAgentIds(thread).includes(SINGLE_CHAT_VOICE.id) && openSingleOverride.autoResolved !== true
   // Mentions offer only who can sit in this room: Session personas in a Session.
   const composerAgents = singleChat ? NO_AGENTS : roomAgents(workspace.agents, chat)
   const notesActions: NotesActions | undefined = onEditPersona === undefined || onUndoMemoryWrite === undefined ? undefined : {
@@ -504,25 +497,11 @@ export function ChatPane({
       pickerCollapsible={singleCanAuto}
       picker={
         <SingleRuntimeControl
-          override={openSingleOverride}
+          override={singleOverride}
           fallback={singleDefault}
           allowAuto={false}
           disabled={status !== 'live'}
           onChange={(override) => setChatOverride(SINGLE_CHAT_VOICE.id, override, chat.id)}
-        />
-      }
-    />
-  ) : browserHouse ? (
-    <ComposerAutoRow
-      pickerOpen
-      pickerCollapsible={false}
-      picker={
-        <RuntimeControls
-          agents={houseAgents}
-          overrides={thread.overrides}
-          disabled={status !== 'live'}
-          startedAgentIds={startedAgentIds}
-          onChange={(agentId, override) => setChatOverride(agentId, override, chat.id)}
         />
       }
     />
@@ -534,7 +513,7 @@ export function ChatPane({
         runningTurnIds.length > 0 || sessionLive(chat.id).running || waiting || thread.pending.length > 0)}
       household={workspace.agents}
       allowAgentMentions={!singleChat && chat.kind !== 'dm'}
-      allowWorkDestination={!singleChat && (chat.kind === 'dm' || chat.kind === 'browser')}
+      allowWorkDestination={chat.kind === 'dm'}
       allSkillsAvailable={singleChat}
       showRecipients={!singleChat && composerShowsRecipients(chat.kind, thread.events, thread.pending.length)}
       {...(chat.kind === 'group' ? { memberIds: chat.memberIds } : {})}

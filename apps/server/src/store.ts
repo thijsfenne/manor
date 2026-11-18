@@ -816,10 +816,11 @@ export const SIDE_CHAT_TITLE = 'Aside'
  */
 export function checkChatDraft(draft: ChatDraft): CheckedChatDraft {
   const kind = draft.kind ?? 'project'
-  const mode = draft.mode ?? 'house'
+  const mode = draft.mode ?? (kind === 'browser' ? 'single' : 'house')
   if (mode === 'single' && kind !== 'project' && kind !== 'run' && kind !== 'browser') {
     throw new Error('single sessions must be project chats, browser sessions or routine runs')
   }
+  if (kind === 'browser' && mode !== 'single') throw new Error('a browser session runs one model')
   const projectId = draft.projectId ?? null
   // Duplicates are dropped rather than refused: two clicks on the same avatar in a
   // group picker is a slip, not an instruction, and the array is a set in spirit.

@@ -1,6 +1,5 @@
-import type { ComponentProps } from 'react'
-import { BotIcon, Clock01Icon, PlusSignIcon, UserMultiple02Icon } from '@hugeicons/core-free-icons'
-import type { Chat, ChatMode } from '@manor/contracts'
+import { Clock01Icon, PlusSignIcon } from '@hugeicons/core-free-icons'
+import type { Chat } from '@manor/contracts'
 import { IconButton } from './ui/IconButton'
 import { Menu, MenuItem, useMenu } from './ui/Menu'
 
@@ -15,42 +14,22 @@ export function recentBrowserSessions(chats: readonly Chat[], limit = RECENT_BRO
     .slice(0, limit)
 }
 
-/** Single first: browsing is mostly quick questions, and Single is the default. */
-const MODES = [
-  { mode: 'single', label: 'Single', detail: 'One model', icon: BotIcon },
-  { mode: 'house', label: 'Multiple', detail: 'Every agent', icon: UserMultiple02Icon },
-] satisfies { mode: ChatMode; label: string; detail: string; icon: ComponentProps<typeof MenuItem>['icon'] }[]
-
 const SIZE = { maxHeight: 420, minHeight: 120, minWidth: 240 }
-
-function ModeItems({ disabled, onNew, close }: { disabled: boolean; onNew(mode: ChatMode): void; close(): void }) {
-  return <>{MODES.map((option) => (
-    <MenuItem key={option.mode} icon={option.icon} trailing={option.detail} disabled={disabled}
-      onClick={() => { close(); onNew(option.mode) }}>
-      {option.label}
-    </MenuItem>
-  ))}</>
-}
 
 /**
  * New session and the recent list, in the pane header beside the Browser stage.
- * The mode is picked here because it is fixed for the session's whole life.
+ * A session is always one model, so New starts one straight away.
  */
 export function BrowserSessionMenu({ sessions, currentId, disabled, onNew, onOpen }: {
   sessions: readonly Chat[]
   currentId: string | null
   disabled: boolean
-  onNew(mode: ChatMode): void
+  onNew(): void
   onOpen(chatId: string): void
 }) {
-  const [fresh, freshTrigger] = useMenu(SIZE)
   const [recent, recentTrigger] = useMenu(SIZE)
   return <div className="pointer-events-auto flex flex-none items-center gap-0.5">
-    <IconButton ref={freshTrigger} icon={PlusSignIcon} label="New session" aria-haspopup="menu" aria-expanded={fresh.open}
-      disabled={disabled} onClick={fresh.toggle} />
-    <Menu menu={fresh} label="New session">
-      <ModeItems disabled={disabled} onNew={onNew} close={fresh.close} />
-    </Menu>
+    <IconButton icon={PlusSignIcon} label="New session" disabled={disabled} onClick={onNew} />
     <IconButton ref={recentTrigger} icon={Clock01Icon} label="Recent sessions" aria-haspopup="menu" aria-expanded={recent.open}
       disabled={sessions.length === 0} onClick={recent.toggle} />
     <Menu menu={recent} label="Recent sessions">
@@ -65,17 +44,13 @@ export function BrowserSessionMenu({ sessions, currentId, disabled, onNew, onOpe
 }
 
 /** The pane before any session exists: the one thing to do, and nothing else. */
-export function BrowserSessionEmpty({ disabled, onNew }: { disabled: boolean; onNew(mode: ChatMode): void }) {
-  const [menu, trigger] = useMenu(SIZE)
+export function BrowserSessionEmpty({ disabled, onNew }: { disabled: boolean; onNew(): void }) {
   return <div className="grid min-h-0 place-items-center px-8 text-center">
     <div>
-      <button ref={trigger} type="button" aria-haspopup="menu" aria-expanded={menu.open} disabled={disabled} onClick={menu.toggle}
+      <button type="button" disabled={disabled} onClick={onNew}
         className="cursor-pointer rounded-button-sm border border-line bg-surface-2 px-3 py-1.5 text-label text-text hover:bg-user-bg disabled:cursor-default disabled:opacity-40">
         New session
       </button>
-      <Menu menu={menu} label="New session">
-        <ModeItems disabled={disabled} onNew={onNew} close={menu.close} />
-      </Menu>
     </div>
   </div>
 }

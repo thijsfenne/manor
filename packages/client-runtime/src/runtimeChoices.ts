@@ -6,6 +6,7 @@ import {
   effectiveSpeed,
   supportsFastMode,
   type AgentConfig,
+  type ChatKind,
   type ChatOverride,
   type DriverName,
   type Effort,
@@ -30,6 +31,14 @@ export { SINGLE_DRIVERS, defaultSingleRuntime, isSingleDriver } from '@manor/con
 export function readSingleRuntime(override: ChatOverride | undefined, fallback: SingleRuntime): SingleRuntime {
   const parsed = SingleRuntimeSchema.safeParse(override)
   return parsed.success ? parsed.data : fallback
+}
+
+/**
+ * The Single pin a chat's controls read. A Browser chat never runs Auto (the server
+ * skips it there), so an empty or Auto pin reads as the concrete runtime it will run.
+ */
+export function singleChatOverride(kind: ChatKind, override: ChatOverride, fallback: SingleRuntime): ChatOverride {
+  return kind === 'browser' ? { ...readSingleRuntime(override, fallback), auto: false } : override
 }
 
 /** The anonymous runtime as the existing picker primitives expect to receive it. */

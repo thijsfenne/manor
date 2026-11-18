@@ -5599,6 +5599,20 @@ describe('Orchestrator, chat overrides', () => {
     })
   })
 
+  it('runs a Browser session on its one model: Auto neither selects nor pins there', async () => {
+    const select = vi.fn<NonNullable<OrchestratorOptions['selectAutoRuntime']>>()
+      .mockResolvedValue({ runtime: { driver: 'codex', model: 'gpt-5.6-sol', effort: 'high' }, category: 'hardest', confidence: 0.9 })
+    const seen: TurnInput[] = []
+    const { orchestrator, store } = await harness(recording(createMockDriver({ deltaDelayMs: 0 }), seen),
+      { selectAutoRuntime: select, agents: liveRoster })
+    const session = await store.createChat({ kind: 'browser' })
+    await orchestrator.setOverride(session.id, '__single__', { auto: true })
+    await orchestrator.submitUserMessage(session.id, 'what is on this page?')
+    expect(select).not.toHaveBeenCalled()
+    expect(seen[0]?.agent).toMatchObject({ driver: 'claude', model: 'claude-fable-5-2' })
+    expect((await orchestrator.overrides(session.id)).__single__).toEqual({ auto: true })
+  })
+
   it('keeps the house Single default when Auto cannot classify', async () => {
     const house = [
       { ...marlow, driver: 'cursor' as const, model: 'cursor-grok-4.6', effort: 'high' as const },

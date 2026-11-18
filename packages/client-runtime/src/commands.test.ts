@@ -2,12 +2,13 @@ import { describe, expect, it } from 'vitest'
 import { SINGLE_CHAT_VOICE } from '@manor/contracts'
 import type { ClientMessage, ThreadEvent } from '@manor/contracts'
 import { createChatMessage, createWorkspaceCommands } from './commands'
+import { singleChatOverride } from './runtimeChoices'
 import { emptyWorkspace, type WorkspaceState } from './workspaceState'
 
 describe('browser session creation', () => {
-  it('carries the fixed mode and only the single voice pin', () => {
+  it('is always Single and carries only the single voice pin', () => {
     expect(createChatMessage(
-      { kind: 'browser', mode: 'single' },
+      { kind: 'browser' },
       undefined,
       { sage: { model: 'claude-opus-5' }, [SINGLE_CHAT_VOICE.id]: { model: 'gpt-6-astra' } },
     )).toEqual({
@@ -16,7 +17,7 @@ describe('browser session creation', () => {
       mode: 'single',
       overrides: { [SINGLE_CHAT_VOICE.id]: { model: 'gpt-6-astra' } },
     })
-    expect(createChatMessage({ kind: 'browser', mode: 'house' })).toEqual({ type: 'create_chat', kind: 'browser', mode: 'house' })
+    expect(createChatMessage({ kind: 'browser' })).toEqual({ type: 'create_chat', kind: 'browser', mode: 'single' })
   })
 })
 
@@ -147,5 +148,14 @@ describe('shared request commands', () => {
       { type: 'restore_outbound_draft', chatId: 'c1', draftId: 'd1' },
       { type: 'outbound_thread_read', chatId: 'c1', draftId: 'd1', requestId: 'outbound-thread-1' },
     ])
+  })
+})
+
+describe('the Browser chat runtime pin', () => {
+  const fallback = { driver: 'claude' as const, model: 'claude-fable-5-2', effort: 'high' as const }
+  it('reads an empty or Auto pin as the concrete default, and leaves other chats alone', () => {
+    expect(singleChatOverride('browser', { auto: true }, fallback)).toEqual({ ...fallback, auto: false })
+    expect(singleChatOverride('browser', {}, fallback)).toEqual({ ...fallback, auto: false })
+    expect(singleChatOverride('project', { auto: true }, fallback)).toEqual({ auto: true })
   })
 })

@@ -113,3 +113,25 @@ describe('the migration that retires General', () => {
     db.close()
   })
 })
+
+describe('the migration that makes Browser sessions Single', () => {
+  it('turns a Multiple Browser session into a Single one and leaves other chats alone', () => {
+    const filename = path.join(mkdtempSync(path.join(os.tmpdir(), 'manor-browser-')), 'manor.db')
+    openSqlite(filename).close()
+    const before = new DatabaseSync(filename)
+    const insert = before.prepare('INSERT INTO records(collection, key, value) VALUES(?, ?, ?)')
+    insert.run('chats', 'house', JSON.stringify({ id: 'house', kind: 'browser', mode: 'house', title: 'kept' }))
+    insert.run('chats', 'single', JSON.stringify({ id: 'single', kind: 'browser', mode: 'single' }))
+    insert.run('chats', 'project', JSON.stringify({ id: 'project', kind: 'project', mode: 'house' }))
+    // The version before 017_single_browser_sessions.sql, the migration under test.
+    before.exec('PRAGMA user_version = 16')
+    before.close()
+
+    const db = openSqlite(filename)
+    const mode = (key: string) => JSON.parse(String(db.prepare("SELECT value FROM records WHERE collection = 'chats' AND key = ?").get(key)?.value)) as Record<string, unknown>
+    expect(mode('house')).toMatchObject({ mode: 'single', title: 'kept' })
+    expect(mode('single')).toMatchObject({ mode: 'single' })
+    expect(mode('project')).toMatchObject({ mode: 'house' })
+    db.close()
+  })
+})

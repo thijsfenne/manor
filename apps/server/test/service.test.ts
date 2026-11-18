@@ -240,26 +240,36 @@ describe('ManorService', () => {
     const { manor, replies, reply } = service(
       store, undefined, undefined, undefined, undefined, undefined, undefined, (chatIds) => deleted.push([...chatIds]),
     )
-    const start = async (mode: 'single' | 'house') => {
-      await manor.handle(ClientMessageSchema.parse(createChatMessage({ kind: 'browser', mode })), reply)
+    const start = async () => {
+      await manor.handle(ClientMessageSchema.parse(createChatMessage({ kind: 'browser' })), reply)
       const created = replies.filter((message) => message.type === 'chat_created').at(-1)
       if (created?.type !== 'chat_created') throw new Error('missing chat')
       return created.chatId
     }
     const browserChats = async () => (await store.listChats()).filter((chat) => chat.kind === 'browser').map((chat) => chat.id)
-    const talked = await start('house')
+    const talked = await start()
     await store.appendEvent(talked, { type: 'user_message', text: 'Look at this page.', mentions: [] })
-    const untouched = await start('single')
-    const current = await start('house')
+    const untouched = await start()
+    const current = await start()
 
     expect(deleted).toEqual([[untouched]])
     expect((await browserChats()).sort()).toEqual([talked, current].sort())
 
     // Two starts at once, a double click from two windows: each clears before it
     // creates, so the later one always survives the other's sweep.
-    await Promise.all((['single', 'house'] as const).map((mode) =>
-      manor.handle(ClientMessageSchema.parse(createChatMessage({ kind: 'browser', mode })), reply)))
+    await Promise.all([0, 1].map(() =>
+      manor.handle(ClientMessageSchema.parse(createChatMessage({ kind: 'browser' })), reply)))
     expect((await browserChats()).filter((id) => id !== talked).length).toBeGreaterThan(0)
+  })
+
+  it('runs a Browser session on one model and refuses one with personas', async () => {
+    const store = createMemoryStore({ agents: roster })
+    const { manor, replies, reply } = service(store)
+    await manor.handle({ type: 'create_chat', kind: 'browser', mode: 'house' }, reply)
+    expect((await store.listChats()).some((chat) => chat.kind === 'browser')).toBe(false)
+    expect(replies.at(-1)).toMatchObject({ type: 'notice', kind: 'error' })
+    await manor.handle(ClientMessageSchema.parse(createChatMessage({ kind: 'browser' })), reply)
+    expect((await store.listChats()).find((chat) => chat.kind === 'browser')).toMatchObject({ mode: 'single' })
   })
 
   it('creates a Single chat on Auto without a runtime pin', async () => {
@@ -902,7 +912,7 @@ describe('ManorService', () => {
     const { chatId } = await seededChat(store)
     const { driver, forChat } = gated()
     const { manor, broadcast, replies, reply } = service(store, driver)
-    await manor.handle(ClientMessageSchema.parse(createChatMessage({ kind: 'browser', mode: 'house' })), reply)
+    await manor.handle(ClientMessageSchema.parse(createChatMessage({ kind: 'browser' })), reply)
     const created = replies.find((message) => message.type === 'chat_created')
     if (created?.type !== 'chat_created') throw new Error('missing browser chat')
     const browserChat = created.chatId

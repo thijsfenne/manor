@@ -22,7 +22,7 @@ import { quoteNamesAuthor } from '@manor/client-runtime/message-quotes'
 import { chatSubagents, chatWaitsOnBackground, dmWorking, runningSubagents } from '@manor/client-runtime/turn-trace'
 import { chatFallbackTargets, composerRecipients, composerShowsRecipients, replyFallbackTargets, roomAgents } from '@manor/client-runtime/mentions'
 import { chatChangedFiles, resolveMarkdownRepoLink } from '@manor/client-runtime/changed-files'
-import { defaultSingleRuntime, effectiveDriver, isAutoPending, readSingleRuntime, runtimeLabel, runtimeParts, singleRuntimeVoice } from '@manor/client-runtime/runtime-choices'
+import { defaultSingleRuntime, effectiveDriver, isAutoPending, readSingleRuntime, runtimeLabel, runtimeParts, singleChatOverride, singleRuntimeVoice } from '@manor/client-runtime/runtime-choices'
 import type { ChangeableAnswer, OpenAsk, PendingDocument, QuietWorkspace, RelayExchange, Row, SessionLink, ThreadShape, TurnConsultation, TurnRow, UnannouncedConsultation, WorkHandoffRow } from '@manor/client-runtime/state'
 import { activityOf, chatOf, dmMemoryMarks, isHomeRoom, isProjectThread, roomOf, sitsSettled, messageBrief, projectSessionOverview, sessionsDot, openAsk, sessionLiveOf, threadQuestionIn, openSubagentQuestion, subagentSummaryOf, changeableAnswers, personaOf, projectWorkHandoffs, repoListingKey, rowHasQuoteSource, rowsOf, createRowMemory, createValueMemory, feedIndexOf, NO_OPEN_THREAD_BUNDLES, openThreadBundleAt, setThreadBundleOpen, threadBundleOpen, threadBundleOpenItems, threadStretch, onlyConsulted, runtimeStartedAgentIds, sessionReadyRow, sessionThreadOf, stackedConsultationMarkers, relayExchanges, relayMarkerAction, projectThreadFeed, threadQuestionAdvice, threadOf, withSessionTitle, threadSpacing, unannouncedConsultations, workDecisionOpen, type ScreenSpan } from '@manor/client-runtime/state'
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router'
@@ -754,7 +754,8 @@ function ChatContent({ chatId }: { chatId: string | undefined }) {
   // A Single Session names its runtime instead of its project (2026-11-12), so a model
   // change shows where the eye already is. A Multiple Session has no one runtime.
   const singleDefault = defaultSingleRuntime(workspace.agents)
-  const singleOverride = thread.overrides[SINGLE_CHAT_VOICE.id] ?? {}
+  const browserChat = chat?.kind === 'browser'
+  const singleOverride = singleChatOverride(chat?.kind ?? 'project', thread.overrides[SINGLE_CHAT_VOICE.id] ?? {}, singleDefault)
   const singleVoice = singleRuntimeVoice(readSingleRuntime(singleOverride, singleDefault))
   const sessionRuntime = chat?.kind === 'project' && singleChat && !projectThread ? singleVoice : undefined
   const memberNames = chat?.kind === 'group'
@@ -1130,7 +1131,7 @@ function ChatContent({ chatId }: { chatId: string | undefined }) {
           open={sheet === 'model'}
           override={singleOverride}
           fallback={singleDefault}
-          allowAuto={!startedAgentIds.includes(SINGLE_CHAT_VOICE.id) && singleOverride.autoResolved !== true}
+          allowAuto={!browserChat && !startedAgentIds.includes(SINGLE_CHAT_VOICE.id) && singleOverride.autoResolved !== true}
           disabled={status !== 'live'}
           onChange={(override) => setChatOverride(chatId, SINGLE_CHAT_VOICE.id, override)}
           onClose={() => setSheet(null)}

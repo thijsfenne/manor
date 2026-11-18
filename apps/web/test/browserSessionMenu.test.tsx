@@ -27,26 +27,25 @@ describe('browser sessions', () => {
     expect(recentBrowserSessions(chats, 1)).toHaveLength(1)
   })
 
-  it('starts a session in the mode picked, and reopens a past one', () => {
+  it('starts a session at once, and reopens a past one', () => {
     const onNew = vi.fn()
     const onOpen = vi.fn()
     const sessions = [chat('current', 'browser', 5), chat('earlier', 'browser', 1)]
     act(() => { tree = create(<BrowserSessionMenu sessions={sessions} currentId="current" disabled={false} onNew={onNew} onOpen={onOpen} />) })
-    click('New session'); click('Multiple')
-    expect(onNew).toHaveBeenCalledWith('house')
+    click('New session')
+    expect(onNew).toHaveBeenCalledOnce()
+    expect(tree!.root.findAllByProps({ role: 'menuitem' })).toHaveLength(0)
     click('Recent sessions'); click('current')
     expect(onOpen).not.toHaveBeenCalled()
     click('Recent sessions'); click('earlier')
     expect(onOpen).toHaveBeenCalledWith('earlier')
   })
 
-  it('offers only New session before any exists, Single first', () => {
+  it('offers only New session before any exists, with no mode to pick', () => {
     const onNew = vi.fn()
     act(() => { tree = create(<BrowserSessionEmpty disabled={false} onNew={onNew} />) })
     click('New session')
-    const items = tree!.root.findAllByProps({ role: 'menuitem' })
-    expect(items[0]!.findAll((node) => node.children.includes('Single')).length).toBeGreaterThan(0)
-    click('Single')
-    expect(onNew).toHaveBeenCalledWith('single')
+    expect(onNew).toHaveBeenCalledOnce()
+    expect(tree!.root.findAllByProps({ role: 'menuitem' })).toHaveLength(0)
   })
 })

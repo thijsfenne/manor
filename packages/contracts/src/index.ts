@@ -3145,7 +3145,7 @@ export const ARCHIVE_RETENTION_MS = daysToMs(DEFAULT_HOUSE_SETTINGS.archiveReten
  * stores' idea of who is in a chat all have to agree.
  */
 export const isOpenRoom = (chat: { kind: ChatKind; mode?: ChatMode }): boolean =>
-  chat.mode !== 'single' && (chat.kind === 'project' || chat.kind === 'run' || chat.kind === 'browser')
+  chat.mode !== 'single' && (chat.kind === 'project' || chat.kind === 'run')
 
 /**
  * Whether this room has exactly one fixed addressee, so nothing in a message routes.

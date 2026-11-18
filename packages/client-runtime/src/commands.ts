@@ -34,8 +34,8 @@ export type NewChatTarget =
   | { kind: 'project'; projectId: string; mode?: ChatMode }
   | { kind: 'dm'; agentId: string }
   | { kind: 'group'; memberIds: string[]; title?: string }
-  /** A session beside the Browser surface; its mode is fixed here, at the start. */
-  | { kind: 'browser'; mode: ChatMode }
+  /** A session beside the Browser surface: always one model, never personas. */
+  | { kind: 'browser' }
 
 export interface OpeningMessage {
   text: string
@@ -70,7 +70,7 @@ export function createChatMessage(
 ): ClientMessage {
   // A draft may retain both sets while switching modes. Only the selected runtime
   // crosses the wire; persona pins make a single-session create invalid.
-  const single = (target.kind === 'project' || target.kind === 'browser') && target.mode === 'single'
+  const single = target.kind === 'browser' || (target.kind === 'project' && target.mode === 'single')
   const selectedPins = Object.fromEntries(Object.entries(overrides ?? {}).filter(
     ([id]) => single === (id === SINGLE_CHAT_VOICE.id),
   ))
@@ -79,7 +79,7 @@ export function createChatMessage(
     target.kind === 'project'
       ? { projectId: target.projectId, ...(target.mode === undefined ? {} : { mode: target.mode }) }
       : target.kind === 'browser'
-        ? { kind: 'browser' as const, mode: target.mode }
+        ? { kind: 'browser' as const, mode: 'single' as const }
       : target.kind === 'dm'
         ? { kind: 'dm' as const, memberIds: [target.agentId] }
         : {
