@@ -276,7 +276,7 @@ function pushedLink(result: SessionGitResult | undefined, repo: SessionRepo): Pu
 
 interface PushedLink { text: string; label: string; url: string }
 
-/** The branch, where a worktree merges, what Push would send, and the two ways to land it. */
+/** The branch, where a worktree merges, and the one way to land it that can act now. */
 function BranchLine({ repo, named, waiting, running, connected, committing: committingNow, failure, pushed, requestEvents, onCommit, onPush }: {
   repo: SessionRepo
   named: boolean
@@ -319,6 +319,7 @@ function BranchLine({ repo, named, waiting, running, connected, committing: comm
   const state = repo.branch === null ? null
     : repo.pushTarget === undefined ? 'no remote'
       : repo.ahead > 0 ? `${plural(repo.ahead, 'commit')} to push` : 'nothing to push'
+  // One action at most, the one that can act now: Commit first, since Push then sends it too.
   // Confirm is the way to land a waiting result, so Commit is not here at all then.
   const canCommit = !waiting && repo.uncommitted.length > 0
   const canPush = repo.pushTarget !== undefined && repo.ahead > 0
@@ -342,34 +343,25 @@ function BranchLine({ repo, named, waiting, running, connected, committing: comm
 
   return (
     <div className="min-w-0">
-      {/* One line while it fits; in a narrow panel the actions drop under the branch
-          rather than cutting its name short. */}
-      <div className="flex min-h-8 min-w-0 flex-wrap items-center gap-x-2 gap-y-1 px-2 py-0.5 text-[13px]">
-        <span className="flex max-w-full min-w-0 flex-none items-center gap-2">
-          <Icon icon={GitBranchIcon} size={14} className="flex-none text-dim" />
-          <span className="min-w-0 truncate" title={state === null ? where : `${where}, ${state}`}>
-            <span className="text-text">{where}</span>
-            {state === null ? null : <span className="text-dim">, {state}</span>}
-          </span>
-        </span>
-        <span className="ml-auto flex flex-none items-center gap-1.5 empty:hidden">
-          {canCommit ? (
-            <Button size="compact" variant="secondary" className="flex-none"
-              disabled={!connected || running || busy}
-              title={running ? 'A turn is running. Commit once it ends.'
-                : committingNow ? 'Committing. The pre-commit checks may take a while.'
-                  : `Commit this Session’s ${plural(repo.uncommitted.length, 'uncommitted file')}`}
-              onClick={openDialog}>
-              {busy ? 'Committing…' : 'Commit'}
-            </Button>
-          ) : null}
-          {canPush ? (
-            <Button size="compact" variant="secondary" className="flex-none" disabled={!connected || push.pending}
-              title={`Push ${branch} to ${repo.pushTarget}. Never forced.`} onClick={startPush}>
-              {push.pending ? 'Pushing…' : 'Push'}
-            </Button>
-          ) : null}
-        </span>
+      <div className="flex min-h-8 min-w-0 items-center gap-2 px-2 text-[13px]">
+        <Icon icon={GitBranchIcon} size={14} className="flex-none text-dim" />
+        <span className="min-w-0 flex-1 truncate text-text" title={state === null ? where : `${where}, ${state}`}>{where}</span>
+        {push.pending ? (
+          <Button size="compact" variant="secondary" className="flex-none" disabled>Pushing…</Button>
+        ) : busy ? (
+          <Button size="compact" variant="secondary" className="flex-none" disabled
+            title={committingNow ? 'Committing. The pre-commit checks may take a while.' : undefined}>Committing…</Button>
+        ) : !connected || running ? null : canCommit ? (
+          <Button size="compact" variant="secondary" className="flex-none"
+            title={`Commit this Session’s ${plural(repo.uncommitted.length, 'uncommitted file')}`} onClick={openDialog}>
+            Commit
+          </Button>
+        ) : canPush ? (
+          <Button size="compact" variant="secondary" className="flex-none"
+            title={`Push ${plural(repo.ahead, 'commit')} on ${branch} to ${repo.pushTarget}. Never forced.`} onClick={startPush}>
+            {`Push ${repo.ahead}`}
+          </Button>
+        ) : null}
       </div>
       {error === undefined ? null : (
         <p role="alert" className="m-0 px-2 pb-1.5 pl-[30px] text-meta break-words text-danger">{error}</p>

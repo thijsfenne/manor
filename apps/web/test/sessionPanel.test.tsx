@@ -82,12 +82,12 @@ describe('a Session action whose answer is lost with the connection', () => {
       onToggleDiff: () => {}, onRetry: () => {}, onCommit: () => true, onPush, openApps: [], onOpenFolder: () => {},
     }
     act(() => { view = create(<SessionSections {...props} />) })
-    act(() => button('Push').props.onClick())
+    act(() => button('Push 1').props.onClick())
     expect(button('Pushing…').props.disabled).toBe(true)
     act(() => view!.update(<SessionSections {...props} connected={false} />))
     expect(view!.root.findAll((node) => node.props.role === 'alert' && node.type === 'p').length).toBe(1)
     act(() => view!.update(<SessionSections {...props} />))
-    expect(button('Push').props.disabled).toBe(false)
+    expect(button('Push 1').props.disabled).toBeUndefined()
     expect(view!.root.findAll((node) => node.props.role === 'alert' && node.type === 'p')).toEqual([])
     expect(onPush).toHaveBeenCalledTimes(1)
   })
@@ -170,7 +170,22 @@ describe('a Commit that runs on after its dialog closed', () => {
     act(() => view!.update(<SessionSections {...props} commits={[{ chatId: 'other', root: '/repo', files: 2 }]} />))
     expect(buttons()).toContainEqual(['Commit', false])
     act(() => view!.update(<SessionSections {...props} connected={false} commits={[{ chatId: 'chat', root: '/repo', files: 2 }]} />))
-    expect(buttons()).toContainEqual(['Commit', true])
+    expect(buttons()).toEqual([])
+  })
+
+  it('offers only the action that can act now, never a disabled one', () => {
+    const ahead = { ...repo, repos: [{ ...repo.repos[0]!, ahead: 14 }] }
+    act(() => { view = create(<SessionSections {...props} repo={ahead} />) })
+    expect(buttons()).toEqual([['Commit', false]])
+    act(() => view!.update(<SessionSections {...props} repo={ahead} running />))
+    expect(buttons()).toEqual([])
+    const pushOnly = { ...repo, repos: [{ ...repo.repos[0]!, ahead: 14, uncommitted: [] }] }
+    act(() => view!.update(<SessionSections {...props} repo={pushOnly} />))
+    expect(buttons()).toEqual([['Push 14', false]])
+    act(() => view!.update(<SessionSections {...props} repo={{ ...repo, repos: [{ ...repo.repos[0]!, uncommitted: [] }] }} />))
+    expect(buttons()).toEqual([])
+    act(() => view!.update(<SessionSections {...props} repo={{ ...repo, waiting: true }} />))
+    expect(buttons()).toEqual([])
   })
 
   it('keeps a failure under the branch and reopens with its message, ticks and error', () => {
