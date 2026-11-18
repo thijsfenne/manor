@@ -10,6 +10,7 @@ import {
   choosePort,
   loginShellPath,
   manorAnswers,
+  waitForManor,
   startBundledServer,
   type BundledServer,
 } from './bundledServer'
@@ -83,6 +84,14 @@ describe('what the bundled server is started with', () => {
     expect(await manorAnswers('http://localhost:1', async () => new Response('ok'))).toBe(true)
     expect(await manorAnswers('http://localhost:1', async () => new Response('no', { status: 404 }))).toBe(false)
     expect(await manorAnswers('http://localhost:1', async () => { throw new Error('refused') })).toBe(false)
+  })
+
+  it('waits for a server that comes up late, and gives up on one that never does', async () => {
+    let asked = 0
+    const late = async () => (++asked < 3 ? Promise.reject(new Error('refused')) : new Response('ok'))
+    expect(await waitForManor('http://localhost:1', 1_000, late, 1)).toBe(true)
+    expect(asked).toBe(3)
+    expect(await waitForManor('http://localhost:1', 20, async () => { throw new Error('refused') }, 5)).toBe(false)
   })
 })
 

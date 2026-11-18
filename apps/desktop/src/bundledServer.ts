@@ -31,7 +31,21 @@ export async function manorAnswers(origin: string, fetchFn: typeof fetch = fetch
   }
 }
 
-type RunShell = (shell: string, args: string[], env: NodeJS.ProcessEnv) => Promise<string>
+/**
+ * Waits until a Manor server answers at this address, or the time runs out. At login
+ * the app can open before a LaunchAgent's server listens; its own copy then fails on
+ * the database that server holds, and this finds the server it should have used.
+ */
+export async function waitForManor(origin: string, timeoutMs: number, fetchFn: typeof fetch = fetch, pauseMs = 500): Promise<boolean> {
+  const deadline = Date.now() + timeoutMs
+  while (true) {
+    if (await manorAnswers(origin, fetchFn)) return true
+    if (Date.now() + pauseMs > deadline) return false
+    await new Promise((resolve) => setTimeout(resolve, pauseMs))
+  }
+}
+
+type RunShell =(shell: string, args: string[], env: NodeJS.ProcessEnv) => Promise<string>
 
 const runShell: RunShell = (shell, args, env) => new Promise((resolve, reject) => {
   execFile(shell, args, { env, timeout: 5_000, maxBuffer: 256 * 1024 }, (error, stdout) => {

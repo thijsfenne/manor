@@ -37,7 +37,7 @@ import { allowsBrowserPagePermission, allowsRendererPermission } from './permiss
 import { loadRenderer } from './rendererLoad'
 import { listLocalServers } from './localServers'
 import { DEFAULT_RENDERER_URL, isAllowedRendererNavigation, resolveRendererUrl } from './rendererUrl'
-import { bundledServerEntry, manorAnswers, startBundledServer } from './bundledServer'
+import { bundledServerEntry, manorAnswers, startBundledServer, waitForManor } from './bundledServer'
 import { bindPageFullscreen, bindWindowChrome, trafficLightPositionForZoom } from './windowChrome'
 import { FULLSCREEN_CHANNEL, ZOOM_CHANNEL } from './zoomChannels'
 
@@ -158,6 +158,8 @@ async function ensureServer(): Promise<boolean> {
     server.child.once('exit', () => { if (!quitting) app.quit() })
     return true
   } catch (error: unknown) {
+    // At login a LaunchAgent's server may still be starting and hold the database.
+    if (!own && await waitForManor(DEFAULT_RENDERER_URL, 30_000)) return true
     dialog.showErrorBox('Manor could not start', messageOf(error))
     app.quit()
     return false
