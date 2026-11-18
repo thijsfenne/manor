@@ -174,7 +174,10 @@ export function ChatRoutines({
 
       {dialog.editing === null ? null : (
         <RoutineDialog
-          key={dialog.editing.id ?? 'new'}
+          // Prefixed because the detail view above is a sibling keyed on the same routine
+          // id. A shared key makes React lose track of that view and stack a copy of it
+          // behind the dialog on every render.
+          key={`dialog:${dialog.editing.id ?? 'new'}`}
           initial={dialog.editing}
           projects={projects}
           chats={chats}
