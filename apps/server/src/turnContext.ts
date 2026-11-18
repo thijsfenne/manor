@@ -87,14 +87,16 @@ const lastAgentCursorId = (
 /**
  * Relay markers that reached a DM while the turn ending at `cursor` ran: after its
  * prompt was built, before the result that became the cursor. Steering extends that
- * turn, so the walk passes it. A marker that landed just before the prompt was built
- * comes again, which costs a line, not a lost message.
+ * turn, and a message queued during it (running now, or never run) did not open it, so
+ * the walk passes both. A marker that landed just before the prompt was built comes
+ * again, which costs a line, not a lost message.
  */
 const relaysDuringTurn = (events: readonly ThreadEvent[], cursor: string): ThreadEvent[] => {
   const missed: ThreadEvent[] = []
   for (let index = events.findIndex((event) => event.id === cursor) - 1; index >= 0; index -= 1) {
     const event = events[index]
-    if (event === undefined || (event.type === 'user_message' && event.steersTurnId === undefined)) break
+    if (event === undefined || (event.type === 'user_message' && event.steersTurnId === undefined &&
+      (event.dispatchState === undefined || event.dispatchState === 'completed'))) break
     if (event.type === 'agent_relay') missed.unshift(event)
   }
   return missed

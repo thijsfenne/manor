@@ -23,6 +23,7 @@ import { AsyncQueue } from '../src/asyncQueue.js'
 import { contextWindowFor } from '@manor/contracts'
 import { renderCatchUpEvents, SESSION_CONTEXT_FRACTION } from '../src/composer.js'
 import { closeTerminalTurn } from '../src/agentRelayLifecycle.js'
+import { createTurnContext } from '../src/turnContext.js'
 import { gated, marlow, sage, scratchFor, scripted, smith, until } from './helpers.js'
 
 const agents: AgentConfig[] = [
@@ -911,6 +912,29 @@ describe('agent relay orchestration', () => {
     expect(renderCatchUpEvents(receiver.forChat(sageDm.id)[held + 1]?.input.catchUp ?? [], agents)).toBe('User: Thanks.')
     receiver.forChat(sageDm.id)[held + 1]?.finish()
     await next
+  })
+
+  it('carries a relay that landed before a message queued during the previous DM turn', async () => {
+    const store = createMemoryStore({ agents })
+    const pair = await store.pairChatFor('marlow', 'sage')
+    const dm = await store.createChat({ kind: 'dm', memberIds: ['sage'], title: 'Sage' })
+    await store.appendEvent(pair.id, {
+      type: 'user_message', text: 'The grant fund rejected us.', mentions: [], source: 'agent_relay', authorAgentId: 'marlow', relayId: 'relay_1',
+    })
+    await store.appendEvent(dm.id, { type: 'user_message', text: 'Build it in the background.', mentions: [], dispatchState: 'completed' })
+    await store.appendEvent(dm.id, {
+      type: 'agent_relay', phase: 'received', agentId: 'sage', peerAgentId: 'marlow', pairChatId: pair.id, turnId: 'turn_1', relayId: 'relay_1',
+    })
+    // Saved while that turn waited on background work, so it runs as the next turn.
+    await store.appendEvent(dm.id, { type: 'user_message', text: 'Did Marlow write?', mentions: [], dispatchState: 'started' })
+    await store.appendEvent(dm.id, { type: 'turn_result', agentId: 'sage', turnId: 'turn_dm', driver: 'claude' })
+
+    const prepared = await createTurnContext({ store, agents: () => agents }).prepareAttempt({
+      chatId: dm.id, agentId: 'sage', driver: 'claude', sessionId: 'session-sage', room: dm, cwd: await scratchFor(dm.id),
+    })
+    const seen = renderCatchUpEvents(prepared.catchUp, agents)
+    expect(seen).toContain('Marlow wrote: "The grant fund rejected us."')
+    expect(seen).toContain('Did Marlow write?')
   })
 
   it('reads a relay only for the DM persona that received it', async () => {
