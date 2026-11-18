@@ -8378,7 +8378,7 @@ describe('Orchestrator, live sessions', () => {
       driver, turns, of, end, park, wake, closed,
       liveSessions: {
         info: (chatId: string, agentId: string) => sessions.get(key(chatId, agentId)),
-        busyThreads: () => new Set([...sessions].filter(([, info]) => info.running.length > 0).map(([name]) => name.split('/')[0]!)),
+        busyWork: () => new Map([...sessions].flatMap(([name, info]) => info.running.length === 0 ? [] : [[name.split('/')[0]!, info.running] as const])),
         close: driver.closeLiveSession!,
       },
       connect: (orchestrator: Orchestrator) => { sink = (event) => orchestrator.onLiveSession(event) },
@@ -8426,6 +8426,7 @@ describe('Orchestrator, live sessions', () => {
     live.park(live.turns[0]!, 'Building.', build, 'codex')
     await first
     expect(orchestrator.backgroundChatIds([chatId, 'elsewhere'])).toEqual([chatId])
+    expect(orchestrator.backgroundWork([chatId, 'elsewhere'])).toEqual({ [chatId]: [{ title: 'npm run build', kind: 'command' }] })
     build.length = 0
     expect(orchestrator.backgroundChatIds([chatId])).toEqual([])
     live.liveSessions.close(chatId)

@@ -1194,7 +1194,10 @@ describe('live sessions', () => {
    * One driver whose first turn, Sage's in thread "main", runs a background build and
    * answers while it still runs. `rekey` answers for the capability registries.
    */
-  async function parkedSession(rekey: (from: string, to: string) => 'rekeyed' | 'unknown' | 'conflict' = () => 'rekeyed') {
+  async function parkedSession(
+    rekey: (from: string, to: string) => 'rekeyed' | 'unknown' | 'conflict' = () => 'rekeyed',
+    command = 'npm run build -- --token held-secret',
+  ) {
     const child = new FakeChild()
     let stdin = ''
     child.stdin.on('data', (chunk: Buffer) => { stdin += chunk.toString('utf8') })
@@ -1220,7 +1223,7 @@ describe('live sessions', () => {
     await write(JSON.stringify({ id: 1, result: { thread: { id: 'thread-1' }, model: 'gpt-5.6-sol', serviceTier: null } }))
     await write(JSON.stringify({ id: 2, result: { turn: { id: 'turn-1' } } }))
     await write(
-      shellStarted('shell-1', 'npm run build -- --token held-secret'),
+      shellStarted('shell-1', command),
       said('turn-1', 'msg-1', 'The build runs in the background.'), usage(105, 100), turnDone('turn-1'),
     )
     return { child, driver, write, requests, reported, rekeys, firstEvents, spawns: () => spawns }
@@ -1240,6 +1243,15 @@ describe('live sessions', () => {
       running: [{ toolCallId: 'shell-1', title: 'npm run build -- --token [redacted]', kind: 'command' }],
     })
     expect(JSON.stringify(seen)).not.toContain('held-secret')
+  })
+
+  it('scrubs a credential in a background title before the title is cut to length', async () => {
+    const { driver, firstEvents } = await parkedSession(undefined, `${'a'.repeat(170)} TOKEN=eyJhbGciOiJIUzI1.${'x'.repeat(1_000)}.abcdefghijklmnop`)
+    await firstEvents
+    const titles = driver.busyLiveWork?.().flatMap((work) => work.running.map((item) => item.title)) ?? []
+    expect(titles).toHaveLength(1)
+    expect(titles[0]).toContain('TOKEN=[redacted]')
+    expect(titles[0]).not.toContain('eyJ')
   })
 
   it('settles the row through the session and asks for a wake when the build ends', async () => {

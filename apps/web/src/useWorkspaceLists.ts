@@ -21,11 +21,11 @@ export function useWorkspaceLists(workspace: WorkspaceShape, phone: boolean) {
   // list with every session in it (decided 2026-10-10).
   const chatInbox = useMemo(
     () => inbox(workspace, { hideThreadSessions: !phone }),
-    [workspace.chats, workspace.projects, workspace.workHandoffs, workspace.activity, workspace.subagents, workspace.backgroundChatIds, workspace.houseSettings, workspace.openChatId, workspace.pendingChatId, phone],
+    [workspace.chats, workspace.projects, workspace.workHandoffs, workspace.activity, workspace.subagents, workspace.backgroundWork, workspace.houseSettings, workspace.openChatId, workspace.pendingChatId, phone],
   )
   const threadRows = useMemo(
     () => projectThreads(workspace),
-    [workspace.chats, workspace.projects, workspace.workHandoffs, workspace.activity, workspace.subagents, workspace.backgroundChatIds, workspace.houseSettings, workspace.openChatId, workspace.pendingChatId],
+    [workspace.chats, workspace.projects, workspace.workHandoffs, workspace.activity, workspace.subagents, workspace.backgroundWork, workspace.houseSettings, workspace.openChatId, workspace.pendingChatId],
   )
   const threadlessProjects = useMemo(
     // A hidden project to add back, or a folder to make a project (2026-11-13); a folder taken off the picker stays off here too.

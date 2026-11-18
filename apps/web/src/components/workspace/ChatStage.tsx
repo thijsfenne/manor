@@ -50,7 +50,7 @@ import { hasOwnBrowserPanel } from '../../websiteLinkRoute'
 /** One empty list for every pane without page contexts, so the composer keeps its props. */
 const NO_PAGE_CONTEXTS: PageContextAttachment[] = []
 
-const NO_SESSIONS: SessionOverview = { waiting: [], working: [], settled: [], archived: [], archiveKeepMs: ARCHIVE_KEEP_MS }
+const NO_SESSIONS: SessionOverview = { waiting: [], working: [], background: [], settled: [], archived: [], archiveKeepMs: ARCHIVE_KEEP_MS }
 
 /**
  * What every chat pane on the stage draws from, built by `Workspace` on each render. The

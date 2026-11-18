@@ -220,7 +220,7 @@ describe('the shared Work handoff projection', () => {
       goalReport: { result: 'Export works with the chat title. It also names the file.', limitations: 'No empty-chat test.' }, goalCompletion: completion,
     }
     const project_ = (record: WorkHandoff, transcript: Row[], running = false) => projectWorkHandoffs(transcript, [record], [target], [project], [lead, support, { ...lead, id: 'argus', name: 'Argus' }], {},
-      () => ({ running, asking: false }))
+      () => ({ running, background: false, asking: false }))
     const shape = (projected: Row[]) => projected.map((row) => row.kind === 'work_handoff' ? 'card' : row.key)
     const history = [created, receipt('first', 2), chatter, reopenedAt('reopened', 3), receipt('second', 4)]
 
@@ -444,7 +444,7 @@ describe('a result card that tells the truth (2026-10-14)', () => {
   ]
   const created: Row = { kind: 'event', key: 'created', event: { id: 'c', ts: 1, type: 'system_note', kind: 'info', text: 'Proposed.', workHandoffId: handoff.id, workHandoffVersion: 1, workHandoffPhase: 'created' } }
   const card = (record: Partial<WorkHandoff>, running = false) => projectWorkHandoffs([created], [{ ...handoff, acceptedAt: 1, goalReachedAt: 3, version: 2, ...record }], [target], [project], [lead, { ...lead, id: 'argus', name: 'Argus' }], {},
-    () => ({ running, asking: false })).at(-1) as WorkHandoffRow
+    () => ({ running, background: false, asking: false })).at(-1) as WorkHandoffRow
 
   it('offers Follow up and Close on a report with nothing to commit, with its choices and no reviewer', () => {
     const report = card({ goalReport: { result: 'HTML can look native in the chat.', choices }, goalCompletion: none }).report!
@@ -513,7 +513,7 @@ describe('a result card that tells the truth (2026-10-14)', () => {
 
   it('drops Ready from the Session bar and the card while the Session works again, and brings it back after', () => {
     const reported = { ...handoff, acceptedAt: 1, goalReachedAt: 3, version: 2, goalReport: { result: 'Done.' }, goalCompletion: none }
-    const live = (running: boolean) => () => ({ running, asking: false })
+    const live = (running: boolean) => () => ({ running, background: false, asking: false })
     expect(sessionReadyRow(target, [reported], [target], [project], [lead], {}, live(false))?.session).toBe('ready')
     expect(sessionReadyRow(target, [reported], [target], [project], [lead], {}, live(true))).toBeUndefined()
     const working = card({ goalReport: { result: 'Done.' }, goalCompletion: none }, true)
@@ -521,9 +521,9 @@ describe('a result card that tells the truth (2026-10-14)', () => {
     expect(workCardStatus(working)).toEqual({ tone: 'busy', text: 'Working' })
     expect(openWorkDecisions([working])).toEqual([])
     // A question the new work asks reads Waiting, not the old Ready.
-    const asking = projectWorkHandoffs([created], [reported], [target], [project], [lead], {}, () => ({ running: true, asking: true })).at(-1) as WorkHandoffRow
+    const asking = projectWorkHandoffs([created], [reported], [target], [project], [lead], {}, () => ({ running: true, background: false, asking: true })).at(-1) as WorkHandoffRow
     expect(workCardStatus(asking)).toEqual({ tone: 'waiting', text: 'Waiting' })
-    expect(sessionReadyRow(target, [reported], [target], [project], [lead], {}, () => ({ running: false, asking: true }))).toBeUndefined()
+    expect(sessionReadyRow(target, [reported], [target], [project], [lead], {}, () => ({ running: false, background: false, asking: true }))).toBeUndefined()
   })
 
   it('finds the report in the last turn that called goal_reached, the longest thing the lead said there', () => {

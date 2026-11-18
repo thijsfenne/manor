@@ -304,8 +304,8 @@ export function ChatPane({
   // the transcript reads the streamed text, through `liveRows` below.
   const thread = threadOf(workspace, chat.id)
   // What runs in each Session, so its card says what its overview row says.
-  const { activity, subagents, backgroundChatIds } = workspace
-  const sessionLive = sessionLiveOf({ activity, subagents, backgroundChatIds })
+  const { activity, subagents, backgroundWork } = workspace
+  const sessionLive = sessionLiveOf({ activity, subagents, backgroundWork })
   // A DM's indicator waits on a consulted colleague only while her pair chat still runs.
   const runningChatIds = new Set(Object.entries(activity).filter(([, entry]) => entry.runningTurns.length > 0).map(([id]) => id))
   const projectRows = (source: ThreadShape) => {

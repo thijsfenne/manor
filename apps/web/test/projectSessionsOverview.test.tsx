@@ -34,13 +34,13 @@ const chat = (fields: Partial<Chat> & Pick<Chat, 'id'>): Chat => ({
 const row = (fields: Partial<Chat> & Pick<Chat, 'id'>): SessionOverviewRow =>
   ({ key: fields.id, title: fields.title ?? fields.id, status: 'working', chat: chat(fields), line: 'Latest line', at: 1, unread: false, running: true, waiting: false })
 
-const noArchive = { archived: [], archiveKeepMs: 1 }
+const noWaitOrArchive = { background: [], archived: [], archiveKeepMs: 1 }
 
 const rows = (working: SessionOverviewRow[]) => {
   const html = renderToStaticMarkup(
     <ProjectSessionsOverview
       threadId="runtime-marks-thread"
-      overview={{ waiting: [], working, settled: [], ...noArchive }}
+      overview={{ waiting: [], working, settled: [], ...noWaitOrArchive }}
       agents={[agent('wren', 'Wren'), agent('iris', 'Iris')]}
       onOpen={() => {}}
       onRevealProposal={() => {}}
@@ -90,7 +90,7 @@ describe('a proposal in the sessions overview', () => {
     const html = renderToStaticMarkup(
       <ProjectSessionsOverview
         threadId="proposal-thread"
-        overview={{ waiting: [proposal], working: [], settled: [], ...noArchive }}
+        overview={{ waiting: [proposal], working: [], settled: [], ...noWaitOrArchive }}
         agents={[]}
         onOpen={() => {}}
         onRevealProposal={() => {}}
@@ -123,30 +123,40 @@ describe('the sessions overview rows', () => {
   )
 
   it('wear the sidebar rows: Settle on a live one, Unsettle on a settled one, and no one-click Archive', () => {
-    const live = html({ waiting: [], working: [row({ id: 'live' })], settled: [], ...noArchive })
+    const live = html({ waiting: [], working: [row({ id: 'live' })], settled: [], ...noWaitOrArchive })
     // Archive lives in the right-click menu: a stray click on a button archived an open Session.
     expect(live).not.toContain('Archive live')
     expect(live).toContain('aria-label="Settle live"')
     expect(live).not.toContain('Unsettle live')
-    const settled = html({ waiting: [], working: [], settled: [{ ...row({ id: 'done' }), status: 'confirmed', running: false }], ...noArchive })
+    const settled = html({ waiting: [], working: [], settled: [{ ...row({ id: 'done' }), status: 'confirmed', running: false }], ...noWaitOrArchive })
     expect(settled).toContain('aria-label="Unsettle done"')
     expect(settled).not.toContain('aria-label="Settle done"')
   })
 
   it('lead a fold\'s header with its mark, follow the label with the count and end on the chevron', () => {
-    const header = html({ waiting: [], working: [row({ id: 'live' })], settled: [], ...noArchive })
+    const header = html({ waiting: [], working: [row({ id: 'live' })], settled: [], ...noWaitOrArchive })
     expect(header).toMatch(/<svg[^>]*class="flex-none text-dim"[^>]*>.*?<\/svg><span class="min-w-0 truncate[^"]*">Needs you<\/span><span class="flex-1[^"]*">0<\/span><span class="grid place-items-center"/)
     expect(header).toMatch(/<svg[^>]*class="flex-none text-busy"[^>]*>.*?<\/svg><span[^>]*>Working<\/span>/)
   })
 
   it('shows a project with no Session one line instead of folds, and every fold once it holds one', () => {
-    const empty = html({ waiting: [], working: [], settled: [], ...noArchive })
+    const empty = html({ waiting: [], working: [], settled: [], ...noWaitOrArchive })
     expect(empty).toContain('No Sessions yet. A proposal you accept in the thread starts one.')
     expect(empty).not.toContain('>Needs you<')
     expect(empty).not.toContain('>Working<')
     expect(empty).not.toContain('>Settled<')
-    const busy = html({ waiting: [], working: [row({ id: 'live' })], settled: [], ...noArchive })
+    const busy = html({ waiting: [], working: [row({ id: 'live' })], settled: [], ...noWaitOrArchive })
     expect(busy).toContain('>Working<')
     expect(busy).toContain('>Settled<')
+    // Waiting appears only while a Session waits on background work, never as an empty fold.
+    expect(busy).not.toContain('>Waiting<')
+  })
+
+  it('show a Waiting fold for a Session waiting on its background work, with what it waits on and no spinner', () => {
+    const waiting = { ...row({ id: 'retry', title: 'Phone check' }), status: 'background' as const, running: false, line: 'Retry the phone launch' }
+    const markup = html({ ...noWaitOrArchive, waiting: [], working: [], background: [waiting], settled: [] })
+    expect(markup).toMatch(/<svg[^>]*class="flex-none text-muted"[^>]*>.*?<\/svg><span[^>]*>Waiting<\/span><span[^>]*>1</)
+    expect(markup).toContain('Retry the phone launch')
+    expect(markup).not.toContain('animate-spin')
   })
 })

@@ -18,6 +18,7 @@ const row = (index: number): SessionOverviewRow => ({
 const overview: SessionOverview = {
   waiting: Array.from({ length: 23 }, (_, index) => row(index + 100)),
   working: [],
+  background: [],
   settled: Array.from({ length: 45 }, (_, index) => row(index)),
   archived: [],
   archiveKeepMs: 1,

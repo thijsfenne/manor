@@ -120,7 +120,7 @@ export function ChatPanelRegion({
   const running = thread.liveTurns.length > 0
   const waiting = waitingGoal(workspace, open)
   // Confirm in the diff says what it commits the way the card's Confirm does.
-  const sessionLive = useMemo(() => sessionLiveOf(workspace), [workspace.activity, workspace.subagents, workspace.backgroundChatIds])
+  const sessionLive = useMemo(() => sessionLiveOf(workspace), [workspace.activity, workspace.subagents, workspace.backgroundWork])
   // Gone while the Session works again, like its bar above the composer.
   const ready = useMemo(
     () => waiting === undefined ? undefined : sessionReadyRow(open, workspace.workHandoffs, workspace.chats, workspace.projects, workspace.agents, workspace.checkoutStatus, sessionLive),

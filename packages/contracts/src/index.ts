@@ -3101,6 +3101,10 @@ export const NativeSubagentSchema = SubagentSummarySchema.pick({
 })
 export type NativeSubagent = z.infer<typeof NativeSubagentSchema>
 
+/** Background work a live session runs after its turn ended, as the directory lists it. Titles are redacted. */
+export const BackgroundWorkSchema = z.object({ title: z.string(), kind: z.enum(['agent', 'command']) })
+export type BackgroundWork = z.infer<typeof BackgroundWorkSchema>
+
 /**
  * Where a chat lives. `project` is the original kind and still the default: it sits in
  * a project and derives who is in it from the transcript. `dm` and `group` are home
@@ -4677,6 +4681,11 @@ export const ServerMessageSchema = z.discriminatedUnion('type', [
      * still runs in its persona's live session. Such a chat still reads as working.
      */
     backgroundChatIds: z.array(z.string()).optional(),
+    /**
+     * The same chats' running background work, by chat: what a Session's Waiting says it
+     * waits on. `backgroundChatIds` stays for clients built before it.
+     */
+    backgroundWork: z.record(z.string(), z.array(BackgroundWorkSchema)).optional(),
   }),
   // A `directory` as the change from the last one this socket received, sent only to
   // a client that opened it with `directory=patch`. The client turns it back into a
@@ -4692,6 +4701,7 @@ export const ServerMessageSchema = z.discriminatedUnion('type', [
     runningTurns: z.record(z.string(), z.array(z.string())).optional(),
     nativeSubagents: z.array(NativeSubagentSchema).optional(),
     backgroundChatIds: z.array(z.string()).optional(),
+    backgroundWork: z.record(z.string(), z.array(BackgroundWorkSchema)).optional(),
   }),
   // The household. Sent on connect and after every agent change, so an edited
   // persona reaches every open client at once. Manor has ONE roster shared by every
@@ -5578,8 +5588,8 @@ export interface Driver {
   prepareRuntime?(): Promise<{ version: string; done: Promise<{ ok: true } | { ok: false; reason: string }> } | null>
   /** The live session this persona keeps in this thread, if the driver can keep one. */
   liveSession?(threadId: string, agentId: string): LiveSessionInfo | undefined
-  /** Threads where a live session of this driver still runs background work, whoever the persona was. */
-  busyLiveThreads?(): string[]
+  /** Threads where a live session of this driver still runs background work, whoever the persona was, with that work. */
+  busyLiveWork?(): { threadId: string; running: LiveSessionItem[] }[]
   /**
    * Ends a live session and the background work in it, or every live session in the
    * thread when no persona is named. Returns the titles of the work it stopped.

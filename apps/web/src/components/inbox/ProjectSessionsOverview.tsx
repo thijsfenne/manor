@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from '
 import { QUIET_PAGE_SIZE, readSessionOverviewUI, subscribeSessionOverviewUI, toggleSessionOverviewSection, updateSessionOverviewUI, type SessionOverviewSection } from '@manor/client-runtime/session-overview-ui'
 import { createPortal } from 'react-dom'
 import type { IconSvgElement } from '@hugeicons/react'
-import { AlertCircleIcon, Archive02Icon, CheckListIcon, CheckmarkCircle02Icon, CircleCheckIcon, Progress03Icon, Undo02Icon } from '@hugeicons/core-free-icons'
+import { AlertCircleIcon, Archive02Icon, CheckListIcon, CheckmarkCircle02Icon, CircleCheckIcon, HourglassIcon, Progress03Icon, Undo02Icon } from '@hugeicons/core-free-icons'
 import { DEFAULT_PROJECT_COLOR, DEFAULT_PROJECT_ICON, type AgentConfig, type Project } from '@manor/contracts'
 import { isArchiveExpired, type SessionOverview, type SessionOverviewRow } from '../../state'
 import { useMinuteClock } from '../../useMinuteClock'
@@ -39,10 +39,11 @@ interface ProjectSessionsOverviewProps {
 }
 
 // Each fold leads with its state's mark: only the two live states carry colour, and a fold
-// with no rows drops to dim like the quiet ones.
+// with no rows drops to dim like the quiet ones. Waiting and Archived show only with rows.
 const GROUPS: { id: SessionOverviewSection; label: string; hint: string; icon: IconSvgElement; tone: string }[] = [
   { id: 'waiting', label: 'Needs you', hint: 'Proposals, questions, reviews and results to confirm.', icon: AlertCircleIcon, tone: 'text-warn' },
   { id: 'working', label: 'Working', hint: 'Sessions with a turn running.', icon: Progress03Icon, tone: 'text-busy' },
+  { id: 'background', label: 'Waiting', hint: 'Sessions waiting on background work they started.', icon: HourglassIcon, tone: 'text-muted' },
   { id: 'settled', label: 'Settled', hint: 'Settled sessions.', icon: CircleCheckIcon, tone: 'text-dim' },
   { id: 'archived', label: 'Archived', hint: 'Archived sessions.', icon: Archive02Icon, tone: 'text-dim' },
 ]
@@ -51,7 +52,8 @@ const GROUPS: { id: SessionOverviewSection; label: string; hint: string; icon: I
  * A project thread's sessions (decided 2026-10-10, grouped 2026-10-11): the right pane
  * beside the thread, or the header toggle's popover where the window is too narrow to
  * split. Three folds with a count, Settled folded by default, so the thread can be read
- * without opening every session. A project with no Session yet shows one quiet line
+ * without opening every session. Waiting joins them only while a Session waits on
+ * background work it started (2026-11-18). A project with no Session yet shows one quiet line
  * instead of folds counting zero. Each row settles or unsettles in place. Archived sits
  * folded at the foot, only while it has rows: the sidebar's list leaves a thread's
  * sessions out, so this is where one archived by mistake comes back.
@@ -65,14 +67,14 @@ export function ProjectSessionsOverview({ threadId, overview, agents, onOpen, on
   const gutter = compact ? 'px-1.5' : 'px-1'
   // Past its restore window a row is as good as gone, and the hourly sweep deletes it.
   const archived = overview.archived.filter((row) => row.chat?.archivedAt != null && !isArchiveExpired(row.chat.archivedAt, now, overview.archiveKeepMs))
-  const empty = overview.waiting.length + overview.working.length + overview.settled.length + archived.length === 0
+  const empty = overview.waiting.length + overview.working.length + overview.background.length + overview.settled.length + archived.length === 0
 
   return (
     <div className={`flex min-h-0 min-w-0 flex-col overflow-y-auto ${gutter} ${compact ? 'max-h-[min(520px,70vh)] py-1.5' : 'h-full pt-2 pb-4'}`}>
       {empty ? <p className="m-0 px-3 py-1.5 text-[13px] text-dim">No Sessions yet. A proposal you accept in the thread starts one.</p> : null}
       {empty ? null : GROUPS.map(({ id, label, hint, icon, tone }) => {
         const rows = id === 'archived' ? archived : overview[id]
-        if (id === 'archived' && rows.length === 0) return null
+        if ((id === 'archived' || id === 'background') && rows.length === 0) return null
         const shown = id === 'settled' ? rows.slice(0, visibleSettled) : id === 'archived' ? rows.slice(0, visibleArchived) : rows
         return (
           <section key={id} aria-label={label} className="flex flex-none flex-col pb-2">
@@ -98,6 +100,7 @@ export function ProjectSessionsOverview({ threadId, overview, agents, onOpen, on
                     // The sidebar's own rows: live ones with Archive and Settle, settled ones
                     // as a quiet line whose card opens to the left, away from the right pane's edge.
                     // The fold's header already says running or waiting, so the row keeps only unread and age.
+                    // A Waiting row's detail is what it waits on (`SessionOverviewRow.line`).
                     const entry = {
                       chat: row.chat, selected: false, unread: row.unread, running: false, waiting: false,
                       projectName: project?.name ?? '', projectIcon: project?.icon ?? DEFAULT_PROJECT_ICON, projectColor: project?.color ?? DEFAULT_PROJECT_COLOR,

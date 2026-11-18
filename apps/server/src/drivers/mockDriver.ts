@@ -5,6 +5,7 @@ import { homedir } from 'node:os'
 import path from 'node:path'
 import { promisify } from 'node:util'
 import { AsyncQueue } from '../asyncQueue.js'
+import { scrubCredentialText } from '../store.js'
 import { describeCommand } from './commands.js'
 import { errorLine } from './toolActivity.js'
 import { memoryRoot, resolveMemoryTarget } from '../memoryTarget.js'
@@ -920,7 +921,10 @@ export function createMockDriver(options: MockDriverOptions = {}): Driver {
   let launches = 0
   return {
     liveSession: (threadId, agentId) => live.get(liveKey(threadId, agentId))?.info,
-    busyLiveThreads: () => [...live.values()].filter((session) => session.info.running.length > 0).map((session) => session.threadId),
+    busyLiveWork: () => [...live.values()].flatMap((session) => session.info.running.length === 0 ? [] : [{
+      threadId: session.threadId,
+      running: session.info.running.map((item) => ({ ...item, title: scrubCredentialText(item.title) })),
+    }]),
     closeLiveSession(threadId, agentId) {
       const stopped: string[] = []
       for (const [key, session] of [...live]) {

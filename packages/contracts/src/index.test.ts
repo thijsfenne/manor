@@ -210,6 +210,12 @@ test('a directory patch follows subagents appearing and disappearing, and an unc
   for (const key of ['projects', 'chats', 'workHandoffs', 'subagents'] as const) assert.equal(same.whole[key], listing[key])
 })
 
+test('a directory patch carries background work whole, and its end clears it', () => {
+  const waiting = { ...listing, backgroundChatIds: ['b'], backgroundWork: { b: [{ title: 'Retry the launch', kind: 'command' as const }] } }
+  assert.deepEqual(rebuilt(listing, waiting).patch.backgroundWork, waiting.backgroundWork)
+  assert.deepEqual(rebuilt(waiting, { ...listing, backgroundChatIds: [], backgroundWork: {} }).whole.backgroundWork, {})
+})
+
 test('only links to the public web read as sources', async () => {
   const { faviconSource, webLinkOrigin, REMOTE_FAVICON_PATH } = await import('./webLinks.js')
   assert.equal(webLinkOrigin('https://www.healio.com/news/gastroenterology/x?y=1'), 'https://www.healio.com')

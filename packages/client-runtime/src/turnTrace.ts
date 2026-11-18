@@ -1,6 +1,7 @@
 import { EFFORTS, driverForModel, modelLabel, type FileEdit, type SubagentLaunch, type SubagentSummary } from '@manor/contracts'
 import { isToolStep, liveWritten, type ReasoningStep, type Row, type ToolStep, type TurnActivity as TurnStep, type TurnRow, type TurnSegment } from './state'
 import { activityDetail, activityKind, currentLabel, elapsedLabel, searchQuery, isBrowserTool, isMemoryWrite, isTaskTool, settledLabel, shortTarget, workedLabel } from './turnLabels'
+import { waitingOn } from './sessionStatus'
 import { isCompacting, LIVE_COMPACT_DONE, LIVE_COMPACT_FAILED, LIVE_COMPACT_NOTE, LIVE_COMPACT_STOPPED } from './compacting'
 
 export { isCompacting, LIVE_COMPACT_DONE, LIVE_COMPACT_FAILED, LIVE_COMPACT_NOTE, LIVE_COMPACT_STOPPED }
@@ -348,15 +349,6 @@ export const isWaiting = (turn: TurnRow): boolean =>
 export function backgroundWaitLabel(turn: TurnRow): string | undefined {
   const wait = turn.live?.state === 'running' ? turn.live.background : undefined
   return wait === undefined ? undefined : waitingOn(wait.agents, wait.commands)
-}
-
-function waitingOn(agentCount: number, commandCount: number): string | undefined {
-  if (agentCount + commandCount === 0) return undefined
-  const agents = `${agentCount} background ${agentCount === 1 ? 'agent' : 'agents'}`
-  const commands = `${commandCount} ${agentCount > 0 ? '' : 'background '}${commandCount === 1 ? 'command' : 'commands'}`
-  if (commandCount === 0) return `Waiting on ${agents}`
-  if (agentCount === 0) return `Waiting on ${commands}`
-  return `Waiting on ${agents} and ${commands}`
 }
 
 /**

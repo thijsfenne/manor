@@ -258,6 +258,19 @@ describe('a child that needs the user', () => {
     await vi.waitFor(() => expect(subagents.runs(taskId)).toBe(false))
     expect(subagents.openAsks()).toEqual({})
   })
+
+  it('stops offering a question once its child is told to stop, before it has shut down', async () => {
+    const { driver, store, subagents, context, parentChat, changed } = await setup({ nestedMcp: manorTools })
+    const { taskId } = await subagents.delegate(context, { task: 'Pick one.', model: 'claude-sonnet-5-5', effort: 'low', wait: false })
+    await vi.waitFor(() => expect(driver.turns).toHaveLength(1))
+    await subagents.recordAsk(taskId, SUBAGENT_VOICE.id, subagents.activeTurn(taskId)!.turnId, 'req_1', question)
+    driver.turns[0]!.stop.mockImplementation(() => undefined)
+    changed.mockClear()
+    expect(subagents.stop(parentChat.id, (await store.getChat(taskId))!.subagent!.toolCallId)).toBe(true)
+    expect(changed).toHaveBeenCalledTimes(1)
+    expect(subagents.runs(taskId)).toBe(true)
+    expect(subagents.openAsks()).toEqual({})
+  })
 })
 
 describe('ending a child early', () => {
@@ -286,6 +299,27 @@ describe('ending a child early', () => {
     await expect(subagents.result(context, b.taskId)).resolves.toMatchObject({ status: 'cancelled', reason: "Stopped with Smith's turn." })
     await expect(subagents.result(context, c.taskId)).resolves.toMatchObject({ status: 'cancelled' })
     expect(subagents.stop(parentChat.id, await toolCallOf(a.taskId))).toBe(false)
+  })
+
+  it('lists a stopped child as cancelled at once, while it shuts down and when its end fails to save', async () => {
+    const { driver, subagents, context, store, parentChat } = await setup({ policy: { ...policy, maxConcurrent: 2 } })
+    const brief = { task: 'Work.', model: 'gpt-6.1-sol', effort: 'low', wait: false } as const
+    const [slow, unsaved] = [await subagents.delegate(context, brief), await subagents.delegate(context, brief)]
+    await vi.waitFor(() => expect(driver.turns).toHaveLength(2))
+    for (const turn of driver.turns) turn.stop.mockImplementation(() => undefined)
+    const stateOf = async (taskId: string) =>
+      subagentDirectory(await store.listChats(), {}, [], {}, subagents.stoppingIds()).subagents.find((child) => child.id === taskId)?.state
+    expect(subagents.stopInChat(parentChat.id, 'Stopped by the user.')).toHaveLength(2)
+    expect((await store.getChat(slow.taskId))?.subagent?.state).toBe('running')
+    expect(await stateOf(slow.taskId)).toBe('cancelled')
+    driver.turns[0]!.queue.close()
+    await expect(subagents.result(context, slow.taskId)).resolves.toMatchObject({ status: 'cancelled' })
+    expect(subagents.stoppingIds().has(slow.taskId)).toBe(false)
+    vi.spyOn(store, 'endSubagent').mockRejectedValueOnce(new Error('disk full'))
+    driver.turns[1]!.queue.close()
+    await expect(subagents.result(context, unsaved.taskId)).resolves.toMatchObject({ status: 'cancelled' })
+    expect((await store.getChat(unsaved.taskId))?.subagent?.state).toBe('running')
+    expect(await stateOf(unsaved.taskId)).toBe('cancelled')
   })
 
   it('ends children a restart cut off and closes their launch rows', async () => {

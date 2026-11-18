@@ -325,7 +325,7 @@ export function useSplitActions(
     activeView === 'chat' && !overviewClosed
   const sessionOverview = useMemo(
     () => stageThreadId === null ? null : projectSessionOverview(workspace, stageThreadId),
-    [stageThreadId, workspace.projects, workspace.chats, workspace.workHandoffs, workspace.activity, workspace.subagents, workspace.backgroundChatIds, workspace.houseSettings],
+    [stageThreadId, workspace.projects, workspace.chats, workspace.workHandoffs, workspace.activity, workspace.subagents, workspace.backgroundWork, workspace.houseSettings],
   )
   /** The stage holds two panes: two chats, or the thread beside its overview. */
   const paneSplit = visibleSplit !== null || overviewShown

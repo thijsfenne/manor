@@ -73,7 +73,7 @@ type ProjectMessage = Extract<
 
 type ProjectRuntime = Pick<
   Orchestrator,
-  'activeTurn' | 'backgroundChatIds' | 'runningTurnId' | 'discard' | 'runExclusive' | 'setOverride' | 'subagents' | 'tryRunExclusive'
+  'activeTurn' | 'backgroundChatIds' | 'backgroundWork' | 'runningTurnId' | 'discard' | 'runExclusive' | 'setOverride' | 'subagents' | 'tryRunExclusive'
 >
 
 type OpeningMessage = NonNullable<Extract<ClientMessage, { type: 'create_chat' }>['openingMessage']>
@@ -850,6 +850,8 @@ export class ProjectModule {
   }
 
   private async loadDirectory(remember: 'none' | 'merge' | 'replace'): Promise<ServerMessage> {
+    // Taken before the read: a child whose end saves meanwhile leaves the set but not these rows.
+    const stopping = new Set(this.options.orchestrator.subagents.stoppingIds())
     const [projects, chats, workHandoffs] = await Promise.all([
       this.options.store.listProjects(),
       this.options.store.listChats(),
@@ -873,6 +875,7 @@ export class ProjectModule {
       const turnId = this.options.orchestrator.runningTurnId(chat.id)
       return turnId === undefined ? [] : [[chat.id, [turnId]]]
     }))
+    const backgroundWork = this.options.orchestrator.backgroundWork(listed.map((chat) => chat.id))
     return {
       type: 'directory',
       projects,
@@ -883,8 +886,9 @@ export class ProjectModule {
       }),
       workHandoffs: workHandoffs.filter((handoff) => handoff.version > 0 || handoff.state === 'deleted'),
       runningTurns,
-      ...subagentDirectory(chats, runningTurns, this.options.orchestrator.subagents.nativeRunning(), this.options.orchestrator.subagents.openAsks()),
-      backgroundChatIds: this.options.orchestrator.backgroundChatIds(listed.map((chat) => chat.id)),
+      ...subagentDirectory(chats, runningTurns, this.options.orchestrator.subagents.nativeRunning(), this.options.orchestrator.subagents.openAsks(), stopping),
+      backgroundChatIds: Object.keys(backgroundWork),
+      backgroundWork,
     }
   }
 

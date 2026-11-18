@@ -15,7 +15,7 @@ interface ListPatch<T> {
   order?: string[]
 }
 
-type WholeFields = Pick<DirectoryMessage, 'awaitingInput' | 'runningTurns' | 'nativeSubagents' | 'backgroundChatIds'>
+type WholeFields = Pick<DirectoryMessage, 'awaitingInput' | 'runningTurns' | 'nativeSubagents' | 'backgroundChatIds' | 'backgroundWork'>
 
 // Directory items are never mutated once built, so an encoding holds for as long as
 // its item lives, and a base diffed for every socket in a broadcast is encoded once.
@@ -58,6 +58,7 @@ function wholeFields(message: WholeFields): WholeFields {
   if (message.runningTurns !== undefined) fields.runningTurns = message.runningTurns
   if (message.nativeSubagents !== undefined) fields.nativeSubagents = message.nativeSubagents
   if (message.backgroundChatIds !== undefined) fields.backgroundChatIds = message.backgroundChatIds
+  if (message.backgroundWork !== undefined) fields.backgroundWork = message.backgroundWork
   return fields
 }
 

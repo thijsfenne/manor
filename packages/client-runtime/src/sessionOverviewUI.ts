@@ -12,7 +12,7 @@ interface SessionOverviewUI {
 }
 
 const defaults: SessionOverviewUI = {
-  open: { waiting: true, working: true, settled: false, archived: false },
+  open: { waiting: true, working: true, background: true, settled: false, archived: false },
   visibleSettled: QUIET_PAGE_SIZE,
   visibleArchived: QUIET_PAGE_SIZE,
 }

@@ -33,6 +33,7 @@ import {
   redactGrantedEnvValues,
 } from '../childEnv.js'
 import { catchUpStyle, composeCatchUp } from '../composer.js'
+import { scrubCredentialText } from '../store.js'
 import { readClaudeProviderUsage } from './claudeUsage.js'
 import { describeCommand } from './commands.js'
 import { describeTool, errorText, redactToolActivity, subagentLaunch, subagentOutput } from './toolActivity.js'
@@ -1294,7 +1295,8 @@ export function createClaudeDriver(options: ClaudeDriverOptions): Driver {
   const redactWith = (proc: ClaudeProcess) => (message: string) =>
     proc.granted.reduce((text, { env, keys }) => redactGrantedEnvValues(text, env, keys), message)
   /** A task title as it may leave the driver: no granted value in it, within the wake row's limit. */
-  const safeTitle = (proc: ClaudeProcess, title: string) => redactWith(proc)(title).slice(0, WAKE_TITLE_MAX)
+  // Credential shapes go before the cut, which could leave too little of one to recognise.
+  const safeTitle = (proc: ClaudeProcess, title: string) => scrubCredentialText(title, redactWith(proc)).slice(0, WAKE_TITLE_MAX)
   const freeze = (proc: ClaudeProcess) => {
     if (proc.frozen) return
     proc.frozen = true
@@ -1473,8 +1475,10 @@ export function createClaudeDriver(options: ClaudeDriverOptions): Driver {
       }
     },
 
-    busyLiveThreads: () => [...live.values()]
-      .filter(({ proc }) => proc.parser.runningBackground().length > 0).map(({ proc }) => proc.threadId),
+    busyLiveWork: () => [...live.values()].flatMap(({ proc }) => {
+      const running = proc.parser.runningBackground()
+      return running.length === 0 ? [] : [{ threadId: proc.threadId, running: running.map((item) => ({ ...item, title: safeTitle(proc, item.title) })) }]
+    }),
 
     closeLiveSession(threadId, agentId) {
       const stopped: string[] = []

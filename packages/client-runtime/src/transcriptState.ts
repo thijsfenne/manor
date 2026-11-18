@@ -1129,7 +1129,7 @@ export function threadBundleSummary(items: readonly Row[]): string {
 }
 
 /** The order a bundle's line names Sessions in: what finished first, then what still runs or waits. */
-const SUMMARY_GROUPS = ['settled', 'working', 'waiting', 'closed'] as const
+const SUMMARY_GROUPS = ['settled', 'working', 'background', 'waiting', 'closed'] as const
 
 /** The mark a bundle chip or note wears; each client maps it to its own icon. */
 export type ThreadBundleGlyph = 'session' | 'file' | 'learning' | 'report' | 'answer' | 'question' | 'update'
@@ -1176,8 +1176,8 @@ export interface ThreadBundleView {
 }
 
 /** Which Session state colours the Sessions chip: the one that asks most of the user. */
-const SESSION_URGENCY = ['waiting', 'working', 'settled', 'closed'] as const
-const SESSION_TONE = { waiting: 'warn', working: 'busy', settled: 'ok', closed: 'dim' } as const
+const SESSION_URGENCY = ['waiting', 'working', 'background', 'settled', 'closed'] as const
+const SESSION_TONE = { waiting: 'warn', working: 'busy', background: 'dim', settled: 'ok', closed: 'dim' } as const
 
 /** What a write to each thread file holds, and the verb its chip says for an add or update. */
 const FILE_NOUN: Record<ProjectThreadFile, { one: string; many: string; kept: string }> = {
@@ -1438,7 +1438,10 @@ export function forwardedLine(row: Pick<WorkHandoffRow, 'projectName' | 'forward
   if (row.status === 'Settled' || row.status === 'Archived') return `Settled in project thread ${row.projectName}`
   if (phase === 'ready') return report ? `Ready in project thread ${row.projectName}` : `Ready, confirm in project thread ${row.projectName}`
   // The overview's own fold decides: a question, a result to confirm or a quiet Session is the user's move.
-  if (phase === 'working') return `${sessionGroup(row.session) === 'waiting' ? 'Needs you in' : 'Running via'} project thread ${row.projectName}`
+  if (phase === 'working') {
+    const group = sessionGroup(row.session)
+    return `${group === 'waiting' ? 'Needs you in' : group === 'background' ? 'Waiting in' : 'Running via'} project thread ${row.projectName}`
+  }
   return `To project thread ${row.projectName}`
 }
 
@@ -1594,7 +1597,7 @@ function workHandoffRow(
         threadChatId: chats.some((chat) => chat.id === project?.threadChatId && chat.archivedAt === null) ? project?.threadChatId ?? null : null,
         // Ready only while the linked Session waits, as on its own card.
         phase: linked?.goalConfirmedAt !== undefined ? 'confirmed'
-          : linked?.goalReport !== undefined && own.session !== 'working' && own.session !== 'waiting' ? 'ready'
+          : linked?.goalReport !== undefined && own.session !== 'working' && own.session !== 'waiting' && own.session !== 'background' ? 'ready'
             : linked?.acceptedAt != null ? 'working' : 'starting',
         ...(linked?.goalCompletion?.operation === 'none' ? { nothingToCommit: true } : {}),
       },
@@ -1969,6 +1972,9 @@ const READY: WorkStatus = { tone: 'ready', text: 'Ready' }
 const SESSION_CARD_STATUS: Partial<Record<SessionStatus, WorkStatus>> = {
   working: { tone: 'busy', text: 'Working' },
   waiting: { tone: 'waiting', text: 'Waiting' },
+  // Work it started runs on and will wake it: no spinner, not the user's move, and not
+  // finished either, which `dim` would claim.
+  background: { tone: 'ready', text: 'Waiting' },
   done: { tone: 'ready', text: 'Done' },
 }
 
@@ -2080,6 +2086,7 @@ export type ThreadWorkCard =
 export const THREAD_SESSION_STATUS: Record<SessionGroup, WorkStatus> = {
   working: { tone: 'busy', text: 'Working' },
   waiting: { tone: 'warn', text: 'Needs you' },
+  background: { tone: 'ready', text: 'Waiting' },
   // Muted until the user confirms it; Confirmed carries the green.
   settled: { tone: 'dim', text: 'Done' },
 }

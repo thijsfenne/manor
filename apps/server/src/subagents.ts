@@ -166,6 +166,11 @@ export class Subagents {
   private readonly native = new Map<string, NativeSubagent>()
   /** Waking children that ended with a result their persona has not read, by task id. */
   private readonly unread = new Map<string, EndedChild>()
+  /**
+   * Children told to stop whose end is not on record yet: still shutting down, or their
+   * end failed to save. The directory lists them as cancelled, so a Stop shows at once.
+   */
+  private readonly stopping = new Set<string>()
 
   constructor(private readonly options: SubagentsOptions) {}
 
@@ -362,6 +367,11 @@ export class Subagents {
     if (closed) this.options.changed()
   }
 
+  /** Children a stop reached before their end was recorded, for the directory. */
+  stoppingIds(): ReadonlySet<string> {
+    return this.stopping
+  }
+
   /** Provider-run helpers running now, for the directory. */
   nativeRunning(): NativeSubagent[] {
     return [...this.native.values()]
@@ -372,10 +382,11 @@ export class Subagents {
     return this.live.has(chatId)
   }
 
-  /** Each running child's oldest open question, for the directory. */
+  /** Each running child's oldest open question, for the directory. A stopped child takes no answer. */
   openAsks(): Record<string, SubagentAsk> {
     const open: Record<string, SubagentAsk> = {}
     for (const live of this.live.values()) {
+      if (live.cancelReason !== undefined) continue
       const oldest = live.asks.entries().next().value
       if (oldest !== undefined) open[live.chatId] = { requestId: oldest[0], questions: oldest[1] }
     }
@@ -572,7 +583,7 @@ export class Subagents {
     this.stopFromTurn(live.turnId)
     await this.options.store.endSubagent(live.chatId, {
       state, endedAt: Date.now(), ...(reason === undefined ? {} : { reason: live.redact(reason) }),
-    }).catch(() => undefined)
+    }).then(() => this.stopping.delete(live.chatId), () => undefined)
     await this.appendScrubbed(live, live.parentChatId, {
       type: 'tool_result', agentId: child.agentId, turnId: child.turnId, toolCallId: child.toolCallId,
       outcome: state === 'done' ? 'success' : state === 'cancelled' ? 'stopped' : 'error',
@@ -642,7 +653,10 @@ export class Subagents {
   private end(live: Live, reason: string): void {
     if (live.cancelReason !== undefined) return
     live.cancelReason = reason
+    this.stopping.add(live.chatId)
     live.handle?.stop()
+    // The directory lists it as stopped from here, without waiting for it to shut down.
+    this.options.changed()
   }
 
   private async waitFor(live: Live): Promise<TaskReport> {
@@ -757,10 +771,13 @@ export function subagentDirectory(
   runningTurns: Readonly<Record<string, readonly string[]>> = {},
   native: readonly NativeSubagent[] = [],
   asks: Readonly<Record<string, SubagentAsk>> = {},
+  stopping: ReadonlySet<string> = new Set(),
 ): { subagents: SubagentSummary[]; nativeSubagents: NativeSubagent[] } {
   const earlier: Record<string, number> = {}
   const listed = new Set<string>()
-  const children = chats.filter(isChildChat).sort((a, b) => b.subagent.startedAt - a.subagent.startedAt)
+  const children = chats.filter(isChildChat)
+    .map((chat) => chat.subagent.state === 'running' && stopping.has(chat.id) ? { ...chat, subagent: { ...chat.subagent, state: 'cancelled' as const } } : chat)
+    .sort((a, b) => b.subagent.startedAt - a.subagent.startedAt)
   for (const chat of children) {
     if (chat.subagent.state === 'running') {
       listed.add(chat.id)

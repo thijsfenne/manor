@@ -32,9 +32,9 @@ function ProjectSessions() {
     // The slices the overview reads, not `workspace`, so the React Compiler keeps this screen.
     () => projectSessionOverview({
       projects: workspace.projects, chats: workspace.chats, workHandoffs: workspace.workHandoffs, activity: workspace.activity,
-      subagents: workspace.subagents, backgroundChatIds: workspace.backgroundChatIds, houseSettings: workspace.houseSettings,
+      subagents: workspace.subagents, backgroundWork: workspace.backgroundWork, houseSettings: workspace.houseSettings,
     }, threadId),
-    [workspace.projects, workspace.chats, workspace.workHandoffs, workspace.activity, workspace.subagents, workspace.backgroundChatIds, workspace.houseSettings, threadId],
+    [workspace.projects, workspace.chats, workspace.workHandoffs, workspace.activity, workspace.subagents, workspace.backgroundWork, workspace.houseSettings, threadId],
   )
   const back = () => (router.canGoBack() ? router.back() : router.replace({ pathname: '/chat/[id]', params: { id: threadId } }))
 

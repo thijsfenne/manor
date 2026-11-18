@@ -420,8 +420,10 @@ for (const session of notesSessions) {
   directory.chats.push(chat({ id: session.workChatId, projectId: 'project-notes', title: session.title, preview: session.task,
     minutesAgo: (now - session.createdAt) / 60_000 - 1, settledMinutesAgo: session.state === 'settled' ? 20 : null }))
 }
-// The build's shell keeps running after its turn, so the overview and its line say Working.
+// The build's shell keeps running after its turn, so the overview files it under Waiting
+// with the shell's title, and its line in the thread says Waiting.
 directory.backgroundChatIds = [...(directory.backgroundChatIds ?? []), 'chat-notes-build']
+directory.backgroundWork = { ...directory.backgroundWork, 'chat-notes-build': [{ title: 'Build the nightly release', kind: 'command' }] }
 
 // The two children of `chat-background-wake` and the one the running child started itself.
 // One helper with a role and a task long enough to fold, which a child's card shows above a divider.
@@ -1408,6 +1410,7 @@ function applyEmptyData() {
   directory.workHandoffs.length = 0
   directory.subagents = []
   directory.backgroundChatIds = []
+  directory.backgroundWork = {}
   directory.awaitingInput = {}
   for (const chatId of Object.keys(snapshots)) delete snapshots[chatId]
   for (const chatId of Object.keys(activeTurns)) delete activeTurns[chatId]

@@ -8,7 +8,7 @@ import {
 } from '@manor/contracts'
 import type { AgentConfig, Chat, Project, ProjectIcon, SubagentSummary, ThreadEvent, UserInputAnswers, UserInputQuestion, WorkHandoff } from '@manor/contracts'
 import { IDLE, type ChatActivity } from './activityState'
-import { needsUser, sessionGroup, sessionStatus, type SessionLive, type SessionStatus } from './sessionStatus'
+import { backgroundReason, needsUser, sessionGroup, sessionStatus, type SessionLive, type SessionStatus } from './sessionStatus'
 import { emptyThread, type ThreadState } from './threadState'
 import type { WorkspaceState } from './workspaceState'
 import type { QuietThread, QuietWorkspace, ThreadShape, WorkspaceShape } from './quietState'
@@ -225,7 +225,7 @@ const selectedChatId = (state: Pick<WorkspaceShape, 'openChatId' | 'pendingChatI
  * `sitsSettled`. They are typed by it, so one that reads another slice does not compile.
  */
 const LISTED_SLICES = [
-  'chats', 'projects', 'agents', 'workHandoffs', 'activity', 'subagents', 'backgroundChatIds', 'houseSettings', 'openChatId', 'pendingChatId',
+  'chats', 'projects', 'agents', 'workHandoffs', 'activity', 'subagents', 'backgroundWork', 'houseSettings', 'openChatId', 'pendingChatId',
 ] as const satisfies readonly (keyof WorkspaceShape)[]
 
 export type ListedState = Pick<WorkspaceShape, (typeof LISTED_SLICES)[number]>
@@ -242,7 +242,7 @@ export function createListedState(): (state: ListedState) => ListedState {
     if (last !== null && LISTED_SLICES.every((slice) => last![slice] === state[slice])) return last
     last = {
       chats: state.chats, projects: state.projects, agents: state.agents, workHandoffs: state.workHandoffs,
-      activity: state.activity, subagents: state.subagents, backgroundChatIds: state.backgroundChatIds,
+      activity: state.activity, subagents: state.subagents, backgroundWork: state.backgroundWork,
       houseSettings: state.houseSettings, openChatId: state.openChatId, pendingChatId: state.pendingChatId,
     }
     return last
@@ -342,7 +342,7 @@ export const isSettled = (chat: Chat): boolean =>
  * shared status, so a confirmed result the user did not stamp is settled here too, the way
  * the overview groups it; any other chat keeps its own stamp.
  */
-export function sitsSettled(state: Pick<ListedState, 'projects' | 'workHandoffs' | 'activity' | 'subagents' | 'backgroundChatIds'>, chat: Chat, live = sessionLiveOf(state)) {
+export function sitsSettled(state: Pick<ListedState, 'projects' | 'workHandoffs' | 'activity' | 'subagents' | 'backgroundWork'>, chat: Chat, live = sessionLiveOf(state)) {
   const handoff = handoffIndex(state).byWorkChat.get(chat.id)
   return handoff === undefined ? isSettled(chat) : sessionGroup(sessionStatus(handoff, chat, live(chat.id))) === 'settled'
 }
@@ -505,24 +505,36 @@ export function sessionThreadOf(state: Pick<WorkspaceShape, 'projects' | 'workHa
  * What runs in a chat right now, as every Session reader takes it. The card reads it
  * through `projectWorkHandoffs`, the overview and the project row read it directly.
  * Running counts a turn and the work it started that outlives the turn (a Manor helper,
- * or a provider's helper or shell in its live session).
+ * or a provider's helper or shell in its live session); background is that work alone,
+ * once no turn runs.
  */
-export const sessionLiveOf = (state: Pick<WorkspaceShape, 'activity' | 'subagents' | 'backgroundChatIds'>) => {
+export const sessionLiveOf = (state: Pick<WorkspaceShape, 'activity' | 'subagents' | 'backgroundWork'>): ((chatId: string) => SessionLive) => {
   // Built once per reader, which then asks about every listed chat.
-  const background = new Set(state.backgroundChatIds)
   const helping = new Set(state.subagents.flatMap((child) => child.state === 'running' ? [child.parentChatId] : []))
   const childAsks = subagentAskChats(state.subagents)
   return (chatId: string) => {
     const activity = state.activity[chatId] ?? IDLE
+    const turn = activity.runningTurns.length > 0
+    const background = Object.hasOwn(state.backgroundWork, chatId) || helping.has(chatId)
     return {
-      running: activity.runningTurns.length > 0 || background.has(chatId) || helping.has(chatId),
+      running: turn || background,
+      background: !turn && background,
       asking: activity.awaitingInput.length > 0 || childAsks.has(chatId),
     }
   }
 }
 
-/** The overview group a project session stands in. */
-export type SessionOverviewGroup = 'waiting' | 'working' | 'settled'
+/** What a chat's ended turn left running: its live session's work and its running Manor children. */
+const backgroundWorkOf = (state: Pick<WorkspaceShape, 'subagents' | 'backgroundWork'>, chatId: string) => [
+  ...state.backgroundWork[chatId] ?? [],
+  ...state.subagents.flatMap((child) => child.state === 'running' && child.parentChatId === chatId ? [{ title: child.title, kind: 'agent' as const }] : []),
+]
+
+/**
+ * The overview group a project session stands in. `waiting` reads Needs you, the user's
+ * move; `background` reads Waiting, on work the Session started.
+ */
+export type SessionOverviewGroup = 'waiting' | 'working' | 'background' | 'settled'
 
 /** One row of a project thread's session overview, wearing the sidebar card's state marks. */
 export interface SessionOverviewRow extends ChatStanding {
@@ -533,7 +545,10 @@ export interface SessionOverviewRow extends ChatStanding {
   chat: Chat | null
   /** The same reading the session's card in the thread shows. */
   status: SessionStatus
-  /** The newest line said in the session, or a proposal's goal; empty before anyone spoke. */
+  /**
+   * The newest line said in the session, or a proposal's goal; empty before anyone spoke.
+   * A Session in `background` says what it waits on instead.
+   */
   line: string
   /** When it last moved, the way the sidebar orders it. A running turn's start, else its last message. */
   at: number
@@ -551,20 +566,21 @@ export interface SessionOverview extends Record<SessionOverviewGroup, SessionOve
 }
 
 /**
- * The sessions a project thread started, newest first, in the three groups its overview
+ * The sessions a project thread started, newest first, in the groups its overview
  * shows (decided 2026-10-11), each from the Session's shared status. Needs you holds
  * a proposal to accept, a question, a result to confirm, or a session that has gone
- * quiet, all of them the user's move, even mid-turn. Working is a running turn, or work it started
- * that outlives the turn (a Manor helper, or a provider's helper or shell in its live
- * session). Settled is the user's own stamp, or a result they confirmed. Sessions of the
+ * quiet, all of them the user's move, even mid-turn. Working is a running turn. Waiting
+ * (2026-11-18) is a turn that ended while work it started still runs (a Manor helper, or
+ * a provider's helper or shell in its live session), whose end wakes it; the overview
+ * shows that fold only while it has rows. Settled is the user's own stamp, or a result they confirmed. Sessions of the
  * project that the thread did not start are ordinary sessions and stay in the sidebar list.
  */
 export function projectSessionOverview(
-  state: Pick<WorkspaceShape, 'projects' | 'chats' | 'workHandoffs' | 'activity' | 'subagents' | 'backgroundChatIds' | 'houseSettings'>,
+  state: Pick<WorkspaceShape, 'projects' | 'chats' | 'workHandoffs' | 'activity' | 'subagents' | 'backgroundWork' | 'houseSettings'>,
   threadChatId: string,
 ): SessionOverview {
   const groups: SessionOverview = {
-    waiting: [], working: [], settled: [], archived: [],
+    waiting: [], working: [], background: [], settled: [], archived: [],
     archiveKeepMs: state.houseSettings === null ? ARCHIVE_KEEP_MS : daysToMs(state.houseSettings.archiveRetentionDays),
   }
   if (!state.projects.some((entry) => entry.threadChatId === threadChatId)) return groups
@@ -588,7 +604,8 @@ export function projectSessionOverview(
       ? proposalRow(handoff, chat.title)
       : {
           key: chat.id, title: chat.title, chat, status,
-          line: chat.lastMessagePreview ?? '', at: orderAt(state, chat), ...overviewMarks(status, activity.unread),
+          line: status === 'background' ? backgroundReason(backgroundWorkOf(state, chat.id)) : chat.lastMessagePreview ?? '',
+          at: orderAt(state, chat), ...overviewMarks(status, activity.unread),
         }
     return [row]
   })

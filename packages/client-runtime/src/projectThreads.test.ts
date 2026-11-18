@@ -266,14 +266,15 @@ describe('project thread selectors', () => {
     expect(inSettled(withChatSettled(stampedConfirmed, 'session', false, 11))).toBe(false)
   })
 
-  it('keeps a session Working while work it started outlives its turn', () => {
+  it('files a session under Waiting while work it started outlives its turn, from an older server too', () => {
     const state = reduce(workspace([]), {
       type: 'directory', projects: [project], backgroundChatIds: ['session'],
       workHandoffs: [handoff('h1', { workChatId: 'session' }), handoff('h2', { workChatId: 'quiet' })],
       chats: [chat('thread', { mode: 'single', lastMessageAt: 5 }), chat('session', { lastMessageAt: 9 }), chat('loose'), chat('quiet')],
     })
     const overview = projectSessionOverview(state, 'thread')
-    expect(overview.working.map((row) => row.key)).toEqual(['session'])
+    expect(overview.working).toEqual([])
+    expect(overview.background).toMatchObject([{ key: 'session', status: 'background', line: 'Waiting on background work', running: false }])
     expect(overview.waiting.map((row) => row.key)).toEqual(['quiet'])
   })
 
@@ -327,11 +328,17 @@ describe('a DM brief handed to its project thread', () => {
     const report = { ...ready, goalCompletion: { status: 'ready' as const, operation: 'none' as const, repos: [] } }
     expect(forwardedLine(card([withLink, report]))).toBe('Ready in project thread Manor')
     expect(forwardedLine(card([withLink, { ...report, goalConfirmedAt: 4 }]))).toBe('Closed in project thread Manor')
-    const [running] = projectWorkHandoffs([note(2)], [withLink, report], [chat('thread'), chat('session')], [project], [], {}, () => ({ running: true, asking: false }))
+    const [running] = projectWorkHandoffs([note(2)], [withLink, report], [chat('thread'), chat('session')], [project], [], {}, () => ({ running: true, background: false, asking: false }))
     expect(running?.kind === 'work_handoff' && forwardedLine(running)).toBe('Running via project thread Manor')
     // The Session asks: the overview lists it under Needs you, and so does the line.
-    const [asking] = projectWorkHandoffs([note(2)], [withLink, linked], [chat('thread'), chat('session')], [project], [], {}, () => ({ running: true, asking: true }))
+    const [asking] = projectWorkHandoffs([note(2)], [withLink, linked], [chat('thread'), chat('session')], [project], [], {}, () => ({ running: true, background: false, asking: true }))
     expect(asking?.kind === 'work_handoff' && forwardedLine(asking)).toBe('Needs you in project thread Manor')
+    // Waiting on its own background work, with or without a report, it is neither running nor Ready.
+    const waiting = () => ({ running: true, background: true, asking: false })
+    for (const session of [linked, report]) {
+      const [row] = projectWorkHandoffs([note(2)], [withLink, session], [chat('thread'), chat('session')], [project], [], {}, waiting)
+      expect(row?.kind === 'work_handoff' && forwardedLine(row)).toBe('Waiting in project thread Manor')
+    }
     // A brief whose Session has not started yet is neither running nor waiting.
     expect(forwardedLine(card([brief]))).toBe('To project thread Manor')
   })
@@ -351,7 +358,7 @@ describe('one status per Session, read by its card, its overview row and its pro
   }
   const standing = (state: WorkspaceState, key: string) => {
     const overview = projectSessionOverview(state, 'thread')
-    const group = (['waiting', 'working', 'settled'] as const).find((id) => overview[id].some((row) => row.key === key))
+    const group = (['waiting', 'working', 'background', 'settled'] as const).find((id) => overview[id].some((row) => row.key === key))
     const row = group === undefined ? undefined : overview[group].find((entry) => entry.key === key)
     return { group, status: row?.status, running: row?.running, waiting: row?.waiting }
   }
@@ -428,13 +435,49 @@ describe('one status per Session, read by its card, its overview row and its pro
     expect(standing(again, 'session')).toMatchObject({ status: 'waiting' })
   })
 
-  it('counts work that outlives its turn as Working on the card too', () => {
-    const helping = reduce(workspace([accepted]), {
-      type: 'directory', projects: [project], backgroundChatIds: ['session'], workHandoffs: [accepted],
-      chats: workspace([accepted]).chats,
-    })
-    expect(workCardStatus(card(helping, 'h1'))?.text).toBe('Working')
-    expect(standing(helping, 'session')).toMatchObject({ group: 'working', running: true })
+  it('reads Waiting while work an ended turn started runs, and leaves it on a wake, its end, Stop or Settle', () => {
+    const chats = workspace([accepted]).chats
+    const listing = (extra: Partial<Extract<ServerMessage, { type: 'directory' }>>, handoffs = [accepted]) =>
+      reduce(workspace(handoffs), { type: 'directory', projects: [project], chats, workHandoffs: handoffs, ...extra })
+    const retry = { backgroundChatIds: ['session'], backgroundWork: { session: [{ title: 'Retry the  phone\nlaunch', kind: 'command' as const }] } }
+
+    // The turn ended while its retry loop runs: Waiting, without a spinner, and not the user's move.
+    const waiting = listing(retry)
+    expect(standing(waiting, 'session')).toEqual({ group: 'background', status: 'background', running: false, waiting: false })
+    expect(projectSessionOverview(waiting, 'thread').background[0]?.line).toBe('Retry the phone launch')
+    expect(workCardStatus(card(waiting, 'h1'))).toEqual({ tone: 'ready', text: 'Waiting' })
+    expect(threadWorkCard(card(waiting, 'h1'))).toEqual({ shape: 'line', status: { tone: 'ready', text: 'Waiting' } })
+    expect(projectThreads(waiting)[0]).toMatchObject({ running: 0, waiting: false })
+    expect(sessionsDot(projectSessionOverview(waiting, 'thread'))).toBeNull()
+
+    // Its wake starts a turn: Working again.
+    const woken = reduce(waiting, { type: 'turn_state', chatId: 'session', turnId: 'wake', agentId: 'wren', state: 'running', startedAt: 2 })
+    expect(standing(woken, 'session')).toMatchObject({ group: 'working', status: 'working', running: true })
+
+    // The work ended without a wake: back to how the turn ended, Done, or Ready for a result.
+    expect(standing(listing({ backgroundChatIds: [], backgroundWork: {} }), 'session')).toMatchObject({ status: 'done' })
+    const reported = { ...accepted, goalReport: { result: 'Done.' }, goalReachedAt: 3 }
+    expect(standing(listing(retry, [reported]), 'session')).toMatchObject({ status: 'background' })
+    expect(standing(listing({ backgroundWork: {} }, [reported]), 'session')).toMatchObject({ status: 'ready' })
+
+    // Stop ends the work, so the next listing names none; a settled Session never waits.
+    expect(standing(listing({}), 'session')).toMatchObject({ status: 'done' })
+    expect(standing(withChatSettled(waiting, 'session', true, 10), 'session')).toMatchObject({ group: 'settled', status: 'settled' })
+
+    // After Confirm, a blocked commit stays the user's move and a pending one Working, ahead of Waiting.
+    const confirmed = { ...reported, goalConfirmedAt: 4 }
+    const completion = (extra: Partial<NonNullable<WorkHandoff['goalCompletion']>>) => [{ ...confirmed, goalCompletion: { status: 'complete' as const, operation: 'commit' as const, repos: [], ...extra } }]
+    expect(standing(listing(retry, completion({ status: 'blocked' })), 'session')).toMatchObject({ group: 'waiting', status: 'blocked' })
+    expect(standing(listing(retry, completion({ status: 'pending' })), 'session')).toMatchObject({ group: 'working', status: 'working' })
+    expect(standing(listing(retry, completion({})), 'session')).toMatchObject({ group: 'background', status: 'background' })
+
+    // Several things running are counted, and a running Manor child counts as an agent.
+    const child = { id: 'child', parentChatId: 'session', title: 'Review the diff', agentId: 'sage', turnId: 't', toolCallId: 'c', driver: 'claude' as const, model: 'claude-sonnet-5', effort: 'high' as const, state: 'running' as const, startedAt: 1, depth: 1 }
+    expect(projectSessionOverview(listing({ subagents: [child] }), 'thread').background[0]?.line).toBe('Review the diff')
+    expect(projectSessionOverview(listing({ ...retry, subagents: [child] }), 'thread').background[0]?.line).toBe('Waiting on 1 background agent and 1 command')
+    // A question its child asks is the user's move, ahead of Waiting.
+    const childAsks = { ...child, ask: { requestId: 'r1', questions: [{ id: 'q', question: 'Go?', options: [{ label: 'Yes' }, { label: 'No' }] }] } }
+    expect(standing(listing({ ...retry, subagents: [childAsks] }), 'session')).toMatchObject({ group: 'waiting', status: 'waiting' })
   })
 
   it('drops a rejected or replaced proposal and files a confirmed result under Settled', () => {

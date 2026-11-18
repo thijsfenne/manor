@@ -25,6 +25,7 @@ import {
   redactGrantedEnvValues,
 } from '../childEnv.js'
 import { catchUpStyle, composeCatchUp } from '../composer.js'
+import { scrubCredentialText } from '../store.js'
 import { materialiseImages } from '../turnContext.js'
 import { runtimeVersion } from './runtimeVersion.js'
 import { parseCodexAccount, runStatusCommand } from './providerAccount.js'
@@ -640,9 +641,12 @@ export class CodexStreamParser {
   private readonly childErrors = new Map<string, string>()
   /** A helper's last reply, keyed by its launch call: that is what it hands back. */
   private readonly childOutputs = new Map<string, string>()
-  /** Helper launches still running, by call id, with the name the cap note uses. */
+  /**
+   * Helper launches still running, by call id, with the name the cap note uses. Names stay
+   * whole, so the driver scrubs a credential before it shortens one for display.
+   */
   private readonly openSpawns = new Map<string, string>()
-  /** Main-thread shell commands still running, by item id. */
+  /** Main-thread shell commands still running, by item id, whole like the helper names. */
   private readonly openCommands = new Map<string, string>()
   /**
    * Helpers and shell commands a completed main turn left running, by id. Codex keeps
@@ -780,7 +784,7 @@ export class CodexStreamParser {
     // Codex hands the helper's reply to the next parent turn itself; the wake only names it.
     if (this.backgroundWork.delete(toolCallId)) {
       const failed = this.failedChildCalls.has(toolCallId)
-      this.unreported.push(`Helper "${name ?? toolCallId}" ${failed ? 'stopped without finishing' : 'finished'}.`)
+      this.unreported.push(`Helper "${truncate(name ?? toolCallId)}" ${failed ? 'stopped without finishing' : 'finished'}.`)
       this.ended.push({ toolCallId, title: name ?? 'helper', state: failed ? 'failed' : 'done' })
     }
     const error = this.failedChildCalls.has(toolCallId) ? this.childErrors.get(toolCallId) : undefined
@@ -933,7 +937,7 @@ export class CodexStreamParser {
       }
       if (method === 'item/started') {
         this.runningTools.add(toolCallId)
-        this.openSpawns.set(toolCallId, subject === undefined ? 'helper' : truncate(subject))
+        this.openSpawns.set(toolCallId, subject ?? 'helper')
         return [start]
       }
       if (method === 'item/completed') {
@@ -977,7 +981,7 @@ export class CodexStreamParser {
         const toolCallId = asString(item['id'])
         if (toolCallId !== undefined) this.runningTools.add(toolCallId)
         if (!foreignThread && itemType === 'commandExecution' && toolCallId !== undefined) {
-          this.openCommands.set(toolCallId, truncate(asString(item['command']) ?? 'shell command'))
+          this.openCommands.set(toolCallId, asString(item['command']) ?? 'shell command')
         }
         if (itemType === 'webSearch') {
           return [{ type: 'tool_use', ...(toolCallId === undefined ? {} : { toolCallId }), ...(parentToolCallId === undefined ? {} : { parentToolCallId }), ...describeTool('WebSearch', item) }]
@@ -1310,7 +1314,8 @@ export function createCodexDriver(options: CodexDriverOptions): Driver {
   const redactWith = (proc: CodexProcess) => (message: string) =>
     proc.granted.reduce((text, { env, keys }) => redactGrantedEnvValues(text, env, keys), message)
   /** A title as it may leave the driver: no granted value in it, within the wake row's limit. */
-  const safeTitle = (proc: CodexProcess, title: string) => redactWith(proc)(title).slice(0, WAKE_TITLE_MAX)
+  // Credential shapes go before the cut, which could leave too little of one to recognise.
+  const safeTitle = (proc: CodexProcess, title: string) => scrubCredentialText(title, redactWith(proc)).slice(0, WAKE_TITLE_MAX)
   const terminate = (proc: CodexProcess) => {
     proc.termination ??= terminateCliTree(proc.child).then(() => { proc.terminationReady = true })
   }
@@ -1463,8 +1468,10 @@ export function createCodexDriver(options: CodexDriverOptions): Driver {
       }
     },
 
-    busyLiveThreads: () => [...live.values()]
-      .filter((proc) => proc.parser.runningBackground().length > 0).map((proc) => proc.threadId),
+    busyLiveWork: () => [...live.values()].flatMap((proc) => {
+      const running = proc.parser.runningBackground()
+      return running.length === 0 ? [] : [{ threadId: proc.threadId, running: running.map((item) => ({ ...item, title: safeTitle(proc, item.title) })) }]
+    }),
 
     // Codex 0.160 has no request that stops a background shell or helper, so the session ends with its process.
     closeLiveSession(threadId, agentId) {
@@ -1727,7 +1734,8 @@ export function createCodexDriver(options: CodexDriverOptions): Driver {
         if (backgroundCap !== undefined) return
         backgroundCap = setTimeout(() => {
           if (settled || stopped || sawTerminalLine) return
-          queue.push({ type: 'error', message: redact(backgroundCapNote(backgroundHoldMs, parser.stillRunning(), 'Codex')) })
+          const running = parser.stillRunning().map((title) => truncate(scrubCredentialText(title, redact)))
+          queue.push({ type: 'error', message: redact(backgroundCapNote(backgroundHoldMs, running, 'Codex')) })
           endAnswered()
         }, backgroundHoldMs)
         backgroundCap.unref?.()

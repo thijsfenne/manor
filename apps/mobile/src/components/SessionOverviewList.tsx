@@ -1,6 +1,7 @@
 import AlertCircleIcon from '@hugeicons/core-free-icons/AlertCircleIcon'
 import ArrowDown01Icon from '@hugeicons/core-free-icons/ArrowDown01Icon'
 import CircleCheckIcon from '@hugeicons/core-free-icons/CircleCheckIcon'
+import HourglassIcon from '@hugeicons/core-free-icons/HourglassIcon'
 import Progress03Icon from '@hugeicons/core-free-icons/Progress03Icon'
 import { HugeiconsIcon, type IconSvgElement } from '@hugeicons/react-native'
 import type { AgentConfig } from '@manor/contracts'
@@ -14,10 +15,11 @@ import { SessionMark } from '@/components/SessionMark'
 import { Text } from '@/components/Text'
 import { colors, fonts, radius, spacing, squircle } from '@/theme'
 
-/** Project thread states use the same English labels and marks as the Mac; a fold with no rows drops to dim. */
+/** Project thread states use the same English labels and marks as the Mac; a fold with no rows drops to dim, and Waiting shows only with rows. */
 const GROUPS: { id: SessionOverviewGroup; label: string; hint: string; icon: IconSvgElement; tone: ColorValue }[] = [
   { id: 'waiting', label: 'Needs you', hint: 'Proposals, questions, reviews and results to confirm.', icon: AlertCircleIcon, tone: colors.warning },
   { id: 'working', label: 'Working', hint: 'Sessions with a turn running.', icon: Progress03Icon, tone: colors.busy },
+  { id: 'background', label: 'Waiting', hint: 'Sessions waiting on background work they started.', icon: HourglassIcon, tone: colors.muted },
   { id: 'settled', label: 'Settled', hint: 'Settled sessions.', icon: CircleCheckIcon, tone: colors.dim },
 ]
 
@@ -63,7 +65,7 @@ export function SessionOverviewList({ threadId, overview, agents, onOpen, onReve
 
   return (
     <ScrollView contentContainerStyle={styles.content}>
-      {GROUPS.map(({ id, label, hint, icon, tone }) => (
+      {GROUPS.map(({ id, label, hint, icon, tone }) => id === 'background' && overview[id].length === 0 ? null : (
         <View key={id} style={styles.group}>
           <Pressable
             accessibilityRole="button"

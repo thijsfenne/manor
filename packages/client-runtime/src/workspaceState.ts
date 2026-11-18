@@ -1,4 +1,5 @@
 import type {
+  BackgroundWork,
   WorkflowSuggestion,
   ComposioApp,
   ComposioConnectedApp,
@@ -466,8 +467,8 @@ export interface WorkspaceState {
   subagents: SubagentSummary[]
   /** Provider-run helpers running now, which the sidebar lists beside `subagents`. */
   nativeSubagents: NativeSubagent[]
-  /** Chats whose ended turn left background work running in a live session; see the directory. */
-  backgroundChatIds: string[]
+  /** Background work a chat's ended turn left running in a live session, by chat; see the directory. */
+  backgroundWork: Record<string, BackgroundWork[]>
   /** What subagents may run, or null before Settings first asked for it. */
   subagentPolicy: SubagentPolicy | null
   /** The user as the rail shows them; null until the server's connect message lands. */
@@ -667,7 +668,7 @@ export const emptyWorkspace: WorkspaceState = {
   autoRules: null,
   subagents: [],
   nativeSubagents: [],
-  backgroundChatIds: [],
+  backgroundWork: {},
   subagentPolicy: null,
   profile: null,
   houseSettings: null,
@@ -947,7 +948,8 @@ export function reduce(
         relight: null,
         subagents: msg.subagents ?? state.subagents,
         nativeSubagents: msg.nativeSubagents ?? [],
-        backgroundChatIds: msg.backgroundChatIds ?? [],
+        // A server from before `backgroundWork` names the chats without their work.
+        backgroundWork: msg.backgroundWork ?? Object.fromEntries((msg.backgroundChatIds ?? []).map((chatId) => [chatId, []])),
         childThreads,
         sideChats,
         openChatId: state.openChatId !== null && live.has(state.openChatId) ? state.openChatId : null,

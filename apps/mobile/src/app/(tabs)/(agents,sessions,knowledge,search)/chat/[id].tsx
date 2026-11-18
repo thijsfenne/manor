@@ -256,8 +256,8 @@ function ChatContent({ chatId }: { chatId: string | undefined }) {
   // whole object over reads more than its dependencies name, and the React Compiler then
   // skips this component altogether (`apps/web/test/phoneCompiledComponents.test.ts`).
   const sessionLive = useMemo(
-    () => sessionLiveOf({ activity: workspace.activity, subagents: workspace.subagents, backgroundChatIds: workspace.backgroundChatIds }),
-    [workspace.activity, workspace.subagents, workspace.backgroundChatIds],
+    () => sessionLiveOf({ activity: workspace.activity, subagents: workspace.subagents, backgroundWork: workspace.backgroundWork }),
+    [workspace.activity, workspace.subagents, workspace.backgroundWork],
   )
   // A project thread (2026-10-10) lists its open sessions in the bar and holds their
   // questions; a session it started asks and confirms there.
@@ -335,10 +335,10 @@ function ChatContent({ chatId }: { chatId: string | undefined }) {
     () => projectThread && chatId !== undefined
       ? projectSessionOverview({
           projects: workspace.projects, chats: workspace.chats, workHandoffs: workspace.workHandoffs, activity: workspace.activity,
-          subagents: workspace.subagents, backgroundChatIds: workspace.backgroundChatIds, houseSettings: workspace.houseSettings,
+          subagents: workspace.subagents, backgroundWork: workspace.backgroundWork, houseSettings: workspace.houseSettings,
         }, chatId)
       : null,
-    [projectThread, workspace.projects, workspace.chats, workspace.workHandoffs, workspace.activity, workspace.subagents, workspace.backgroundChatIds, workspace.houseSettings, chatId],
+    [projectThread, workspace.projects, workspace.chats, workspace.workHandoffs, workspace.activity, workspace.subagents, workspace.backgroundWork, workspace.houseSettings, chatId],
   )
   // The Sessions button's one dot: the user is needed, a Session finished unseen, or one runs.
   const sessionsMark = useMemo(() => sessionOverview === null ? null : sessionsDot(sessionOverview), [sessionOverview])

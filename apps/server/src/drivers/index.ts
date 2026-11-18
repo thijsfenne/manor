@@ -1,4 +1,4 @@
-import type { AgentConfig, Driver, LiveSessionEvent, LiveSessionInfo, ProviderUsage } from '@manor/contracts'
+import type { AgentConfig, Driver, LiveSessionEvent, LiveSessionInfo, LiveSessionItem, ProviderUsage } from '@manor/contracts'
 import { createClaudeDriver } from './claudeDriver.js'
 import { createCodexDriver } from './codexDriver.js'
 import { createCursorDriver } from './cursorDriver.js'
@@ -43,8 +43,8 @@ export interface DriverSet {
    */
   liveSessions: {
     info(threadId: string, agentId: string): LiveSessionInfo | undefined
-    /** Threads with background work still running in a live session, independent of the roster. */
-    busyThreads(): Set<string>
+    /** Background work still running in live sessions, by thread, independent of the roster. */
+    busyWork(): Map<string, LiveSessionItem[]>
     close(threadId: string, agentId?: string): string[]
   }
 }
@@ -101,7 +101,13 @@ export function createDrivers(options: DriverResolverOptions): DriverSet {
         }
         return undefined
       },
-      busyThreads: () => new Set([claude, codex, mock].flatMap((driver) => driver.busyLiveThreads?.() ?? [])),
+      busyWork: () => {
+        const work = new Map<string, LiveSessionItem[]>()
+        for (const { threadId, running } of [claude, codex, mock].flatMap((driver) => driver.busyLiveWork?.() ?? [])) {
+          work.set(threadId, [...work.get(threadId) ?? [], ...running])
+        }
+        return work
+      },
       close: (threadId, agentId) => [claude, codex, mock].flatMap((driver) => driver.closeLiveSession?.(threadId, agentId) ?? []),
     },
   }

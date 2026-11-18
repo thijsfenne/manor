@@ -14,7 +14,9 @@ import {
   type GoalClaim,
   type GoalReport,
   type LiveSessionEvent,
+  type BackgroundWork,
   type LiveSessionInfo,
+  type LiveSessionItem,
   MessageAttachmentsSchema,
   type AgentConfig,
   type BackgroundWait,
@@ -245,7 +247,7 @@ export interface OrchestratorOptions {
    */
   liveSessions?: {
     info(chatId: string, agentId: string): LiveSessionInfo | undefined
-    busyThreads(): Set<string>
+    busyWork(): Map<string, LiveSessionItem[]>
     close(chatId: string, agentId?: string): string[]
   }
   /** Empty per-chat working directory; created before the driver is called. */
@@ -1649,9 +1651,17 @@ export class Orchestrator {
 
   /** Chats whose persona's live session still runs background work an ended turn started. */
   backgroundChatIds(chatIds: readonly string[]): string[] {
+    return Object.keys(this.backgroundWork(chatIds))
+  }
+
+  /** That background work by chat, for the directory: what a waiting Session waits on. */
+  backgroundWork(chatIds: readonly string[]): Record<string, BackgroundWork[]> {
     // Read from the sessions themselves: a deleted persona or a Single chat's voice is no roster row.
-    const busy = this.options.liveSessions?.busyThreads() ?? new Set<string>()
-    return chatIds.filter((chatId) => busy.has(chatId))
+    const busy = this.options.liveSessions?.busyWork() ?? new Map<string, LiveSessionItem[]>()
+    return Object.fromEntries(chatIds.flatMap((chatId) => {
+      const running = busy.get(chatId)
+      return running === undefined ? [] : [[chatId, running.map(({ title, kind }) => ({ title, kind }))]]
+    }))
   }
 
   /** What a live session runs moved, so the directory's `backgroundChatIds` did too. */
