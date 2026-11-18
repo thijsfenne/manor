@@ -15,7 +15,12 @@ import {
 export type ConnectionStatus = 'connecting' | 'live' | 'offline'
 
 export interface ConnectionAuth {
-  getToken: () => string | null
+  /**
+   * Read before every attempt. The phone answers with a promise that refreshes an
+   * expired token first, so a return after the token's hour does not open with a
+   * token the server is bound to refuse.
+   */
+  getToken: () => string | null | Promise<string | null>
   onRejected?: () => void
 }
 
@@ -67,27 +72,29 @@ export interface WorkspaceConnectionOptions {
 }
 
 const FIRST_RETRY_MS = 500
-const MAX_RETRY_MS = 15_000
+/** Low enough that a Mac server back from a restart is found within seconds. */
+const MAX_RETRY_MS = 5_000
 const SILENCE_MS = 45_000
+/** An attempt that has not opened by now is abandoned rather than left to the OS's connect timeout. */
+const OPEN_TIMEOUT_MS = 10_000
+/**
+ * How long a lost connection reads as connecting before it reads as offline. A server
+ * restart or a phone back from the background reconnects well inside it; an outage
+ * outlasts it and still shows.
+ */
+export const OFFLINE_AFTER_MS = 10_000
 
 export const connectionBackoffMs = (attempt: number): number =>
   Math.min(MAX_RETRY_MS, FIRST_RETRY_MS * 2 ** attempt)
-
-export function withConnectionToken(url: string, auth?: ConnectionAuth): string {
-  const token = auth?.getToken()
-  if (token === undefined || token === null || token === '') return url
-  const target = new URL(url)
-  target.searchParams.set('token', token)
-  return target.toString()
-}
 
 /**
  * Asks the server for each directory after the first as a patch. Web and the phone
  * both open their socket here, so they opt in together; a build from before this
  * keeps getting whole listings.
  */
-function withDirectoryPatches(url: string): string {
+function socketUrl(url: string, token: string | null): string {
   const target = new URL(url)
+  if (token !== null && token !== '') target.searchParams.set('token', token)
   target.searchParams.set('directory', 'patch')
   return target.toString()
 }
@@ -182,24 +189,71 @@ export function openChatRequest(chatId: string, thread: { events: readonly Threa
 export function createWorkspaceConnection(options: WorkspaceConnectionOptions): WorkspaceConnection {
   let disposed = false
   let attempt = 0
+  // Bumped by every attempt, so a token that arrives after a newer attempt or a
+  // dispose opens nothing.
+  let generation = 0
   let retryTimer: ReturnType<typeof setTimeout> | undefined
   let watchdog: ReturnType<typeof setTimeout> | undefined
+  let offlineTimer: ReturnType<typeof setTimeout> | undefined
+  let shown: ConnectionStatus | undefined
   let activeSocket: SocketAdapter | null = null
   const held = new Set<string>()
   // Not cleared with the socket: a position is what makes a copy from before a reconnect usable.
   const synced = new Map<string, EventSync>()
 
+  const show = (status: ConnectionStatus) => {
+    if (status === shown) return
+    shown = status
+    options.onStatus(status)
+  }
+  // Not live: connecting for a grace period, then offline until a socket opens. Once
+  // offline, a retry does not flip back to connecting, so an outage reads steadily.
+  const notLive = () => {
+    if (shown === 'offline' || offlineTimer !== undefined) return
+    show('connecting')
+    offlineTimer = setTimeout(() => {
+      offlineTimer = undefined
+      show('offline')
+    }, OFFLINE_AFTER_MS)
+  }
+  const retryLater = () => {
+    clearTimeout(retryTimer)
+    retryTimer = setTimeout(open, connectionBackoffMs(attempt))
+    attempt += 1
+  }
+
   const open = () => {
     if (disposed) return
-    options.onStatus('connecting')
+    const run = ++generation
+    notLive()
+    let token: string | null | Promise<string | null> = null
+    try {
+      token = options.auth?.getToken() ?? null
+    } catch { /* No token is still an attempt; the server's refusal asks for a refresh. */ }
+    if (!(token instanceof Promise)) {
+      connect(token)
+      return
+    }
+    // A token that never comes would leave no attempt and no retry; it counts toward the open timeout.
+    const late = setTimeout(() => {
+      if (run !== generation || disposed) return
+      generation += 1
+      retryLater()
+    }, OPEN_TIMEOUT_MS)
+    const settle = (value: string | null) => {
+      clearTimeout(late)
+      if (run === generation && !disposed) connect(value)
+    }
+    token.then(settle, () => settle(null))
+  }
+
+  const connect = (token: string | null) => {
     let opened = false
     let socket: SocketAdapter
     try {
-      socket = options.sockets.create(withDirectoryPatches(withConnectionToken(options.url, options.auth)))
+      socket = options.sockets.create(socketUrl(options.url, token))
     } catch {
-      options.onStatus('offline')
-      retryTimer = setTimeout(open, connectionBackoffMs(attempt))
-      attempt += 1
+      retryLater()
       return
     }
     activeSocket = socket
@@ -218,11 +272,33 @@ export function createWorkspaceConnection(options: WorkspaceConnectionOptions): 
       return message
     }
 
+    // The retry is set before callers hear of the loss, so a reconnect or dispose they
+    // run in `onClose` cancels it.
+    const lost = (refused: boolean) => {
+      activeSocket = null
+      clearTimeout(watchdog)
+      watchdog = undefined
+      retryLater()
+      notLive()
+      // A socket closed before it opened may be a refused handshake. One that timed out is not.
+      if (refused && !opened) options.auth?.onRejected?.()
+      options.onClose?.()
+    }
+
+    // A socket that has gone quiet is let go at once rather than on its close event:
+    // closing a connection whose peer is gone can wait on the network's own timeout,
+    // and meanwhile the connection would still claim to be live.
+    const giveUp = () => {
+      if (disposed || activeSocket !== socket) return
+      lost(false)
+      socket.close()
+    }
     const heard = () => {
       clearTimeout(watchdog)
       if (disposed || activeSocket !== socket) return
-      watchdog = setTimeout(() => socket.close(), SILENCE_MS)
+      watchdog = setTimeout(giveUp, SILENCE_MS)
     }
+    watchdog = setTimeout(giveUp, OPEN_TIMEOUT_MS)
 
     socket.onopen = () => {
       if (disposed || activeSocket !== socket) return
@@ -230,7 +306,9 @@ export function createWorkspaceConnection(options: WorkspaceConnectionOptions): 
       attempt = 0
       held.clear()
       heard()
-      options.onStatus('live')
+      clearTimeout(offlineTimer)
+      offlineTimer = undefined
+      show('live')
       options.onOpen?.()
     }
 
@@ -260,14 +338,7 @@ export function createWorkspaceConnection(options: WorkspaceConnectionOptions): 
 
     socket.onclose = () => {
       if (disposed || activeSocket !== socket) return
-      activeSocket = null
-      clearTimeout(watchdog)
-      watchdog = undefined
-      options.onClose?.()
-      options.onStatus('offline')
-      if (!opened) options.auth?.onRejected?.()
-      retryTimer = setTimeout(open, connectionBackoffMs(attempt))
-      attempt += 1
+      lost(true)
     }
   }
 
@@ -284,6 +355,7 @@ export function createWorkspaceConnection(options: WorkspaceConnectionOptions): 
       if (disposed) return
       clearTimeout(retryTimer)
       clearTimeout(watchdog)
+      watchdog = undefined
       const socket = activeSocket
       activeSocket = null
       socket?.close()
@@ -297,6 +369,7 @@ export function createWorkspaceConnection(options: WorkspaceConnectionOptions): 
       disposed = true
       clearTimeout(retryTimer)
       clearTimeout(watchdog)
+      clearTimeout(offlineTimer)
       const socket = activeSocket
       activeSocket = null
       socket?.close()

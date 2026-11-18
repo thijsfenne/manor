@@ -41,6 +41,26 @@ describe('shared Manor authentication', () => {
     await reopened.refresh()
     expect(await reopened.getSession()).toBeNull()
   })
+  it('gives up on a refresh the Mac never answers, so the next one can start', async () => {
+    vi.useFakeTimers()
+    try {
+      const saved = storage()
+      const hanging = vi.fn<typeof fetch>((_url, init) => new Promise((_resolve, reject) => {
+        init?.signal?.addEventListener('abort', () => reject(new Error('aborted')))
+      }))
+      const client = new ManorAuthClient('http://localhost:43179', saved, vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify(session))))
+      expect(await client.signIn('owner@example.invalid', 'password')).toBeNull()
+      const stalled = new ManorAuthClient('http://localhost:43179', saved, hanging)
+      const refresh = stalled.refresh()
+      await vi.advanceTimersByTimeAsync(10_000)
+      await refresh
+      expect(await stalled.getSession()).toEqual(session)
+      expect(stalled.refresh()).not.toBe(refresh)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('does not restore a session from an in-flight refresh after sign-out', async () => {
     const fetcher = vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify(session)))
     const client = new ManorAuthClient('http://localhost:43179', storage(), fetcher)

@@ -1,6 +1,7 @@
 import type { Chat, ClientMessage, DirectoryMessage, ServerMessage, ThreadEvent } from '@manor/contracts'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
+  OFFLINE_AFTER_MS,
   connectionBackoffMs,
   createWorkspaceConnection,
   openChatRequest,
@@ -115,12 +116,12 @@ describe('workspace connection', () => {
     connection.reconnect()
     expect(sockets[0]?.readyState).toBe(3)
     expect(closed).toHaveBeenCalledOnce()
-    // Already offline: the socket's own close said so, and a reconnect adds nothing.
+    // Already down: the socket's own close said so, and a reconnect adds nothing.
     sockets[1]?.close()
     connection.reconnect()
     expect(closed).toHaveBeenCalledTimes(2)
     sockets[2]?.open()
-    expect(statuses).toEqual(['connecting', 'live', 'connecting', 'offline', 'connecting', 'live'])
+    expect(statuses).toEqual(['connecting', 'live', 'connecting', 'live'])
     connection.dispose()
   })
 
@@ -226,19 +227,143 @@ describe('workspace connection', () => {
     connection.dispose()
   })
 
-  it('closes a live socket after forty-five silent seconds', () => {
+  it('lets a silent socket go after forty-five seconds without waiting for its close event', () => {
     vi.useFakeTimers()
     const { factory, sockets } = fakeSockets()
+    const closed = vi.fn()
+    const statuses: string[] = []
     const connection = createWorkspaceConnection({
       url: 'wss://manor.test/ws',
+      sockets: factory,
+      onStatus: (status) => statuses.push(status),
+      onMessage: () => undefined,
+      onClose: closed,
+    })
+
+    sockets[0]?.open()
+    // A peer that is gone: closing it never reports back, until long after.
+    const lateClose = sockets[0]!.close.bind(sockets[0])
+    const close = vi.fn()
+    sockets[0]!.close = close
+    vi.advanceTimersByTime(44_999)
+    sockets[0]?.receive({ type: 'heartbeat' })
+    vi.advanceTimersByTime(44_999)
+    expect(closed).not.toHaveBeenCalled()
+    vi.advanceTimersByTime(1)
+    expect(closed).toHaveBeenCalledOnce()
+    expect(close).toHaveBeenCalledOnce()
+    expect(connection.send({ type: 'open_chat', chatId: 'chat-1' })).toBe(false)
+    vi.advanceTimersByTime(connectionBackoffMs(0))
+    expect(sockets).toHaveLength(2)
+    sockets[1]?.open()
+    lateClose()
+    vi.advanceTimersByTime(OFFLINE_AFTER_MS)
+    expect(closed).toHaveBeenCalledOnce()
+    expect(sockets).toHaveLength(2)
+    expect(statuses).toEqual(['connecting', 'live', 'connecting', 'live'])
+    connection.dispose()
+  })
+
+  it('abandons an attempt that has not opened after ten seconds and tries again, without a refresh', () => {
+    vi.useFakeTimers()
+    const { factory, sockets } = fakeSockets()
+    const rejected = vi.fn()
+    const connection = createWorkspaceConnection({ url: 'wss://manor.test/ws', auth: { getToken: () => 'token', onRejected: rejected }, sockets: factory, onStatus: () => undefined, onMessage: () => undefined })
+
+    sockets[0]!.close = () => undefined
+    vi.advanceTimersByTime(9_999)
+    expect(sockets).toHaveLength(1)
+    vi.advanceTimersByTime(1 + connectionBackoffMs(0))
+    expect(sockets).toHaveLength(2)
+    expect(rejected).not.toHaveBeenCalled()
+    // A late open from the abandoned attempt changes nothing.
+    sockets[0]?.open()
+    expect(connection.send({ type: 'open_chat', chatId: 'chat-1' })).toBe(false)
+    connection.dispose()
+  })
+
+  it('reads a server restart as connecting, never offline', () => {
+    vi.useFakeTimers()
+    const { factory, sockets } = fakeSockets()
+    const statuses: string[] = []
+    const connection = createWorkspaceConnection({ url: 'wss://manor.test/ws', sockets: factory, onStatus: (status) => statuses.push(status), onMessage: () => undefined })
+
+    sockets[0]?.open()
+    sockets[0]?.close()
+    // Refused while the server starts: 0.5 s, 1 s and 2 s later.
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      vi.advanceTimersByTime(connectionBackoffMs(attempt))
+      sockets.at(-1)?.close()
+    }
+    vi.advanceTimersByTime(connectionBackoffMs(3))
+    sockets.at(-1)?.open()
+    vi.advanceTimersByTime(OFFLINE_AFTER_MS)
+    expect(statuses).toEqual(['connecting', 'live', 'connecting', 'live'])
+    connection.dispose()
+  })
+
+  it('shows a real outage as offline once and keeps retrying at most five seconds apart', () => {
+    vi.useFakeTimers()
+    const { factory, sockets } = fakeSockets()
+    const statuses: string[] = []
+    const connection = createWorkspaceConnection({ url: 'wss://manor.test/ws', sockets: factory, onStatus: (status) => statuses.push(status), onMessage: () => undefined })
+
+    sockets[0]?.open()
+    sockets[0]?.close()
+    for (let attempt = 0; attempt < 4; attempt += 1) {
+      vi.advanceTimersByTime(connectionBackoffMs(attempt))
+      sockets.at(-1)?.close()
+    }
+    // 7.5 s down so far.
+    vi.advanceTimersByTime(OFFLINE_AFTER_MS - 7_501)
+    expect(statuses.at(-1)).toBe('connecting')
+    vi.advanceTimersByTime(1)
+    expect(statuses.at(-1)).toBe('offline')
+    for (let attempt = 4; attempt < 12; attempt += 1) {
+      vi.advanceTimersByTime(connectionBackoffMs(attempt))
+      sockets.at(-1)?.close()
+    }
+    expect(connectionBackoffMs(12)).toBe(5_000)
+    expect(statuses).toEqual(['connecting', 'live', 'connecting', 'offline'])
+    vi.advanceTimersByTime(5_000)
+    sockets.at(-1)?.open()
+    expect(statuses).toEqual(['connecting', 'live', 'connecting', 'offline', 'live'])
+    connection.dispose()
+  })
+
+  it('waits for a token that is still being refreshed, and drops one a newer attempt overtook', async () => {
+    const { factory, sockets } = fakeSockets()
+    const pending: ((token: string) => void)[] = []
+    const connection = createWorkspaceConnection({
+      url: 'wss://manor.test/ws',
+      auth: { getToken: () => new Promise<string>((resolve) => { pending.push(resolve) }) },
       sockets: factory,
       onStatus: () => undefined,
       onMessage: () => undefined,
     })
 
-    sockets[0]?.open()
-    vi.advanceTimersByTime(45_000)
-    expect(sockets[0]?.readyState).toBe(3)
+    expect(sockets).toHaveLength(0)
+    connection.reconnect()
+    pending[1]?.('fresh')
+    pending[0]?.('stale')
+    await Promise.resolve()
+    expect(sockets.map((socket) => new URL(socket.url).searchParams.get('token'))).toEqual(['fresh'])
+    connection.reconnect()
+    connection.dispose()
+    pending[2]?.('after dispose')
+    await Promise.resolve()
+    expect(sockets).toHaveLength(1)
+  })
+
+  it('tries again when a token never arrives', () => {
+    vi.useFakeTimers()
+    const { factory, sockets } = fakeSockets()
+    const asked = vi.fn(() => new Promise<string>(() => undefined))
+    const connection = createWorkspaceConnection({ url: 'wss://manor.test/ws', auth: { getToken: asked }, sockets: factory, onStatus: () => undefined, onMessage: () => undefined })
+
+    vi.advanceTimersByTime(10_000 + connectionBackoffMs(0))
+    expect(asked).toHaveBeenCalledTimes(2)
+    expect(sockets).toHaveLength(0)
     connection.dispose()
   })
 })

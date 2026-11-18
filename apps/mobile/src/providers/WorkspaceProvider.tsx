@@ -206,7 +206,8 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const [store] = useState(() => createWorkspaceStore(emptyWorkspace))
   const { update: applyWorkspace } = store
   const workspace = useSyncExternalStore(store.subscribe, store.quiet, store.quiet)
-  const [status, setStatus] = useState<ConnectionStatus>('offline')
+  const [status, setStatus] = useState<ConnectionStatus>('connecting')
+  const liveRef = useRef(false)
   const [createdChat, setCreatedChat] = useState<{ chatId: string; requestId?: string } | null>(null)
   const [createdProject, setCreatedProject] = useState<{ projectId: string; requestId?: string } | null>(null)
   const connectionRef = useRef<WorkspaceConnection | null>(null)
@@ -306,7 +307,8 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       setWorkspace(() => emptyWorkspace)
       setCreatedChat(null)
       setCreatedProject(null)
-      setStatus('offline')
+      // The auth gate covers this state; a session that becomes ready opens on connecting.
+      setStatus('connecting')
       /* eslint-enable react-hooks/set-state-in-effect */
       return
     }
@@ -315,14 +317,21 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     connection = createWorkspaceConnection({
       url: mobileConfig.webSocketUrl,
       auth: {
-        getToken: () => authRef.current.getToken(),
+        // The stored session refreshes a token near its end first. After an hour in a
+        // pocket the held one has expired, and the server would refuse the first attempt.
+        getToken: () => authClient === null
+          ? authRef.current.getToken()
+          : authClient.getSession().then((session) => session?.access_token ?? null, () => authRef.current.getToken()),
         onRejected: () => void authClient?.refresh(),
       },
       sockets: {
         openState: WebSocket.OPEN,
         create: (url) => new WebSocket(url) as unknown as SocketAdapter,
       },
-      onStatus: setStatus,
+      onStatus: (next) => {
+        liveRef.current = next === 'live'
+        setStatus(next)
+      },
       onOpen: () => {
         setWorkspace((current) => clearArtifactRequest(clearRunningTurns(current)))
         const token = pushTokenRef.current
@@ -395,6 +404,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
 
     const stopWatchingForeground = watchForeground(AppState, {
       reconnectAfterMs: BACKGROUND_RECONNECT_AFTER_MS,
+      isLive: () => liveRef.current,
       onReconnect: () => connection.reconnect(),
       onForeground: () => pushRefreshRef.current(),
     })

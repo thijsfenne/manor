@@ -7,6 +7,12 @@ export interface AuthStorage {
   removeItem(key: string): void | Promise<void>
 }
 
+/**
+ * A request to a Mac that cannot be reached would otherwise wait out the OS's own
+ * timeout, and every refresh and phone reconnect would wait behind that one promise.
+ */
+const REQUEST_TIMEOUT_MS = 10_000
+
 export class ManorAuthClient {
   private session: ManorSession | null = null
   private loaded: Promise<void> | undefined
@@ -66,9 +72,13 @@ export class ManorAuthClient {
     this.listeners.add(listener)
     return () => { this.listeners.delete(listener) }
   }
+  // The deadline is left running past the headers so it also bounds reading the body;
+  // aborting a request that already finished does nothing.
   private request(route: string, body: object) {
+    const controller = new AbortController()
+    setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
     return this.fetcher(`${this.origin}/auth/${route}`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: controller.signal,
     })
   }
   async signIn(email: string, password: string): Promise<string | null> {
