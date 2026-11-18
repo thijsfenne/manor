@@ -1,7 +1,6 @@
 import type { ClientMessage, PhoneAccess, ServerMessage, TailscaleStatus } from '@manor/contracts'
 import { pairingLink } from '@manor/contracts'
 import type { IncomingHttpHeaders } from 'node:http'
-import { isLoopbackHost } from './config.js'
 import { MYMIND_THUMBNAIL_PREFIX } from './mymind.js'
 import type { PairedDevices } from './pairedDevices.js'
 import type { TailscaleServe } from './tailscale.js'
@@ -22,6 +21,9 @@ export function refusesForwarded(
   const internal = url.startsWith('/internal/') && !url.startsWith(MYMIND_THUMBNAIL_PREFIX)
   return internal || options.isMcp(request.url)
 }
+
+/** Every name a URL keeps for this Mac's own loopback: localhost, the 127/8 range and ::1. */
+const LOOPBACK = /^(localhost\.?|127(\.\d{1,3}){3}|\[::1\])$/i
 
 type PhoneMessage = Extract<ClientMessage, { type: 'get_phone_access' | 'create_pairing_link' | 'revoke_device' | 'set_tailscale_serve' }>
 
@@ -136,13 +138,13 @@ export function createPhoneAccess(options: {
           const origin = tailscale.state === 'ready' && tailscale.serving
             ? tailscale.address
             : host === undefined ? undefined : `http://${host}`
-          if (origin === undefined) {
+          // A link on this Mac's own loopback address opens nothing on a phone, so none is made.
+          if (origin === undefined || LOOPBACK.test(new URL(origin).hostname)) {
             reply({ type: 'notice', kind: 'error', text: 'Turn on Tailscale HTTPS first, so your phone can reach this Mac.', ...requestId })
             return
           }
           const { code, expiresAt } = options.devices.createCode()
-          const hostname = new URL(origin).hostname.replace(/^\[|\]$/g, '')
-          reply({ type: 'pairing_link', link: pairingLink(origin, code), expiresAt, loopback: isLoopbackHost(hostname), ...requestId })
+          reply({ type: 'pairing_link', link: pairingLink(origin, code), expiresAt, ...requestId })
           ack()
           return
         }

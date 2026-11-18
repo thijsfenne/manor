@@ -78,9 +78,6 @@ function PairingPanel({ link, pairedName, onDone }: { link: PairingLink; pairedN
             <span className="text-label text-muted tabular-nums">
               Works once, for {left === 1 ? '1 more minute' : `${left} more minutes`}.
             </span>
-            {link.loopback ? (
-              <span className="text-label text-warn">This link only works on this Mac. Turn on Tailscale HTTPS to pair a phone.</span>
-            ) : null}
           </>
         ) : (
           <span className="text-[14px] text-text">{ended}</span>

@@ -169,7 +169,7 @@ describe('Settings → Phone', () => {
     expect(last?.type === 'phone_access' && last.access.devices.map((device) => [device.name, device.connected])).toEqual([['iPad', true]])
   })
 
-  it('makes the link on the Tailscale address while it serves, else on the address the asking client used', async () => {
+  it('makes the link on the Tailscale address while it serves, else on the address the asking client used, never on loopback', async () => {
     const { devices } = devicesAt()
     const replies: ServerMessage[] = []
     const desk = socket()
@@ -179,14 +179,18 @@ describe('Settings → Phone', () => {
     await served.handle(desk, { type: 'create_pairing_link' }, (message) => replies.push(message))
 
     const local = createPhoneAccess({ devices, tailscale: tailscale(), broadcast: () => undefined, dropPushToken: () => undefined })
-    local.attach(desk, null, '127.0.0.1:43179')
-    await local.handle(desk, { type: 'create_pairing_link' }, (message) => replies.push(message))
+    const lan = socket()
+    local.attach(lan, null, '192.168.1.20:43179')
+    await local.handle(lan, { type: 'create_pairing_link' }, (message) => replies.push(message))
+    for (const host of ['127.0.0.1:43179', '127.0.0.2:43179', 'localhost:43179', 'localhost.:43179', '[::1]:43179']) {
+      local.attach(desk, null, host)
+      await local.handle(desk, { type: 'create_pairing_link', requestId: host }, (message) => replies.push(message))
+    }
 
     const links = replies.flatMap((message) => message.type === 'pairing_link' ? [message] : [])
-    expect(links.map((link) => [parsePairingLink(link.link)?.origin, link.loopback])).toEqual([
-      ['https://mac.example.ts.net', false],
-      ['http://127.0.0.1:43179', true],
-    ])
+    expect(links.map((link) => parsePairingLink(link.link)?.origin)).toEqual(['https://mac.example.ts.net', 'http://192.168.1.20:43179'])
+    const refused = replies.flatMap((message) => message.type === 'notice' ? [message.requestId] : [])
+    expect(refused).toEqual(['127.0.0.1:43179', '127.0.0.2:43179', 'localhost:43179', 'localhost.:43179', '[::1]:43179'])
     expect(devices.redeem(parsePairingLink(links[0]!.link)!.code, 'iPhone')).not.toBeNull()
   })
 })

@@ -1506,7 +1506,7 @@ export function reduce(
       return { ...state, phoneAccess: msg.access }
 
     case 'pairing_link':
-      return { ...state, pairingLink: { link: msg.link, expiresAt: msg.expiresAt, loopback: msg.loopback } }
+      return { ...state, pairingLink: { link: msg.link, expiresAt: msg.expiresAt } }
 
     case 'outbound_thread':
       return {

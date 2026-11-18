@@ -61,8 +61,6 @@ export type PhoneAccess = z.infer<typeof PhoneAccessSchema>
 export const PairingLinkSchema = z.object({
   link: z.string(),
   expiresAt: z.number().int().nonnegative(),
-  /** The address in the link reaches only this Mac, so a phone cannot use it. */
-  loopback: z.boolean(),
 })
 export type PairingLink = z.infer<typeof PairingLinkSchema>
 

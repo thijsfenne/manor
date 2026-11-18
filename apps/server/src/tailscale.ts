@@ -10,6 +10,11 @@ export type RunTailscale = (args: readonly string[]) => Promise<TailscaleRun>
 
 /** The app's own copy of the CLI, for a Mac where Tailscale was installed as an app only. */
 const MAC_APP_CLI = '/Applications/Tailscale.app/Contents/MacOS/Tailscale'
+/**
+ * The app's binary starts the menu bar app unless told otherwise, and then prints a GUI
+ * error on stdout with exit 0. This makes it act as the CLI; a standalone CLI ignores it.
+ */
+const CLI_MODE = { TAILSCALE_BE_CLI: '1' }
 /** `serve --bg` can wait on an HTTPS consent page when the tailnet lacks it; never wait forever. */
 const RUN_TIMEOUT_MS = 20_000
 
@@ -35,7 +40,7 @@ export function createTailscaleRunner(env: NodeJS.ProcessEnv = process.env): Run
       resolve('missing')
       return
     }
-    execFile(cli, [...args], { env: childProcessEnv(env), timeout: RUN_TIMEOUT_MS, maxBuffer: 4 * 1024 * 1024 }, (error, stdout, stderr) => {
+    execFile(cli, [...args], { env: childProcessEnv(env, [], CLI_MODE), timeout: RUN_TIMEOUT_MS, maxBuffer: 4 * 1024 * 1024 }, (error, stdout, stderr) => {
       if (error !== null && (error as NodeJS.ErrnoException).code === 'ENOENT') {
         resolve('missing')
         return

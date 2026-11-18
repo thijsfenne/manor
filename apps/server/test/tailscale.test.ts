@@ -1,5 +1,8 @@
+import { chmodSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { createTailscaleServe, type TailscaleRun } from '../src/tailscale.js'
+import { createTailscaleRunner, createTailscaleServe, type TailscaleRun } from '../src/tailscale.js'
 
 const PORT = 43179
 const TARGET = `http://127.0.0.1:${PORT}`
@@ -90,5 +93,24 @@ describe('Tailscale HTTPS', () => {
     const status = await leaky.tailscale.status()
     expect(JSON.stringify(status)).not.toContain('tskey')
     expect(status.state).toBe('error')
+  })
+
+  it('runs the Mac app\'s binary as the CLI, so it answers in JSON instead of starting its GUI', async () => {
+    const dir = mkdtempSync(path.join(os.tmpdir(), 'manor-tailscale-'))
+    try {
+      // Stands in for the app binary: without the switch it prints a GUI error and exits 0.
+      const cli = path.join(dir, 'tailscale')
+      writeFileSync(cli, '#!/bin/sh\nif [ "$TAILSCALE_BE_CLI" = 1 ]; then echo \'{"BackendState":"Stopped"}\'; else echo "The Tailscale GUI failed to start"; fi\n')
+      chmodSync(cli, 0o755)
+      const tailscale = createTailscaleServe({ run: createTailscaleRunner({ PATH: dir, HOME: dir }), port: PORT })
+      expect(await tailscale.status()).toEqual({ state: 'stopped' })
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('says it cannot read an answer that is not JSON, without repeating it', async () => {
+    const gui = ok('The Tailscale GUI failed to start: (Tailscale.CLIError error 3.)')
+    expect(await fakeCli({ status: gui }).tailscale.status()).toEqual({ state: 'error', message: 'Tailscale answered with something Manor cannot read.' })
   })
 })
