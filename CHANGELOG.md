@@ -4,6 +4,8 @@ What changed for someone who uses Manor, newest first. A version is a tag on `ma
 
 ## Unreleased
 
+- Settings → Appearance offers more fonts. Interface font adds Albert Sans, Lato, Lexend, Montserrat, Nunito Sans, Outfit, Poppins, Roboto, Rubik, Sora, Spline Sans and Work Sans, and Code font adds Spline Sans Mono. Both menus list the default first, then the rest alphabetically. Lato has no medium weight, so text that is normally medium shows in its regular weight.
+
 ## 0.2.1, 2026-11-19
 
 - Settings, Agent settings, Connectors, Usage, the composer's skill menu and the scheduled task dialog drop the subtitles, captions, footnotes and hints that only restated what the screen already shows. A connector's tool list opens with a chevron instead of a change or hide suffix. The mymind connector explains itself in one line, and the cost figure on Usage no longer shows 100% of cost when one provider holds it all.

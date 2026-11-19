@@ -35,33 +35,50 @@ const mono = <Id extends string>(id: Id, label: string, family: string, load: ()
   load,
 })
 
-/* Figtree, Instrument Sans and Geist are imported by styles.css as part of the default stack. */
+/* Figtree, Instrument Sans and Geist are imported by styles.css as part of the default stack.
+   After the default the list runs alphabetically. Faces without an italic cut get a slanted upright. */
 export const SANS_FONTS = [
   sans('figtree', 'Figtree', 'Figtree Variable'),
-  sans('inter', 'Inter', 'Inter Variable', () => Promise.all([import('@fontsource-variable/inter'), import('@fontsource-variable/inter/wght-italic.css')])),
-  sans('instrument-sans', 'Instrument Sans', 'Instrument Sans Variable'),
-  sans('geist', 'Geist', 'Geist Variable'),
-  sans('ibm-plex-sans', 'IBM Plex Sans', 'IBM Plex Sans Variable', () => Promise.all([import('@fontsource-variable/ibm-plex-sans'), import('@fontsource-variable/ibm-plex-sans/wght-italic.css')])),
+  sans('albert-sans', 'Albert Sans', 'Albert Sans Variable', () => Promise.all([import('@fontsource-variable/albert-sans'), import('@fontsource-variable/albert-sans/wght-italic.css')])),
   sans('dm-sans', 'DM Sans', 'DM Sans Variable', () => Promise.all([import('@fontsource-variable/dm-sans'), import('@fontsource-variable/dm-sans/wght-italic.css')])),
-  // Manrope ships no italic; the browser slants the upright for the odd emphasis.
-  sans('manrope', 'Manrope', 'Manrope Variable', () => import('@fontsource-variable/manrope')),
+  sans('geist', 'Geist', 'Geist Variable'),
   sans('hanken-grotesk', 'Hanken Grotesk', 'Hanken Grotesk Variable', () => Promise.all([import('@fontsource-variable/hanken-grotesk'), import('@fontsource-variable/hanken-grotesk/wght-italic.css')])),
+  sans('ibm-plex-sans', 'IBM Plex Sans', 'IBM Plex Sans Variable', () => Promise.all([import('@fontsource-variable/ibm-plex-sans'), import('@fontsource-variable/ibm-plex-sans/wght-italic.css')])),
+  sans('instrument-sans', 'Instrument Sans', 'Instrument Sans Variable'),
+  sans('inter', 'Inter', 'Inter Variable', () => Promise.all([import('@fontsource-variable/inter'), import('@fontsource-variable/inter/wght-italic.css')])),
+  // No variable cut, and no 500 either: Lato's medium text shows at 400.
+  sans('lato', 'Lato', 'Lato', () => Promise.all([import('@fontsource/lato/400.css'), import('@fontsource/lato/400-italic.css')])),
+  sans('lexend', 'Lexend', 'Lexend Variable', () => import('@fontsource-variable/lexend')),
+  sans('manrope', 'Manrope', 'Manrope Variable', () => import('@fontsource-variable/manrope')),
+  sans('montserrat', 'Montserrat', 'Montserrat Variable', () => Promise.all([import('@fontsource-variable/montserrat'), import('@fontsource-variable/montserrat/wght-italic.css')])),
+  sans('nunito-sans', 'Nunito Sans', 'Nunito Sans Variable', () => Promise.all([import('@fontsource-variable/nunito-sans'), import('@fontsource-variable/nunito-sans/wght-italic.css')])),
   sans('open-sans', 'Open Sans', 'Open Sans Variable', () => Promise.all([import('@fontsource-variable/open-sans'), import('@fontsource-variable/open-sans/wght-italic.css')])),
+  sans('outfit', 'Outfit', 'Outfit Variable', () => import('@fontsource-variable/outfit')),
   sans('plus-jakarta-sans', 'Plus Jakarta Sans', 'Plus Jakarta Sans Variable', () => Promise.all([import('@fontsource-variable/plus-jakarta-sans'), import('@fontsource-variable/plus-jakarta-sans/wght-italic.css')])),
+  // No variable cut exists, so the two house weights come as static files.
+  sans('poppins', 'Poppins', 'Poppins', () =>
+    Promise.all([import('@fontsource/poppins/400.css'), import('@fontsource/poppins/500.css'), import('@fontsource/poppins/400-italic.css'), import('@fontsource/poppins/500-italic.css')]),
+  ),
   sans('raleway', 'Raleway', 'Raleway Variable', () => Promise.all([import('@fontsource-variable/raleway'), import('@fontsource-variable/raleway/wght-italic.css')])),
+  sans('roboto', 'Roboto', 'Roboto Variable', () => Promise.all([import('@fontsource-variable/roboto'), import('@fontsource-variable/roboto/wght-italic.css')])),
+  sans('rubik', 'Rubik', 'Rubik Variable', () => Promise.all([import('@fontsource-variable/rubik'), import('@fontsource-variable/rubik/wght-italic.css')])),
+  sans('sora', 'Sora', 'Sora Variable', () => import('@fontsource-variable/sora')),
+  sans('spline-sans', 'Spline Sans', 'Spline Sans Variable', () => import('@fontsource-variable/spline-sans')),
   sans('urbanist', 'Urbanist', 'Urbanist Variable', () => Promise.all([import('@fontsource-variable/urbanist'), import('@fontsource-variable/urbanist/wght-italic.css')])),
+  sans('work-sans', 'Work Sans', 'Work Sans Variable', () => Promise.all([import('@fontsource-variable/work-sans'), import('@fontsource-variable/work-sans/wght-italic.css')])),
 ] as const
 
 /* SF Mono is the system face, never bundled. Code has no italics, so only uprights load. */
 export const MONO_FONTS = [
   { id: 'sf-mono', label: 'SF Mono', stack: MONO_TAIL },
+  mono('fira-code', 'Fira Code', 'Fira Code Variable', () => import('@fontsource-variable/fira-code')),
   mono('geist-mono', 'Geist Mono', 'Geist Mono Variable', () => import('@fontsource-variable/geist-mono')),
-  mono('jetbrains-mono', 'JetBrains Mono', 'JetBrains Mono Variable', () => import('@fontsource-variable/jetbrains-mono')),
   // No variable cut exists, so the two house weights come as static files.
   mono('ibm-plex-mono', 'IBM Plex Mono', 'IBM Plex Mono', () => Promise.all([import('@fontsource/ibm-plex-mono/400.css'), import('@fontsource/ibm-plex-mono/500.css')])),
-  mono('fira-code', 'Fira Code', 'Fira Code Variable', () => import('@fontsource-variable/fira-code')),
+  mono('jetbrains-mono', 'JetBrains Mono', 'JetBrains Mono Variable', () => import('@fontsource-variable/jetbrains-mono')),
   mono('roboto-mono', 'Roboto Mono', 'Roboto Mono Variable', () => import('@fontsource-variable/roboto-mono')),
   mono('source-code-pro', 'Source Code Pro', 'Source Code Pro Variable', () => import('@fontsource-variable/source-code-pro')),
+  mono('spline-sans-mono', 'Spline Sans Mono', 'Spline Sans Mono Variable', () => import('@fontsource-variable/spline-sans-mono')),
 ] as const satisfies readonly FontOption[]
 
 export type SansFont = (typeof SANS_FONTS)[number]['id']
