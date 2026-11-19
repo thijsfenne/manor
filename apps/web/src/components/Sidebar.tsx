@@ -118,6 +118,8 @@ interface SidebarProps {
   onHoldPeek: (claim: boolean) => void
   /** Delegated children by parent chat id, nested under the rows that started them. */
   subagentGroups?: Record<string, SubagentGroup>
+  /** The child whose view lies over each chat, which is the row that is active instead of the chat's own. */
+  activeSubagents?: Readonly<Record<string, string>>
   /** Opens a parent with one child, or its whole list (null), in the Subagents panel. */
   onOpenSubagent?: (parentChatId: string, toolCallId: string | null) => void
   /** The Projects section above the Sessions list (2026-10-10). */
@@ -199,6 +201,7 @@ function SidebarNav({
   onToggle,
   onHoldPeek,
   subagentGroups,
+  activeSubagents,
   onOpenSubagent,
   projectThreads,
   threadlessProjects,
@@ -328,6 +331,7 @@ function SidebarNav({
       onHoldPeek={onHoldPeek}
       projectWorkOpen={projectThreads.some((row) => row.running > 0 || row.waiting)}
       {...(subagentGroups === undefined ? {} : { subagentGroups })}
+      {...(activeSubagents === undefined ? {} : { activeSubagents })}
       {...(onOpenSubagent === undefined ? {} : { onOpenSubagent })}
     />
     </div>
@@ -349,6 +353,7 @@ function SidebarNav({
       onDeleteChat={onDeleteChat}
       onSetPins={onSetAgentPins}
       {...(subagentGroups === undefined ? {} : { subagentGroups })}
+      {...(activeSubagents === undefined ? {} : { activeSubagents })}
       {...(onOpenSubagent === undefined ? {} : { onOpenSubagent })}
     />
   ) : panel === 'knowledge' ? (

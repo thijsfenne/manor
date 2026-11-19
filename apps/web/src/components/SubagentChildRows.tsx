@@ -51,8 +51,10 @@ export const providerName = (driver: SubagentSummary['driver']): string =>
  * record. A child's own children run one step further in along the same rail. A click
  * opens the parent with that child's conversation on the stage.
  */
-export function SubagentChildRows({ group, indent = CHILD_INDENT, onOpen }: {
+export function SubagentChildRows({ group, activeId, indent = CHILD_INDENT, onOpen }: {
   group: SubagentGroup | undefined
+  /** The child whose view is open, which takes the sidebar's selected fill. */
+  activeId?: string
   /** Where a child's mark starts, in line with the text of the row it hangs off. */
   indent?: number
   /** Opens the parent with this child's view, by its launch call id. */
@@ -69,6 +71,7 @@ export function SubagentChildRows({ group, indent = CHILD_INDENT, onOpen }: {
         <li key={child.id} className="m-0">
           <ChildBody
             child={child}
+            active={child.id === activeId}
             inset={ROW_INSET + (group.depth[child.id] ?? 0) * NEST_STEP}
             onOpen={() => onOpen(child.toolCallId)}
           />
@@ -84,7 +87,7 @@ export function SubagentChildRows({ group, indent = CHILD_INDENT, onOpen }: {
  * finished one that lingers a moment for its own child shows nothing, never a dot,
  * because a dot here would read as unread.
  */
-function ChildBody({ child, inset, onOpen }: { child: SidebarSubagent; inset: number; onOpen: () => void }) {
+function ChildBody({ child, inset, active, onOpen }: { child: SidebarSubagent; inset: number; active: boolean; onOpen: () => void }) {
   const { model, effort } = child
   const runsOn = model === undefined || effort === undefined
     ? providerName(child.driver)
@@ -92,9 +95,12 @@ function ChildBody({ child, inset, onOpen }: { child: SidebarSubagent; inset: nu
   return (
     <button
       type="button"
-      className="flex h-7 w-full min-w-0 cursor-pointer items-center gap-1.5 rounded-lg border-0 bg-transparent pr-3 text-left text-muted hover:bg-surface-2 hover:text-text"
+      className={`flex h-7 w-full min-w-0 cursor-pointer items-center gap-1.5 rounded-lg border-0 pr-3 text-left ${
+        active ? 'bg-user-bg text-text' : 'bg-transparent text-muted hover:bg-surface-2 hover:text-text'
+      }`}
       style={{ paddingLeft: inset }}
       aria-label={`${child.title}, ${runsOn}, ${subagentStateWord(child.state)}. Open`}
+      aria-current={active ? 'page' : undefined}
       onClick={onOpen}
     >
       <ProviderMark driver={child.driver} size={14} />

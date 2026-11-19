@@ -375,7 +375,7 @@ function Workspace({
     openChat,
   })
 
-  const { sidebarSubagents, subagentPath, pushSubagentView, popSubagentView, closeSubagentView, openSubagent } =
+  const { sidebarSubagents, activeSubagents, subagentPath, pushSubagentView, popSubagentView, closeSubagentView, openSubagent } =
     useSubagentViews(workspace, openChat, closeSidebarOverlay, occupiedChatIdsOf(visibleSplit, null, open?.id ?? null))
   useEffect(() => {
     panelsCoveredRef.current = (chatId) => subagentChrome(subagentPath(chatId)).panelHidden
@@ -817,6 +817,7 @@ function Workspace({
         onOpenSearch={openSearch}
         onOpenChat={openChatFromSidebar}
         subagentGroups={sidebarSubagents}
+        activeSubagents={Object.fromEntries(Object.entries(activeSubagents).filter(([chatId]) => occupiedChatIds.has(chatId)))}
         onOpenSubagent={openSubagent}
         {...(dropLane === 'work' ? { onOpenRight: openRight } : {})}
         {...(canSplit && (activeView === 'chat' || activeView === 'new-chat' || activeView === 'empty-chat')

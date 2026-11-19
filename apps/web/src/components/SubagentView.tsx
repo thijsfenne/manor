@@ -3,10 +3,10 @@ import type { AgentConfig, SubagentSummary } from '@manor/contracts'
 import { useEffect, useMemo, useRef, type CSSProperties, type ReactNode } from 'react'
 import {
   launchDriver,
+  providerHelperKey,
+  providerHelperThread,
   subagentBarStatus,
-  subagentNow,
   subagentRuntime,
-  subagentStepLabel,
   type ChatSubagent,
   type SubagentState,
 } from '@manor/client-runtime/turn-trace'
@@ -14,12 +14,12 @@ import { useLiveThread } from '../liveThread'
 import { rowsOf } from '../state'
 import { useNowSecond } from '../useNowSecond'
 import { Badge } from './ui/Badge'
-import { Markdown } from './Markdown'
 import { ProviderMark } from './ProviderMark'
 import { providerName } from './SubagentChildRows'
 import { SubagentBar } from './SubagentBar'
-import { useTopBarSlot } from './TopBar'
 import { Transcript } from './Transcript'
+
+type ThreadShape = Parameters<typeof rowsOf>[0]
 
 const NOT_REPORTED = 'Not reported'
 
@@ -63,7 +63,7 @@ export function SubagentView(props: SubagentViewProps) {
       style={BAR_DOCK}
       {...(covered ? { inert: '' } : {})}
     >
-      {childId === undefined ? <ProviderRecord {...props} /> : <ChildConversation {...props} childId={childId} />}
+      {childId === undefined ? <ProviderConversation {...props} /> : <ChildConversation {...props} childId={childId} />}
     </section>
   )
 }
@@ -83,7 +83,7 @@ function Fact({ label, children }: { label: string; children: ReactNode }) {
  * sets the room under them: in a child's thread it pulls the 32px transcript gap back to
  * 10px above the handoff card.
  */
-function SubagentFacts({ subagent: { step }, state, summary, starter, below }: Pick<SubagentViewProps, 'subagent' | 'state' | 'summary' | 'starter'> & { below: string }) {
+function SubagentFacts({ subagent: { step }, state, summary, starter, below, note }: Pick<SubagentViewProps, 'subagent' | 'state' | 'summary' | 'starter'> & { below: string; note?: string }) {
   const launch = step.subagent
   const driver = summary?.driver ?? launchDriver(launch)
   const runtime = subagentRuntime(driver, summary?.model ?? launch?.model, summary?.effort ?? launch?.effort)
@@ -99,6 +99,7 @@ function SubagentFacts({ subagent: { step }, state, summary, starter, below }: P
           {driver === undefined ? NOT_REPORTED : runtime === undefined ? providerName(driver) : [runtime.model, runtime.effort].filter(Boolean).join(', ')}
         </Badge>
       </div>
+      {note === undefined ? null : <p className="m-0 text-[13px] text-dim">{note}</p>}
       {why === undefined ? null : (
         <dl className="m-0 grid grid-cols-[6.5rem_minmax(0,1fr)] gap-x-3 gap-y-1.5">
           <Fact label={state === 'failed' ? 'Why it failed' : 'Why it stopped'}>
@@ -131,18 +132,13 @@ function ViewBar({ subagent, state, summary, footerPadding, onOpenParent }: Pick
 }
 
 /**
- * A Manor-run child's own thread, which is the whole history: its task opens it as the
- * starting persona's message and its answer closes it. Read-only: nothing here can
- * reach it, and its questions wait in the parent.
+ * A subagent's conversation, read-only: its task opens it as the starting persona's
+ * message and its answer closes it. Nothing here can reach it, and its questions wait
+ * in the parent. A Manor child's own thread and the record of a provider's helper both
+ * come through here, so every level reads the same.
  */
-function ChildConversation(props: SubagentViewProps & { childId: string }) {
-  const { childId, subagent, state, summary, agents, starter, connected, denseText, covered, load, onOpenChild } = props
-  const loadRef = useRef(load)
-  loadRef.current = load
-  useEffect(() => {
-    if (connected) loadRef.current(childId)
-  }, [childId, connected])
-  const thread = useLiveThread(childId)
+function SubagentConversation(props: SubagentViewProps & { thread: ThreadShape; note?: string }) {
+  const { thread, note, subagent, state, summary, agents, starter, connected, denseText, covered, onOpenChild } = props
   const rows = useMemo(() => rowsOf(thread), [thread])
   return (
     <>
@@ -157,7 +153,7 @@ function ChildConversation(props: SubagentViewProps & { childId: string }) {
           connected={connected}
           onOpenSubagents={onOpenChild}
           taskRole={summary?.role ?? subagent.step.subagent?.role}
-          leading={<SubagentFacts subagent={subagent} state={state} summary={summary} starter={starter} below="-mb-[22px]" />}
+          leading={<SubagentFacts subagent={subagent} state={state} summary={summary} starter={starter} below="-mb-[22px]" {...(note === undefined ? {} : { note })} />}
           emptyNote="Nothing in this thread yet."
           held={covered}
         />
@@ -167,64 +163,31 @@ function ChildConversation(props: SubagentViewProps & { childId: string }) {
   )
 }
 
-function Section({ title, children }: { title: string; children: ReactNode }) {
-  return (
-    <section className="flex flex-col gap-2">
-      <h4 className="m-0 text-meta font-medium text-dim">{title}</h4>
-      {children}
-    </section>
-  )
+/** A Manor-run child: its own thread is the whole history. */
+function ChildConversation(props: SubagentViewProps & { childId: string }) {
+  const { childId, connected, load } = props
+  const loadRef = useRef(load)
+  loadRef.current = load
+  useEffect(() => {
+    if (connected) loadRef.current(childId)
+  }, [childId, connected])
+  const thread = useLiveThread(childId)
+  return <SubagentConversation {...props} thread={thread} />
 }
 
 /**
  * A helper its provider ran inside its own turn. Manor never gets that conversation, so
- * this shows what the launch row holds and says so, rather than dressing it up as a thread.
+ * the view is built from what the launch row holds, and says so in one line.
  */
-function ProviderRecord(props: SubagentViewProps) {
-  const { subagent, state, summary, starter } = props
-  const { step, steps } = subagent
+function ProviderConversation(props: SubagentViewProps) {
+  const { subagent, state } = props
+  const { step } = subagent
+  // The launch row is rebuilt on every parent render, so the thread follows what it holds.
+  const held = providerHelperKey(subagent, state)
+  const subagentRef = useRef(subagent)
+  subagentRef.current = subagent
+  const thread = useMemo(() => providerHelperThread(subagentRef.current, state), [held, state])
   const launch = step.subagent
-  const role = summary?.role ?? launch?.role
-  const now = state === 'running' ? subagentNow(steps) : undefined
-  const headerInBar = useTopBarSlot() !== null
-  return (
-    <>
-      <main className="col-start-1 row-span-2 row-start-1 flex min-h-0 min-w-0 justify-center bg-bg">
-        <div className="scrollbar-hidden flex min-w-0 flex-1 flex-col overflow-x-hidden overflow-y-auto">
-          <div
-            data-reading-column=""
-            className={`mx-auto flex w-full max-w-[780px] flex-1 flex-col gap-5 px-5 ${headerInBar ? 'pt-8' : 'pt-[76px]'} pb-[calc(var(--composer-dock,0px)+3.5rem)] text-label text-text`}
-          >
-            <SubagentFacts subagent={subagent} state={state} summary={summary} starter={starter} below="pb-4" />
-            <p className="m-0 text-[13px] text-dim">
-              {launch?.driver === undefined ? 'The provider' : providerName(launch.driver)} ran this helper inside its own turn, so Manor has its brief, its steps and its result, not its conversation.
-            </p>
-            <Section title="Brief">
-              {launch?.prompt === undefined && role === undefined ? <p className="m-0 text-dim">{NOT_REPORTED}</p> : (
-                <div className="rounded-xl bg-surface-2/45 px-3 py-2.5 leading-[1.55]">
-                  {role === undefined ? null : <p className="m-0 text-muted [overflow-wrap:anywhere]">{role}</p>}
-                  {role === undefined || launch?.prompt === undefined ? null : <hr className="my-2 border-0 border-t border-line" />}
-                  {launch?.prompt === undefined ? <p className="m-0 mt-2 text-dim">{NOT_REPORTED}</p> : <Markdown text={launch.prompt} />}
-                </div>
-              )}
-            </Section>
-            <Section title="Steps">
-              {steps.length === 0 ? <p className="m-0 text-dim">{state === 'running' ? 'None yet' : NOT_REPORTED}</p> : (
-                <ol className="m-0 flex list-none flex-col gap-1 p-0 text-[13px] text-muted">
-                  {steps.map((child) => <li key={child.key} className="truncate">{subagentStepLabel(child)}</li>)}
-                </ol>
-              )}
-              {now === undefined ? null : <p className="m-0 truncate text-[13px] text-muted shimmer-text" data-text={now}>{now}</p>}
-            </Section>
-            <Section title="Result">
-              {step.output !== undefined
-                ? <div className="leading-[1.55]"><Markdown text={step.output} /></div>
-                : <p className="m-0 text-dim">{state === 'running' ? 'Still working' : NOT_REPORTED}</p>}
-            </Section>
-          </div>
-        </div>
-      </main>
-      <ViewBar {...props} />
-    </>
-  )
+  const note = `${launch?.driver === undefined ? 'The provider' : providerName(launch.driver)} ran this helper inside its own turn, so Manor has its brief, its steps and its result, not its conversation.`
+  return <SubagentConversation {...props} thread={thread} note={note} />
 }

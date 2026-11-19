@@ -4,10 +4,10 @@ import { HugeiconsIcon } from '@hugeicons/react-native'
 import { LegendList } from '@legendapp/list/react-native'
 import type { Row } from '@manor/client-runtime/state'
 import { messageBrief, rowsOf } from '@manor/client-runtime/state'
-import { launchDriver, subagentBarStatus, subagentNow, subagentRuntime, subagentStepLabel, type ChatSubagent, type SubagentState } from '@manor/client-runtime/turn-trace'
+import { launchDriver, providerHelperKey, providerHelperThread, subagentBarStatus, subagentRuntime, type ChatSubagent, type SubagentState } from '@manor/client-runtime/turn-trace'
 import type { AgentConfig, SubagentSummary } from '@manor/contracts'
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { Pressable, StyleSheet, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { Badge } from '@/components/Badge'
@@ -15,10 +15,8 @@ import { CHAT_HEADER_HEIGHT } from '@/components/ChatHeader'
 import { EdgeScrim } from '@/components/EdgeScrim'
 import { GlassSurface } from '@/components/GlassSurface'
 import { KickoffCard } from '@/components/KickoffCard'
-import { Markdown } from '@/components/Markdown'
 import { ProviderMark } from '@/components/ProviderMark'
 import { RelayedAgentMessage } from '@/components/RelayedAgentMessage'
-import { ShimmerText } from '@/components/ShimmerText'
 import { Text } from '@/components/Text'
 import { TranscriptCovered, Turn } from '@/components/Turn'
 import { useScreenCovered } from '@/lib/useScreenCovered'
@@ -56,7 +54,7 @@ export function SubagentConversation(props: SubagentConversationProps) {
   return (
     <>
       {childId === undefined
-        ? <ProviderRecord {...props} bottom={bottom} top={top} />
+        ? <ProviderConversation {...props} bottom={bottom} top={top} />
         : <ChildConversation {...props} bottom={bottom} childId={childId} top={top} />}
       <SubagentBar {...props} />
     </>
@@ -73,7 +71,7 @@ function Fact({ label, children }: { label: string; children: ReactNode }) {
 }
 
 /** What the launch said and how it ended, at the head of the screen; `below` is the room under it, 10 above a child's handoff card. */
-function SubagentFacts({ subagent: { step, agentId }, state, summary, agents, below }: Pick<SubagentConversationProps, 'subagent' | 'state' | 'summary' | 'agents'> & { below: number }) {
+function SubagentFacts({ subagent: { step, agentId }, state, summary, agents, below, note }: Pick<SubagentConversationProps, 'subagent' | 'state' | 'summary' | 'agents'> & { below: number; note?: string }) {
   const driver = summary?.driver ?? launchDriver(step.subagent)
   const runtime = subagentRuntime(driver, summary?.model ?? step.subagent?.model, summary?.effort ?? step.subagent?.effort)
   // Why it ended, once that is the news: a done or running helper has nothing to explain.
@@ -89,6 +87,7 @@ function SubagentFacts({ subagent: { step, agentId }, state, summary, agents, be
           {runtime === undefined ? (driver === undefined ? NOT_REPORTED : 'Its provider') : [runtime.model, runtime.effort].filter(Boolean).join(', ')}
         </Badge>
       </View>
+      {note === undefined ? null : <Text style={styles.detail}>{note}</Text>}
       {why === undefined ? null : (
         <Fact label={state === 'failed' ? 'Why it failed' : 'Why it stopped'}><Text selectable style={styles.factText}>{why}</Text></Fact>
       )}
@@ -135,14 +134,17 @@ function SubagentBar({ subagent: { step }, state, summary, onOpenParent }: Pick<
   )
 }
 
+type ThreadShape = Parameters<typeof rowsOf>[0]
+
 /**
- * A Manor-run child's own thread: its task opens it in the starter's voice, its answer
- * closes it. It reads the live thread, so a streamed frame renders this list and not the screen.
+ * A subagent's conversation: its task opens it in the starter's voice, its answer
+ * closes it. A Manor child's own thread and the record of a provider's helper both come
+ * through here, so every level reads the same. The list reads the thread, so a streamed
+ * frame renders this list and not the screen.
  */
-function ChildConversation(props: SubagentConversationProps & { childId: string; top: number; bottom: number }) {
-  const { childId, agents, connected, onOpenChild, top, bottom, summary, subagent } = props
+function Conversation(props: SubagentConversationProps & { thread: ThreadShape; note?: string; top: number; bottom: number }) {
+  const { thread, note, agents, connected, onOpenChild, top, bottom, summary, subagent } = props
   const role = summary?.role ?? subagent.step.subagent?.role
-  const thread = useLiveThread(childId)
   const rows = useMemo(() => rowsOf(thread), [thread])
   const last = rows.at(-1)?.key
   const covered = useScreenCovered()
@@ -159,7 +161,7 @@ function ChildConversation(props: SubagentConversationProps & { childId: string;
       initialScrollAtEnd
       keyExtractor={(row) => row.key}
       ListEmptyComponent={<Text style={styles.empty}>{thread.hasSnapshot ? 'Nothing in this thread yet.' : 'Loading conversation…'}</Text>}
-      ListHeaderComponent={<SubagentFacts {...props} below={10} />}
+      ListHeaderComponent={<SubagentFacts {...props} below={10} {...(note === undefined ? {} : { note })} />}
       maintainScrollAtEnd={covered ? false : { animated: false, on: { dataChange: true, itemLayout: true } }}
       maintainScrollAtEndThreshold={0.15}
       recycleItems={false}
@@ -167,6 +169,27 @@ function ChildConversation(props: SubagentConversationProps & { childId: string;
     />
     </TranscriptCovered.Provider>
   )
+}
+
+/** A Manor-run child: its own thread is the whole history. */
+function ChildConversation(props: SubagentConversationProps & { childId: string; top: number; bottom: number }) {
+  const thread = useLiveThread(props.childId)
+  return <Conversation {...props} thread={thread} />
+}
+
+/**
+ * A helper its provider ran inside its own turn. Manor never gets that conversation, so
+ * the screen is built from what the launch row holds, and says so in one line.
+ */
+function ProviderConversation(props: SubagentConversationProps & { top: number; bottom: number }) {
+  const { subagent, state } = props
+  // The launch row is rebuilt on every parent render, so the thread follows what it holds.
+  const held = providerHelperKey(subagent, state)
+  const subagentRef = useRef(subagent)
+  subagentRef.current = subagent
+  const thread = useMemo(() => providerHelperThread(subagentRef.current, state), [held, state])
+  const note = 'Its provider ran this helper inside its own turn, so Manor has its brief, its steps and its result, not its conversation.'
+  return <Conversation {...props} thread={thread} note={note} />
 }
 
 function ChildRow({ row, agents, connected, latest, onOpenChild, role }: { row: Row; agents: AgentConfig[]; connected: boolean; latest: boolean; onOpenChild: (toolCallId: string) => void; role: string | undefined }) {
@@ -185,49 +208,8 @@ function ChildRow({ row, agents, connected, latest, onOpenChild, role }: { row: 
   return null
 }
 
-function Section({ title, children }: { title: string; children: ReactNode }) {
-  return (
-    <View style={styles.section}>
-      <Text style={styles.sectionLabel}>{title}</Text>
-      {children}
-    </View>
-  )
-}
-
-/**
- * A helper its provider ran inside its own turn. Manor never gets that conversation, so
- * this shows what the launch row holds and says so, rather than dressing it up as a thread.
- */
-function ProviderRecord(props: SubagentConversationProps & { top: number; bottom: number }) {
-  const { subagent: { step, steps }, state, summary, agents, top, bottom } = props
-  const launch = step.subagent
-  const role = summary?.role ?? launch?.role
-  const now = state === 'running' ? subagentNow(steps) : undefined
-  return (
-    <ScrollView contentContainerStyle={[styles.record, { paddingTop: top, paddingBottom: bottom }]}>
-      <SubagentFacts {...props} below={spacing.lg} />
-      <Text style={styles.detail}>Its provider ran this helper inside its own turn, so Manor has its brief, its steps and its result, not its conversation.</Text>
-      <Section title="Brief">
-        {role === undefined ? null : <Text style={styles.detail}>{role}</Text>}
-        {role === undefined || launch?.prompt === undefined ? null : <View style={styles.divider} />}
-        {launch?.prompt === undefined ? <Text style={styles.detail}>{NOT_REPORTED}</Text> : <Markdown agents={agents} text={launch.prompt} />}
-      </Section>
-      <Section title="Steps">
-        {steps.length === 0 ? <Text style={styles.detail}>{state === 'running' ? 'None yet' : NOT_REPORTED}</Text> : (
-          steps.map((child) => <Text key={child.key} numberOfLines={1} style={styles.detail}>{subagentStepLabel(child)}</Text>)
-        )}
-        {now === undefined ? null : <ShimmerText numberOfLines={1} style={styles.detail} text={now} />}
-      </Section>
-      <Section title="Result">
-        {step.output === undefined ? <Text style={styles.detail}>{state === 'running' ? 'Still working' : NOT_REPORTED}</Text> : <Markdown agents={agents} text={step.output} />}
-      </Section>
-    </ScrollView>
-  )
-}
-
 const styles = StyleSheet.create({
   feed: { paddingHorizontal: spacing.lg },
-  record: { gap: spacing.lg, paddingHorizontal: spacing.lg },
   row: { paddingBottom: spacing.xl },
   note: { paddingBottom: spacing.xl, color: colors.muted, fontFamily: fonts.sans, fontSize: 13, lineHeight: 19, textAlign: 'center' },
   error: { color: colors.danger },
@@ -239,9 +221,6 @@ const styles = StyleSheet.create({
   factLabel: { width: 92, color: colors.dim, fontFamily: fonts.sans, fontSize: 13, lineHeight: 19 },
   factValue: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 6 },
   factText: { flexShrink: 1, color: colors.muted, fontFamily: fonts.sans, fontSize: 13, lineHeight: 19 },
-  divider: { height: StyleSheet.hairlineWidth, marginVertical: spacing.sm, backgroundColor: colors.line },
-  section: { gap: spacing.xs },
-  sectionLabel: { color: colors.dim, fontFamily: fonts.sans, fontSize: 13, lineHeight: 18 },
   detail: { color: colors.muted, fontFamily: fonts.sans, fontSize: 14, lineHeight: 20 },
   barHost: { position: 'absolute', right: spacing.lg, left: spacing.lg, zIndex: 1 },
   barFallback: { backgroundColor: colors.surface, borderRadius: radius.lg, ...squircle },

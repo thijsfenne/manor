@@ -14,6 +14,7 @@ import {
   backgroundWaitLabel,
   chatSubagents,
   chatWaitsOnBackground,
+  providerHelperThread,
   dmWorking,
   dmWorkingLabel,
   isPaused,
@@ -164,6 +165,32 @@ describe('live compact status', () => {
     }
     expect(hasFold(live)).toBe(false)
     expect(hasFold(settled)).toBe(true)
+  })
+})
+
+describe('a provider-run helper read as a thread', () => {
+  const events: ThreadEvent[] = [
+    { id: 'a', ts: 1, type: 'tool_use', turnId: 't', agentId: 'smith', toolCallId: 'agent-1', tool: 'Agent', subagent: { title: 'Audit', prompt: 'Read the rail.' } },
+    { id: 'c', ts: 2, type: 'tool_use', turnId: 't', agentId: 'smith', toolCallId: 'child-1', parentToolCallId: 'agent-1', tool: 'Read', targets: ['RightRail.tsx'] },
+    { id: 'd', ts: 3, type: 'tool_result', turnId: 't', agentId: 'smith', toolCallId: 'child-1', parentToolCallId: 'agent-1', outcome: 'success' },
+  ]
+  const helper = (more: ThreadEvent[]) => chatSubagents(rowsOf({ ...emptyThread, events: [...events, ...more] }))[0]!
+
+  it('opens on its brief, then its steps, then its result, like a Manor child', () => {
+    const done = helper([{ id: 'e', ts: 4, type: 'tool_result', turnId: 't', agentId: 'smith', toolCallId: 'agent-1', outcome: 'success', output: 'It is fine.' }])
+    const rows = rowsOf(providerHelperThread(done, 'done'))
+    expect(rows.map((row) => row.kind)).toEqual(['event', 'turn'])
+    const [brief, turn] = rows
+    expect(brief?.kind === 'event' && brief.event.type === 'user_message' && [brief.event.source, brief.event.text]).toEqual(['subagent_task', 'Read the rail.'])
+    expect(turn?.kind === 'turn' && turn.activities.flatMap((step) => step.kind === 'tool' ? [step.tool] : [])).toEqual(['Read'])
+    expect(turn?.kind === 'turn' && turn.answer.map((reply) => reply.text)).toEqual(['It is fine.'])
+    expect(turn?.kind === 'turn' && turn.live).toBeUndefined()
+  })
+
+  it('keeps the turn live while the helper works', () => {
+    const rows = rowsOf(providerHelperThread(helper([]), 'running'))
+    const turn = rows.find((row): row is TurnRow => row.kind === 'turn')
+    expect(turn?.live?.state).toBe('running')
   })
 })
 

@@ -75,6 +75,8 @@ interface InboxViewProps {
   projectWorkOpen?: boolean
   /** Delegated children by parent chat id, nested under the live rows that started them. */
   subagentGroups?: Record<string, SubagentGroup>
+  /** The child whose view lies over a chat: its row is the active one, the chat's own is not. */
+  activeSubagents?: Readonly<Record<string, string>>
   /** Opens a parent with one child, or the whole list (null), in its Subagents panel. */
   onOpenSubagent?: (parentChatId: string, toolCallId: string | null) => void
 }
@@ -102,6 +104,7 @@ export function InboxView({
   onHoldPeek,
   projectWorkOpen = false,
   subagentGroups,
+  activeSubagents,
   onOpenSubagent,
 }: InboxViewProps) {
   // One quiet section open at a time: each fills the room the live list leaves,
@@ -122,10 +125,14 @@ export function InboxView({
   const { unsettled, settled } = inbox
   const shownSettled = settled.slice(0, visibleSettled)
   const moreSettled = settled.length - shownSettled.length
+  // A chat's own row gives its fill to the child that lies over it.
+  const lit = (entry: { chat: { id: string }; selected: boolean }) =>
+    activeSubagents?.[entry.chat.id] === undefined &&
+    (occupiedChatIds !== undefined ? occupiedChatIds.has(entry.chat.id) : showChatSelection && entry.selected)
   // Split rows already have their own fill. Focus changes only the pane's wash.
   const markedChatId =
     occupiedChatIds === undefined && showChatSelection
-      ? [...unsettled, ...shownSettled].find((entry) => entry.selected)?.chat.id
+      ? [...unsettled, ...shownSettled].find((entry) => entry.selected && activeSubagents?.[entry.chat.id] === undefined)?.chat.id
       : undefined
 
   useEffect(
@@ -208,11 +215,7 @@ export function InboxView({
             <LiveRow
               entry={entry}
               agents={agents}
-              selected={
-                occupiedChatIds !== undefined
-                  ? occupiedChatIds.has(entry.chat.id)
-                  : showChatSelection && entry.selected
-              }
+              selected={lit(entry)}
               marked={entry.chat.id === markedChatId}
               motionClass={inboxRowMotionClass(rowMotion, entry.chat.id)}
               now={now}
@@ -229,6 +232,7 @@ export function InboxView({
               <li className="m-0 list-none">
                 <SubagentChildRows
                   group={subagentGroups[entry.chat.id]}
+                  {...(activeSubagents?.[entry.chat.id] === undefined ? {} : { activeId: activeSubagents[entry.chat.id] })}
                   onOpen={(toolCallId) => onOpenSubagent(entry.chat.id, toolCallId)}
                 />
               </li>
@@ -252,11 +256,7 @@ export function InboxView({
               key={entry.chat.id}
               entry={entry}
               agents={agents}
-              selected={
-                occupiedChatIds !== undefined
-                  ? occupiedChatIds.has(entry.chat.id)
-                  : showChatSelection && entry.selected
-              }
+              selected={lit(entry)}
               marked={entry.chat.id === markedChatId}
               now={now}
               armed={armed}
@@ -292,7 +292,7 @@ export function InboxView({
               key={entry.chat.id}
               entry={entry}
               agents={agents}
-              selected={showChatSelection && entry.selected}
+              selected={showChatSelection && entry.selected && activeSubagents?.[entry.chat.id] === undefined}
               now={now}
               armed={armed}
               onArm={onArm}

@@ -49,6 +49,8 @@ interface ChatListViewProps {
   onSetPins: (agentId: string, pins: AgentPins) => void
   /** Delegated children by parent chat id, nested under the conversation that started them. */
   subagentGroups?: Record<string, SubagentGroup>
+  /** The child whose view lies over a chat: its row is the active one, the chat's own is not. */
+  activeSubagents?: Readonly<Record<string, string>>
   /** Opens a parent with one child, or the whole list (null), in its Subagents panel. */
   onOpenSubagent?: (parentChatId: string, toolCallId: string | null) => void
 }
@@ -103,6 +105,7 @@ export function ChatListView({
   onDeleteChat,
   onSetPins,
   subagentGroups,
+  activeSubagents,
   onOpenSubagent,
 }: ChatListViewProps) {
   const now = useMinuteClock()
@@ -114,6 +117,8 @@ export function ChatListView({
     if (grab === null || agentId === null || row.kind !== 'dm' || occupied(row)) return undefined
     return (event: PointerEvent<HTMLElement>) => grab({ kind: 'agent', agentId }, event)
   }
+  // The fill a split pane gives its chat goes to the child that lies over it.
+  const filled = (row: ChatListRow) => occupied(row) && (row.chat === null || activeSubagents?.[row.chat.id] === undefined)
   const shown = rows.filter((row) => row.kind !== 'pair')
   // Resolved once for the whole list rather than per row: the travelling fill is a
   // single surface, so exactly one row may claim it even if the stage somehow lights
@@ -121,7 +126,7 @@ export function ChatListView({
   const markedKey = shown.find((row) =>
     row.chat === null
       ? draftAgentId !== null && row.agentId === draftAgentId
-      : showChatSelection && row.selected,
+      : showChatSelection && row.selected && activeSubagents?.[row.chat.id] === undefined,
   )?.key
   // Whoever the user pinned, at most two, is lifted out of the recency order and given
   // a card above it, the same shape the phone uses. Chief first, then roster order.
@@ -140,6 +145,7 @@ export function ChatListView({
     return (
       <SubagentChildRows
         group={group}
+        {...(activeSubagents?.[chat.id] === undefined ? {} : { activeId: activeSubagents[chat.id] })}
         {...(indent === undefined ? {} : { indent })}
         onOpen={(toolCallId) => onOpenSubagent(chat.id, toolCallId)}
       />
@@ -152,7 +158,7 @@ export function ChatListView({
       row={row}
       compact={heads.length > 1}
       selected={row.key === markedKey}
-      occupied={occupied(row)}
+      occupied={filled(row)}
       onGrab={dragOf(row)}
       armed={armed}
       onArm={onArm}
@@ -194,7 +200,7 @@ export function ChatListView({
                   // the stage's own draft is what lights its row. A project draft lights
                   // nothing here: the stage has left this list entirely.
                   selected={row.key === markedKey}
-                  occupied={occupied(row)}
+                  occupied={filled(row)}
                   onGrab={dragOf(row)}
                   now={now}
                   armed={armed}

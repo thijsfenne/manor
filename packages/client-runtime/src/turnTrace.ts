@@ -1,7 +1,8 @@
-import { EFFORTS, driverForModel, modelLabel, type FileEdit, type SubagentLaunch, type SubagentSummary } from '@manor/contracts'
-import { isToolStep, liveWritten, type ReasoningStep, type Row, type ToolStep, type TurnActivity as TurnStep, type TurnRow, type TurnSegment } from './state'
+import { EFFORTS, driverForModel, modelLabel, type FileEdit, type SubagentLaunch, type SubagentSummary, type ThreadEvent } from '@manor/contracts'
+import { emptyThread, isToolStep, liveWritten, type ReasoningStep, type Row, type ToolStep, type TurnActivity as TurnStep, type TurnRow, type TurnSegment } from './state'
 import { activityDetail, activityKind, currentLabel, elapsedLabel, searchQuery, isBrowserTool, isMemoryWrite, isTaskTool, settledLabel, shortTarget, workedLabel } from './turnLabels'
 import { waitingOn } from './sessionStatus'
+import type { ThreadShape } from './quietState'
 import { isCompacting, LIVE_COMPACT_DONE, LIVE_COMPACT_FAILED, LIVE_COMPACT_NOTE, LIVE_COMPACT_STOPPED } from './compacting'
 
 export { isCompacting, LIVE_COMPACT_DONE, LIVE_COMPACT_FAILED, LIVE_COMPACT_NOTE, LIVE_COMPACT_STOPPED }
@@ -82,10 +83,6 @@ export function subagentNow(steps: readonly TurnStep[]): string | undefined {
   const open = [...steps].reverse().find((step): step is ToolStep => isToolStep(step) && step.status === 'running')
   return open === undefined ? undefined : currentLabel(open)
 }
-
-/** One line per step for the detail views: reasoning reads as "Thought". */
-export const subagentStepLabel = (step: TurnStep): string =>
-  isToolStep(step) ? `${settledLabel(step)}${step.status === 'error' ? ', issue' : ''}` : 'Thought'
 
 /**
  * Adjacent work and landed edits belong to the same act until narration cuts it.
@@ -699,4 +696,79 @@ export function stepImages(steps: readonly TurnStep[]): StepImage[] {
 /** The thumbnails a line draws and how many more it counts as "+N". */
 export function thumbnailStrip<Image>(images: readonly Image[]): { shown: Image[]; more: number } {
   return { shown: images.slice(0, THUMBNAILS_SHOWN), more: Math.max(images.length - THUMBNAILS_SHOWN, 0) }
+}
+
+/** What a provider helper's thread is built from, so a view rebuilds it only when one of these moved. */
+export const providerHelperKey = ({ step, steps }: ChatSubagent, state: SubagentState): string => [
+  state,
+  step.output,
+  step.subagent?.prompt,
+  ...steps.map((child) => child.kind === 'tool'
+    ? `${child.key}:${child.status}:${child.subject}:${child.detail}:${child.edits?.length}:${child.unconfirmed}`
+    : child.key),
+].join('\0')
+
+/**
+ * What Manor holds of a helper its provider ran inside its own turn, as the thread a
+ * Manor-run child would have: its brief as the opening message, its steps in order and
+ * its result as the answer. The view draws it with the same transcript as a child's own
+ * thread; the only difference is that the steps are the launch row's record, not a
+ * conversation Manor took part in.
+ */
+export function providerHelperThread(subagent: ChatSubagent, state: SubagentState): ThreadShape {
+  const { step, steps, agentId } = subagent
+  const turnId = step.toolCallId ?? step.key
+  const events: ThreadEvent[] = [{
+    id: `${turnId}:brief`,
+    ts: step.startedAt,
+    type: 'user_message',
+    text: step.subagent?.prompt ?? 'Not reported',
+    mentions: [],
+    source: 'subagent_task',
+  }]
+  const base = { agentId, turnId }
+  let at = step.startedAt
+  for (const child of steps) {
+    at = Math.max(at, child.startedAt)
+    if (child.kind === 'reasoning') {
+      events.push({ ...base, id: child.key, ts: child.startedAt, type: 'reasoning', text: child.text })
+      continue
+    }
+    // A helper inside a helper has no thread of its own to open from here.
+    if (child.kind !== 'tool' || isTaskTool(child.tool)) continue
+    events.push({
+      ...base,
+      id: child.key,
+      ts: child.startedAt,
+      type: 'tool_use',
+      ...(child.toolCallId === undefined ? {} : { toolCallId: child.toolCallId }),
+      tool: child.tool,
+      ...(child.agentType === undefined ? {} : { agentType: child.agentType }),
+      ...(child.detail === undefined ? {} : { detail: child.detail }),
+      ...(child.subject === undefined ? {} : { subject: child.subject }),
+      ...(child.targets === undefined ? {} : { targets: child.targets }),
+      ...(child.command === undefined ? {} : { command: child.command }),
+      // A stop cut this call short, so a write it was making is a claim nobody can back.
+      ...(child.edits === undefined || child.unconfirmed === true ? {} : { edits: child.edits }),
+    })
+    if (child.status !== 'running' && child.toolCallId !== undefined) {
+      events.push({
+        ...base,
+        id: `${child.key}:result`,
+        ts: child.startedAt,
+        type: 'tool_result',
+        toolCallId: child.toolCallId,
+        outcome: child.status === 'done' ? 'success' : child.status,
+        ...(child.error === undefined ? {} : { error: child.error }),
+      })
+    }
+  }
+  if (step.output !== undefined) {
+    events.push({ ...base, id: `${turnId}:answer`, ts: at, type: 'agent_message', messageId: `${turnId}:answer`, text: step.output })
+  }
+  if (state === 'running') {
+    return { ...emptyThread, events, hasSnapshot: true, liveTurns: [{ turnId, agentId, messages: [], state: 'running', startedAt: step.startedAt }] }
+  }
+  events.push({ ...base, id: `${turnId}:end`, ts: at, type: 'turn_result' })
+  return { ...emptyThread, events, hasSnapshot: true }
 }

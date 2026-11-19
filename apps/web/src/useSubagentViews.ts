@@ -75,5 +75,25 @@ export function useSubagentViews(
 
   const subagentPath = useCallback((chatId: string) => views[chatId] ?? EMPTY_PATH, [views])
 
-  return { sidebarSubagents, subagentPath, pushSubagentView, popSubagentView, closeSubagentView, openSubagent }
+  /**
+   * The sidebar row each open view stands for, by the chat it lies over. A view whose
+   * row the sidebar does not list (a finished child leaves it) has no entry, so the
+   * chat's own row stays the one that is active.
+   */
+  const activeSubagents = useMemo(() => {
+    const rows = sidebarSubagentRows(workspace)
+    const active: Record<string, string> = {}
+    for (const [chatId, path] of Object.entries(views)) {
+      const listed = sidebarSubagents[chatId]?.children.find((child) => {
+        const line = subagentLineage(rows, child.id)
+        return line[0]?.parentChatId === chatId
+          && line.length === path.length
+          && line.every((step, index) => step.toolCallId === path[index])
+      })
+      if (listed !== undefined) active[chatId] = listed.id
+    }
+    return active
+  }, [views, sidebarSubagents, workspace.subagents, workspace.nativeSubagents])
+
+  return { sidebarSubagents, activeSubagents, subagentPath, pushSubagentView, popSubagentView, closeSubagentView, openSubagent }
 }
