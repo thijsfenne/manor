@@ -4,6 +4,8 @@ What changed for someone who uses Manor, newest first. A version is a tag on `ma
 
 ## Unreleased
 
+## 0.2.1, 2026-11-19
+
 - Settings, Agent settings, Connectors, Usage, the composer's skill menu and the scheduled task dialog drop the subtitles, captions, footnotes and hints that only restated what the screen already shows. A connector's tool list opens with a chevron instead of a change or hide suffix. The mymind connector explains itself in one line, and the cost figure on Usage no longer shows 100% of cost when one provider holds it all.
 - Settings → Appearance has an Interface font and a Code font menu, on the Mac and in the browser. Interface font offers twelve faces, Figtree by default; Code font offers seven, SF Mono by default, and sets code blocks, inline code, diffs, the file viewer and the editors. Each menu names its fonts in their own face, and a sample under it, a message with its chips or a small diff, shows the font under the pointer before you pick. Code never joins characters such as `!=` into one glyph. The added fonts ship with Manor and work offline. The default code font is SF Mono again, where it had been Geist Mono. The phone keeps its fonts.
 - A Session a project thread proposes gets one row in the project's Notes straight away, which reads proposed, then accepted, then the Session's own status. A newer version of the proposal takes over that row, Reject checks it off with the reason, and landed work closes it as before, so a proposed Session no longer leaves a second row behind that never closes. The thread can no longer add its own row for a Session that is still open. A task without a Session that stayed open for more than a week now asks the thread to check or close it.
