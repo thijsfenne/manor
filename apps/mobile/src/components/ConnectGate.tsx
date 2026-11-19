@@ -146,7 +146,7 @@ export function ConnectGate({ children }: { children: ReactNode }) {
           <Text style={styles.title}>Connect to your Mac</Text>
           <Text style={styles.subtitle}>
             {incoming === null
-              ? 'In Manor on your Mac, open Settings → Phone and choose Pair phone.'
+              ? 'In Manor on your Mac, open Settings → Phone and choose Make link.'
               // A link from outside the app could name someone else's server, so the
               // person confirms the exact address before the phone contacts it.
               : `Connect this phone to ${incoming.origin}? Only continue if you just made this code on your Mac.`}

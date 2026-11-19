@@ -1441,7 +1441,7 @@ function LiveTranscript({
       recycleItems={false}
       ListEmptyComponent={
         thread.hasSnapshot
-          ? <View style={styles.empty}><Text style={styles.emptyTitle}>An empty conversation</Text><Text style={styles.emptyCopy}>Say something to get started.</Text></View>
+          ? <View style={styles.empty}><Text style={styles.emptyTitle}>An empty conversation</Text></View>
           : <View style={styles.empty}><Text style={styles.emptyCopy}>Loading conversation…</Text></View>
       }
       onScroll={onScroll}

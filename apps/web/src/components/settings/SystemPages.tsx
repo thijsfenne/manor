@@ -268,7 +268,7 @@ export function MemoryPage({ info, settings, connections, onRequest, onCheck, on
   }
   const writer = dailyLogWriter(connections)
   return (
-    <SettingsPage title="Memory & knowledge" description="Plain markdown folders on this Mac. Manor reads and writes them, and so can you.">
+    <SettingsPage title="Memory & knowledge" description="Plain markdown folders on this Mac.">
       {info === null || settings === null ? <Reading /> : (
         <>
           <SettingsGroup title="Folders">
@@ -282,7 +282,7 @@ export function MemoryPage({ info, settings, connections, onRequest, onCheck, on
             />
             <FolderRow
               label="Knowledge folder"
-              description="Your notes, behind the Knowledge door. An Obsidian vault works as it is."
+              description="Your notes."
               variable="MANOR_VAULT_DIR"
               state={info.vault}
               onChoose={move('knowledgeDir')}
@@ -358,7 +358,7 @@ export function AboutPage({ info, notice, onRequest, onRevealLog, onDismissNotic
           </SettingsGroup>
           <SettingsGroup title="Logs">
             {info.logs.length === 0 ? (
-              <SettingsRow label="No log files" description="The server writes none where Manor knows to look." />
+              <SettingsRow label="No log files" />
             ) : info.logs.map((log) => (
               <SettingsRow key={log.path} label={log.label} description={<Path value={log.path} />}>
                 <Button size="compact" variant="secondary" onClick={() => onRevealLog(log.path)}>Show in Finder</Button>

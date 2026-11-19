@@ -45,8 +45,8 @@ function Vault() {
 
   const content = vault.status === 'none' ? (
       <View style={styles.empty}>
-        <Text style={styles.emptyTitle}>No vault on this Mac</Text>
-        <Text style={styles.emptyCopy}>Knowledge reads the Obsidian vault Manor knows on your Mac. Connect one there and it will show up here.</Text>
+        <Text style={styles.emptyTitle}>No Knowledge folder on this Mac</Text>
+        <Text style={styles.emptyCopy}>Check Settings → Memory & knowledge on your Mac.</Text>
       </View>
   ) : (
     <FileBrowser

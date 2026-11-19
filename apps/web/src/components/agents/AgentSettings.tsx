@@ -289,7 +289,7 @@ export const withLine = (instructions: string, line: string): string => {
 function SuggestedLine({ name, line, onAdd, onDismiss }: { name: string; line: string; onAdd: () => void; onDismiss: () => void }) {
   return (
     <div className="flex flex-col gap-2 rounded-lg border border-line bg-surface-2 px-3 py-2.5">
-      <span className="text-meta text-dim">{name} offered this line. It is not in the instructions until you add it.</span>
+      <span className="text-meta text-dim">{name} offered this line.</span>
       <span className="text-[14px] text-text [overflow-wrap:anywhere]">{line}</span>
       <div className="flex gap-2">
         <Button variant="primary" size="small" onClick={onAdd}>Add to instructions</Button>
@@ -391,7 +391,7 @@ function RootPage({ draft, agent, registry, notes, taskCount, hasFiles, pin, onP
   const access = [
     draft.isCos ? 'Chief of staff' : null,
     draft.placement === 'session' ? 'Sessions' : null,
-    draft.memoryScope ? 'Memory on' : 'Memory off',
+    draft.memoryScope ? 'Memory on' : null,
   ].filter((part) => part !== null).join(', ')
 
   const remove = () => {
@@ -435,7 +435,6 @@ function RootPage({ draft, agent, registry, notes, taskCount, hasFiles, pin, onP
       </label>
 
       <div className="flex flex-col gap-1.5">
-        <span className="pl-0.5 text-meta font-medium text-dim">Brain</span>
         <ModelField
           // An agent saved before models were required runs on its driver's default; say which.
           draft={draft.model === undefined ? { ...draft, model: defaultModel(draft.driver) } : draft}
@@ -542,7 +541,7 @@ function AccessPage({ draft, agent, agents, subagents, edit, onOpenSubagents }: 
       <Group>
         <SwitchRow
           label="Memory"
-          hint="Gets your personal memory and keeps its own notes. Off means no notes."
+          hint="Gets your personal memory and keeps its own notes."
           checked={draft.memoryScope}
           onChange={(memoryScope) => edit({ memoryScope })}
         />

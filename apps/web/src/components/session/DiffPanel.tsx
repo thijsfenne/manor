@@ -244,7 +244,7 @@ export function DiffPanel({
           <div className="pt-3">
             {partial ? (
               <p className="m-0 mb-3 rounded-lg bg-[color-mix(in_srgb,var(--color-warn)_10%,transparent)] px-3 py-2 text-label text-warn">
-                Partial diff. Some files are too large to show here and are listed by name only. Open one in the files panel to read all of it.
+                Some changes are not shown.
               </p>
             ) : null}
             {hidden > 0 ? (
@@ -261,7 +261,7 @@ export function DiffPanel({
               <p className="m-0 py-6 text-label text-dim">Reading the diff…</p>
             ) : files.length === 0 ? (
               <p className="m-0 py-6 text-label text-dim">
-                {sessionScope ? (hasSession ? 'Nothing to land yet. This Session has no uncommitted changes of its own.' : 'No linked git folder to diff.') : 'This turn changed no lines.'}
+                {sessionScope ? (hasSession ? 'No changes yet.' : 'No linked git folder to diff.') : 'This turn changed no lines.'}
               </p>
             ) : (
               <div className="flex flex-col gap-3">

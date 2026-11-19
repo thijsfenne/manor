@@ -392,7 +392,6 @@ export function SlashMenuList({ items, index, onPick, onHover }: { items: readon
   }, [index])
   return (
     <>
-      <li role="presentation" className="px-2 pt-1.5 pb-1 text-meta text-dim">Basic blocks</li>
       {items.map((item, position) => (
         <li
           key={item.id}
@@ -410,10 +409,7 @@ export function SlashMenuList({ items, index, onPick, onHover }: { items: readon
           <span className="grid h-8 w-8 flex-none place-items-center rounded-md border border-line bg-surface text-muted">
             <Icon icon={SLASH_ICONS[item.id]} size={16} />
           </span>
-          <span className="min-w-0 flex-1">
-            <span className="block truncate text-label text-text">{item.name}</span>
-            <span className="block truncate text-meta text-muted">{item.description}</span>
-          </span>
+          <span className="min-w-0 flex-1 truncate text-label text-text">{item.name}</span>
           <span className="flex-none font-mono text-meta text-dim">{item.hint}</span>
         </li>
       ))}

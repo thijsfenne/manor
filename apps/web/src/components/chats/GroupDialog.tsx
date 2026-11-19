@@ -166,7 +166,7 @@ export function GroupDialogContent({ mode, agents, members, title, notice = null
         </ul>
         <span className={formHintClass}>
           {picked.length < MIN_MEMBERS
-            ? `Pick at least ${MIN_MEMBERS}. Talking to one persona is a direct message.`
+            ? `Pick at least ${MIN_MEMBERS}.`
             : `${picked.length} in this group. Only the chief of staff may hand work to the others.`}
         </span>
       </section>

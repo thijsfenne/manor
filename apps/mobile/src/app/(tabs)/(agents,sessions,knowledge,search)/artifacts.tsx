@@ -86,7 +86,7 @@ function Library() {
         />
       </View>
       {!live ? (
-        <Text style={styles.note}>Your Mac is offline. The library loads once the connection is back.</Text>
+        <Text style={styles.note}>Your Mac is offline.</Text>
       ) : artifacts.error !== null ? (
         <Text style={[styles.note, styles.error]}>{artifacts.error}</Text>
       ) : loading || artifacts.status === 'unknown' ? (

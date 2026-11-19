@@ -273,7 +273,7 @@ export function ProjectSettingsSheet({ project, open, onClose, onFiles, onDelete
             <View style={styles.folderHint}>
               <Text style={styles.hint}>
                 {draft.repoPaths.length === 0
-                  ? 'No folders. Most projects here don’t need one.'
+                  ? 'No folders.'
                   : full
                     ? `That is the most a project can link (${MAX_PROJECT_FOLDERS}).`
                     : 'Every folder is real, and every persona here can write to it.'}
@@ -308,7 +308,7 @@ export function ProjectSettingsSheet({ project, open, onClose, onFiles, onDelete
             label="Knowledge work memory"
             onChange={(checked) => setDraft({ ...draft, memoryScope: checked ? 'knowledge' : 'project' })}
           />
-          <Text style={styles.hint}>Search every memory index, not only this project’s own. For the planning room.</Text>
+          <Text style={styles.hint}>Search every memory index, not only this project’s own.</Text>
         </View>
 
         {error === null ? null : <Text accessibilityRole="alert" style={styles.error}>{error}</Text>}

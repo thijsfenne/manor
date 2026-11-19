@@ -135,7 +135,7 @@ function FileDiff({ file }: { file: ChangedFile }) {
     <Animated.View entering={FadeIn.duration(160)} style={styles.diff}>
       {hunks.length === 0 ? (
         <Text style={styles.empty}>
-          {file.diffTruncated ? truncatedNote : file.diffSkipped ? skippedNote : file.status === 'deleted' ? 'This file was deleted.' : 'The runtime sent no content, so there is no diff to show.'}
+          {file.diffTruncated ? truncatedNote : file.diffSkipped ? skippedNote : file.status === 'deleted' ? 'This file was deleted.' : 'No diff to show.'}
         </Text>
       ) : (
         hunks.map((edit, index) => <Hunk edit={edit} key={`${file.raw}:hunk:${index}`} labelled={hunks.length > 1} />)

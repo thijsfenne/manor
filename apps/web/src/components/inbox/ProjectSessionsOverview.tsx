@@ -40,12 +40,12 @@ interface ProjectSessionsOverviewProps {
 
 // Each fold leads with its state's mark: only the two live states carry colour, and a fold
 // with no rows drops to dim like the quiet ones. Waiting and Archived show only with rows.
-const GROUPS: { id: SessionOverviewSection; label: string; hint: string; icon: IconSvgElement; tone: string }[] = [
+const GROUPS: { id: SessionOverviewSection; label: string; hint?: string; icon: IconSvgElement; tone: string }[] = [
   { id: 'waiting', label: 'Needs you', hint: 'Proposals, questions, reviews and results to confirm.', icon: AlertCircleIcon, tone: 'text-warn' },
-  { id: 'working', label: 'Working', hint: 'Sessions with a turn running.', icon: Progress03Icon, tone: 'text-busy' },
+  { id: 'working', label: 'Working', icon: Progress03Icon, tone: 'text-busy' },
   { id: 'background', label: 'Waiting', hint: 'Sessions waiting on background work they started.', icon: HourglassIcon, tone: 'text-muted' },
-  { id: 'settled', label: 'Settled', hint: 'Settled sessions.', icon: CircleCheckIcon, tone: 'text-dim' },
-  { id: 'archived', label: 'Archived', hint: 'Archived sessions.', icon: Archive02Icon, tone: 'text-dim' },
+  { id: 'settled', label: 'Settled', icon: CircleCheckIcon, tone: 'text-dim' },
+  { id: 'archived', label: 'Archived', icon: Archive02Icon, tone: 'text-dim' },
 ]
 
 /**
@@ -92,7 +92,7 @@ export function ProjectSessionsOverview({ threadId, overview, agents, onOpen, on
             </button>
             <Fold open={open[id]}>
               {rows.length === 0 ? (
-                <p className="m-0 px-3 pt-1.5 pb-1 text-[13px] text-dim">{hint}</p>
+                hint === undefined ? null : <p className="m-0 px-3 pt-1.5 pb-1 text-[13px] text-dim">{hint}</p>
               ) : (
                 <ul className="m-0 flex list-none flex-col gap-0.5 p-0 pt-1.5">
                   {shown.map((row) => {

@@ -665,7 +665,7 @@ export function KnowledgePanel({
           return (
             <span
               className="text-dim underline decoration-dotted underline-offset-2"
-              title="No note in this vault answers to that name"
+              title="No note has this name"
             >
               {children}
             </span>
@@ -948,8 +948,8 @@ function EmptyStage({ listed, docked, yieldsNarrow, canCreate, onCreate }: { lis
   return (
     <div role={docked ? 'region' : 'main'} aria-label="Knowledge" className={`grid min-h-0 place-items-center px-6 ${yieldsNarrow ? 'max-[760px]:hidden' : ''}`}>
       <div className={`text-center ${docked ? '' : 'max-w-[46ch]'}`}>
-        <h1 className="m-0 font-display text-xl font-medium text-text">{listed ? 'Your notes, close at hand' : 'Reading the vault…'}</h1>
-        <p className="mt-2 mb-5 text-[13px] leading-relaxed text-muted">Open a note from the sidebar, or capture something new in Inbox. Changes save automatically.</p>
+        <h1 className="m-0 font-display text-xl font-medium text-text">{listed ? 'No note open' : 'Reading the vault…'}</h1>
+        <p className="mt-2 mb-5 text-[13px] leading-relaxed text-muted">Open a note from the sidebar, or capture something new in Inbox.</p>
         {listed ? <Button variant="primary" size="compact" disabled={!canCreate} onClick={onCreate}>New note</Button> : null}
         <p className="mt-5 mb-0 text-[12px] leading-[2] text-muted">
           <Key>/</Key> to filter notes, <Key>⌘S</Key> to save now

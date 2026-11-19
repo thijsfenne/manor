@@ -11,25 +11,24 @@ import { chain, enclosing, inFrontmatter, linePrefix } from './noteSyntax'
 export interface SlashItem {
   id: InsertKind
   name: string
-  description: string
   /** The markdown it writes, or the shortcut where there is no markdown to show. */
   hint: string
   keywords: readonly string[]
 }
 
 export const SLASH_ITEMS: readonly SlashItem[] = [
-  { id: 'text', name: 'Text', description: 'Plain writing, no block', hint: '⌘⌥0', keywords: ['paragraph', 'plain', 'body'] },
-  { id: 'h1', name: 'Heading 1', description: 'Big section heading', hint: '#', keywords: ['h1', 'title', 'heading'] },
-  { id: 'h2', name: 'Heading 2', description: 'Medium section heading', hint: '##', keywords: ['h2', 'subtitle', 'heading'] },
-  { id: 'h3', name: 'Heading 3', description: 'Small section heading', hint: '###', keywords: ['h3', 'heading'] },
-  { id: 'bullet', name: 'Bulleted list', description: 'A simple bulleted list', hint: '-', keywords: ['ul', 'unordered', 'bullet', 'list'] },
-  { id: 'number', name: 'Numbered list', description: 'A list with numbers', hint: '1.', keywords: ['ol', 'ordered', 'number', 'list'] },
-  { id: 'todo', name: 'To-do list', description: 'Track tasks with a checkbox', hint: '[]', keywords: ['todo', 'task', 'checkbox', 'check'] },
-  { id: 'quote', name: 'Quote', description: 'Capture a quote', hint: '>', keywords: ['blockquote', 'citation'] },
-  { id: 'divider', name: 'Divider', description: 'Separate sections with a line', hint: '---', keywords: ['hr', 'rule', 'line', 'separator'] },
-  { id: 'code', name: 'Code block', description: 'Capture a code snippet', hint: '```', keywords: ['code', 'snippet', 'fence', 'pre'] },
-  { id: 'callout', name: 'Callout', description: 'Make a passage stand out', hint: '> [!note]', keywords: ['note', 'info', 'tip', 'warning', 'admonition'] },
-  { id: 'table', name: 'Table', description: 'A small two column table', hint: '| |', keywords: ['grid', 'columns', 'rows'] },
+  { id: 'text', name: 'Text', hint: '⌘⌥0', keywords: ['paragraph', 'plain', 'body'] },
+  { id: 'h1', name: 'Heading 1', hint: '#', keywords: ['h1', 'title', 'heading'] },
+  { id: 'h2', name: 'Heading 2', hint: '##', keywords: ['h2', 'subtitle', 'heading'] },
+  { id: 'h3', name: 'Heading 3', hint: '###', keywords: ['h3', 'heading'] },
+  { id: 'bullet', name: 'Bulleted list', hint: '-', keywords: ['ul', 'unordered', 'bullet', 'list'] },
+  { id: 'number', name: 'Numbered list', hint: '1.', keywords: ['ol', 'ordered', 'number', 'list'] },
+  { id: 'todo', name: 'To-do list', hint: '[]', keywords: ['todo', 'task', 'checkbox', 'check'] },
+  { id: 'quote', name: 'Quote', hint: '>', keywords: ['blockquote', 'citation'] },
+  { id: 'divider', name: 'Divider', hint: '---', keywords: ['hr', 'rule', 'line', 'separator'] },
+  { id: 'code', name: 'Code block', hint: '```', keywords: ['code', 'snippet', 'fence', 'pre'] },
+  { id: 'callout', name: 'Callout', hint: '> [!note]', keywords: ['note', 'info', 'tip', 'warning', 'admonition'] },
+  { id: 'table', name: 'Table', hint: '| |', keywords: ['grid', 'columns', 'rows'] },
 ]
 
 /** The items for `query`, best match first: name start, then a word in the name, then a keyword. */

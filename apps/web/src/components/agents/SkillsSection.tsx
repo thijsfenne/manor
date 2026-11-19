@@ -22,7 +22,7 @@ export function SkillsSection({ draft, skills, onChange }: SkillsSectionProps) {
     return (
       <div className={formFieldClass}>
         <span className={formLabelClass}>Skills</span>
-        <span className={formHintClass}>None imported yet. Import one under Plugins → Skills to make it attachable here.</span>
+        <span className={formHintClass}>None imported yet. Import one under Plugins → Skills.</span>
       </div>
     )
   }
@@ -43,7 +43,7 @@ export function SkillsSection({ draft, skills, onChange }: SkillsSectionProps) {
               <span className="flex flex-col gap-1">
                 <span className="font-mono text-meta text-text">${skill.id}</span>
                 <span>
-                  {skill.description || 'No description. What it does is whatever its SKILL.md says, unannounced.'}
+                  {skill.description || 'No description.'}
                 </span>
               </span>
             }

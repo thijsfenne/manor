@@ -4,7 +4,6 @@ import {
   CancelCircleIcon,
   Clock01Icon,
   Flag02Icon,
-  Idea01Icon,
   Tick02Icon,
   ViewIcon,
 } from '@hugeicons/core-free-icons'
@@ -194,15 +193,10 @@ function CandidateDetail({
   )
 }
 
-function EmptyStage({ title, body, icon = false }: { title: string; body: string; icon?: boolean }) {
+function EmptyStage({ title, body }: { title: string; body: string }) {
   return (
     <div className="mx-auto grid w-full min-h-0 max-w-page flex-1 place-items-center px-8 py-12">
       <div className="max-w-[380px] text-center">
-        {icon ? (
-          <span className="mx-auto mb-3 grid size-9 place-items-center rounded-lg bg-surface text-[var(--color-skill)]">
-            <Icon icon={Idea01Icon} size={18} />
-          </span>
-        ) : null}
         <h2 className="m-0 text-[16px] font-semibold">{title}</h2>
         <p className="mt-1.5 mb-0 text-label text-muted">{body}</p>
       </div>
@@ -294,7 +288,6 @@ export function SuggestionsView({ ledger, canDiscuss, onRefresh, onDiscuss }: Su
         />
       ) : suggestions.length === 0 ? (
         <EmptyStage
-          icon
           title="No suggestions yet"
           body="No recurring workflow is on record. A candidate appears once a session tags one."
         />

@@ -146,8 +146,7 @@ export function ArtifactDetailDialog({
           )}
           {spaces.length === 0 ? null : (
             <div className="mt-6 border-t border-line pt-4">
-              <p className="m-0 text-meta font-medium tracking-[0.08em] text-dim uppercase">In spaces</p>
-              <div className="mt-2 flex flex-wrap gap-1.5">
+              <div className="flex flex-wrap gap-1.5">
                 {spaces.map((space) => (
                   <Badge key={space.id} icon={Folder01Icon}>
                     {space.name}

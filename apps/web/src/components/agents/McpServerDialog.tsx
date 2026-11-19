@@ -151,7 +151,7 @@ export function McpServerDialog({
         <FormField
           label="Paste a config"
           optional
-          hint="The JSON block from the server’s README, in any of the usual shapes. Env values are dropped and only their variable names kept; a credential inside an argument is kept as pasted, and flagged."
+          hint="The JSON block from the server’s README. Env values keep only their names, and a credential in an argument is flagged."
         >
           <textarea
             className={`${formInputClass} min-h-[76px] resize-y font-mono text-[12px] leading-relaxed`}
@@ -216,7 +216,7 @@ export function McpServerDialog({
 
       <FormField
         label="Command"
-        hint="The executable Manor starts. Leave empty for an HTTP server. An absolute path is safest on the VPS."
+        hint="The executable Manor starts. Leave empty for an HTTP server. An absolute path is safest."
       >
         <input
           className={`${formInputClass} font-mono`}
@@ -339,8 +339,7 @@ export function McpServerDialog({
         <span className="flex min-w-0 flex-col gap-0.5">
           <span className="text-[13px] text-text">This server can change things</span>
           <span className={formHintClass}>
-            Shows a warning wherever it is attached. It does not narrow any sandbox: the Codex sandbox
-            governs shell commands and cannot reach an MCP process at all.
+            Shows a warning wherever it is attached. It does not sandbox the server.
           </span>
         </span>
       </label>
@@ -374,7 +373,7 @@ export function McpServerDialog({
       <ModalFooter>
         {armed ? (
           <ConfirmStrip
-            question={`Delete ${initial.name}? Every agent holding it is detached in the same write.`}
+            question={`Delete ${initial.name}? Every agent using it loses it.`}
             onConfirm={() => {
               setArmed(false)
               if (!onDelete()) setProblem(OFFLINE)

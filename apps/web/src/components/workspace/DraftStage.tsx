@@ -161,9 +161,9 @@ export function DraftStage({
     : []
   const draftRole = draftAgent === undefined
     ? ''
-    : draftAgent.isCos
-      ? `${draftAgent.role === '' ? 'Chief of staff' : draftAgent.role}${passesTo.length === 0 ? '' : `. Passes work to ${nameList(passesTo)}.`}`
-      : draftAgent.role
+    : passesTo.length > 0
+      ? `Passes work to ${nameList(passesTo)}.`
+      : draftAgent.isCos && draftAgent.role === '' ? 'Chief of staff' : draftAgent.role
   // The stage's sources travel with the create, so the slot they were staged in is
   // spent. Left standing they would ride along into the next new chat as well. A create
   // the server then refuses puts them back, the same way the text goes back in the box.
@@ -372,7 +372,7 @@ export function DraftStage({
               <div className="mb-6 flex flex-col items-center gap-2.5">
                 <Avatar name={draftAgent.name} color={draftAgent.color} src={draftAgent.avatar} shape={draftAgent.avatarShape} tone={draftAgent.avatarTone} size={56} />
                 <h1 className="m-0 text-center font-display text-[24px] font-semibold tracking-[-0.02em] text-text">
-                  Message {draftAgent.name}
+                  {draftAgent.name}
                 </h1>
                 {draftRole === '' ? null : <p className="m-0 text-center text-meta text-dim">{draftRole}</p>}
                 {draftAgent.isCos ? (

@@ -232,7 +232,7 @@ function ConversationRow({
           <RoleBadge label={row.kind === 'pair' ? 'View only' : agent === undefined ? 'Group' : roleLabel(agent)} />
         </View>
         <Text numberOfLines={1} style={styles.preview}>
-          {row.chat === null ? 'No conversation yet. Tap to start.' : row.preview || 'Nothing said yet.'}
+          {row.chat === null ? 'No conversation yet.' : row.preview || 'Nothing said yet.'}
         </Text>
       </View>
       <RowMeta row={row} />

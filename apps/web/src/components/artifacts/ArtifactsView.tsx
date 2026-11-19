@@ -280,7 +280,6 @@ export function ArtifactsView({
                     : 'border-line bg-surface text-muted hover:text-text'
                 }`}
               >
-                <span className="h-2 w-2 rounded-full bg-muted" aria-hidden="true" />
                 {space.name}
               </button>
             ))}

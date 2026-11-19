@@ -7,7 +7,6 @@
  * FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, DESIGN.md, and every shipping raster carrying its provenance
  */
 import ArrowDown01Icon from '@hugeicons/core-free-icons/ArrowDown01Icon'
-import BubbleChatIcon from '@hugeicons/core-free-icons/BubbleChatIcon'
 import FolderOffIcon from '@hugeicons/core-free-icons/FolderOffIcon'
 import Tick02Icon from '@hugeicons/core-free-icons/Tick02Icon'
 import Undo02Icon from '@hugeicons/core-free-icons/Undo02Icon'
@@ -118,12 +117,12 @@ function ProjectInbox() {
   }
 
   const empty = workspace.hasDirectory
-    ? { title: 'No sessions yet', copy: 'Start a Session with the button at the bottom right.' }
+    ? { title: 'No sessions yet' }
     : status === 'offline'
-      ? { title: 'No connection to your Mac', copy: 'Open Manor on your Mac. Your Sessions show up here once the connection is back.' }
+      ? { title: 'No connection to your Mac', copy: 'Open Manor on your Mac.' }
       : status === 'connecting'
-        ? { title: 'Connecting to your Mac', copy: 'Your projects and Sessions show up here once Manor connects.' }
-        : { title: 'Loading Sessions', copy: 'Your Mac is sending over your projects and Sessions.' }
+        ? { title: 'Connecting to your Mac' }
+        : { title: 'Loading Sessions' }
 
   return (
     <SectionScaffold compactTitle edgeToEdge title="Sessions">
@@ -139,11 +138,8 @@ function ProjectInbox() {
         onEndReachedThreshold={0.4}
         ListEmptyComponent={
           <View style={styles.empty}>
-            <View style={styles.emptyMark}>
-              <HugeiconsIcon color={colors.muted} icon={BubbleChatIcon} size={22} strokeWidth={1.6} />
-            </View>
             <Text style={styles.emptyTitle}>{empty.title}</Text>
-            <Text style={styles.emptyCopy}>{empty.copy}</Text>
+            {empty.copy === undefined ? null : <Text style={styles.emptyCopy}>{empty.copy}</Text>}
           </View>
         }
         renderItem={({ item }) => {
@@ -435,16 +431,6 @@ const styles = StyleSheet.create({
   },
   quietTitle: { flex: 1, color: colors.muted, fontFamily: fonts.sans, fontSize: 17, lineHeight: 22 },
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: spacing.sm, padding: spacing.xxl },
-  emptyMark: {
-    width: 48,
-    height: 48,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: radius.lg,
-    ...squircle,
-    backgroundColor: colors.surface,
-    marginBottom: spacing.sm,
-  },
   emptyTitle: { color: colors.text, fontFamily: fonts.sans, fontSize: 20, fontWeight: '500' },
   emptyCopy: { maxWidth: 280, color: colors.muted, fontFamily: fonts.sans, fontSize: 15, lineHeight: 21, textAlign: 'center' },
   toolbarArea: {

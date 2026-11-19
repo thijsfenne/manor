@@ -27,7 +27,7 @@ export function McpSection({ draft, registry, onChange }: McpSectionProps) {
       <div className={formFieldClass}>
         <span className={formLabelClass}>MCP servers</span>
         <span className={formHintClass}>
-          None registered yet. Add one under Plugins → Connectors to make it attachable here.
+          None registered yet. Add one under Plugins → Connectors.
         </span>
       </div>
     )

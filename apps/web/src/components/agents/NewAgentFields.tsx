@@ -88,7 +88,7 @@ export function NewAgentFields({ draft, providers, disabled = false, onChange }:
 
       <label className={formFieldClass}>
         <span className={formLabelClass}>Name <span className="text-meta text-dim">required</span></span>
-        <input className={formInputClass} value={draft.name} onChange={(event) => edit({ name: event.target.value })} placeholder="Name your agent" autoFocus maxLength={60} required />
+        <input className={formInputClass} value={draft.name} onChange={(event) => edit({ name: event.target.value })} placeholder="Name" autoFocus maxLength={60} required />
       </label>
 
       <FormField label="What should this agent help with?">

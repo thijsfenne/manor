@@ -219,13 +219,7 @@ export function SideChatPanel({
           hasSnapshot={thread.hasSnapshot}
           variant="panel"
           emptyNote={
-            <span className="block">
-              Ask about the conversation on the left.
-              <span className="mt-1.5 block text-meta">
-                It reads that chat up to the moment you ask, and answers only here. It holds no
-                tools, so it cannot open a file or run anything.
-              </span>
-            </span>
+            <span className="block text-meta">It has no tools, so it cannot open a file or run anything.</span>
           }
         />
       )}

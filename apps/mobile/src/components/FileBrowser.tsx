@@ -132,7 +132,7 @@ export function FileBrowser({ place, onPlace, files, truncated, preview, live, a
   return (
     <Animated.View entering={still ? undefined : direction === 'back' ? SlideInLeft.duration(220) : FadeIn.duration(120)} exiting={still ? undefined : FadeOut.duration(80)} key={place.dir} style={styles.fill}>
       {!live ? (
-        <Empty text="Your Mac is offline. Files load once the connection is back." />
+        <Empty text="Your Mac is offline." />
       ) : files === null ? (
         <Loading text="Loading files…" />
       ) : files.length === 0 ? (
@@ -161,7 +161,7 @@ export function FileBrowser({ place, onPlace, files, truncated, preview, live, a
             keyboardShouldPersistTaps="handled"
             keyExtractor={(entry) => `${entry.kind}:${entry.path}`}
             ListEmptyComponent={<Empty text={searching ? `No files match “${query.trim()}”.` : 'This folder is empty.'} />}
-            ListFooterComponent={truncated ? <Text style={styles.truncated}>Not everything is shown. Manor cuts long lists short.</Text> : null}
+            ListFooterComponent={truncated ? <Text style={styles.truncated}>Not everything is shown.</Text> : null}
             renderItem={({ item }) => (
               <Pressable accessibilityLabel={item.path} accessibilityRole="button" onPress={() => openEntry(item)} style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}>
                 <View style={styles.mark}>

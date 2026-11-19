@@ -107,7 +107,7 @@ export function SubagentsPage({ policy, notice, onRequest, onSave, onDismissNoti
   return (
     <SettingsPage
       title="Subagents"
-      description="Agents start subagents on any model and level allowed here. A request outside it is refused with the reason."
+      description="Agents start subagents on any model and level allowed here."
     >
       <SettingsGroup
         title="Allowed"

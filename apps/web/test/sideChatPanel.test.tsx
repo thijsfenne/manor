@@ -140,7 +140,6 @@ describe('the side chat panel', () => {
   it('says what the panel is while the thread is still empty', () => {
     const html = render()
 
-    expect(html).toContain('Ask about the conversation on the left')
     expect(html).toContain('cannot open a file or run anything')
   })
 

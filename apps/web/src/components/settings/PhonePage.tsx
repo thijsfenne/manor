@@ -206,7 +206,7 @@ export function PhonePage({ access, pairingLink, notice, requestEvents, onReques
 
       <SettingsGroup title="Pair">
         <SettingsRow label="Pair phone" description="Makes a one-time link and QR code. It works for 10 minutes, on one device.">
-          <Button size="small" disabled={pairing.pending} onClick={createLink}>{shown === null ? 'Pair phone' : 'New link'}</Button>
+          <Button size="small" disabled={pairing.pending} onClick={createLink}>{shown === null ? 'Make link' : 'New link'}</Button>
         </SettingsRow>
         {shown !== null && pairingLink !== null ? (
           <PairingPanel key={pairingLink.expiresAt} link={pairingLink} pairedName={shown.usedBy ?? newDevice?.name ?? null} onDone={() => setShown(null)} />

@@ -41,8 +41,7 @@ const SECTIONS = [
   { value: 'suggestions', label: 'Suggestions' },
 ] as const satisfies readonly { value: PluginSection; label: string }[]
 
-const INTRO: Record<PluginSection, string> = {
-  connectors: 'The external tools available to Manor and its agents.',
+const INTRO: Partial<Record<PluginSection, string>> = {
   skills: 'Reusable instructions your agents can call on.',
   suggestions: 'Repeated workflows that could become skills.',
 }
@@ -58,7 +57,7 @@ function PluginsRoom() {
     <ScrollView contentContainerStyle={styles.page}>
       <View style={styles.head}>
         <SegmentedControl fill label="Plugin section" options={SECTIONS} value={section} onChange={setSection} />
-        <Text style={styles.intro}>{INTRO[section]}</Text>
+        {INTRO[section] === undefined ? null : <Text style={styles.intro}>{INTRO[section]}</Text>}
       </View>
       {section === 'connectors' ? <Connectors /> : section === 'skills' ? <Skills /> : <Suggestions />}
     </ScrollView>
@@ -205,7 +204,7 @@ function Suggestions() {
     return <EmptyCard title="No memory folder on this host" body="Suggestions are read from the memory folder on the Mac." />
   }
   if (groups.length === 0) {
-    return <EmptyCard idea title="No suggestions yet" body="No recurring workflow is on record." />
+    return <EmptyCard title="No suggestions yet" body="No recurring workflow is on record." />
   }
   return (
     <View style={styles.groups}>

@@ -10,7 +10,7 @@ The phone finds its Mac by pairing, once. Nothing about the Mac is built into th
 1. Install Tailscale on the Mac and on the phone, and sign in to the same tailnet on both.
    The tailnet needs MagicDNS and HTTPS certificates (Tailscale admin console, DNS).
 2. Open the Manor app on the phone. It shows Connect to your Mac.
-3. On the Mac, open Settings → Phone, turn on Tailscale HTTPS and choose Pair phone.
+3. On the Mac, open Settings → Phone, turn on Tailscale HTTPS and choose Make link.
    Scan the QR code with the phone, or paste the link.
 
 Tailscale HTTPS runs `tailscale serve` for Manor's own port, so only devices in your

@@ -831,14 +831,9 @@ export function BrowserPanel({
 
       {!bridge?.webviews ? (
         <div className="grid min-h-0 place-items-center px-8 text-center">
-          <div>
-            <p className="m-0 text-label font-medium text-text">{bridge
-              ? 'Update the desktop app to use the browser'
-              : 'The shared browser needs the desktop app'}</p>
-            <p className="mx-auto mt-1.5 max-w-[36ch] text-meta leading-relaxed text-dim">
-              The shared browser runs inside the Manor desktop app.
-            </p>
-          </div>
+          <p className="m-0 text-label font-medium text-text">{bridge
+            ? 'Update the desktop app to use the browser'
+            : 'The shared browser needs the desktop app'}</p>
         </div>
       ) : (
         <div ref={frameRef} data-browser-slot="sidebar"

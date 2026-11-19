@@ -121,7 +121,7 @@ export function StoragePage({ settings, archivedAt, notice, requestEvents, onSav
         <SettingsRow label="Keep picture copies" description="Copies agents read from a chat's working folder. The chat keeps the picture itself.">
           {control('attachmentRetentionDays', 'Keep picture copies', 'Keep all')}
         </SettingsRow>
-        <SettingsRow label="Keep backups" description="Nightly copies of Manor's database in ~/.manor/backups. Each copy is the full database.">
+        <SettingsRow label="Keep backups" description="Nightly copies of Manor's database in ~/.manor/backups.">
           {control('backupRetentionDays', 'Keep backups', 'Keep all')}
         </SettingsRow>
       </SettingsGroup>

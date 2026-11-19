@@ -480,7 +480,6 @@ function ProjectPicker({
         </View>
       ) : (
         <>
-          <Text style={styles.intro}>Where does this conversation belong?</Text>
           {general === undefined ? null : (
             <View style={[styles.group, projects.length > 0 && styles.noProjectGroup]}>
               <Pressable
@@ -882,7 +881,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   content: { gap: spacing.xl, paddingHorizontal: spacing.xl, paddingTop: spacing.md, paddingBottom: 48 },
-  intro: { color: colors.muted, fontFamily: fonts.sans, fontSize: 15, lineHeight: 21 },
   group: { overflow: 'hidden', borderRadius: radius.panel, ...squircle, backgroundColor: colors.surface },
   noProjectGroup: { marginBottom: spacing.md },
   projectRow: {

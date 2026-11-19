@@ -221,7 +221,7 @@ function ProviderCard({ usage, now }: { usage: ProviderUsage; now: number }) {
         <ProviderMark driver={usage.provider} size={14} />
         <span className="text-[14px] font-medium text-text capitalize">{usage.provider}</span>
         <span className="ml-auto flex gap-2 text-label whitespace-nowrap text-dim">
-          {usage.plan === undefined ? null : <span>{usage.plan}</span>}
+          {usage.plan === undefined ? null : <span className="capitalize">{usage.plan}</span>}
           {note === undefined ? null : <span>at {note}</span>}
         </span>
       </header>

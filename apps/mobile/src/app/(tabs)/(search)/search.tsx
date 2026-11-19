@@ -156,7 +156,7 @@ export default function SearchScreen() {
       : failed
         ? { title: 'Search failed', copy: SEARCH_FAILED }
         : waiting
-          ? { title: 'Searching', copy: 'Your Mac is looking through messages and notes.' }
+          ? { title: 'Searching' }
           : { title: 'Nothing found', copy: 'Try fewer words, or a word from the title.' }
 
   return (
@@ -173,7 +173,7 @@ export default function SearchScreen() {
               <HugeiconsIcon color={colors.muted} icon={Search01Icon} size={22} strokeWidth={1.6} />
             </View>
             <Text style={styles.emptyTitle}>{empty.title}</Text>
-            <Text style={styles.emptyCopy}>{empty.copy}</Text>
+            {empty.copy === undefined ? null : <Text style={styles.emptyCopy}>{empty.copy}</Text>}
           </View>
         }
         ListFooterComponent={results.length > 0 && (waiting || failed) ? (

@@ -17,11 +17,11 @@ import { Text } from '@/components/Text'
 import { colors, fonts, radius, spacing, squircle } from '@/theme'
 
 /** Project thread states use the same English labels and marks as the Mac; a fold with no rows drops to dim, and Waiting shows only with rows. */
-const GROUPS: { id: SessionOverviewGroup; label: string; hint: string; icon: IconSvgElement; tone: ColorValue }[] = [
+const GROUPS: { id: SessionOverviewGroup; label: string; hint?: string; icon: IconSvgElement; tone: ColorValue }[] = [
   { id: 'waiting', label: 'Needs you', hint: 'Proposals, questions, reviews and results to confirm.', icon: AlertCircleIcon, tone: colors.warning },
-  { id: 'working', label: 'Working', hint: 'Sessions with a turn running.', icon: Progress03Icon, tone: colors.busy },
+  { id: 'working', label: 'Working', icon: Progress03Icon, tone: colors.busy },
   { id: 'background', label: 'Waiting', hint: 'Sessions waiting on background work they started.', icon: HourglassIcon, tone: colors.muted },
-  { id: 'settled', label: 'Settled', hint: 'Settled sessions.', icon: CircleCheckIcon, tone: colors.dim },
+  { id: 'settled', label: 'Settled', icon: CircleCheckIcon, tone: colors.dim },
 ]
 
 /**
@@ -106,7 +106,7 @@ export function SessionOverviewList({ threadId, overview, agents, inset, onOpen,
             )}
           </Pressable>
           {!unfolded[id] ? null
-            : overview[id].length === 0 ? <Text style={styles.empty}>{hint}</Text>
+            : overview[id].length === 0 ? (hint === undefined ? null : <Text style={styles.empty}>{hint}</Text>)
             : (id === 'settled' ? shownSettled : overview[id]).map((entry) => row(entry, id === 'settled', id === 'working'))}
           {id !== 'settled' || !unfolded[id] || moreSettled <= 0 ? null : (
             <Pressable

@@ -136,7 +136,7 @@ export function ContextFilesPage({ files, notice, requestEvents, onRequest, onSa
   return (
     <SettingsPage
       title="Context files"
-      description="Shared with Claude Code, Codex and Grok, inside Manor and out. A change here applies everywhere these files are loaded."
+      description="Shared with Claude Code, Codex and Grok."
       {...(files?.root ? { onSaveShortcut: saveOpen } : {})}
     >
       {files === null ? (

@@ -6,7 +6,6 @@ import {
   CodeIcon,
   Copy01Icon,
   EyeIcon,
-  File01Icon,
   FloppyDiskIcon,
   RefreshIcon,
   Search01Icon,
@@ -532,11 +531,7 @@ export function RepoFilesPanel({
           <div className="relative grid min-h-0 min-w-0">
             {selectedPath === null && !searching && files !== undefined && files.length > 0 ? (
               <div className="grid min-h-0 place-items-center px-6 text-center">
-                <div className="flex flex-col items-center">
-                  <Icon icon={File01Icon} size={24} className="mb-3 text-dim" />
-                  <p className="m-0 text-[13px] font-medium text-text">Open a file</p>
-                  <p className="mt-1 mb-0 text-[12px] text-dim">Select a file from the workspace tree.</p>
-                </div>
+                <p className="m-0 text-[13px] font-medium text-text">Open a file</p>
               </div>
             ) : selectedPath !== null && editor === null ? (
               <FilePreview path={selectedPath} result={result} />

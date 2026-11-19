@@ -30,7 +30,7 @@ export function ConnectScreen({ error }: { error: string | null }) {
       <form className="flex w-full max-w-[360px] flex-col gap-3 rounded-xl border border-line bg-surface p-6" onSubmit={submit}>
         <h1 className="m-0 font-display text-[16px] font-semibold tracking-[0.02em] text-text">Connect to your Mac</h1>
         <p className="mt-[-4px] mb-1 text-[13px] leading-relaxed text-muted">
-          In Manor on your Mac, open Settings → Phone and choose Pair phone. Open the link in this browser, or paste it here.
+          In Manor on your Mac, open Settings → Phone and choose Make link. Open the link in this browser, or paste it here.
         </p>
         <input
           aria-label="Paste the pairing link"

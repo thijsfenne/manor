@@ -80,7 +80,7 @@ function ProviderCard({ usage, now }: { usage: ProviderUsage; now: number }) {
       <View style={styles.cardHead}>
         <ProviderMark driver={usage.provider} size={15} />
         <Text style={styles.cardTitle}>{usage.provider}</Text>
-        <Text numberOfLines={1} style={styles.cardMeta}>{usage.plan ?? ''}</Text>
+        <Text numberOfLines={1} style={styles.cardMeta}>{usage.plan?.replace(/\b\w/g, (letter) => letter.toUpperCase()) ?? ''}</Text>
         {note === undefined ? null : <Text style={styles.cardNote}>at {note}</Text>}
       </View>
 
