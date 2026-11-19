@@ -69,10 +69,17 @@ app id and icon, and is ad-hoc signed only. It is a local build, not a
 distribution artifact. The app uses a Manor server that already runs on
 `localhost:43179`, and starts its bundled one when there is none.
 
-`pnpm desktop:install` does the whole update: it packages, quits the running
+`pnpm desktop:install` does the whole update: it builds the app, quits the running
 Manor, replaces `/Applications/Manor.app` and opens it again. A failed build leaves
-the installed app alone. Use it after preload or main-process changes; renderer
-changes only need `pnpm stable:restart`, which restarts the server, not the app.
+the installed app alone. It takes `MANOR_SIGN_IDENTITY`, or else the first "Developer
+ID Application" identity in the keychain, and builds with `pnpm desktop:release --app`:
+signed with that identity, not notarized, with the Cua driver embedded when Rust is
+installed. macOS ties Accessibility and Screen Recording to the signing team, so the
+grants stay across installs signed by the same team. Without one the app is ad hoc
+signed, and macOS treats every install as a new app: System Settings keeps showing
+Manor switched on while the new build has no grant. Use it after preload or
+main-process changes; renderer changes only need `pnpm stable:restart`, which
+restarts the server, not the app.
 
 ## Release DMG
 
@@ -114,8 +121,7 @@ two grants, read through a fresh probe child of the driver.
 When either variable is missing, the script logs which one and builds a DMG that holds
 an ad hoc signed app, the same app `pnpm desktop:package` makes plus the driver. That path is for
 contributors without a certificate; the DMG is not notarized and is not for handing
-out. Neither path touches `/Applications`; `pnpm desktop:install` stays the local
-ad hoc install.
+out. Neither path touches `/Applications`; `pnpm desktop:install` is the local install.
 
 ## Restarting the stable server
 

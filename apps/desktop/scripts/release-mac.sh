@@ -13,7 +13,14 @@
 # and the DMG is signed, notarized and stapled too. Otherwise the app inside the DMG
 # is ad hoc signed, as `pnpm desktop:package` does: fine on the Mac that built it, not
 # something to hand out.
+#
+# `--app` builds only release/mac-arm64/Manor.app, for `pnpm desktop:install`: signed
+# with MANOR_SIGN_IDENTITY when set, never notarized (a local build carries no
+# quarantine), ad hoc otherwise. Without Rust it leaves the driver out.
 set -euo pipefail
+
+app_only=""
+[ "${1:-}" = "--app" ] && app_only=1
 
 cd "$(dirname "$0")/.."
 version="$(node -p "require('./package.json').version")"
@@ -27,12 +34,46 @@ driver="$app/Contents/Resources/cua-driver/cua-driver"
 
 say() { printf '[release] %s\n' "$*"; }
 
+# macOS keys Manor's grants to its team, so a driver from another signer would not run as Manor.
+check_team() {
+  codesign --verify --deep --strict "$app"
+  local team driver_team
+  team="$(codesign -dv "$app" 2>&1 | sed -n 's/^TeamIdentifier=//p')"
+  driver_team="$(codesign -dv "$driver" 2>&1 | sed -n 's/^TeamIdentifier=//p')"
+  # codesign prints "not set" for an ad hoc signature, which carries no team at all.
+  if [ -z "$team" ] || [ "$team" = "not set" ] || [ "$driver_team" != "$team" ]; then
+    say "the embedded driver is signed by '${driver_team:-nobody}', the app by '${team:-nobody}'"
+    exit 1
+  fi
+}
+
 # electron-builder copies the staged driver from here (extraResources). Removed again on
 # exit, so a later `pnpm desktop:package` does not pick up a stale copy.
+rm -rf "$driver_stage"
 trap 'rm -rf "$driver_stage"' EXIT
-bash ../server/scripts/build-computer-driver.sh --embed "$driver_stage"
+# The driver build looks for rustup in ~/.cargo/bin too.
+if [ -n "$app_only" ] && ! PATH="$HOME/.cargo/bin:$PATH" command -v rustup >/dev/null; then
+  say "no Rust: building without the embedded driver, so computer use keeps CuaDriver.app."
+else
+  bash ../server/scripts/build-computer-driver.sh --embed "$driver_stage"
+fi
 pnpm bundle:app
 pnpm build
+
+if [ -n "$app_only" ]; then
+  if [ -n "$identity" ]; then
+    # The same Developer ID on every install keeps the Accessibility and Screen Recording grants.
+    pnpm exec electron-builder --mac dir --arm64 --publish never -c.mac.identity="$identity" -c.mac.notarize=false
+    if [ -x "$driver" ]; then check_team; else codesign --verify --deep --strict "$app"; fi
+    say "built $app (Developer ID signed, not notarized)"
+  else
+    pnpm exec electron-builder --mac dir --arm64 --publish never
+    pnpm sign:mac
+    say "built $app (ad hoc: macOS asks for its permissions again after every install)"
+  fi
+  exit 0
+fi
+
 rm -f "$dmg"
 
 missing=()
@@ -61,13 +102,7 @@ codesign --verify --strict "$dmg"
 xcrun notarytool submit "$dmg" --keychain-profile "$profile" --wait
 xcrun stapler staple "$dmg"
 
-codesign --verify --deep --strict "$app"
-team="$(codesign -dv "$app" 2>&1 | sed -n 's/^TeamIdentifier=//p')"
-driver_team="$(codesign -dv "$driver" 2>&1 | sed -n 's/^TeamIdentifier=//p')"
-if [ -z "$team" ] || [ "$driver_team" != "$team" ]; then
-  say "the embedded driver is signed by '${driver_team:-nobody}', the app by '${team:-nobody}'"
-  exit 1
-fi
+check_team
 xcrun stapler validate "$app"
 xcrun stapler validate "$dmg"
 spctl --assess --type execute "$app"

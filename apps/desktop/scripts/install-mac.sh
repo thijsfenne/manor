@@ -33,7 +33,11 @@ target="/Applications/Manor.app"
 binary="$target/Contents/MacOS/Manor"
 
 cd "$repo"
-if ! pnpm desktop:package; then
+# macOS ties Accessibility and Screen Recording to the app's signature. An ad hoc build
+# never matches an earlier grant, so with a Developer ID in the keychain every install
+# is signed with it and the grants stay. `security` prints `1) <SHA-1> "<name>"`.
+identity="${MANOR_SIGN_IDENTITY:-$(security find-identity -v -p codesigning 2>/dev/null | awk '/"Developer ID Application:/ { print $2; exit }')}"
+if ! MANOR_SIGN_IDENTITY="$identity" bash apps/desktop/scripts/release-mac.sh --app; then
   echo "desktop:install: build failed, $target was not touched." >&2
   exit 1
 fi
