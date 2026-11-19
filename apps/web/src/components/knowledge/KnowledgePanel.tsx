@@ -31,6 +31,7 @@ import { DockPanelAside } from '../ui/DockPanelAside'
 import { IconButton } from '../ui/IconButton'
 import { Button } from '../ui/Button'
 import { useCollapsed } from '../../chatCollapsed'
+import { useStableCallback } from '../../useStableCallback'
 import { activeTab, closeTab, moveTab, openInActive, openInNew, pruneTabs, renamePaths, selectTab, useCloseTabKey, useStoredTabs } from '../../contentTabs'
 import { ContentTabStrip } from '../ContentTabStrip'
 import { useTopBarSlot } from '../TopBar'
@@ -236,10 +237,12 @@ export function KnowledgePanel({
   const stageRef = useRef<HTMLDivElement>(null)
 
   const topBar = useTopBarSlot()
-  // The desktop vault home keeps its open notes as tabs in the top bar, and the active
-  // tab is the note shown. A dock and the phone keep one note each.
-  const tabbed = dock === undefined && sidebarSlot !== undefined && topBar !== null
-  const [noteTabs, changeNoteTabs] = useStoredTabs(tabbed ? NOTE_TABS_KEY : null)
+  // The desktop vault home keeps its open notes as tabs in the top bar, a dock keeps its
+  // own per chat in its header, and the active tab is the note shown. The phone keeps one.
+  const homeTabbed = dock === undefined && sidebarSlot !== undefined && topBar !== null
+  const tabsKey = homeTabbed ? NOTE_TABS_KEY : dock !== undefined && memoryKey !== undefined ? `${NOTE_TABS_KEY}:${memoryKey}` : null
+  const tabbed = tabsKey !== null
+  const [noteTabs, changeNoteTabs] = useStoredTabs(tabsKey)
   const activeNoteTab = activeTab(noteTabs)
   const selectedPath = tabbed ? activeNoteTab?.path ?? null : selectedPathProp
   // Every route that opens a note (the tree, a link, the palette, a rename) lands here:
@@ -461,13 +464,22 @@ export function KnowledgePanel({
 
   // A tab picked, closed or restored names a note the panel is not showing yet. Leaving
   // goes through `leave`, so unsaved text reaches disk before the note is swapped out.
+  // An empty tab (the strip's plus) shows the empty stage until a note is picked into it.
+  // `leave` changes identity with every parent render (a dock's chrome is a fresh object),
+  // and a store update can re-render before the swap lands, so the effect follows data only.
+  const leaveForTab = useStableCallback(leave)
   useEffect(() => {
-    if (!tabbed || !live || renameRequest !== null) return
+    if (!tabbed || !live || renameRequest !== null || dock?.revealed === false) return
     const target = activeNoteTab?.path
-    if (target === undefined || target === null || target === path) return
+    if (target === undefined || target === path) return
+    if (target === null) {
+      // A pick made while a save is in flight lands in this tab once the save does.
+      if (pendingAction === null) leaveForTab({ kind: 'close' })
+      return
+    }
     if ((pendingAction?.kind === 'open' || pendingAction?.kind === 'new') && pendingAction.path === target) return
-    leave({ kind: 'open', path: target })
-  }, [tabbed, live, renameRequest, activeNoteTab?.path, path, pendingAction, leave])
+    leaveForTab({ kind: 'open', path: target })
+  }, [tabbed, live, renameRequest, dock?.revealed, activeNoteTab?.path, path, pendingAction, leaveForTab])
 
   // Tabs follow their notes. A rename or a move made anywhere carries every tab it
   // touches; a note gone from the listing closes its tab quietly. The note on screen
@@ -828,44 +840,45 @@ export function KnowledgePanel({
     onDismissRejection: isGone ? () => { setGone(null); take({ kind: 'close' }) } : onClearWrite,
   }
 
-  /** A new note opens in a new tab where notes have tabs, beside whatever was open. */
+  /** A new note fills an empty active tab, or opens in a new tab beside whatever was open. */
   const createNote = (target: string) => {
-    if (tabbed) changeNoteTabs((state) => openInNew(state, target))
+    if (tabbed) changeNoteTabs((state) => activeTab(state)?.path === null ? openInActive(state, target) : openInNew(state, target))
     leave({ kind: 'new', path: target })
   }
   const openInNewTab = (target: string, index?: number) => changeNoteTabs((state) => openInNew(state, target, index))
   // The last tab closing leaves the empty stage, through `leave` so a draft saves first.
   // Any other close hands over to a neighbour, which the effect above opens.
   const closeNoteTab = (id: string) => {
+    if (renameRequest !== null) return
     const next = closeTab(noteTabs, id)
     changeNoteTabs(() => next)
     if (next.tabs.length === 0) leave({ kind: 'close' })
   }
 
   // ⌘W closes the active tab while Knowledge was last pressed or focused: its tree, its
-  // note or its strip.
+  // note or its strip. A dock is one card, found by its chat.
   useCloseTabKey(
     tabbed && shortcutsActive && noteTabs.activeId !== null,
-    (element) => [stageRef.current, sidebarSlot ?? null, topBar?.element ?? null].some((area) => area?.contains(element) === true),
+    (element) => dock === undefined
+      ? [stageRef.current, sidebarSlot ?? null, topBar?.element ?? null].some((area) => area?.contains(element) === true)
+      : element.closest('[data-knowledge-panel]')?.getAttribute('data-knowledge-panel') === memoryKey,
     () => { if (noteTabs.activeId !== null) closeNoteTab(noteTabs.activeId) },
   )
 
-  const noteTabStrip = !tabbed || topBar?.element == null ? null : createPortal(
-    <div data-top-bar-crumb="" className="order-1 flex min-w-0 flex-1 items-center">
+  const tabStrip = !tabbed ? null : (
       <ContentTabStrip
         label="Note tabs"
-        newLabel="New note"
+        newLabel="New tab"
+        slim={homeTabbed}
         disabled={!live || renameRequest !== null}
-        items={noteTabs.tabs.flatMap((tab) => tab.path === null ? [] : [{
-          id: tab.id,
-          name: baseName(tab.path).replace(/\.md$/i, ''),
-          title: tab.path,
-        }])}
+        items={noteTabs.tabs.map(({ id, path: tabPath }) => tabPath === null
+          ? { id, name: 'New tab', title: 'New tab' }
+          : { id, name: baseName(tabPath).replace(/\.md$/i, ''), title: tabPath, menu: [{ label: 'Rename', onSelect: () => beginRename(tabPath) }] })}
         activeId={noteTabs.activeId}
         onSelect={(id) => changeNoteTabs((state) => selectTab(state, id))}
         onClose={closeNoteTab}
         onMove={(id, index) => changeNoteTabs((state) => moveTab(state, id, index))}
-        onNew={() => createNote(inboxNote(files ?? []))}
+        onNew={() => changeNoteTabs((state) => openInNew(state, null))}
         drop={{
           accepts: (event) => event.dataTransfer.types.includes(ENTRY_DRAG),
           // A folder dragged here is not a note to open; only listed notes are.
@@ -876,7 +889,9 @@ export function KnowledgePanel({
           onDrop: (dropped, index) => openInNewTab(dropped, index),
         }}
       />
-    </div>,
+  )
+  const noteTabStrip = !homeTabbed || topBar?.element == null ? null : createPortal(
+    <div data-top-bar-crumb="" className="order-1 flex min-w-0 flex-1 items-center">{tabStrip}</div>,
     topBar.element,
   )
 
@@ -975,6 +990,7 @@ export function KnowledgePanel({
     <>
       <DockPanelAside
         revealed={revealed}
+        data-knowledge-panel={memoryKey}
         style={{ '--knowledge-width': `${dock.width}px`, '--knowledge-tree-width': `${FILES_TREE_WIDTH}px` } as CSSProperties}
         data-open={dock.overlay ? dock.revealed : undefined}
         className={`grid min-h-0 grid-rows-[auto_minmax(0,1fr)] ease-arrive ${DOCK_PANEL_SHELL} ${dockPanelLayoutClass(
@@ -1003,29 +1019,15 @@ export function KnowledgePanel({
           <div role="toolbar" aria-label="Knowledge actions" className="flex min-h-11 min-w-0 items-center gap-1 px-2 py-1">
             <div className="flex min-w-0 flex-1 items-center gap-1">
               {path === null ? null : (
-                <>
-                  <IconButton
-                    icon={SidebarLeftIcon}
-                    label={showTree ? 'Hide note tree' : 'Show note tree'}
-                    aria-pressed={showTree}
-                    selected={showTree}
-                    onClick={() => compact ? setCompactTree((current) => !current) : setTreeHidden(!treeHidden)}
-                  />
-                  <div
-                    className="flex min-h-8 min-w-0 max-w-72 items-center gap-1 rounded-button bg-surface-2 py-1 pr-1 pl-2.5 text-label text-text"
-                    title={path}
-                  >
-                    <div className="min-w-0 flex-1"><NoteName key={path} {...renameProps} /></div>
-                    <IconButton
-                      icon={Cancel01Icon}
-                      iconSize={13}
-                      size={24}
-                      label={`Close ${baseName(path)}`}
-                      onClick={() => leave({ kind: 'close' })}
-                    />
-                  </div>
-                </>
+                <IconButton
+                  icon={SidebarLeftIcon}
+                  label={showTree ? 'Hide note tree' : 'Show note tree'}
+                  aria-pressed={showTree}
+                  selected={showTree}
+                  onClick={() => compact ? setCompactTree((current) => !current) : setTreeHidden(!treeHidden)}
+                />
               )}
+              {tabStrip}
             </div>
             <div className="flex flex-none items-center gap-1">
               {editor === null ? null : (
@@ -1048,6 +1050,8 @@ export function KnowledgePanel({
               />
             </div>
           </div>
+          {/* The tabs name the note; a rename asked for from the tree is typed here. */}
+          {renameProps.editing ? <div className="px-3 pb-2 text-label text-text"><NoteName key={path} {...renameProps} /></div> : null}
         </div>
 
         <div className={`grid min-h-0 ${splitColumns ? SPLIT_COLUMNS : 'grid-cols-1'}`}>
