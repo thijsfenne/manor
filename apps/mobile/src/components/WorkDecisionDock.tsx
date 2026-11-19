@@ -64,6 +64,28 @@ export function WorkDecisionDock({ rows, inView, agents, onReject, onReveal, onR
   )
 }
 
+/**
+ * A Session whose question waits in the project thread: one dock row in the same glass,
+ * so it reads like the Accept and Confirm rows. Open is its one action.
+ */
+export function WaitingDock({ onOpen }: { onOpen: () => void }) {
+  return (
+    <GlassSurface radius={radius.panel} fallbackStyle={styles.fallback}>
+      <View style={styles.list}>
+        <View style={styles.row}>
+          <View accessible style={styles.reveal}>
+            <View style={styles.line}>
+              <Text style={styles.kind}>Waiting</Text>
+              <Text numberOfLines={1} style={styles.title}>A choice in the project thread</Text>
+            </View>
+          </View>
+          <CardButton label="Open" variant="primary" accessibilityLabel="Open project thread" onPress={onOpen} />
+        </View>
+      </View>
+    </GlassSurface>
+  )
+}
+
 function ProposalRow({ row, agents, onReject, onReveal }: {
   row: WorkHandoffRow
   agents: AgentConfig[]
@@ -206,7 +228,7 @@ const styles = StyleSheet.create({
   dock: { width: '100%' },
   // Where glass is missing: the solid raised card with a rim and a floating shadow.
   fallback: {
-    shadowColor: '#000000',
+    shadowColor: colors.shadow,
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.16,
     shadowRadius: 16,

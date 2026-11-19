@@ -142,16 +142,17 @@ export function AskCard({
               {macOnly ? null : <View style={styles.options}>
                 {question.options.map((option) => {
                   const selected = draft.selected.includes(option.label)
+                  const description = option.description?.trim() || undefined
                   return (
                     <Pressable
                       accessibilityRole="button"
                       accessibilityState={{ selected }}
                       key={option.label}
                       onPress={() => pick(option.label)}
-                      style={({ pressed }) => [styles.option, selected && styles.optionSelected, pressed && styles.pressed]}
+                      style={({ pressed }) => [styles.option, description !== undefined && styles.optionWithDescription, selected && styles.optionSelected, pressed && styles.pressed]}
                     >
                       <Text style={[styles.optionLabel, selected && styles.optionLabelSelected]}>{option.label}</Text>
-                      {option.description === undefined ? null : <Text style={[styles.optionDescription, selected && styles.optionLabelSelected]}>{option.description}</Text>}
+                      {description === undefined ? null : <Text style={[styles.optionDescription, selected && styles.optionLabelSelected]}>{description}</Text>}
                     </Pressable>
                   )
                 })}
@@ -213,13 +214,16 @@ const styles = StyleSheet.create({
   adviceBy: { color: colors.text, fontWeight: '500' },
   options: { gap: spacing.sm },
   option: { gap: 2, borderRadius: radius.md, ...squircle, backgroundColor: colors.chip, padding: spacing.md },
+  // Two lines already give the row its height, so it takes less air above and below.
+  optionWithDescription: { paddingVertical: spacing.sm },
   optionSelected: { backgroundColor: colors.text },
   optionLabel: { color: colors.text, fontFamily: fonts.sans, fontSize: 15, fontWeight: '500' },
   optionLabelSelected: { color: colors.onPrimary },
   // The label's own colour, softened, so it reads on the plain and the picked fill alike.
   optionDescription: { color: colors.text, opacity: 0.7, fontFamily: fonts.sans, fontSize: 13, lineHeight: 18 },
-  // A fixed height with no vertical padding, so iOS centres the line and its placeholder.
-  custom: { height: 44, borderRadius: radius.md, ...squircle, backgroundColor: colors.chip, color: colors.text, fontFamily: fonts.sans, fontSize: 15, letterSpacing: tracking.small, paddingHorizontal: spacing.md, paddingVertical: 0 },
+  // A fixed height, so iOS centres the line and its placeholder. Figtree's tall ascender
+  // sets that line low; the bottom padding lifts the letters to the optical middle.
+  custom: { height: 44, borderRadius: radius.md, ...squircle, backgroundColor: colors.chip, color: colors.text, fontFamily: fonts.sans, fontSize: 15, letterSpacing: tracking.small, paddingHorizontal: spacing.md, paddingTop: 0, paddingBottom: 7 },
   macOnly: { color: colors.muted, fontFamily: fonts.sans, fontSize: 14, lineHeight: 20 },
   actions: { gap: spacing.xs },
   actionRow: { flexDirection: 'row', gap: spacing.sm },

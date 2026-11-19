@@ -4,7 +4,7 @@ import { KickoffCard } from '@/components/KickoffCard'
 import { FOOTER_GAP, KeyboardFooter, useFooterPadding } from '@/components/KeyboardFooter'
 import { WakeNotices, WakeText } from '@/components/SubagentRow'
 import { SubagentDirectory, SubagentLaunchesContext, type SubagentLaunches } from '@/lib/subagentContext'
-import { WorkDecisionDock } from '@/components/WorkDecisionDock'
+import { WaitingDock, WorkDecisionDock } from '@/components/WorkDecisionDock'
 import { openWorkChanges, useDockedWorkChanges, workChangesDockable } from '@/components/WorkResultBody'
 import ArrowDown01Icon from '@hugeicons/core-free-icons/ArrowDown01Icon'
 import CellsIcon from '@hugeicons/core-free-icons/CellsIcon'
@@ -992,17 +992,7 @@ function ChatContent({ chatId }: { chatId: string | undefined }) {
             </View>
           ) : ask !== null && openStartedBy !== undefined ? (
             // The question waits in the project thread, so this says where.
-            <View style={styles.routedAsk}>
-              <Text numberOfLines={1} style={styles.routedAskText}>Waiting for a choice in the project thread</Text>
-              <Pressable
-                accessibilityLabel="Open project thread"
-                accessibilityRole="button"
-                onPress={openStartedBy}
-                style={({ pressed }) => [styles.routedAskAction, pressed && styles.pressed]}
-              >
-                <Text style={styles.routedAskActionText}>Open project thread</Text>
-              </Pressable>
-            </View>
+            <WaitingDock onOpen={openStartedBy} />
           ) : changeAsk !== null && changingAnswer !== undefined ? (
             // Before any waiting question, because he just asked for it. It leaves once the
             // thread records the change; a refusal comes back as a notice and Cancel closes it.
@@ -1966,10 +1956,6 @@ const styles = StyleSheet.create({
   pairNotice: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   pairNoticeText: { color: colors.muted, fontFamily: fonts.sans, fontSize: 14 },
   closeChat: { borderRadius: radius.round, backgroundColor: colors.surface2, paddingHorizontal: spacing.md, paddingVertical: spacing.sm },
-  routedAsk: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, borderRadius: radius.composer, ...squircle, backgroundColor: colors.raised, paddingVertical: spacing.sm, paddingLeft: spacing.lg, paddingRight: spacing.sm },
-  routedAskText: { flex: 1, color: colors.muted, fontFamily: fonts.sans, fontSize: 14 },
-  routedAskAction: { minHeight: 38, justifyContent: 'center', borderRadius: radius.sm, ...squircle, backgroundColor: colors.fill, paddingHorizontal: spacing.md },
-  routedAskActionText: { color: colors.text, fontFamily: fonts.sans, fontSize: 13, fontWeight: '500' },
   closeChatText: { color: colors.text, fontFamily: fonts.sans, fontSize: 14, fontWeight: '500' },
   stopChatText: { color: colors.danger, fontFamily: fonts.sans, fontSize: 14, fontWeight: '500' },
   settledBanner: { position: 'absolute', right: 0, left: 0, zIndex: 1, alignItems: 'center' },
