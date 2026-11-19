@@ -62,7 +62,7 @@ export const SETTINGS_GROUPS: readonly { label: string; sections: readonly Secti
   {
     label: 'Personal',
     sections: [
-      { id: 'general', label: 'General', icon: Settings02Icon, keywords: ['forget this mac', 'default agent', 'photo', 'name', 'profile', 'routing'] },
+      { id: 'general', label: 'General', icon: Settings02Icon, keywords: ['forget this mac', 'default agent', 'photo', 'name', 'profile', 'routing', 'keep awake', 'sleep', 'power', 'search engine', 'browser'] },
       { id: 'appearance', label: 'Appearance', icon: PaintBoardIcon, keywords: ['theme', 'dark', 'light', 'system', 'font', 'code font', 'typeface'] },
       { id: 'keybindings', label: 'Keybindings', icon: KeyboardIcon, keywords: ['shortcuts', 'keys', 'workspace'] },
       { id: 'usage', label: 'Usage & limits', icon: DashboardSpeed02Icon, keywords: ['tokens', 'cost', 'api-rate equivalent', 'limits', 'period', 'breakdown', 'cost quality'] },

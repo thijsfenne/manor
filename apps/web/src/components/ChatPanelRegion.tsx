@@ -1,5 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type ComponentPropsWithoutRef, type CSSProperties, type Dispatch, type RefObject, type SetStateAction } from 'react'
-import { DEFAULT_USER_PROFILE, isFolder, isOpenRoom, NOTE_AI_DEFAULTS, type Chat, type NoteQuote, type PageContextAttachment, type RepoFileApp } from '@manor/contracts'
+import { DEFAULT_HOUSE_SETTINGS, DEFAULT_USER_PROFILE, isFolder, isOpenRoom, NOTE_AI_DEFAULTS, type Chat, type NoteQuote, type PageContextAttachment, type RepoFileApp } from '@manor/contracts'
 import type { useWorkspace } from '../useWorkspace'
 import { chatRoster } from '../chatRoster'
 import { lastTurnSelectedMemoryPaths, messageTime, projectWritesKey } from '../messageMeta'
@@ -495,6 +495,7 @@ export function ChatPanelRegion({
         chatId={open.id}
         bridge={browserBridge}
         activity={manor.browserActivity[open.id]}
+        searchEngine={workspace.houseSettings?.browserSearchEngine ?? DEFAULT_HOUSE_SETTINGS.browserSearchEngine}
         pageContextCount={pageContextCount}
         onAddPageContext={(context) => onAddPageContext(context)}
         shown={browserShown}

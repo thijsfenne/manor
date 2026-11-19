@@ -329,6 +329,11 @@ export class Subagents {
     return false
   }
 
+  /** The top-level chat of each child still running and not told to stop, for the count of active work. */
+  runningRootChatIds(): string[] {
+    return [...this.live.values()].flatMap((live) => (live.cancelReason === undefined ? [live.rootChatId] : []))
+  }
+
   /** A deleted parent takes every child under it, nested ones included. */
   discardChat(chatId: string): void {
     for (const live of [...this.live.values()]) {

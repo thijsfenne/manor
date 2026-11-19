@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState, type ChangeEvent } from 'react'
-import { DEFAULT_USER_PROFILE, type AgentConfig, type AgentDraft, type UserProfile } from '@manor/contracts'
+import { DEFAULT_USER_PROFILE, type AgentConfig, type AgentDraft, type HouseSettings, type SystemInfo, type UserProfile } from '@manor/contracts'
 import { AVATAR_ACCEPT, shrinkToAvatar } from '../../avatar'
 import { cleanDraft, cosOf, draftOf } from '../../persona'
 import type { Notice } from '../../state'
@@ -11,7 +11,9 @@ import { formInputClass } from '../ui/FormField'
 import { RequestNotice } from '../ui/RequestNotice'
 import { Select } from '../ui/Select'
 import { SettingsGroup, SettingsPage, SettingsRow } from './SettingsLayout'
+import { BrowserGroup } from './BrowserSettings'
 import { FontGroup } from './FontSettings'
+import { PowerGroup } from './PowerSettings'
 import { ThemePicker } from './ThemePicker'
 
 const OFFLINE = 'Nothing was sent, the connection is down. Try again once it is back.'
@@ -23,7 +25,7 @@ function PageNotice({ notice, problem, onDismiss }: { notice: Notice | null; pro
   return <p className="m-0 text-label text-danger" role="status">{problem}</p>
 }
 
-export function GeneralPage({ agents, profile, account, notice, requestEvents, onSaveAgent, onSaveProfile, onDismissNotice }: {
+export function GeneralPage({ agents, profile, account, notice, requestEvents, onSaveAgent, onSaveProfile, onDismissNotice, settings, onSaveSettings, info, onRequestInfo }: {
   agents: AgentConfig[]
   /** Null until the server's connect message lands; nothing is saved over an unread profile. */
   profile: UserProfile | null
@@ -34,12 +36,19 @@ export function GeneralPage({ agents, profile, account, notice, requestEvents, o
   onSaveAgent: (draft: AgentDraft, requestId: string) => boolean
   onSaveProfile: (profile: UserProfile, requestId: string) => boolean
   onDismissNotice: () => void
+  /** Null until the server has sent them; the groups that save them wait. */
+  settings: HouseSettings | null
+  onSaveSettings: (settings: HouseSettings) => void
+  info: SystemInfo | null
+  onRequestInfo: () => void
 }) {
   const [problem, setProblem] = useState<string | null>(null)
   return (
     <SettingsPage title="General">
       <ProfileGroup profile={profile} requestEvents={requestEvents} onSave={onSaveProfile} onProblem={setProblem} onDismissNotice={onDismissNotice} />
       <RoutingGroup agents={agents} requestEvents={requestEvents} onSaveAgent={onSaveAgent} onProblem={setProblem} onDismissNotice={onDismissNotice} />
+      <PowerGroup settings={settings} info={info} onSaveSettings={onSaveSettings} onRequestInfo={onRequestInfo} />
+      <BrowserGroup settings={settings} onSave={onSaveSettings} />
       {account === undefined ? null : (
         <SettingsGroup title="This browser">
           <SettingsRow label="Forget this Mac" description="Removes this browser from Manor. Pair it again from Settings → Phone on your Mac.">

@@ -99,6 +99,9 @@ it.each(LAUNCHES)('starts as an empty house, keeps strangers out, and answers on
     try { return (await fetch(`http://127.0.0.1:${port}/health`)).ok } catch { return false }
   }, { timeout: 25_000, interval: 200 }).toBe(true)
 
+  // Nothing runs yet, which the desktop app reads before it asks about quitting.
+  expect(await (await fetch(`http://127.0.0.1:${port}/health`)).json()).toMatchObject({ ok: true, working: 0 })
+
   // The settings file in the data folder was read: it named the port the server listens on.
   expect(log).toContain(`:${port}/ws`)
   // Memory needs no setting either: its folder sits beside the database with starter files.

@@ -356,6 +356,23 @@ describe('Orchestrator', () => {
     expect((await store.loadEvents(second.id)).some((event) => event.type === 'turn_result')).toBe(false)
   })
 
+  it('counts the chats with a running turn as active work, back to zero once they end', async () => {
+    const gate = gated()
+    const { orchestrator, store, chatId } = await harness(gate.driver)
+    const second = await store.createChat({ kind: 'dm', memberIds: ['sage'], title: 'Sage' })
+    expect(orchestrator.activeWork()).toBe(0)
+    const firstRun = orchestrator.submitUserMessage(chatId, '@Sage first')
+    const secondRun = orchestrator.submitUserMessage(second.id, 'second')
+    await until(() => gate.gates.length === 2, 'both turns to start')
+    expect(orchestrator.activeWork()).toBe(2)
+    gate.forChat(chatId)[0]!.finish()
+    await firstRun
+    expect(orchestrator.activeWork()).toBe(1)
+    gate.forChat(second.id)[0]!.finish()
+    await secondRun
+    expect(orchestrator.activeWork()).toBe(0)
+  })
+
   it('keeps arrival order when the first acceptance awaits a slow store read', async () => {
     const { orchestrator, store, chatId } = await harness(createMockDriver({ deltaDelayMs: 0 }))
     const getChat = store.getChat.bind(store)
@@ -702,6 +719,31 @@ describe('Orchestrator', () => {
     expect(steer).not.toHaveBeenCalled()
     orchestrator.stopChat(dm.id)
     await Promise.all([first, work])
+  })
+
+  it('counts a running turn and live background work as active work until each ends', async () => {
+    const gate = gated()
+    const busy = new Map<string, LiveSessionItem[]>()
+    const { orchestrator, chatId, sent } = await harness(gate.driver, {
+      liveSessions: { info: () => undefined, busyWork: () => busy, close: () => [] },
+    })
+    // Keep awake reads the count as the end is announced, so the turn must already be out of it.
+    let atEnd: number | undefined
+    sent.push = (...messages) => {
+      if (messages.some((message) => message.type === 'turn_state' && message.state === 'done')) atEnd = orchestrator.activeWork()
+      return Array.prototype.push.apply(sent, messages)
+    }
+    expect(orchestrator.activeWork()).toBe(0)
+    const turn = orchestrator.submitUserMessage(chatId, '@Sage Inspect the files.')
+    await until(() => gate.forChat(chatId).length === 1, 'the running turn')
+    expect(orchestrator.activeWork()).toBe(1)
+    busy.set('chat_elsewhere', [{ toolCallId: 'bg', title: 'Build', kind: 'command' }])
+    expect(orchestrator.activeWork()).toBe(2)
+    busy.clear()
+    gate.forChat(chatId)[0]?.finish()
+    await turn
+    expect(atEnd).toBe(0)
+    expect(orchestrator.activeWork()).toBe(0)
   })
 
   it('starts an addition arriving after Stop as a fresh request', async () => {

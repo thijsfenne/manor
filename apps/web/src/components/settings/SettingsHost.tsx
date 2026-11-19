@@ -64,6 +64,10 @@ export function SettingsHost({
             requestEvents={manor.requestEvents}
             onSaveAgent={manor.saveAgent}
             onSaveProfile={manor.saveProfile}
+            settings={workspace.houseSettings}
+            onSaveSettings={manor.saveHouseSettings}
+            info={workspace.systemInfo}
+            onRequestInfo={manor.requestSystemInfo}
             {...common}
           />
         )

@@ -208,7 +208,7 @@ describe('browser panel menu integration', () => {
       clearData: vi.fn(async () => {}), configure: vi.fn(async () => {}),
       startPreview: vi.fn(async () => {}), stopPreview: vi.fn(async () => {}), onPreview: vi.fn(() => () => {}),
     }
-    const props = { bridge: bridge as unknown as DesktopBrowserBridge, chatId: 'chat', activity: undefined,
+    const props = { bridge: bridge as unknown as DesktopBrowserBridge, chatId: 'chat', activity: undefined, searchEngine: 'google' as const,
       shown: true, stage, settling: false, revealed: true, width: 620, expanded: false, resizing: false,
       resizeProps: {}, pageContextCount: 0, onAddPageContext: vi.fn(), onToggleExpanded: vi.fn(), onClose: vi.fn(), onFloat: vi.fn() }
     await act(async () => { tree = create(<BrowserPanel {...props} />, {
@@ -615,6 +615,17 @@ describe('browser panel menu integration', () => {
     await act(async () => { await vi.advanceTimersByTimeAsync(120) })
     expect(bridge.history).not.toHaveBeenCalled()
     expect(tree!.root.findAllByProps({ role: 'listbox' })).toHaveLength(0)
+  })
+
+  it('searches with the chosen engine and names it on the search row', async () => {
+    vi.useFakeTimers()
+    const { props, bridge, address, submit } = await typeIntoAddress('best pizza')
+    await act(async () => tree!.update(<BrowserPanel {...props} searchEngine="duckduckgo" />))
+    const row = tree!.root.findAllByProps({ role: 'option' })[0]!
+    expect(row.findAll((node) => node.type === 'span' && node.props.className === 'text-dim')[0]!.children.join('')).toBe('Search DuckDuckGo for ')
+    act(() => address().props.onChange({ target: { value: 'best pizza' }, nativeEvent: { inputType: 'insertText' } }))
+    await submit()
+    expect(bridge.navigate).toHaveBeenLastCalledWith('https://duckduckgo.com/?q=best+pizza', 'chat')
   })
 
   it('discards a pending history response when switching tabs', async () => {

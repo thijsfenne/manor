@@ -10,16 +10,16 @@ import { SettingsGroup, SettingsPage, SettingsRow } from './SettingsLayout'
 const OFFLINE = 'Nothing was sent, the connection is down. Try again once it is back.'
 const NEVER = 'never'
 
-/** The settings counted in days; the folders and the note AI live on the Memory page. */
-type DaysKey = Exclude<keyof HouseSettings, 'memoryDir' | 'knowledgeDir' | 'noteAiModel' | 'noteAiEffort' | 'disabledModels'>
-
 /** The day counts each row offers. A value saved outside these still shows as itself. */
-const CHOICES: Record<DaysKey, readonly number[]> = {
+const CHOICES = {
   autoSettleDays: [1, 2, 3, 7, 14],
   archiveRetentionDays: [3, 7, 10, 14, 30, 60, 90],
   attachmentRetentionDays: [3, 7, 14, 30, 90],
   backupRetentionDays: [7, 14, 30, 90],
-}
+} satisfies Partial<Record<keyof HouseSettings, readonly number[]>>
+
+/** The settings this page edits, each counted in days. */
+type DaysKey = keyof typeof CHOICES
 
 const dayLabel = (days: number) => (days === 1 ? '1 day' : days % 7 === 0 && days <= 14 ? `${days / 7} ${days === 7 ? 'week' : 'weeks'}` : `${days} days`)
 

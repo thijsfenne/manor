@@ -1,4 +1,4 @@
-import type { BrowserAddressMatches, BrowserHistoryEntry, BrowserTabState } from '@manor/contracts'
+import type { BrowserAddressMatches, BrowserHistoryEntry, BrowserSearchEngine, BrowserTabState } from '@manor/contracts'
 import { addressSearches, resolveBrowserAddress } from './browserAddress'
 
 /**
@@ -148,16 +148,18 @@ const siteRow = (url: string, title: string, icon: { favicon?: string }): Addres
   ({ kind: 'site', key: `site:${url}`, url, title, ...icon })
 
 /**
- * The rows for what is typed, in Chrome's order: the completed site, then the Google
- * search, then other sites, open tabs and pages. Without a completion the typed text
- * leads, opened as an address when it is one. `completing` is false right after a
- * deletion, so Backspace removes the completion instead of bringing it straight back.
+ * The rows for what is typed, in the order a browser's address bar uses: the completed
+ * site, then the search with the chosen engine, then other sites, open tabs and pages.
+ * Without a completion the typed text leads, opened as an address when it is one.
+ * `completing` is false right after a deletion, so Backspace removes the completion
+ * instead of bringing it straight back.
  * Visits that no longer answer the text are dropped, so a slower answer for an earlier
  * prefix never shows. An empty field lists recent visits only.
  */
 export function planAddress(
   typed: string,
   matches: BrowserAddressMatches,
+  engine: BrowserSearchEngine,
   tabs: readonly BrowserTabState[] = [],
   completing = true,
 ): AddressPlan {
@@ -172,7 +174,7 @@ export function planAddress(
   const rows: AddressSuggestion[] = completion !== undefined
     ? [siteRow(completion.url, completion.title, completion), search]
     : addressSearches(text) ? [search] : [{ kind: 'address', key: 'address', text }, search]
-  const taken = new Set(completion === undefined ? [resolveBrowserAddress(text)] : [completion.url])
+  const taken = new Set(completion === undefined ? [resolveBrowserAddress(text, engine)] : [completion.url])
 
   const prefix = bare(text).toLowerCase().split('/')[0]!
   const sites = /\s/.test(text) ? [] : [...knownSites(matches)]

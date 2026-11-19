@@ -64,6 +64,7 @@ const panel = (props: Partial<Parameters<typeof BrowserPanel>[0]> = {}) =>
       chatId="chat_1"
       bridge={bridge()}
       activity={undefined}
+      searchEngine="google"
       settling={false}
       pageContextCount={0}
       onAddPageContext={() => {}}
@@ -87,20 +88,20 @@ describe('the browser address field', () => {
     expect(panel()).not.toContain('Focus this thread to show its browser.')
   })
 
-  it('sends ordinary text to Google Search', () => {
-    expect(resolveBrowserAddress('in app browser')).toBe(
+  it('sends ordinary text to the search engine', () => {
+    expect(resolveBrowserAddress('in app browser', 'google')).toBe(
       'https://www.google.com/search?q=in+app+browser',
     )
   })
 
   it('opens website addresses, giving a bare host its scheme', () => {
-    expect(resolveBrowserAddress('example.com/path')).toBe('https://example.com/path')
-    expect(resolveBrowserAddress('https://example.com/path')).toBe('https://example.com/path')
-    expect(resolveBrowserAddress('localhost:5173')).toBe('http://localhost:5173')
+    expect(resolveBrowserAddress('example.com/path', 'google')).toBe('https://example.com/path')
+    expect(resolveBrowserAddress('https://example.com/path', 'google')).toBe('https://example.com/path')
+    expect(resolveBrowserAddress('localhost:5173', 'google')).toBe('http://localhost:5173')
   })
 
   it('leaves explicit unsupported schemes for the browser host to reject', () => {
-    expect(resolveBrowserAddress('javascript:alert(1)')).toBe('javascript:alert(1)')
+    expect(resolveBrowserAddress('javascript:alert(1)', 'google')).toBe('javascript:alert(1)')
   })
 
   it('rests a web address on its site, split so the pieces rejoin exactly', () => {

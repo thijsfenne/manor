@@ -341,6 +341,11 @@ export class ManorService {
     return this.orchestrator.stopActiveTurns()
   }
 
+  /** How many chats have work running now; keep awake and the desktop's quit question read it. */
+  activeWork(): number {
+    return this.orchestrator.activeWork()
+  }
+
   /**
    * True while this chat has a turn in flight, or a subagent it started still runs: a
    * child works in its parent's folder and may outlive the turn that delegated it.

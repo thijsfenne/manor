@@ -56,6 +56,8 @@ export interface SystemInfoSources {
   /** The real provider drivers; empty under `MANOR_DRIVER=mock`. */
   drivers: DriverSet['byProvider']
   home: string
+  /** The keep awake controller can hold this Mac awake; false off macOS. */
+  canKeepAwake?: boolean
   /**
    * How each folder relates to its setting right now. Asked on every read, because
    * the setting changes in the app while the folder in use only changes at a start.
@@ -106,6 +108,7 @@ export function createSystemInfo(sources: SystemInfoSources): () => Promise<Syst
       memory: { path: sources.memoryDir, ...folders.memory },
       vault: { path: sources.vaultDir, ...folders.knowledge },
       logs: await listLogs(sources.home),
+      canKeepAwake: sources.canKeepAwake === true,
     }
   }
 }

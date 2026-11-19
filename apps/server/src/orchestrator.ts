@@ -573,6 +573,19 @@ export class Orchestrator {
     return turns.length
   }
 
+  /**
+   * How many chats have work running now: a turn whose end is not announced yet, a
+   * subagent child still running, or background work a live session runs after its
+   * turn. Keep awake holds the Mac while this is above zero, and `/health` reports it
+   * for the desktop's quit question.
+   */
+  activeWork(): number {
+    const busy = new Set(this.options.liveSessions?.busyWork().keys())
+    for (const [chatId, chat] of this.chats) if (chat.active !== undefined && !chat.active.terminal) busy.add(chatId)
+    for (const chatId of this.subagents.runningRootChatIds()) busy.add(chatId)
+    return busy.size
+  }
+
   /** Invisible router jobs whose scratch directory is still in use. */
   activeGroupRouterThreadIds(): string[] {
     return [...this.activeGroupRouterThreads]

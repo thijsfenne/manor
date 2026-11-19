@@ -210,6 +210,7 @@ import { sweepUnterminatedTurns } from './turnSweep.js'
 import { SubagentRefusal } from './subagents.js'
 import { openVault, type Vault } from './vault.js'
 import { createSystemInfo } from './systemInfo.js'
+import { createKeepAwake } from './keepAwake.js'
 import { RemindersSource, remindersBinaries } from './reminders.js'
 import { OPEN_LOOPS_LIST, OPEN_LOOPS_POLL_MS, OpenLoopsSync } from './openLoopsSync.js'
 import { WorkToolInputSchema } from './workTool.js'
@@ -783,8 +784,17 @@ async function main(): Promise<void> {
    * orchestrator would mean finding them one at a time and missing the two that
    * are not the happy one.
    */
+  const keepAwake = createKeepAwake()
+  // A count over in-memory maps, so it runs at every moment the mode or the work may change.
+  const syncKeepAwake = () => { keepAwake.sync(service.currentSettings().keepAwake, service.activeWork()) }
   const broadcast = (message: ServerMessage) => {
     send(message)
+    // Every turn, a subagent child's included, starts and ends with a `turn_state`. A
+    // child leaving its slot, live background work changing and a settings save each
+    // send a directory or the settings, after the state they report has changed. The
+    // heartbeat catches what none of those announce: a hold that died, or work that
+    // ended without a message.
+    if (message.type === 'turn_state' || message.type === 'directory' || message.type === 'house_settings' || message.type === 'heartbeat') syncKeepAwake()
     if (!closeTerminalTurn(message, (turnId) => {
       interactions.closeTurn(turnId)
       secretRequests.closeTurn(turnId)
@@ -1106,6 +1116,7 @@ async function main(): Promise<void> {
       vaultDir: vaultDir.ok ? vaultDir.dir : null,
       drivers: drivers.byProvider,
       home: homedir(),
+      canKeepAwake: keepAwake.supported,
       folders: async () => {
         const saved = await store.getHouseSettings()
         const nextMemory = memoryRoot(resolveMemoryTarget(process.env, homedir(), saved.memoryDir)) ?? null
@@ -1140,6 +1151,8 @@ async function main(): Promise<void> {
   await service.recoverSubagents()
     .then((count) => { if (count > 0) console.warn(`[manor] ended ${count} subagent${count === 1 ? '' : 's'} left running by a previous run`) })
     .catch((error: unknown) => console.error('[manor] could not recover subagents', error))
+  // The saved settings are read by now, so `always` holds from the start.
+  syncKeepAwake()
 
   if (openLoops !== undefined) {
     console.log(`[manor] open loops: ${openLoopsLedger} is kept in step with the Reminders list ${OPEN_LOOPS_LIST}`)
@@ -1352,7 +1365,9 @@ async function main(): Promise<void> {
     }
     if (request.method === 'GET' && request.url === '/health') {
       response.writeHead(200, { 'content-type': 'application/json' })
-      response.end(JSON.stringify({ ok: true, store: resolved.config.kind }))
+      // `working` is a count only: the desktop app asks before a quit would stop that work.
+      // `service` is assigned above, before this server is created, so it is always there.
+      response.end(JSON.stringify({ ok: true, store: resolved.config.kind, working: service.activeWork() }))
       return
     }
     if (handlesPairingRequest(request)) {
@@ -1705,6 +1720,7 @@ async function main(): Promise<void> {
     stdioPool.close()
     for (const client of clients) client.terminate()
     const stopped = service.stopActiveTurns()
+    keepAwake.stop()
     const children = await stopAllCliChildren()
     // Every CLI gets TERM now, including Codex and invisible infrastructure turns.
     if (stopped + children > 0) await new Promise((resolve) => setTimeout(resolve, 1_600))

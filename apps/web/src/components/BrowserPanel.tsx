@@ -29,6 +29,7 @@ import type {
   BrowserDeviceViewport,
   BrowserAddressMatches,
   BrowserPasswordOfferChoice,
+  BrowserSearchEngine,
   BrowserTabAdblock,
   BrowserTabState,
   DesktopBrowserBridge,
@@ -55,7 +56,7 @@ import {
   type ReactNode,
   type RefObject,
 } from 'react'
-import { addressParts, googleSearchUrl, resolveBrowserAddress, shownAddress } from '../browserAddress'
+import { addressParts, resolveBrowserAddress, SEARCH_ENGINES, searchUrl, shownAddress } from '../browserAddress'
 import { cleanTitle, matchSpan, planAddress, shownUrl, type AddressSuggestion } from '../browserSuggestions'
 import type { CrossingTarget } from '../browserCrossing'
 import { browserActorLabel, type BrowserActivity } from '../desktopBrowser'
@@ -116,6 +117,8 @@ interface BrowserPanelProps {
   bridge: DesktopBrowserBridge | undefined
   /** The agent holding the page right now, if one is. */
   activity: BrowserActivity | undefined
+  /** Where words typed into the address bar are searched: the house setting, or its default until it has loaded. */
+  searchEngine: BrowserSearchEngine
   /** False as soon as this panel yields its slot to the floating preview. */
   shown?: boolean
   /** The native host has one page slot; two open browser panels share it by focus. */
@@ -166,6 +169,7 @@ export function BrowserPanel({
   chatId,
   bridge,
   activity,
+  searchEngine,
   shown = true,
   pageVisible = true,
   settling,
@@ -746,6 +750,7 @@ export function BrowserPanel({
               onSelectTab={selectTab}
               onNavigate={navigate}
               onError={fail}
+              searchEngine={searchEngine}
               trailingButtons={1 + (passwordsMenu === null ? 0 : 1) + (adblockSwitch === null ? 0 : 1) + (zoom === 1 ? 0 : 1)}
               trailing={<>
                 {zoom === 1 ? null : (
@@ -854,7 +859,7 @@ export function BrowserPanel({
 }
 
 /** Typing and suggestions update only this field, leaving the surrounding chrome idle. */
-function BrowserAddressField({ addressRef, bridge, url, locked, consumeFocus, otherTabs, onSelectTab, onNavigate, onError, trailing, trailingButtons = 1 }: {
+function BrowserAddressField({ addressRef, bridge, url, locked, consumeFocus, otherTabs, onSelectTab, onNavigate, onError, searchEngine, trailing, trailingButtons = 1 }: {
   addressRef: RefObject<HTMLInputElement>
   bridge: DesktopBrowserBridge
   url: string
@@ -866,6 +871,7 @@ function BrowserAddressField({ addressRef, bridge, url, locked, consumeFocus, ot
   onSelectTab(tabId: string): void
   onNavigate(url: string): void
   onError(reason: unknown): void
+  searchEngine: BrowserSearchEngine
   /** Sits inside the field at its end: the saved-passwords key, if any, and the bookmark star. */
   trailing?: ReactNode
   /** How many 24px buttons `trailing` holds, so the resting site label stops before them. */
@@ -885,7 +891,7 @@ function BrowserAddressField({ addressRef, bridge, url, locked, consumeFocus, ot
   // False after a deletion, so Backspace takes the completion away instead of bringing it straight back.
   const [completing, setCompleting] = useState(true)
   const [focused, setFocused] = useState(false)
-  const plan = planAddress(historyQuery, matches, otherTabs, completing && address === historyQuery)
+  const plan = planAddress(historyQuery, matches, searchEngine, otherTabs, completing && address === historyQuery)
   const suggestions = plan.rows
   const form = useRef<HTMLFormElement>(null)
   const listOpen = historyOpen && !locked && lookUp !== undefined
@@ -996,8 +1002,8 @@ function BrowserAddressField({ addressRef, bridge, url, locked, consumeFocus, ot
     }
     const target = suggestion.kind === 'site' ? suggestion.url
       : suggestion.kind === 'visit' ? suggestion.entry.url
-      : suggestion.kind === 'search' ? googleSearchUrl(suggestion.text)
-      : resolveBrowserAddress(suggestion.text)
+      : suggestion.kind === 'search' ? searchUrl(suggestion.text, searchEngine)
+      : resolveBrowserAddress(suggestion.text, searchEngine)
     setAddress(suggestion.kind === 'search' || suggestion.kind === 'address' ? suggestion.text : target)
     go(target)
   }
@@ -1006,7 +1012,7 @@ function BrowserAddressField({ addressRef, bridge, url, locked, consumeFocus, ot
     event.preventDefault()
     const chosen = historyOpen ? suggestions[highlight] : undefined
     if (chosen !== undefined) choose(chosen)
-    else if (address.trim() !== '') go(resolveBrowserAddress(address))
+    else if (address.trim() !== '') go(resolveBrowserAddress(address, searchEngine))
   }
 
   const closeHistoryOnBlur = (event: FocusEvent<HTMLFormElement>) => {
@@ -1120,6 +1126,7 @@ function BrowserAddressField({ addressRef, bridge, url, locked, consumeFocus, ot
           placement={listPlacement}
           suggestions={suggestions}
           typed={historyQuery}
+          searchLabel={SEARCH_ENGINES[searchEngine].label}
           highlight={highlight}
           onHighlight={setHighlight}
           emptyMessage={suggestions.length > 0 ? '' : historyLoading ? 'Loading history…' : 'No browser history yet'}
@@ -1142,6 +1149,7 @@ const BrowserHistoryResults = memo(function BrowserHistoryResults({
   placement,
   suggestions,
   typed,
+  searchLabel,
   highlight,
   onHighlight,
   emptyMessage,
@@ -1153,6 +1161,8 @@ const BrowserHistoryResults = memo(function BrowserHistoryResults({
   suggestions: AddressSuggestion[]
   /** What was typed, bolded where a row's address contains it. */
   typed: string
+  /** The search engine's name, on the search row. */
+  searchLabel: string
   highlight: number
   onHighlight: (index: number) => void
   emptyMessage: string
@@ -1189,21 +1199,21 @@ const BrowserHistoryResults = memo(function BrowserHistoryResults({
           onMouseDown={(event) => event.preventDefault()}
           onClick={() => onChoose(suggestion)}
         >
-          <AddressRow suggestion={suggestion} typed={typed} />
+          <AddressRow suggestion={suggestion} typed={typed} searchLabel={searchLabel} />
         </button>
       ))}
     </div>
   )
 })
 
-function AddressRow({ suggestion, typed }: { suggestion: AddressSuggestion; typed: string }) {
+function AddressRow({ suggestion, typed, searchLabel }: { suggestion: AddressSuggestion; typed: string; searchLabel: string }) {
   switch (suggestion.kind) {
     case 'search':
       return (
         <>
           <Icon icon={Search01Icon} size={14} className="flex-none text-dim" />
           <span className="block min-w-0 flex-1 truncate">
-            <span className="text-dim">Search Google for </span>{suggestion.text}
+            <span className="text-dim">Search {searchLabel} for </span>{suggestion.text}
           </span>
         </>
       )

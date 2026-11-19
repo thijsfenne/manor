@@ -38,6 +38,7 @@ import { loadRenderer } from './rendererLoad'
 import { listLocalServers } from './localServers'
 import { DEFAULT_RENDERER_URL, isAllowedRendererNavigation, resolveRendererUrl } from './rendererUrl'
 import { bundledServerEntry, manorAnswers, startBundledServer, waitForManor } from './bundledServer'
+import { createQuitGuard, readWorking } from './quitGuard'
 import { EmbeddedDriver, embeddedDriverPath } from './embeddedDriver'
 import { registerPermissionsIpc } from './systemPermissions'
 import { bindPageFullscreen, bindWindowChrome, trafficLightPositionForZoom } from './windowChrome'
@@ -46,6 +47,8 @@ import { FULLSCREEN_CHANNEL, ZOOM_CHANNEL } from './zoomChannels'
 let mainWindow: BrowserWindow | null = null
 /** Set once the app is quitting, so the bundled server stopping then is expected. */
 let quitting = false
+/** Holds a quit that would stop the bundled server's running work; only set while this app runs that server. */
+let quitGuard: ReturnType<typeof createQuitGuard> | null = null
 let browserManager: BrowserManager | null = null
 let browserSession: Session | null = null
 let browserImport: BrowserProfileSnapshot | null = null
@@ -66,7 +69,14 @@ const BROWSER_PROFILE_UNAVAILABLE = 'MANOR_BROWSER_PROFILE_UNAVAILABLE'
 // and Dock. The packaged bundle repeats this as productName, because Finder reads
 // metadata before this process gets a chance to run.
 app.setName('Manor')
-app.on('before-quit', () => { quitting = true })
+app.on('before-quit', (event) => {
+  // Held until the user answers; the guard calls `app.quit()` again to go on.
+  if (quitGuard?.request() === false) {
+    event.preventDefault()
+    return
+  }
+  quitting = true
+})
 
 app.whenReady().then(async () => {
   // Only `electron .` needs this: the packaged bundle carries an icon that follows
@@ -174,8 +184,24 @@ async function ensureServer(): Promise<boolean> {
     })
     process.env.MANOR_DESKTOP_URL = `${server.origin}/`
     app.on('will-quit', () => server.stop())
+    // Quitting stops this server and every turn it runs, so a quit with work running asks first.
+    quitGuard = createQuitGuard({
+      read: () => readWorking(server.origin),
+      ask: async (question) => {
+        const options = { type: 'warning' as const, ...question }
+        // A sheet on a window not shown yet would be out of reach, and hold the quit for good.
+        const owner = mainWindow !== null && !mainWindow.isDestroyed() && mainWindow.isVisible() ? mainWindow : null
+        const { response } = owner === null ? await dialog.showMessageBox(options) : await dialog.showMessageBox(owner, options)
+        return response === 0
+      },
+      quit: () => app.quit(),
+    })
     // The server going away under a running app leaves a window that can do nothing.
-    server.child.once('exit', () => { if (!quitting) app.quit() })
+    // Nothing is left to protect then, so that quit never asks.
+    server.child.once('exit', () => {
+      quitGuard?.release()
+      if (!quitting) app.quit()
+    })
     return true
   } catch (error: unknown) {
     // The daemon only serves this app's own server.

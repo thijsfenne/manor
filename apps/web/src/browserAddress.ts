@@ -1,3 +1,4 @@
+import type { BrowserSearchEngine } from '@manor/contracts'
 import { TOP_LEVEL_DOMAINS } from './browserTlds'
 
 const EXPLICIT_SCHEME = /^[a-z][a-z\d+.-]*:/i
@@ -24,34 +25,55 @@ export function addressParts(url: string): { before: string; site: string; after
   return { before: url.slice(0, start), site: url.slice(start, start + site.length), after: url.slice(start + site.length) }
 }
 
-const SEARCH_URL = 'https://www.google.com/search'
-
 /**
- * Turns the address field into either a website navigation or a Google search, the way
- * Chrome's omnibox reads it. A domain with a real TLD, localhost or an IP is an address,
- * and gains its scheme here: `localhost:3000` would otherwise read as scheme `localhost:`.
- * Text with a space, or a single word, searches. Other schemes stay for the host to judge.
+ * Each engine the address bar can search with: the name rows and Settings show, and the
+ * results page the typed words go to as its `q` parameter.
  */
-export function resolveBrowserAddress(raw: string): string {
-  const value = raw.trim()
-  if (value === '') return ''
-
-  const website = websiteAddress(value)
-  if (website !== null) return website
-  if (EXPLICIT_SCHEME.test(value) && !/\s/.test(value)) return value
-  return googleSearchUrl(value)
+export const SEARCH_ENGINES: Record<BrowserSearchEngine, { label: string; url: string }> = {
+  google: { label: 'Google', url: 'https://www.google.com/search' },
+  duckduckgo: { label: 'DuckDuckGo', url: 'https://duckduckgo.com/' },
+  bing: { label: 'Bing', url: 'https://www.bing.com/search' },
+  brave: { label: 'Brave Search', url: 'https://search.brave.com/search' },
+  ecosia: { label: 'Ecosia', url: 'https://www.ecosia.org/search' },
+  kagi: { label: 'Kagi', url: 'https://kagi.com/search' },
 }
 
-/** The Google results page for this text, even when it reads as an address. */
-export function googleSearchUrl(text: string): string {
-  const search = new URL(SEARCH_URL)
+/** What Enter does with the address field: open this address, or search for this text. */
+type AddressReading = { kind: 'open'; url: string } | { kind: 'search'; text: string }
+
+/**
+ * Reads the address field as a website navigation or a search. A domain with a real TLD,
+ * localhost or an IP is an address, and gains its scheme here: `localhost:3000` would
+ * otherwise read as scheme `localhost:`. Text with a space, or a single word, searches.
+ * Other schemes stay for the host to judge. Null for an empty field.
+ */
+function readAddress(raw: string): AddressReading | null {
+  const value = raw.trim()
+  if (value === '') return null
+
+  const website = websiteAddress(value)
+  if (website !== null) return { kind: 'open', url: website }
+  if (EXPLICIT_SCHEME.test(value) && !/\s/.test(value)) return { kind: 'open', url: value }
+  return { kind: 'search', text: value }
+}
+
+/** Where Enter on the address field goes: the address itself, or the engine's results for the text. */
+export function resolveBrowserAddress(raw: string, engine: BrowserSearchEngine): string {
+  const reading = readAddress(raw)
+  if (reading === null) return ''
+  return reading.kind === 'open' ? reading.url : searchUrl(reading.text, engine)
+}
+
+/** The engine's results page for this text, even when it reads as an address. */
+export function searchUrl(text: string, engine: BrowserSearchEngine): string {
+  const search = new URL(SEARCH_ENGINES[engine].url)
   search.searchParams.set('q', text.trim())
   return search.href
 }
 
-/** Whether Enter on this text searches Google rather than opening it. */
+/** Whether Enter on this text searches rather than opening it, whichever engine searches. */
 export function addressSearches(raw: string): boolean {
-  return resolveBrowserAddress(raw).startsWith(`${SEARCH_URL}?`)
+  return readAddress(raw)?.kind === 'search'
 }
 
 function websiteAddress(value: string): string | null {

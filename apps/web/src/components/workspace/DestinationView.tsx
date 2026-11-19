@@ -1,7 +1,7 @@
 import { useCallback, useMemo, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { SidebarLeftIcon, SidebarRightIcon } from '@hugeicons/core-free-icons'
-import { BROWSER_HOME_SESSION_ID, NOTE_AI_DEFAULTS, type WorkflowSuggestion, type Chat, type PageContextAttachment, type Project, type Routine } from '@manor/contracts'
+import { BROWSER_HOME_SESSION_ID, DEFAULT_HOUSE_SETTINGS, NOTE_AI_DEFAULTS, type WorkflowSuggestion, type Chat, type PageContextAttachment, type Project, type Routine } from '@manor/contracts'
 import { composioBinding } from '../connectors/composioCatalogue'
 import { PluginsTabs, PluginsView } from '../plugins/PluginsView'
 import { ScheduledTabs } from '../routines/ScheduledTabs'
@@ -401,6 +401,7 @@ function BrowserPlace({
           chatId={BROWSER_HOME_SESSION_ID}
           bridge={browserBridge}
           activity={manor.browserActivity[BROWSER_HOME_SESSION_ID]}
+          searchEngine={workspace.houseSettings?.browserSearchEngine ?? DEFAULT_HOUSE_SETTINGS.browserSearchEngine}
           settling={false}
           {...(manor.externalBrowser === null ? {} : { onOpenExternal: manor.openExternalUrl })}
           openInChatTargets={crossing}

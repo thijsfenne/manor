@@ -14,6 +14,7 @@ const info = (memory: Partial<SystemInfo['memory']> = {}, vault: Partial<SystemI
   version: '0.0.1', commit: null, startedAt: '2026-11-10T00:00:00.000Z', providers: [], logs: [],
   memory: { path: '/Users/someone/.manor/memory', pinned: false, pending: null, ...memory },
   vault: { path: '/Users/someone/.manor/knowledge', pinned: false, pending: null, ...vault },
+  canKeepAwake: false,
 })
 const row = (provider: ProviderConnection['provider'], state: ProviderConnection['state']): ProviderConnection =>
   ({ provider, installed: state !== 'install', version: '1.0.0', signedIn: state === 'ready', state, canSignIn: true, canInstall: false })

@@ -47,7 +47,7 @@ if pgrep -f "$binary" >/dev/null; then
     sleep 0.5
   done
   if pgrep -f "$binary" >/dev/null; then
-    echo "desktop:install: Manor did not quit within 20s, $target was not replaced." >&2
+    echo "desktop:install: Manor did not quit within 20s, $target was not replaced. If it asks whether to quit while agents work, answer it and run this again." >&2
     exit 1
   fi
 fi

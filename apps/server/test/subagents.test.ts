@@ -155,6 +155,19 @@ describe('a delegated child', () => {
     await expect(subagents.delegate(context, { task: 'x', model: 'gpt-6.1-sol', effort: 'low' })).rejects.toThrow('can no longer start')
   })
 
+  it('names its top-level chat as running work until it ends or is told to stop', async () => {
+    const { driver, subagents, context, parentChat } = await setup({ policy: { ...policy, maxConcurrent: 2 } })
+    const brief = { task: 'Work.', model: 'gpt-6.1-sol', effort: 'low', wait: false } as const
+    const first = await subagents.delegate(context, brief)
+    await subagents.delegate(context, brief)
+    await vi.waitFor(() => expect(driver.turns).toHaveLength(2))
+    expect(subagents.runningRootChatIds()).toEqual([parentChat.id, parentChat.id])
+    await subagents.cancel(context, first.taskId)
+    expect(subagents.runningRootChatIds()).toEqual([parentChat.id])
+    driver.answer(1, 'Done.')
+    await vi.waitFor(() => expect(subagents.runningRootChatIds()).toEqual([]))
+  })
+
   it('reports a wait that ran out as still running', async () => {
     const { subagents, context } = await setup({ waitMs: 10 })
     await expect(subagents.delegate(context, { task: 'Slow work.', model: 'gpt-6.1-sol', effort: 'low' }))

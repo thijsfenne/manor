@@ -2944,6 +2944,17 @@ export const NOTE_AI_DEFAULTS = { model: 'claude-sonnet-5-5', effort: 'medium' }
  */
 export const NOTE_AI_MAX_CHARS = 40_000
 
+/**
+ * Whether Manor holds the Mac awake: `off` never, `working` while a turn, a subagent or
+ * a live session's background work runs, `always` for as long as the server runs.
+ * Only idle sleep is held off; the display still sleeps and a closed lid still sleeps.
+ */
+export const KeepAwakeModeSchema = z.enum(['off', 'working', 'always'])
+export type KeepAwakeMode = z.infer<typeof KeepAwakeModeSchema>
+/** The engines the Browser's address bar can search with. A closed list: no URL template. */
+export const BrowserSearchEngineSchema = z.enum(['google', 'duckduckgo', 'bing', 'brave', 'ecosia', 'kagi'])
+export type BrowserSearchEngine = z.infer<typeof BrowserSearchEngineSchema>
+
 export const HouseSettingsSchema = z.object({
   /** A project chat quiet this long is settled. Null leaves every chat where it is. */
   autoSettleDays: z.number().int().min(1).max(90).nullable().default(2),
@@ -2973,6 +2984,10 @@ export const HouseSettingsSchema = z.object({
    * off list, so a model the catalogue gains later starts on.
    */
   disabledModels: z.array(z.string().min(1).max(100)).max(200).default([]),
+  /** Applied by the server at once; a host that cannot hold the Mac awake ignores it. */
+  keepAwake: KeepAwakeModeSchema.default('off'),
+  /** Where words typed into the Browser's address bar are searched. */
+  browserSearchEngine: BrowserSearchEngineSchema.default('google'),
 })
 export type HouseSettings = z.infer<typeof HouseSettingsSchema>
 
@@ -3025,6 +3040,8 @@ export const SystemInfoSchema = z.object({
   memory: z.object({ path: z.string().nullable(), ...folderState }),
   vault: z.object({ path: z.string().nullable(), ...folderState }),
   logs: z.array(z.object({ label: z.string(), path: z.string() })),
+  /** The server runs on macOS, so Settings offers to keep the Mac awake. */
+  canKeepAwake: z.boolean().default(false),
 })
 export type SystemInfo = z.infer<typeof SystemInfoSchema>
 

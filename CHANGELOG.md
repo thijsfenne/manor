@@ -4,6 +4,9 @@ What changed for someone who uses Manor, newest first. A version is a tag on `ma
 
 ## Unreleased
 
+- Settings → General has a Power group on a Mac. Keep this Mac awake offers Never, While agents work and Always, and stops the Mac from going to sleep on its own while it applies. The display can still sleep and a closed lid still sleeps the Mac. While agents work lets go about a minute after the last agent stops.
+- Settings → General has a Browser group in the desktop app. Search engine sets where words typed into the Browser's address bar are searched, with six engines to pick from. A pasted results page now opens as the address it is.
+- Quitting the desktop app while agents are working asks first, and names how many chats would be stopped. It asks only when the app runs its own server.
 - Settings → Appearance offers more fonts. Interface font adds Albert Sans, Lato, Lexend, Montserrat, Nunito Sans, Outfit, Poppins, Roboto, Rubik, Sora, Spline Sans and Work Sans, and Code font adds Spline Sans Mono. Both menus list the default first, then the rest alphabetically. Lato has no medium weight, so text that is normally medium shows in its regular weight.
 
 ## 0.2.1, 2026-11-19

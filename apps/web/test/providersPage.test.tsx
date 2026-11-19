@@ -12,6 +12,7 @@ const info: SystemInfo = {
     { driver: 'cursor', command: 'cursor-agent', version: '2026.11.05' },
   ],
   memory: { path: null, pinned: false, pending: null }, vault: { path: null, pinned: false, pending: null }, logs: [],
+  canKeepAwake: false,
 }
 const row = (provider: ProviderConnection['provider'], rest: Partial<ProviderConnection>): ProviderConnection =>
   ({ provider, installed: true, version: '1.0.0', signedIn: null, state: 'ready', canSignIn: true, canInstall: false, ...rest })

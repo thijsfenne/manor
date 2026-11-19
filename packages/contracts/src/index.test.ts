@@ -335,6 +335,14 @@ test('Settings keeps one model on, and a provider switch lands on a model still 
   assert.equal(landingModel('grok', ['grok-4.5', 'grok-4.6', 'grok-4.7']), 'grok-4.7')
 })
 
+test('settings saved before keep awake existed read it as off, and only a known mode saves', async () => {
+  const { HouseSettingsSchema } = await import('./index.js')
+  const saved = { autoSettleDays: 2, archiveRetentionDays: 10, attachmentRetentionDays: 7, backupRetentionDays: 14, disabledModels: [] }
+  assert.equal(HouseSettingsSchema.parse(saved).keepAwake, 'off')
+  assert.equal(HouseSettingsSchema.parse({ ...saved, keepAwake: 'working' }).keepAwake, 'working')
+  assert.equal(HouseSettingsSchema.safeParse({ ...saved, keepAwake: 'sometimes' }).success, false)
+})
+
 test('a new conversation whose default model is off starts on a model that is on', async () => {
   const { MODELS, NEW_SINGLE_CHAT_DEFAULT, runtimeOn, workSingleDefault } = await import('./index.js')
   assert.equal(runtimeOn(NEW_SINGLE_CHAT_DEFAULT, []), NEW_SINGLE_CHAT_DEFAULT)
@@ -345,4 +353,12 @@ test('a new conversation whose default model is off starts on a model that is on
   const nextProvider = runtimeOn({ ...NEW_SINGLE_CHAT_DEFAULT, speed: 'fast' }, MODELS.claude.map((option) => option.value))
   assert.equal(nextProvider.driver, 'codex')
   assert.equal(nextProvider.speed, undefined)
+})
+
+test('a house settings record saved before the search engine existed reads google, and an unknown engine is refused', async () => {
+  const { HouseSettingsSchema } = await import('./index.js')
+  const saved = { autoSettleDays: 3, archiveRetentionDays: 10, attachmentRetentionDays: 7, backupRetentionDays: 14, memoryDir: null, knowledgeDir: null, disabledModels: [] }
+  assert.equal(HouseSettingsSchema.parse(saved).browserSearchEngine, 'google')
+  assert.equal(HouseSettingsSchema.parse({ ...saved, browserSearchEngine: 'kagi' }).browserSearchEngine, 'kagi')
+  assert.equal(HouseSettingsSchema.safeParse({ ...saved, browserSearchEngine: 'unknown-engine' }).success, false)
 })
