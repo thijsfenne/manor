@@ -207,7 +207,9 @@ The desktop window is an L-frame (`--color-frame`, `--color-sidebar`, `--color-s
 
 **Body Font:** Figtree, same stack.
 
-**Label/Mono Font:** Geist Mono Variable for paths, shortcuts, code, and exact identifiers.
+**Label/Mono Font:** SF Mono, the system face, for paths, shortcuts, code, and exact identifiers. Code never forms ligatures, so `!=` stays two characters in every code font.
+
+**Font Choice:** On desktop and web, Settings → Appearance swaps the body font and the code font for one of a fixed bundled list, each with a live sample under its row (a message with chips, a diff). Figtree and SF Mono stay the defaults, a choice is kept per device, and page titles follow the body font. Figtree sits in the main stylesheet and SF Mono is the system face; every other face is bundled, never fetched from a font service, and loads only once chosen or once its menu opens to show the names. The phone keeps its own fonts.
 
 **Character:** Even, open letterforms with a tall x-height, quiet enough to read all day and precise rather than technical. The house gets its softness from continuous corners and tonal fills, not from the type.
 

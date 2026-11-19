@@ -772,7 +772,7 @@ const highlight = HighlightStyle.define([
   { tag: tags.strikethrough, textDecoration: 'line-through', color: 'var(--color-muted)' },
   { tag: tags.link, color: 'var(--accent-fg)', textDecoration: 'underline', textUnderlineOffset: '2px' },
   { tag: tags.url, color: 'var(--color-muted)' },
-  { tag: tags.monospace, fontFamily: 'var(--font-mono)', color: 'var(--color-text)' },
+  { tag: tags.monospace, fontFamily: 'var(--font-mono)', fontVariantLigatures: 'none', color: 'var(--color-text)' },
   { tag: tags.contentSeparator, color: 'var(--color-muted)' },
 ])
 
@@ -849,6 +849,7 @@ const theme = EditorView.theme({
   '.cm-manor-codeblock': {
     backgroundColor: 'var(--color-surface-2)',
     fontFamily: 'var(--font-mono)',
+    fontVariantLigatures: 'none',
     fontSize: '0.875em',
     lineHeight: '1.6',
     paddingLeft: '1.15em',
@@ -880,6 +881,7 @@ const theme = EditorView.theme({
     borderRadius: 'var(--radius-sm)',
     padding: '0.1em 0.3em',
     fontFamily: 'var(--font-mono)',
+    fontVariantLigatures: 'none',
     fontSize: '0.875em',
   },
   // One fixed height whether it shows the rule or its `---`, so the caret never jolts it.
@@ -901,6 +903,7 @@ const theme = EditorView.theme({
   // Metadata, not prose: still yours to edit, but it stops shouting over the note.
   '.cm-manor-frontmatter': {
     fontFamily: 'var(--font-mono)',
+    fontVariantLigatures: 'none',
     fontSize: '0.78em',
     lineHeight: '1.6',
     color: 'var(--color-muted)',

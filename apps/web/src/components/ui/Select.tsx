@@ -1,4 +1,4 @@
-import { useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent } from 'react'
+import { useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties, type KeyboardEvent } from 'react'
 import { createPortal } from 'react-dom'
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import { ArrowDown01Icon, Tick02Icon } from '@hugeicons/core-free-icons'
@@ -17,6 +17,8 @@ import { usePopupPlacement } from './usePopupPlacement'
 export interface SelectOption<T extends string> {
   value: T
   label: string
+  /** Drawn on the label in the list and the trigger, such as a font name set in that font. */
+  style?: CSSProperties
 }
 
 interface SelectProps<T extends string> {
@@ -29,6 +31,11 @@ interface SelectProps<T extends string> {
   placeholder?: string
   disabled?: boolean
   className?: string
+  /**
+   * The option under the pointer or the arrow keys while the list is open, and null
+   * once it closes, so a caller can preview a value before it is chosen.
+   */
+  onPreview?: (value: T | null) => void
 }
 
 const MAX_HEIGHT = 288
@@ -53,6 +60,7 @@ export function Select<T extends string>({
   placeholder = 'Choose…',
   disabled = false,
   className = '',
+  onPreview,
 }: SelectProps<T>) {
   const triggerRef = useRef<HTMLButtonElement>(null)
   const popupRef = useRef<HTMLDivElement>(null)
@@ -73,15 +81,33 @@ export function Select<T extends string>({
   const selected = options.findIndex((option) => option.value === value)
   const current = selected === -1 ? null : options[selected]
 
+  // An exiting list keeps its rows, and their handlers, until its animation ends. The
+  // ref lets those rows see the close, so a pointer crossing them cannot preview again.
+  const openRef = useRef(open)
+  useEffect(() => {
+    openRef.current = open
+  }, [open])
+
+  const point = (index: number) => {
+    setActive(index)
+    const option = options[index]
+    if (option !== undefined) onPreview?.(option.value)
+  }
+
   const show = () => {
     if (disabled || options.length === 0) return
-    setActive(selected === -1 ? 0 : selected)
+    point(selected === -1 ? 0 : selected)
     opening.current += 1
     setOpen(true)
   }
 
-  const hide = () => {
+  const close = () => {
     setOpen(false)
+    onPreview?.(null)
+  }
+
+  const hide = () => {
+    close()
     triggerRef.current?.focus()
   }
 
@@ -96,7 +122,7 @@ export function Select<T extends string>({
   // Armed only once the list has a height. Opening used to call `scrollIntoView`
   // on a clip of height 0, which scrolled the dialog and `layoutMoved` then
   // closed the list before it had grown.
-  useDismiss(open && (!visible || contentHeight > 0), () => setOpen(false), {
+  useDismiss(open && (!visible || contentHeight > 0), close, {
     within: [triggerRef, popupRef],
     layoutMoved: true,
   })
@@ -130,9 +156,7 @@ export function Select<T extends string>({
     return () => observer.disconnect()
   }, [visible, options.length, placement])
 
-  const step = (delta: number) => {
-    setActive((current) => Math.max(0, Math.min(options.length - 1, current + delta)))
-  }
+  const step = (delta: number) => point(Math.max(0, Math.min(options.length - 1, active + delta)))
 
   const onKeyDown = (event: KeyboardEvent<HTMLButtonElement>) => {
     if (!open) {
@@ -146,7 +170,7 @@ export function Select<T extends string>({
       // Tab is the one key that leaves without preventDefault: the list closes and
       // focus moves on, rather than trapping a keyboard behind an open popup.
       case 'Tab':
-        setOpen(false)
+        close()
         return
       case 'Escape':
         event.preventDefault()
@@ -162,11 +186,11 @@ export function Select<T extends string>({
         return
       case 'Home':
         event.preventDefault()
-        setActive(0)
+        point(0)
         return
       case 'End':
         event.preventDefault()
-        setActive(options.length - 1)
+        point(options.length - 1)
         return
       case 'Enter':
       case ' ':
@@ -199,7 +223,7 @@ export function Select<T extends string>({
         onClick={() => (open ? hide() : show())}
         onKeyDown={onKeyDown}
       >
-        <span className="min-w-0 flex-1 truncate">{current?.label ?? placeholder}</span>
+        <span className="min-w-0 flex-1 truncate" style={current?.style}>{current?.label ?? placeholder}</span>
         <motion.span
           className="flex-none text-muted"
           animate={{ rotate: open ? 180 : 0 }}
@@ -264,10 +288,12 @@ export function Select<T extends string>({
                     className={`flex h-8 w-full cursor-pointer items-center gap-2 rounded-md border-0 px-2 text-left text-label text-text ${
                       index === active ? 'bg-user-bg' : 'bg-transparent'
                     }`}
-                    onMouseEnter={() => setActive(index)}
+                    onMouseEnter={() => {
+                      if (openRef.current) point(index)
+                    }}
                     onClick={() => choose(index)}
                   >
-                    <span className="min-w-0 flex-1 truncate">{option.label}</span>
+                    <span className="min-w-0 flex-1 truncate" style={option.style}>{option.label}</span>
                     {index === selected ? (
                       <Icon className="flex-none" icon={Tick02Icon} size={13} />
                     ) : (

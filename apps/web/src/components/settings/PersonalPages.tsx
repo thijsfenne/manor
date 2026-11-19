@@ -11,6 +11,7 @@ import { formInputClass } from '../ui/FormField'
 import { RequestNotice } from '../ui/RequestNotice'
 import { Select } from '../ui/Select'
 import { SettingsGroup, SettingsPage, SettingsRow } from './SettingsLayout'
+import { FontGroup } from './FontSettings'
 import { ThemePicker } from './ThemePicker'
 
 const OFFLINE = 'Nothing was sent, the connection is down. Try again once it is back.'
@@ -190,6 +191,7 @@ export function AppearancePage({ choice, onChange }: { choice: Choice; onChange:
           <p className="m-0 text-label text-muted">System follows macOS. Remembered per device.</p>
         </div>
       </SettingsGroup>
+      <FontGroup />
     </SettingsPage>
   )
 }

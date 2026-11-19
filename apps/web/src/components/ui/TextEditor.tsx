@@ -130,6 +130,7 @@ const plainTheme = EditorView.theme({
   '&.cm-focused': { outline: 'none' },
   '.cm-content': {
     fontFamily: 'var(--font-mono)',
+    fontVariantLigatures: 'none',
     lineHeight: '1.6',
     padding: '0',
     caretColor: 'var(--color-text)',

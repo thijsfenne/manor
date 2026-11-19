@@ -1,10 +1,10 @@
 @import 'tailwindcss';
 
 /* Geist, self-hosted. No CDN reaches the VPS and the app stays offline-safe.
-   It is the fallback now, so the browser only pulls it where SF Pro Rounded is absent. */
+   It is the fallback now, so the browser only pulls it where SF Pro Rounded is absent.
+   Every font the Appearance page offers beyond these loads on demand, see fonts.ts. */
 @import '@fontsource-variable/geist';
 @import '@fontsource-variable/geist/wght-italic.css';
-@import '@fontsource-variable/geist-mono';
 
 /* Figtree on trial as the UI face. Instrument Sans stays imported so dropping
    these two lines and its --font-sans entry hands the room back. */
@@ -44,10 +44,12 @@
      (Apple's SF download installs it system-wide); iOS hides the name but exposes the face
      through `ui-rounded`, which is Safari-only and harmless everywhere else. */
   --font-sans: 'Figtree Variable', 'Instrument Sans Variable', 'SF Pro Rounded', ui-rounded, 'Geist Variable', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
-  /* Page and sidebar titles. The same family as the UI, in its own token so a
-     display face can be tried again by changing one line. */
-  --font-display: 'Figtree Variable', 'Instrument Sans Variable', 'SF Pro Rounded', ui-rounded, system-ui, -apple-system, sans-serif;
-  --font-mono: 'Geist Mono Variable', ui-monospace, SFMono-Regular, Menlo, monospace;
+  /* Page and sidebar titles. The same family as the UI, so the Font picked in Appearance
+     (set on <html> as --font-sans) reaches them too. Its own token, so a display face can
+     be tried again by changing one line. */
+  --font-display: var(--font-sans);
+  /* SF Mono, the system face. Appearance can override it on <html>, see fonts.ts. */
+  --font-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, monospace;
 
   /* Two weights in the whole house, 400 and 500. Emphasis nudges rather than shouts, so
      `font-semibold` resolves to the same 500 as `font-medium` instead of adding a third
@@ -722,6 +724,16 @@ body {
 
 button {
   font-family: inherit;
+}
+
+/* Code shows the characters as typed in every code font: `!=` never joins into one glyph.
+   The CodeMirror editor sets the same in TextEditor.tsx. */
+code,
+kbd,
+samp,
+pre,
+.font-mono {
+  font-variant-ligatures: none;
 }
 
 /* Lexical owns the list structure; the composer owns a visible, aligned gutter.
