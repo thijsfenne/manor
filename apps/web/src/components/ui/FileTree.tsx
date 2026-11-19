@@ -81,6 +81,8 @@ interface FileTreeProps {
   openFolders: Set<string>
   onToggleFolder: (path: string) => void
   onSelect: (path: string) => void
+  /** ⌘-click or a middle click on a file: open it beside the current one, in a new tab. */
+  onOpenInNewTab?: (path: string) => void
   /** The file this tree is showing; absent in a tree that only opens things. */
   selectedPath?: string | null
   /** The one file with unsaved edits, which wears a dot rather than a second colour. */
@@ -103,6 +105,7 @@ export function FileTree({
   openFolders,
   onToggleFolder,
   onSelect,
+  onOpenInNewTab,
   selectedPath = null,
   dirtyPath = null,
   notePreviews,
@@ -193,6 +196,7 @@ export function FileTree({
             dirty={row.node.path === dirtyPath}
             tabStop={row.node.path === stop}
             onSelect={onSelect}
+            {...(onOpenInNewTab === undefined ? {} : { onOpenInNewTab })}
             {...(drag === undefined ? {} : { drag })}
             {...(onFileMenu === undefined ? {} : { onMenu: onFileMenu })}
             {...(notePreviews === undefined ? {} : { preview: notePreviews[row.node.path] ?? '' })}
@@ -221,6 +225,7 @@ function FileRow({
   dirty,
   tabStop,
   onSelect,
+  onOpenInNewTab,
   preview,
   onMenu,
   guides,
@@ -231,6 +236,7 @@ function FileRow({
   dirty: boolean
   tabStop: boolean
   onSelect: (path: string) => void
+  onOpenInNewTab?: (path: string) => void
   preview?: string
   onMenu?: FileTreeProps['onFileMenu']
   guides: ReactNode
@@ -257,7 +263,15 @@ function FileRow({
         onDragStart: (event: DragEvent<HTMLElement>) => drag.start(row.node.path, true, event),
         onDragEnd: drag.end,
       })}
-      onClick={() => onSelect(row.node.path)}
+      onClick={(event) => {
+        if (onOpenInNewTab !== undefined && (event.metaKey || event.ctrlKey)) onOpenInNewTab(row.node.path)
+        else onSelect(row.node.path)
+      }}
+      onAuxClick={onOpenInNewTab === undefined ? undefined : (event) => {
+        if (event.button !== 1) return
+        event.preventDefault()
+        onOpenInNewTab(row.node.path)
+      }}
       onContextMenu={onMenu === undefined ? undefined : (event) => {
         event.preventDefault()
         event.currentTarget.focus()

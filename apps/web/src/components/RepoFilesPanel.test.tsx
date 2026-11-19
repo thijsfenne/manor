@@ -1,8 +1,8 @@
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { filterRepoFiles, REPO_FILE_AUTOSAVE_MS, RepoFilesPanel } from './RepoFilesPanel'
-import { RepoFileTree } from './RepoFileTree'
+import { matchRepoEntries, REPO_FILE_AUTOSAVE_MS, RepoFilesPanel } from './RepoFilesPanel'
+import { repoTreeEntries, RepoFileTree } from './RepoFileTree'
 
 vi.mock('./ui/TextEditor', async (importOriginal) => ({
   ...(await importOriginal<typeof import('./ui/TextEditor')>()),
@@ -11,8 +11,24 @@ vi.mock('./ui/TextEditor', async (importOriginal) => ({
   ),
 }))
 
+// Motion's layout measuring needs a real page; the strip's own behaviour is covered on its own.
+vi.mock('./ContentTabStrip', () => ({
+  ContentTabStrip: ({ items, onClose, onNew }: { items: { id: string; name: string }[]; onClose: (id: string) => void; onNew: () => void }) => (
+    <div>
+      <button type="button" aria-label="New tab" onClick={onNew} />
+      {items.map((item) => (
+        <span key={item.id}>
+          <span>{item.name}</span>
+          <button type="button" aria-label={`Close ${item.name}`} onClick={() => onClose(item.id)} />
+        </span>
+      ))}
+    </div>
+  ),
+}))
+
 beforeEach(() => {
   vi.stubGlobal('document', {
+    activeElement: null,
     addEventListener: vi.fn(),
     removeEventListener: vi.fn(),
   })
@@ -103,6 +119,115 @@ describe('repository files panel', () => {
     act(() => panel!.unmount())
   })
 
+  describe('tabs', () => {
+    const KEY = 'manor:file-tabs:chat-1'
+    let store: Map<string, string>
+    beforeEach(() => {
+      store = new Map()
+      vi.stubGlobal('window', {
+        ...window,
+        localStorage: {
+          getItem: (key: string) => store.get(key) ?? null,
+          setItem: (key: string, value: string) => store.set(key, value),
+          removeItem: (key: string) => store.delete(key),
+        },
+      })
+    })
+    const panel = (selectedPath: string | null, onSelect: (path: string) => void) => (
+      <RepoFilesPanel
+        {...callbacks}
+        memoryKey="chat-1"
+        files={['a.ts', 'b.ts', 'c.ts']}
+        selectedPath={selectedPath}
+        canEdit
+        width={720}
+        expanded={false}
+        resizing={false}
+        resizeProps={{}}
+        onSelect={onSelect}
+      />
+    )
+
+    it('restores the stored tabs, drops a file that is gone and opens the active one', () => {
+      store.set(KEY, JSON.stringify({ tabs: [{ id: 't1', path: 'a.ts' }, { id: 't2', path: 'gone.ts' }, { id: 't3', path: 'b.ts' }], activeId: 't3' }))
+      const onSelect = vi.fn()
+      let view: ReactTestRenderer
+      act(() => { view = create(panel(null, onSelect)) })
+      expect(onSelect).toHaveBeenLastCalledWith('b.ts')
+      expect(JSON.parse(store.get(KEY)!)).toEqual({ tabs: [{ id: 't1', path: 'a.ts' }, { id: 't3', path: 'b.ts' }], activeId: 't3' })
+      act(() => view!.unmount())
+    })
+
+    it('never opens a restored active file that is gone, so a surviving tab keeps its file', () => {
+      store.set(KEY, JSON.stringify({ tabs: [{ id: 't1', path: 'a.ts' }, { id: 't2', path: 'gone.ts' }], activeId: 't2' }))
+      const onSelect = vi.fn()
+      let view: ReactTestRenderer
+      act(() => { view = create(panel(null, onSelect)) })
+      expect(onSelect.mock.calls).toEqual([['a.ts']])
+      act(() => view!.update(panel('a.ts', onSelect)))
+      expect(JSON.parse(store.get(KEY)!)).toEqual({ tabs: [{ id: 't1', path: 'a.ts' }], activeId: 't1' })
+      act(() => view!.unmount())
+    })
+
+    it('follows a file opened from outside into the active tab and opens a new tab from the tree', () => {
+      const onSelect = vi.fn()
+      let view: ReactTestRenderer
+      act(() => { view = create(panel('a.ts', onSelect)) })
+      act(() => view!.update(panel('b.ts', onSelect)))
+      expect(JSON.parse(store.get(KEY)!).tabs.map((tab: { path: string }) => tab.path)).toEqual(['b.ts'])
+      act(() => view!.root.findByType(RepoFileTree).props.onOpenInNewTab('c.ts'))
+      expect(JSON.parse(store.get(KEY)!).tabs.map((tab: { path: string }) => tab.path)).toEqual(['b.ts', 'c.ts'])
+      expect(onSelect).toHaveBeenLastCalledWith('c.ts')
+      act(() => view!.unmount())
+    })
+
+    it('asks for a new tab\'s file once while the old file stays open in the editor', () => {
+      const onSelect = vi.fn()
+      let view: ReactTestRenderer
+      act(() => {
+        view = create(
+          <RepoFilesPanel {...callbacks} memoryKey="chat-1" files={['a.ts', 'b.ts']} selectedPath="a.ts"
+            preview={{ path: 'a.ts', result: { status: 'ready', content: 'export {}', revision: 'base' } }}
+            canEdit width={720} expanded={false} resizing={false} resizeProps={{}} onSelect={onSelect} />,
+        )
+      })
+      act(() => view!.root.findByType(RepoFileTree).props.onOpenInNewTab('b.ts'))
+      expect(onSelect.mock.calls).toEqual([['b.ts']])
+      act(() => view!.unmount())
+    })
+
+    it('fills a plus tab with the file picked in its finder', () => {
+      const onSelect = vi.fn()
+      const onClearSelection = vi.fn()
+      let view: ReactTestRenderer
+      const content = (selectedPath: string | null) => (
+        <RepoFilesPanel {...callbacks} memoryKey="chat-1" files={['a.ts', 'b.ts', 'c.ts']} selectedPath={selectedPath}
+          canEdit width={720} expanded={false} resizing={false} resizeProps={{}}
+          onSelect={onSelect} onClearSelection={onClearSelection} />
+      )
+      act(() => { view = create(content('a.ts')) })
+      act(() => view!.root.findByProps({ 'aria-label': 'New tab' }).props.onClick())
+      expect(onClearSelection).toHaveBeenCalledOnce()
+      act(() => view!.update(content(null)))
+      act(() => view!.root.findByProps({ 'aria-label': 'Find a file' }).props.onChange({ target: { value: 'c' } }))
+      act(() => view!.root.findByProps({ role: 'option', title: 'c.ts' }).props.onClick({ metaKey: false, ctrlKey: false }))
+      expect(onSelect).toHaveBeenLastCalledWith('c.ts')
+      act(() => view!.update(content('c.ts')))
+      expect(JSON.parse(store.get(KEY)!).tabs.map((tab: { path: string }) => tab.path)).toEqual(['a.ts', 'c.ts'])
+
+      // A finder that picks a file open in another tab closes and hands over to that tab.
+      act(() => view!.root.findByProps({ 'aria-label': 'New tab' }).props.onClick())
+      act(() => view!.update(content(null)))
+      act(() => view!.root.findByProps({ 'aria-label': 'Find a file' }).props.onChange({ target: { value: 'a' } }))
+      act(() => view!.root.findByProps({ role: 'option', title: 'a.ts' }).props.onClick({ metaKey: false, ctrlKey: false }))
+      const stored = JSON.parse(store.get(KEY)!)
+      expect(stored.tabs.map((tab: { path: string }) => tab.path)).toEqual(['a.ts', 'c.ts'])
+      expect(stored.activeId).toBe(stored.tabs[0].id)
+      expect(onSelect).toHaveBeenLastCalledWith('a.ts')
+      act(() => view!.unmount())
+    })
+  })
+
   it('keeps the tree instead of an empty viewer when a fileless panel turns compact', () => {
     const content = (compact: boolean) => (
       <RepoFilesPanel
@@ -174,7 +299,7 @@ describe('repository files panel', () => {
         resizeProps={{}}
       />
     )
-    const openFile = (panel: ReactTestRenderer) => panel.root.findAllByProps({ 'aria-label': 'Close brief.md' })
+    const openFile = (panel: ReactTestRenderer) => panel.root.findAllByProps({ 'aria-label': 'File path' })
     let panel: ReactTestRenderer
     act(() => { panel = create(content('notes/brief.md', true)) })
     expect(openFile(panel!)).not.toHaveLength(0)
@@ -193,7 +318,7 @@ describe('repository files panel', () => {
     act(() => panel!.unmount())
   })
 
-  it('only claims the Save shortcut while its thread is focused', () => {
+  it('only claims Save and close-tab while its thread is focused', () => {
     const props = {
       selectedPath: 'note.md', canEdit: true, width: 460, expanded: false,
       resizing: false, resizeProps: {}, ...callbacks,
@@ -205,10 +330,10 @@ describe('repository files panel', () => {
     )
     expect(captures()).toHaveLength(0)
     act(() => view.update(<RepoFilesPanel {...props} shortcutsActive />))
-    expect(captures()).toHaveLength(1)
-    const handler = captures()[0]![1]
+    expect(captures()).toHaveLength(2)
+    const handlers = captures().map(([, handler]) => handler)
     act(() => view.update(<RepoFilesPanel {...props} shortcutsActive={false} />))
-    expect(window.removeEventListener).toHaveBeenCalledWith('keydown', handler, { capture: true })
+    for (const handler of handlers) expect(window.removeEventListener).toHaveBeenCalledWith('keydown', handler, { capture: true })
     act(() => view.unmount())
   })
 
@@ -327,12 +452,11 @@ describe('repository files panel', () => {
     act(() => panel!.unmount())
   })
 
-  it('filters files by any case-insensitive part of their path', () => {
-    expect(filterRepoFiles(['Manor/src/App.tsx', 'Manor/README.md'], 'SRC/app')).toEqual([
-      'Manor/src/App.tsx',
-    ])
-    expect(filterRepoFiles(['Manor/src/App.tsx'], '  ')).toEqual(['Manor/src/App.tsx'])
-    expect(filterRepoFiles(['Manor/src/App.tsx'], 'Manor')).toEqual([])
+  it('filters files by any case-insensitive part of their shown path', () => {
+    const match = (files: string[], query: string) => matchRepoEntries(repoTreeEntries(files), query).map(({ sourcePath }) => sourcePath)
+    expect(match(['Manor/src/App.tsx', 'Manor/README.md'], 'SRC/app')).toEqual(['Manor/src/App.tsx'])
+    expect(match(['Manor/src/App.tsx'], '  ')).toEqual(['Manor/src/App.tsx'])
+    expect(match(['Manor/src/App.tsx'], 'Manor')).toEqual([])
   })
 
   it('replaces the tree with flat filename and path search results', () => {

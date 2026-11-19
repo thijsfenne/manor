@@ -191,5 +191,6 @@ const host: DesktopHostBridge = {
   platform: process.platform,
   onZoomFactor,
   onFullscreen,
+  claimCloseTab: (claim) => ipcRenderer.send('manor:close-tab-claim', claim),
 }
 contextBridge.exposeInMainWorld('manorDesktop', host)

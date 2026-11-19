@@ -32,6 +32,11 @@ export function browserShortcut(input: KeyInput): BrowserShortcut | undefined {
   }
 }
 
+/** Plain ⌘W, which a content surface with tabs may claim from Close Window. */
+export function isCloseTabKey(input: KeyInput): boolean {
+  return input.type === 'keyDown' && !input.isAutoRepeat && input.meta && !input.control && !input.shift && !input.alt && input.key.toLowerCase() === 'w'
+}
+
 /**
  * A Manor key typed while a web page has focus. Reserved keys belong to Manor wherever
  * focus is, the way Chrome keeps ⌘1–⌘9 and ⌘N from pages; page-first keys reach Manor

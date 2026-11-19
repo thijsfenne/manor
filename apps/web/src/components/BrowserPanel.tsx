@@ -60,7 +60,7 @@ import { addressParts, resolveBrowserAddress, SEARCH_ENGINES, searchUrl, shownAd
 import { cleanTitle, matchSpan, planAddress, shownUrl, type AddressSuggestion } from '../browserSuggestions'
 import type { CrossingTarget } from '../browserCrossing'
 import { browserActorLabel, type BrowserActivity } from '../desktopBrowser'
-import { EASE_TRAVEL, ICON_SWAP, ICON_SWAP_GONE, ICON_SWAP_REST, INSTANT, TAB_REORDER } from '../motion'
+import { EASE_TRAVEL, ICON_SWAP, ICON_SWAP_GONE, ICON_SWAP_REST, INSTANT } from '../motion'
 import { useBrowserSlot } from '../useBrowserSlot'
 export { isPersistentBrowserProfileFailure } from '../useBrowserSlot'
 import { ConfirmStrip } from './Confirm'
@@ -68,8 +68,8 @@ import { Icon } from './Icon'
 import { DOCK_PANEL_SHELL, STAGE_PANEL_SHELL, dockPanelLayoutClass } from './ui/dockPanel'
 import { Button } from './ui/Button'
 import { IconButton } from './ui/IconButton'
-import { Popover } from './ui/Popover'
 import { ScrollFade } from './ui/ScrollFade'
+import { StripTab, type StripTabReorder } from './ui/StripTab'
 import { useDismiss } from './ui/useDismiss'
 import { usePopupPlacement, type PopupPlacement } from './ui/usePopupPlacement'
 import { BrowserMenu, nextZoom } from './BrowserMenu'
@@ -1289,138 +1289,47 @@ export function Tab({
   /** Menu steps for the keyboard; each is absent at its end of the tab's group. */
   onMoveLeft?: () => void
   onMoveRight?: () => void
-  /** Present inside a `Reorder.Group`: the tab can be dragged to a new place. */
-  reorder?: { dragging: boolean; bounds: RefObject<HTMLDivElement | null>; onDrop: () => void }
+  reorder?: StripTabReorder
 }) {
-  const trigger = useRef<HTMLSpanElement>(null)
-  const popup = useRef<HTMLDivElement>(null)
-  const [menuOpen, setMenuOpen] = useState(false)
-  // Motion keeps an item with ref drag bounds at the same fraction of those bounds
-  // whenever the window, the tab or its group resizes. For a tab at rest that is a
-  // stray offset, and resizing the panel stacked tabs on top of each other. The
-  // bounds are therefore handed over only while the tab is pressed. The release is
-  // heard on the window: a press let go just past the tab's edge, short of a drag,
-  // never reaches the tab itself.
-  const [held, setHeld] = useState(false)
-  useEffect(() => {
-    if (!held) return
-    const release = () => setHeld(false)
-    window.addEventListener('pointerup', release)
-    window.addEventListener('pointercancel', release)
-    return () => {
-      window.removeEventListener('pointerup', release)
-      window.removeEventListener('pointercancel', release)
-    }
-  }, [held])
-  const placement = usePopupPlacement({ open: menuOpen, triggerRef: trigger, maxHeight: 240, minHeight: 80, minWidth: 156 })
-  useDismiss(menuOpen, () => setMenuOpen(false), {
-    within: [trigger, popup], layoutMoved: true, contextMenu: true,
-    onEscape: () => { setMenuOpen(false); trigger.current?.querySelector('button')?.focus() },
-  })
   // A blank page titles itself with its own address; a new tab says what it is.
   const label = shownAddress(tab.url) === '' ? '' : tab.title === '' ? hostOf(tab.url) : tab.title
   const name = label === '' ? 'New tab' : label
-  // A tab opened past the strip's edge is scrolled to, so the one you are on is always in view.
-  useEffect(() => {
-    if (active) trigger.current?.scrollIntoView?.({ behavior: 'smooth', block: 'nearest', inline: 'nearest' })
-  }, [active])
-  const shell = {
-    onContextMenu: (event: ReactMouseEvent) => { event.preventDefault(); if (!disabled && onPin) setMenuOpen(true) },
-    // The title runs to the tab's edge and only gives way, by the close mark's own
-    // width, while the mark is showing on hover or keyboard focus.
-    className: `group relative flex h-8 items-center rounded-button ${tab.pinned ? 'w-9 flex-none justify-center' : 'min-w-[90px] max-w-[200px] flex-[1_1_200px] gap-1.5 px-2 hover:pr-6 has-[:focus-visible]:pr-6'} ${
-      active ? 'bg-surface-2 text-text' : 'text-muted hover:bg-surface-2/60'
-    }`,
-  }
-  const menuItem = 'w-full cursor-pointer rounded-button-sm border-0 bg-transparent px-3 py-2 text-left text-label text-text hover:bg-user-bg disabled:cursor-default'
-  const body = (
-    <>
-      {tab.pinned ? (
-        <button type="button" className="grid h-full w-full cursor-pointer place-items-center border-0 bg-transparent p-0 disabled:cursor-default"
-          aria-label={`${name}, pinned tab`} title={shownAddress(tab.url) === '' ? name : `${name}\n${tab.url}`}
-          disabled={disabled} onClick={onSelect}
-          onKeyDown={(event) => { if (event.shiftKey && event.key === 'F10' && onPin) { event.preventDefault(); setMenuOpen(true) } }}>
-          {tab.favicon === undefined ? <Icon icon={Globe02Icon} size={16} className="opacity-70" />
-            : <img src={tab.favicon} alt="" className="h-4 w-4 rounded-[2px] object-contain" />}
-        </button>
-      ) : (
-        <>
-          {tab.favicon === undefined ? <Icon icon={Globe02Icon} size={13} className="flex-none opacity-70" />
-            : <img src={tab.favicon} alt="" className="h-[13px] w-[13px] flex-none rounded-[2px] object-contain" />}
-          <button type="button"
-            className="min-w-0 flex-1 cursor-pointer truncate border-0 bg-transparent p-0 text-left text-meta disabled:cursor-default"
-            title={shownAddress(tab.url) === '' ? name : `${name}\n${tab.url}`}
-            disabled={disabled} onClick={onSelect}
-            onKeyDown={(event) => { if (event.shiftKey && event.key === 'F10' && onPin) { event.preventDefault(); setMenuOpen(true) } }}>
-            {name}
-          </button>
-        </>
-      )}
-      {/* A page's popup opens behind the tab being looked at, so it announces itself
-          with the same dot the sidebar uses for unread, until it is selected. */}
-      <AnimatePresence>
-        {tab.unseen === true && !active ? (
-          <motion.span
-            key="unseen"
-            role="img"
-            aria-label="New from the page"
-            className={`${tab.pinned ? 'absolute right-0.5 bottom-0.5' : 'flex-none'} h-1.5 w-1.5 rounded-full bg-primary`}
-            initial={ICON_SWAP_GONE}
-            animate={ICON_SWAP_REST}
-            exit={ICON_SWAP_GONE}
-            transition={ICON_SWAP}
-          />
-        ) : null}
-      </AnimatePresence>
-      {tab.pinned ? null : <IconButton
-        icon={Cancel01Icon}
-        iconSize={12}
-        size={20}
-        label={`Close ${name}`}
-        className="absolute top-1/2 right-1 -translate-y-1/2 opacity-0 group-hover:opacity-100 group-has-[:focus-visible]:opacity-100"
-        disabled={disabled}
-        onClick={onClose}
-      />}
-      {onPin === undefined || typeof document === 'undefined' ? null : createPortal(
-        <Popover open={menuOpen} ref={popup} onReady={() => popup.current?.querySelector<HTMLButtonElement>('button:not(:disabled)')?.focus()}
-          style={placement ?? { visibility: 'hidden' }}
-          className="fixed z-40 rounded-panel border border-line surface-floating p-1 shadow-menu"
-          role="menu" aria-label={`${name} tab actions`}>
-          <button type="button" role="menuitem" disabled={disabled} className={menuItem}
-            onClick={() => { setMenuOpen(false); onPin() }}>{tab.pinned ? 'Unpin tab' : 'Pin tab'}</button>
-          {onMoveLeft === undefined ? null : (
-            <button type="button" role="menuitem" disabled={disabled} className={menuItem}
-              onClick={() => { setMenuOpen(false); onMoveLeft() }}>Move tab left</button>
-          )}
-          {onMoveRight === undefined ? null : (
-            <button type="button" role="menuitem" disabled={disabled} className={menuItem}
-              onClick={() => { setMenuOpen(false); onMoveRight() }}>Move tab right</button>
-          )}
-          <button type="button" role="menuitem" disabled={disabled} className={menuItem}
-            onClick={() => { setMenuOpen(false); onClose() }}>Close tab</button>
-        </Popover>, document.body,
-      )}
-    </>
-  )
-  if (reorder === undefined) return <span ref={trigger} {...shell}>{body}</span>
+  const pinned = tab.pinned === true
+  const mark = pinned
+    ? tab.favicon === undefined ? <Icon icon={Globe02Icon} size={16} className="opacity-70" />
+      : <img src={tab.favicon} alt="" className="h-4 w-4 rounded-[2px] object-contain" />
+    : tab.favicon === undefined ? <Icon icon={Globe02Icon} size={13} className="flex-none opacity-70" />
+      : <img src={tab.favicon} alt="" className="h-[13px] w-[13px] flex-none rounded-[2px] object-contain" />
+  const menu = onPin === undefined ? undefined : [
+    { label: pinned ? 'Unpin tab' : 'Pin tab', onSelect: onPin },
+    ...(onMoveLeft === undefined ? [] : [{ label: 'Move tab left', onSelect: onMoveLeft }]),
+    ...(onMoveRight === undefined ? [] : [{ label: 'Move tab right', onSelect: onMoveRight }]),
+    { label: 'Close tab', onSelect: onClose },
+  ]
   return (
-    <Reorder.Item as="span" ref={trigger} value={tab.id} {...shell}
-      drag={disabled ? false : 'x'}
-      // A tab stops at its group's ends, as in a browser, instead of sliding under
-      // the strip's clipped edge or into the pins.
-      dragConstraints={held ? reorder.bounds : undefined}
-      dragElastic={0}
-      // Neighbours slide aside only during a drag; any other layout change (a tab
-      // closing, the panel resizing) lands at once, as it did before tabs could move.
-      layout="position"
-      transition={{ layout: reorder.dragging ? TAB_REORDER : INSTANT }}
-      // Ctrl+click is the context click on macOS. Its menu swallows the release, so a
-      // press with Ctrl must not arm a drag that would never end.
-      onPointerDownCapture={(event: ReactPointerEvent) => { if (event.ctrlKey) event.stopPropagation() }}
-      onPointerDown={() => { if (!disabled) setHeld(true) }}
-      onDragEnd={reorder.onDrop}>
-      {body}
-    </Reorder.Item>
+    <StripTab id={tab.id} name={name} title={shownAddress(tab.url) === '' ? name : `${name}\n${tab.url}`}
+      leading={mark} active={active} disabled={disabled} pinned={pinned}
+      {...(menu === undefined ? {} : { menu })}
+      {...(reorder === undefined ? {} : { reorder })}
+      onSelect={onSelect} onClose={onClose}
+      badge={
+        // A page's popup opens behind the tab being looked at, so it announces itself
+        // with the same dot the sidebar uses for unread, until it is selected.
+        <AnimatePresence>
+          {tab.unseen === true && !active ? (
+            <motion.span
+              key="unseen"
+              role="img"
+              aria-label="New from the page"
+              className={`${pinned ? 'absolute right-0.5 bottom-0.5' : 'flex-none'} h-1.5 w-1.5 rounded-full bg-primary`}
+              initial={ICON_SWAP_GONE}
+              animate={ICON_SWAP_REST}
+              exit={ICON_SWAP_GONE}
+              transition={ICON_SWAP}
+            />
+          ) : null}
+        </AnimatePresence>
+      } />
   )
 }
 

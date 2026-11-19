@@ -31,13 +31,18 @@ import { DockPanelAside } from '../ui/DockPanelAside'
 import { IconButton } from '../ui/IconButton'
 import { Button } from '../ui/Button'
 import { useCollapsed } from '../../chatCollapsed'
+import { activeTab, closeTab, moveTab, openInActive, openInNew, pruneTabs, renamePaths, selectTab, useCloseTabKey, useStoredTabs } from '../../contentTabs'
+import { ContentTabStrip } from '../ContentTabStrip'
+import { useTopBarSlot } from '../TopBar'
 import { NoteName } from './NoteName'
 import { NoteDocument, type Conflict, type EditorState } from './NoteDocument'
 import type { QuoteAction } from './NoteFormatting'
-import { filterNotes, NoteRail } from './NoteRail'
+import { ENTRY_DRAG, filterNotes, NoteRail } from './NoteRail'
 import { useNoteAi } from './useNoteAi'
 
 const INBOX = 'inbox'
+/** Where the vault home keeps its note tabs across a restart. */
+export const NOTE_TABS_KEY = 'manor:knowledge-tabs'
 export const NOTE_AUTOSAVE_MS = 500
 /** How often a clean open note is re-read from disk while Knowledge is up. */
 export const NOTE_REFRESH_MS = 1_000
@@ -177,8 +182,8 @@ export function KnowledgePanel({
   memoryKey,
   dock,
   shortcutsActive: homeShortcutsActive = true,
-  selectedPath,
-  onRememberPath,
+  selectedPath: selectedPathProp,
+  onRememberPath: rememberPathProp,
   onQuote,
   onAddToSideChat,
   openRequest,
@@ -228,6 +233,24 @@ export function KnowledgePanel({
   const consumedMove = useRef(vault.moved?.requestId ?? null)
   /** The move this panel sent, whose landing expands the destination and selects the note. */
   const ownMove = useRef<string | null>(null)
+  const stageRef = useRef<HTMLDivElement>(null)
+
+  const topBar = useTopBarSlot()
+  // The desktop vault home keeps its open notes as tabs in the top bar, and the active
+  // tab is the note shown. A dock and the phone keep one note each.
+  const tabbed = dock === undefined && sidebarSlot !== undefined && topBar !== null
+  const [noteTabs, changeNoteTabs] = useStoredTabs(tabbed ? NOTE_TABS_KEY : null)
+  const activeNoteTab = activeTab(noteTabs)
+  const selectedPath = tabbed ? activeNoteTab?.path ?? null : selectedPathProp
+  // Every route that opens a note (the tree, a link, the palette, a rename) lands here:
+  // the active tab takes it, or switches to the tab that already holds it.
+  const rememberTab = useCallback((next: string | null) => {
+    if (next !== null) changeNoteTabs((state) => openInActive(state, next))
+  }, [changeNoteTabs])
+  const onRememberPath = tabbed ? rememberTab : rememberPathProp
+  const tabEvents = useRef({ moved: vault.moved?.requestId ?? null, renamed: vault.rename?.requestId ?? null, deleted: vault.deleted?.requestId ?? null })
+  /** The listing tabs were last checked against; null until the first one after mount. */
+  const prunedListing = useRef<readonly string[] | null>(null)
 
   const live = status === 'live'
   const files = vault.files
@@ -435,6 +458,49 @@ export function KnowledgePanel({
     },
     [path, dirty, isGone, editor, saving, conflict, rejected, save, take, renameRequest],
   )
+
+  // A tab picked, closed or restored names a note the panel is not showing yet. Leaving
+  // goes through `leave`, so unsaved text reaches disk before the note is swapped out.
+  useEffect(() => {
+    if (!tabbed || !live || renameRequest !== null) return
+    const target = activeNoteTab?.path
+    if (target === undefined || target === null || target === path) return
+    if ((pendingAction?.kind === 'open' || pendingAction?.kind === 'new') && pendingAction.path === target) return
+    leave({ kind: 'open', path: target })
+  }, [tabbed, live, renameRequest, activeNoteTab?.path, path, pendingAction, leave])
+
+  // Tabs follow their notes. A rename or a move made anywhere carries every tab it
+  // touches; a note gone from the listing closes its tab quietly. The note on screen
+  // keeps its tab until the panel itself lets go (a new note is not listed until saved,
+  // and a deleted note with unsaved text stays readable). The first listing after a
+  // restart spares nothing, so a tab whose note vanished while Manor was closed goes.
+  useEffect(() => {
+    if (!tabbed) return
+    const seen = tabEvents.current
+    const moved = vault.moved
+    if (moved !== undefined && moved.requestId !== seen.moved) {
+      seen.moved = moved.requestId
+      changeNoteTabs((state) => renamePaths(state, (target) => insideVaultEntry(target, moved.path) ? movedVaultPath(target, moved.path, moved.newPath) : target))
+    }
+    const renamed = vault.rename
+    if (renamed?.result?.status === 'renamed' && renamed.requestId !== seen.renamed) {
+      seen.renamed = renamed.requestId
+      changeNoteTabs((state) => renamePaths(state, (target) => target === renamed.path ? renamed.newPath : target))
+    }
+    const deleted = vault.deleted
+    if (deleted !== undefined && deleted.requestId !== seen.deleted) {
+      seen.deleted = deleted.requestId
+      changeNoteTabs((state) => pruneTabs(state, (target) => !insideVaultEntry(target, deleted.path), dirty ? path : null))
+    }
+  }, [tabbed, vault.moved, vault.rename, vault.deleted, dirty, path, changeNoteTabs])
+
+  useEffect(() => {
+    if (!tabbed || files === null || vault.truncated || prunedListing.current === files) return
+    const first = prunedListing.current === null
+    prunedListing.current = files
+    const listed = new Set(files)
+    changeNoteTabs((state) => pruneTabs(state, (target) => listed.has(target), first ? null : path))
+  }, [tabbed, files, vault.truncated, path, changeNoteTabs])
 
   useEffect(() => {
     if (openRequest === undefined || openRequest === null || !live) return
@@ -762,6 +828,58 @@ export function KnowledgePanel({
     onDismissRejection: isGone ? () => { setGone(null); take({ kind: 'close' }) } : onClearWrite,
   }
 
+  /** A new note opens in a new tab where notes have tabs, beside whatever was open. */
+  const createNote = (target: string) => {
+    if (tabbed) changeNoteTabs((state) => openInNew(state, target))
+    leave({ kind: 'new', path: target })
+  }
+  const openInNewTab = (target: string, index?: number) => changeNoteTabs((state) => openInNew(state, target, index))
+  // The last tab closing leaves the empty stage, through `leave` so a draft saves first.
+  // Any other close hands over to a neighbour, which the effect above opens.
+  const closeNoteTab = (id: string) => {
+    const next = closeTab(noteTabs, id)
+    changeNoteTabs(() => next)
+    if (next.tabs.length === 0) leave({ kind: 'close' })
+  }
+
+  // ⌘W closes the active tab while Knowledge was last pressed or focused: its tree, its
+  // note or its strip.
+  useCloseTabKey(
+    tabbed && shortcutsActive && noteTabs.activeId !== null,
+    (element) => [stageRef.current, sidebarSlot ?? null, topBar?.element ?? null].some((area) => area?.contains(element) === true),
+    () => { if (noteTabs.activeId !== null) closeNoteTab(noteTabs.activeId) },
+  )
+
+  const noteTabStrip = !tabbed || topBar?.element == null ? null : createPortal(
+    <div data-top-bar-crumb="" className="order-1 flex min-w-0 flex-1 items-center">
+      <ContentTabStrip
+        label="Note tabs"
+        newLabel="New note"
+        disabled={!live || renameRequest !== null}
+        items={noteTabs.tabs.flatMap((tab) => tab.path === null ? [] : [{
+          id: tab.id,
+          name: baseName(tab.path).replace(/\.md$/i, ''),
+          title: tab.path,
+        }])}
+        activeId={noteTabs.activeId}
+        onSelect={(id) => changeNoteTabs((state) => selectTab(state, id))}
+        onClose={closeNoteTab}
+        onMove={(id, index) => changeNoteTabs((state) => moveTab(state, id, index))}
+        onNew={() => createNote(inboxNote(files ?? []))}
+        drop={{
+          accepts: (event) => event.dataTransfer.types.includes(ENTRY_DRAG),
+          // A folder dragged here is not a note to open; only listed notes are.
+          read: (event) => {
+            const dropped = event.dataTransfer.getData(ENTRY_DRAG)
+            return files?.includes(dropped) === true ? dropped : null
+          },
+          onDrop: (dropped, index) => openInNewTab(dropped, index),
+        }}
+      />
+    </div>,
+    topBar.element,
+  )
+
   const rail = (
     <NoteRail
       vaultName={vault.name}
@@ -775,7 +893,7 @@ export function KnowledgePanel({
       onRename={beginRename}
       move={vault.move}
       onMove={startMove}
-      onCreateAt={(path) => leave({ kind: 'new', path })}
+      onCreateAt={createNote}
       onCreateFolder={onCreateFolder}
       onFolderCreated={(path) => { setFilter(''); showFolders(`${path}/note.md`); onList() }}
       files={files}
@@ -788,7 +906,8 @@ export function KnowledgePanel({
       selectedPath={path}
       dirtyPath={dirty ? (editor?.path ?? null) : null}
       onSelect={(next) => leave({ kind: 'open', path: next })}
-      onCreate={() => leave({ kind: 'new', path: inboxNote(files ?? []) })}
+      {...(tabbed ? { onOpenInNewTab: (next: string) => openInNewTab(next) } : {})}
+      onCreate={() => createNote(inboxNote(files ?? []))}
       canCreate={live && renameRequest === null}
       creating={fresh !== null && saving}
       filterRef={filterRef}
@@ -801,7 +920,7 @@ export function KnowledgePanel({
   const showSidebarToggle = dock === undefined && sidebarSlot !== undefined && sidebarCollapsed && onToggleSidebar !== undefined
 
   const document = path === null ? (
-    <EmptyStage listed={files !== null} docked={dock !== undefined} yieldsNarrow={dock === undefined && sidebarSlot === undefined} canCreate={live} onCreate={() => leave({ kind: 'new', path: inboxNote(files ?? []) })} />
+    <EmptyStage listed={files !== null} docked={dock !== undefined} yieldsNarrow={dock === undefined && sidebarSlot === undefined} canCreate={live} onCreate={() => createNote(inboxNote(files ?? []))} />
   ) : (
     <div
       className={`relative grid min-h-0 min-w-0 ${dock === undefined ? 'max-[760px]:absolute max-[760px]:inset-0 max-[760px]:z-[8]' : ''}`}
@@ -821,8 +940,9 @@ export function KnowledgePanel({
     // Until the sidebar has mounted its slot the tree simply waits; the document does not.
     // With the sidebar away the tree goes with it, so its way back sits where Work's does.
     return (
-      <div className="relative grid min-h-0 min-w-0 grid-cols-[minmax(0,1fr)]">
+      <div ref={stageRef} className="relative grid min-h-0 min-w-0 grid-cols-[minmax(0,1fr)]">
         {sidebarSlot === null ? null : createPortal(rail, sidebarSlot)}
+        {noteTabStrip}
         {!showSidebarToggle || onToggleSidebar === undefined ? null : (
           <IconButton
             className="absolute top-[var(--titlebar-row-pad)] left-[calc(1rem+var(--titlebar-inset))] z-[9]"

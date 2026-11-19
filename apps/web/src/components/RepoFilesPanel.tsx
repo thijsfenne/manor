@@ -23,6 +23,7 @@ import {
   type CSSProperties,
 } from 'react'
 import { copyText } from '../clipboard'
+import { activeTab, closeTab, moveTab, openInActive, openInNew, pruneTabs, selectTab, useCloseTabKey, useStoredTabs } from '../contentTabs'
 import { FILES_TREE_WIDTH } from '../useFilesPanel'
 import type { RepoFileWrite } from '../state'
 import { baseName, FileMark } from './fileMark'
@@ -32,6 +33,8 @@ import { Markdown } from './Markdown'
 import { RepoFileOpenMenu } from './RepoFileOpenMenu'
 import { repoTreeEntries, RepoFileTree } from './RepoFileTree'
 import { useCollapsed } from '../chatCollapsed'
+import { ContentTabStrip } from './ContentTabStrip'
+import { REPO_FILE_DRAG } from './RepoFileTree'
 import { Button } from './ui/Button'
 import { DOCK_PANEL_SHELL, dockPanelLayoutClass } from './ui/dockPanel'
 import { DockPanelAside } from './ui/DockPanelAside'
@@ -42,6 +45,8 @@ type Preview = { path: string; result: RepoFileResult | null }
 
 const SPLIT_COLUMNS = 'grid-cols-[var(--files-tree-width)_minmax(0,1fr)]'
 export const REPO_FILE_AUTOSAVE_MS = 500
+/** Each chat's Files panel keeps its own tabs under this prefix and the chat id. */
+export const FILE_TABS_KEY = 'manor:file-tabs'
 
 /** What the editor is holding, and what it is holding it against. */
 interface Editor {
@@ -128,7 +133,13 @@ export function RepoFilesPanel({
   const [treeHidden, setTreeHidden] = useCollapsed(memoryKey, 'files-tree')
   const [compactTree, setCompactTree] = useState(false)
   const pendingSave = useRef<{ path: string; text: string } | null>(null)
-  const showTree = selectedPath === null || (compact ? compactTree : !treeHidden)
+  // Without a chat to keep them under, the tabs last as long as the panel.
+  const [fileTabs, changeFileTabs] = useStoredTabs(memoryKey === undefined ? null : `${FILE_TABS_KEY}:${memoryKey}`)
+  const activeFileTab = activeTab(fileTabs)
+  // A tab opened with the plus asks which file it is for, in place of the viewer.
+  const finding = activeFileTab !== undefined && activeFileTab.path === null
+  const [finderQuery, setFinderQuery] = useState('')
+  const showTree = (selectedPath === null && !finding) || (compact ? compactTree : !treeHidden)
   const splitColumns = showTree && !compact
 
   useEffect(() => setCompactTree(false), [selectedPath])
@@ -146,11 +157,11 @@ export function RepoFilesPanel({
   // so it is not offered for editing at all.
   const editable = canEdit && result?.status === 'ready' && result.revision !== undefined
   const searching = query.trim() !== ''
-  const visibleFiles = useMemo(() => filterRepoFiles(files, query), [files, query])
-  const visibleFileSet = useMemo(() => new Set(visibleFiles), [visibleFiles])
-  const visibleEntries = useMemo(
-    () => repoTreeEntries(files ?? []).filter(({ sourcePath }) => visibleFileSet.has(sourcePath)),
-    [files, visibleFileSet],
+  const treeEntries = useMemo(() => repoTreeEntries(files ?? []), [files])
+  const visibleEntries = useMemo(() => matchRepoEntries(treeEntries, query), [treeEntries, query])
+  const finderEntries = useMemo(
+    () => !finding || finderQuery.trim() === '' ? [] : matchRepoEntries(treeEntries, finderQuery),
+    [finding, treeEntries, finderQuery],
   )
 
   const take = useCallback(
@@ -199,6 +210,67 @@ export function RepoFilesPanel({
       if (!save(editor.base)) setPendingAction(null)
     },
     [selectedPath, dirty, editor, saving, conflict, rejected, save, take],
+  )
+
+  // A restored tab whose file is gone closes quietly once the first full listing is in.
+  const [restored, setRestored] = useState(false)
+  useEffect(() => {
+    if (files === undefined || truncated || restored) return
+    setRestored(true)
+    const listed = new Set(files)
+    changeFileTabs((state) => pruneTabs(state, (path) => listed.has(path)))
+  }, [files, truncated, restored, changeFileTabs])
+
+  // The tabs and the open file follow each other. A file opened from anywhere (the tree,
+  // a link in the chat) lands in the active tab; switching, adding or closing tabs opens
+  // the active tab's file through `leave`, so a draft reaches disk first.
+  const seenSelection = useRef<string | null | undefined>(undefined)
+  // The tab and file last asked for. The selection lands a render or more later, and
+  // asking again meanwhile would clear the editor that the old file just filled.
+  const requested = useRef<string | null>(null)
+  useEffect(() => {
+    const selectionMoved = seenSelection.current !== selectedPath
+    seenSelection.current = selectedPath
+    if (selectionMoved && selectedPath !== null) {
+      if (activeFileTab?.path !== selectedPath) changeFileTabs((state) => openInActive(state, selectedPath))
+      return
+    }
+    // A closing panel has cleared its selection on purpose; its tabs wait for the next open.
+    if (!revealed || files === undefined || !canEdit) {
+      requested.current = null
+      return
+    }
+    if (pendingAction !== null) return
+    const target = activeFileTab?.path ?? null
+    if (target === selectedPath) {
+      requested.current = null
+      return
+    }
+    // Until the restore prune lands, a tab the full listing lacks is about to close;
+    // opening it would hand the missing path to the selection and so to a surviving tab.
+    if (!restored && target !== null && !truncated && !files.includes(target)) return
+    const request = `${activeFileTab?.id}\0${target}`
+    if (requested.current === request) return
+    // A draft has to reach disk first. A save that is refused leaves the request open,
+    // so the tab still asks again once the draft is dealt with.
+    if (!dirty) requested.current = request
+    leave(target === null ? { kind: 'clear' } : { kind: 'open', path: target })
+  }, [selectedPath, activeFileTab, revealed, files, truncated, restored, canEdit, dirty, pendingAction, leave, changeFileTabs])
+
+  useEffect(() => setFinderQuery(''), [fileTabs.activeId])
+
+  // A finder picking a file already open elsewhere has nothing left to hold.
+  const pickInFinder = (path: string) => {
+    const open = fileTabs.tabs.find((tab) => tab.path === path)
+    if (open === undefined || activeFileTab === undefined) leave({ kind: 'open', path })
+    else changeFileTabs((state) => selectTab(closeTab(state, activeFileTab.id), open.id))
+  }
+  const openInNewTab = (path: string, index?: number) => changeFileTabs((state) => openInNew(state, path, index))
+  const closeFileTab = (id: string) => changeFileTabs((state) => closeTab(state, id))
+  useCloseTabKey(
+    shortcutsActive && fileTabs.activeId !== null,
+    (element) => element.closest('[data-files-panel]')?.getAttribute('data-files-panel') === memoryKey,
+    () => { if (fileTabs.activeId !== null) closeFileTab(fileTabs.activeId) },
   )
 
   // Every Markdown file enters through its reading view, including a file selected
@@ -313,30 +385,35 @@ export function RepoFilesPanel({
       className="flex h-11 min-w-0 items-center gap-1 px-2"
     >
       <div className="flex min-w-0 flex-1 items-center gap-1">
-        {selectedPath === null ? null : (
-          <>
-            <IconButton
-              icon={SidebarLeftIcon}
-              label={showTree ? 'Hide file tree' : 'Show file tree'}
-              aria-pressed={showTree}
-              selected={showTree}
-              onClick={() => compact ? setCompactTree((current) => !current) : setTreeHidden(!treeHidden)}
-            />
-            <div
-              className="flex h-8 min-w-0 max-w-52 items-center gap-1 rounded-button bg-surface-2 py-1 pr-1 pl-2.5 text-label text-text"
-              title={selectedPath}
-            >
-              <span className="min-w-0 truncate">{baseName(selectedPath)}</span>
-              <IconButton
-                icon={Cancel01Icon}
-                iconSize={13}
-                size={24}
-                label={`Close ${baseName(selectedPath)}`}
-                onClick={() => leave({ kind: 'clear' })}
-              />
-            </div>
-          </>
+        {selectedPath === null && !finding ? null : (
+          <IconButton
+            icon={SidebarLeftIcon}
+            label={showTree ? 'Hide file tree' : 'Show file tree'}
+            aria-pressed={showTree}
+            selected={showTree}
+            onClick={() => compact ? setCompactTree((current) => !current) : setTreeHidden(!treeHidden)}
+          />
         )}
+        <ContentTabStrip
+          label="File tabs"
+          newLabel="New tab"
+          items={fileTabs.tabs.map((tab) => tab.path === null
+            ? { id: tab.id, name: 'Find a file', title: 'Find a file', leading: <Icon icon={Search01Icon} size={13} className="flex-none text-dim" /> }
+            : { id: tab.id, name: baseName(tab.path), title: tab.path, leading: <FileMark path={tab.path} size={13} /> })}
+          activeId={fileTabs.activeId}
+          onSelect={(id) => changeFileTabs((state) => selectTab(state, id))}
+          onClose={closeFileTab}
+          onMove={(id, index) => changeFileTabs((state) => moveTab(state, id, index))}
+          onNew={() => changeFileTabs((state) => openInNew(state, null))}
+          drop={{
+            accepts: (event) => event.dataTransfer.types.includes(REPO_FILE_DRAG),
+            read: (event) => {
+              const path = event.dataTransfer.getData(REPO_FILE_DRAG)
+              return files?.includes(path) === true ? path : null
+            },
+            onDrop: openInNewTab,
+          }}
+        />
       </div>
       <div className="flex flex-none items-center gap-1">
         {editor === null ? null : (
@@ -390,7 +467,8 @@ export function RepoFilesPanel({
       revealed={revealed}
       style={{ '--files-width': `${width}px`, '--files-tree-width': `${FILES_TREE_WIDTH}px` } as CSSProperties}
       data-open={overlay ? revealed : undefined}
-      className={`grid min-h-0 grid-rows-[auto_minmax(0,1fr)] ease-arrive ${DOCK_PANEL_SHELL} ${dockPanelLayoutClass(
+      data-files-panel={memoryKey ?? ''}
+      className={`grid min-h-0 grid-cols-[minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)] ease-arrive ${DOCK_PANEL_SHELL} ${dockPanelLayoutClass(
         'w-[calc(var(--files-width)-8px)]',
         expanded,
         overlay,
@@ -513,9 +591,11 @@ export function RepoFilesPanel({
                 query={query}
                 selectedPath={selectedPath}
                 onSelect={(next) => leave({ kind: 'open', path: next })}
+                onOpenInNewTab={openInNewTab}
               />
             ) : (
-              <RepoFileTree files={files} visible={showTree} onSelect={(next) => leave({ kind: 'open', path: next })} />
+              <RepoFileTree files={files} visible={showTree} selectedPath={selectedPath}
+                onSelect={(next) => leave({ kind: 'open', path: next })} onOpenInNewTab={openInNewTab} />
             )}
             {truncated ? (
               <p className="m-2 flex-none text-label leading-relaxed text-dim">Only the first 4,000 files are shown.</p>
@@ -529,7 +609,45 @@ export function RepoFilesPanel({
         >
           {fileHeader}
           <div className="relative grid min-h-0 min-w-0">
-            {selectedPath === null && !searching && files !== undefined && files.length > 0 ? (
+            {selectedPath === null && finding ? (
+              <div className="grid min-h-0 min-w-0 grid-rows-[auto_minmax(0,1fr)]">
+                <div className="grid h-11 min-w-0 grid-cols-[minmax(0,1fr)] items-center border-b border-line px-3">
+                  <label className="flex h-7 w-full min-w-0 items-center gap-2 overflow-hidden rounded-lg border border-line bg-bg px-2.5 text-muted focus-within:border-dim">
+                    <Icon icon={Search01Icon} size={14} className="flex-none text-dim" />
+                    <input
+                      type="search"
+                      autoFocus
+                      value={finderQuery}
+                      placeholder="Find a file by name…"
+                      aria-label="Find a file"
+                      className="min-w-0 flex-1 border-0 bg-transparent p-0 font-sans text-[12px] text-text outline-none placeholder:text-dim [&::-webkit-search-cancel-button]:appearance-none"
+                      disabled={files === undefined}
+                      onChange={(event) => setFinderQuery(event.target.value)}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter' && finderEntries[0] !== undefined) {
+                          event.preventDefault()
+                          pickInFinder(finderEntries[0].sourcePath)
+                        }
+                      }}
+                    />
+                  </label>
+                </div>
+                <div className="flex min-h-0 min-w-0 flex-col py-1">
+                  {finderQuery.trim() === '' ? (
+                    <PanelMessage>Type part of a file name to open it in this tab.</PanelMessage>
+                  ) : finderEntries.length === 0 ? (
+                    <PanelMessage>No files match “{finderQuery}”.</PanelMessage>
+                  ) : (
+                    <RepoFileSearchResults
+                      entries={finderEntries}
+                      query={finderQuery}
+                      selectedPath={null}
+                      onSelect={pickInFinder}
+                    />
+                  )}
+                </div>
+              </div>
+            ) : selectedPath === null && !searching && files !== undefined && files.length > 0 ? (
               <div className="grid min-h-0 place-items-center px-6 text-center">
                 <p className="m-0 text-[13px] font-medium text-text">Open a file</p>
               </div>
@@ -558,7 +676,7 @@ export function RepoFilesPanel({
 }
 
 // Wraps every case-insensitive occurrence of `match` so the row shows why it
-// qualified; the caller passes the same trimmed term `filterRepoFiles` used.
+// qualified; the caller passes the same trimmed term `matchRepoEntries` used.
 function highlightMatches(text: string, match: string, className: string) {
   const lower = text.toLocaleLowerCase()
   if (match === '' || !lower.includes(match)) return text
@@ -582,11 +700,13 @@ function RepoFileSearchResults({
   query,
   selectedPath,
   onSelect,
+  onOpenInNewTab,
 }: {
   entries: ReturnType<typeof repoTreeEntries>
   query: string
   selectedPath: string | null
   onSelect: (path: string) => void
+  onOpenInNewTab?: (path: string) => void
 }) {
   const match = query.trim().toLocaleLowerCase()
   return (
@@ -604,7 +724,8 @@ function RepoFileSearchResults({
             className={`flex h-8 w-full flex-none min-w-0 cursor-pointer items-center gap-1.5 overflow-hidden rounded-md border-0 px-2 text-left font-sans text-[12px] ${
               sourcePath === selectedPath ? 'bg-user-bg text-text' : 'bg-transparent text-muted hover:bg-tree-hover hover:text-text'
             }`}
-            onClick={() => onSelect(sourcePath)}
+            onClick={(event) => (event.metaKey || event.ctrlKey) && onOpenInNewTab !== undefined ? onOpenInNewTab(sourcePath) : onSelect(sourcePath)}
+            onAuxClick={(event) => { if (event.button === 1 && onOpenInNewTab !== undefined) { event.preventDefault(); onOpenInNewTab(sourcePath) } }}
           >
             <FileMark path={sourcePath} size={14} className="opacity-75" />
             <span className="min-w-0 max-w-[50%] shrink truncate">
@@ -650,13 +771,10 @@ function FileBreadcrumbs({ path }: { path: string }) {
   )
 }
 
-export function filterRepoFiles(files: readonly string[] | undefined, query: string): string[] {
-  if (files === undefined) return []
+/** The entries whose shown path holds `query`, ignoring case; an empty query keeps all. */
+export function matchRepoEntries(entries: ReturnType<typeof repoTreeEntries>, query: string) {
   const match = query.trim().toLocaleLowerCase()
-  if (match === '') return [...files]
-  return repoTreeEntries(files)
-    .filter(({ displayPath }) => displayPath.toLocaleLowerCase().includes(match))
-    .map(({ sourcePath }) => sourcePath)
+  return match === '' ? entries : entries.filter(({ displayPath }) => displayPath.toLocaleLowerCase().includes(match))
 }
 
 function FilePreview({ path, result }: { path: string; result: RepoFileResult | null }) {

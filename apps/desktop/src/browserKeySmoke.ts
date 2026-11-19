@@ -33,6 +33,7 @@ app.whenReady().then(async () => {
     window: () => window,
     chromeFocused: () => false,
     accepts: (guest) => guest === undefined || guest === browser.activeWebContents(),
+    closeTabClaimed: () => false,
   })
   window.webContents.on('did-attach-webview', (_event, guest) => {
     guest.on('before-input-event', (event, input) => keys.fromKey(event, input, guest))

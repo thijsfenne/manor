@@ -61,6 +61,8 @@ let browserAdblock: BrowserAdblock | null = null
 let browserProfileError: string | null = null
 let browserProfileTransition = Promise.resolve()
 let browserChromeFocused = false
+/** Set by the renderer while Knowledge shows tabs, so ⌘W closes a tab rather than the window. */
+let closeTabClaimed = false
 /** The release build's own Cua daemon, running only beside the bundled server. */
 let embeddedDriver: EmbeddedDriver | null = null
 const BROWSER_PROFILE_UNAVAILABLE = 'MANOR_BROWSER_PROFILE_UNAVAILABLE'
@@ -300,6 +302,7 @@ async function createWindow(): Promise<void> {
   window.on('closed', () => {
     mainWindow = null
     browserChromeFocused = false
+    closeTabClaimed = false
   })
 
   await loadRenderer(window, rendererUrl)
@@ -324,6 +327,9 @@ function installAppMenu(): void {
 }
 
 function registerBrowserIpc(): void {
+  ipcMain.on('manor:close-tab-claim', (event, claim: unknown) => {
+    if (event.sender === mainWindow?.webContents && typeof claim === 'boolean') closeTabClaimed = claim
+  })
   ipcMain.on('manor:browser:shortcut-focus', (event, focused: unknown) => {
     if (event.sender === mainWindow?.webContents && typeof focused === 'boolean') browserChromeFocused = focused
   })
@@ -756,6 +762,7 @@ const browserKeys = browserKeyForwarding({
   window: () => mainWindow,
   chromeFocused: () => browserChromeFocused,
   accepts: (guest) => browserManager?.acceptsShortcut(guest) ?? false,
+  closeTabClaimed: () => closeTabClaimed,
 })
 
 function checkedChatId(value: unknown): string {

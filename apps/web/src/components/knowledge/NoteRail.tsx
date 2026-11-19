@@ -12,7 +12,7 @@ import { insideVaultEntry } from '@manor/client-runtime/state'
 import { MoveDialog, parentFolder } from './MoveDialog'
 
 /** The drag's own type, so a file dragged in from Finder is never read as a move. */
-const ENTRY_DRAG = 'application/x-manor-vault-entry'
+export const ENTRY_DRAG = 'application/x-manor-vault-entry'
 /** How long a drag rests on a closed folder before it opens. */
 export const FOLDER_OPEN_DELAY_MS = 700
 
@@ -47,6 +47,8 @@ interface NoteRailProps {
   selectedPath: string | null
   dirtyPath: string | null
   onSelect: (path: string) => void
+  /** Where notes open in tabs: ⌘-click or a middle click opens one in a new tab. */
+  onOpenInNewTab?: (path: string) => void
   /** Makes a new note in the vault's inbox and opens it. */
   onCreate: () => void
   canCreate: boolean
@@ -96,6 +98,7 @@ export function NoteRail({
   selectedPath,
   dirtyPath,
   onSelect,
+  onOpenInNewTab,
   onCreate,
   canCreate,
   creating,
@@ -366,6 +369,7 @@ export function NoteRail({
             openFolders={openFolders}
             onToggleFolder={onToggleFolder}
             onSelect={onSelect}
+            {...(onOpenInNewTab === undefined ? {} : { onOpenInNewTab })}
             selectedPath={selectedPath}
             dirtyPath={dirtyPath}
             drag={drag}

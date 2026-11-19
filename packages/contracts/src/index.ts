@@ -6194,4 +6194,9 @@ export interface DesktopHostBridge {
   onZoomFactor?: (listener: (zoom: number) => void) => () => void
   /** Native macOS fullscreen, where the traffic lights are gone. */
   onFullscreen?: (listener: (fullscreen: boolean) => void) => () => void
+  /**
+   * While true, ⌘W in the Manor window closes the content tab on screen instead of the
+   * window: main replays it as a keydown on `window`.
+   */
+  claimCloseTab?: (claim: boolean) => void
 }

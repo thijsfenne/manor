@@ -1,6 +1,6 @@
 import type { BrowserWindow, Input, IpcMainEvent, WebContents } from 'electron'
 import { BROWSER_SHORTCUT_CHANNEL, HOUSE_KEY_CHANNEL } from './browserChannels'
-import { declinedPageKey, routeBrowserKey } from './browserShortcuts'
+import { declinedPageKey, isCloseTabKey, routeBrowserKey } from './browserShortcuts'
 
 /**
  * Sends keys to their owner: the Browser's own shortcuts to the panel, Manor's keys
@@ -11,11 +11,19 @@ export function browserKeyForwarding(deps: {
   chromeFocused(): boolean
   /** Whether this guest (or, with none, the chrome) belongs to the Browser on screen. */
   accepts(guest?: WebContents): boolean
+  /** Whether a content surface with tabs (Knowledge) holds ⌘W; see `claimCloseTab`. */
+  closeTabClaimed(): boolean
 }) {
   const fromKey = (event: Electron.Event, input: Input, guest?: WebContents) => {
     const window = deps.window()
     if (window === null || window.isDestroyed()) return
     const route = routeBrowserKey(input, guest !== undefined, deps.chromeFocused(), deps.accepts(guest))
+    if (route === undefined && guest === undefined && deps.closeTabClaimed() && isCloseTabKey(input)) {
+      // The File menu's Close Window would take ⌘W first; the surface closes a tab instead.
+      event.preventDefault()
+      window.webContents.send(HOUSE_KEY_CHANNEL, input.key)
+      return
+    }
     if (route === undefined) return
     event.preventDefault()
     if (route.to === 'manor-reload') window.webContents.reload()
