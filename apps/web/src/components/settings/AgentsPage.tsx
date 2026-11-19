@@ -1,5 +1,6 @@
 import { ArrowUpRight01Icon, PlusSignIcon } from '@hugeicons/core-free-icons'
 import type { AgentConfig, Chat } from '@manor/contracts'
+import { useLayoutEffect, useRef, useState } from 'react'
 import { AgentSettings, type AgentSettingsProps } from '../agents/AgentSettings'
 import { Avatar } from '../Avatar'
 import { Icon } from '../Icon'
@@ -7,6 +8,8 @@ import { Button } from '../ui/Button'
 import { SelectionMarker } from '../ui/SelectionMarker'
 
 const ROW_MARKER = 'settings-agent-row'
+/** The list's sticky top (top-6) plus the page's bottom padding (pb-10), the room it needs besides itself. */
+const LIST_ROOM = 24 + 40
 
 /** One list, placement as its subheaders: Session agents first, chat agents below. */
 const listOrder = (agents: readonly AgentConfig[]) => [
@@ -38,6 +41,20 @@ export function AgentsPage({ agentId, chats, onSelect, onOpenDm, onNewAgent, ...
   const ordered = listOrder(settings.agents)
   const editedHere = ordered.filter((agent) => dmOf(chats, agent) === undefined)
   const selected = editedHere.find((agent) => agent.id === agentId) ?? editedHere[0]
+  // The list stays in view while the editor scrolls, but only while it fits the window:
+  // a taller list scrolls with the page, or its foot could never be reached.
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const listRef = useRef<HTMLElement>(null)
+  const [listFits, setListFits] = useState(true)
+  useLayoutEffect(() => {
+    const scroller = scrollRef.current
+    const list = listRef.current
+    if (scroller === null || list === null) return
+    const observer = new ResizeObserver(() => setListFits(list.offsetHeight + LIST_ROOM <= scroller.clientHeight))
+    observer.observe(scroller)
+    observer.observe(list)
+    return () => observer.disconnect()
+  }, [])
 
   const row = (agent: AgentConfig) => {
     const inDm = dmOf(chats, agent) !== undefined
@@ -73,7 +90,7 @@ export function AgentsPage({ agentId, chats, onSelect, onOpenDm, onNewAgent, ...
     )
 
   return (
-    <div className="h-full min-h-0 overflow-y-auto">
+    <div ref={scrollRef} className="h-full min-h-0 overflow-y-auto">
       <div className="mx-auto w-full max-w-page">
         <header className="flex items-end justify-between gap-6 px-8 pt-10 pb-6 @max-[560px]:px-5 @max-[560px]:pt-7">
           <h1 className="m-0 min-w-0 font-display text-[24px] leading-tight font-semibold tracking-[-0.02em]">Agents</h1>
@@ -84,7 +101,7 @@ export function AgentsPage({ agentId, chats, onSelect, onOpenDm, onNewAgent, ...
         </header>
 
         <div className="grid grid-cols-[minmax(0,264px)_minmax(0,1fr)] gap-6 px-6 pb-10 @max-[720px]:grid-cols-1">
-          <nav aria-label="Agents list" className="self-start">
+          <nav ref={listRef} aria-label="Agents list" className={`self-start ${listFits ? '@min-[720px]:sticky @min-[720px]:top-6' : ''}`}>
             {group('Session agents', ordered.filter((agent) => agent.placement === 'session'))}
             {group('Chat agents', ordered.filter((agent) => agent.placement !== 'session'))}
           </nav>
@@ -95,7 +112,8 @@ export function AgentsPage({ agentId, chats, onSelect, onOpenDm, onNewAgent, ...
             <section
               aria-label="Agent settings"
               // No card: the editor is the page's own content here, as wide as the page has room.
-              className="flex h-[min(760px,calc(100dvh-12rem))] min-h-[480px] w-full flex-col"
+              // No height either, so the editor grows and the page is the one scroll.
+              className="flex min-h-[480px] w-full flex-col"
             >
               {/* Keyed on the agent so another agent never shows this one's draft or page. */}
               <AgentSettings key={selected.id} agent={selected} {...settings} />

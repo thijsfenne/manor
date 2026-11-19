@@ -150,7 +150,7 @@ export function SettingsView({ section, onSection, onClose, leaving, onDiscard, 
         <div className="min-h-0 overflow-y-auto overscroll-y-none px-2.5 pb-4" onKeyDown={walk}>
           {shown.length === 0 ? <p className="m-0 px-3 pt-3 text-label text-dim">No settings match</p> : null}
           {shown.map((group) => (
-            <div key={group.label} role="group" aria-label={group.label} className="pt-3 first:pt-1">
+            <div key={group.label} role="group" aria-label={group.label} className="pt-3 first:pt-5">
               <h3 className="m-0 px-3 pb-1 text-meta font-medium text-dim">{group.label}</h3>
               {group.sections.map((entry) => {
                 const current = entry.id === section
