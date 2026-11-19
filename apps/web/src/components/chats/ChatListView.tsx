@@ -123,11 +123,15 @@ export function ChatListView({
   // Resolved once for the whole list rather than per row: the travelling fill is a
   // single surface, so exactly one row may claim it even if the stage somehow lights
   // a chat and a DM draft in the same frame.
-  const markedKey = shown.find((row) =>
+  const litKey = shown.find((row) =>
     row.chat === null
       ? draftAgentId !== null && row.agentId === draftAgentId
-      : showChatSelection && row.selected && activeSubagents?.[row.chat.id] === undefined,
+      : showChatSelection && row.selected,
   )?.key
+  // A subagent's view over the lit chat carries the travelling fill onto its row.
+  const markedKey = shown.some((row) => row.key === litKey && row.chat !== null && activeSubagents?.[row.chat.id] !== undefined)
+    ? undefined
+    : litKey
   // Whoever the user pinned, at most two, is lifted out of the recency order and given
   // a card above it, the same shape the phone uses. Chief first, then roster order.
   const heads = chatListPins(agents).flatMap((agent) => {
@@ -145,6 +149,8 @@ export function ChatListView({
     return (
       <SubagentChildRows
         group={group}
+        rowKey={chat.id}
+        marked={row.key === litKey}
         {...(activeSubagents?.[chat.id] === undefined ? {} : { activeId: activeSubagents[chat.id] })}
         {...(indent === undefined ? {} : { indent })}
         onOpen={(toolCallId) => onOpenSubagent(chat.id, toolCallId)}

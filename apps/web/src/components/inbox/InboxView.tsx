@@ -26,7 +26,8 @@ import { PlanCount } from './PlanCount'
 import { Standing } from './Standing'
 import { useSplitDragGrab } from '../SplitDrag'
 import { InboxCard } from './InboxCard'
-import { SubagentChildRows } from '../SubagentChildRows'
+import { SubagentChildRows, SubagentDisclosure } from '../SubagentChildRows'
+import { useCollapsedSubagentRows } from '../../subagentCollapse'
 import { QUIET_PAGE_SIZE } from '@manor/client-runtime/session-overview-ui'
 import { ShowMoreRow } from './ShowMoreRow'
 
@@ -122,18 +123,27 @@ export function InboxView({
   const setSettled = useRef(onSetSettled)
   setSettled.current = onSetSettled
   const now = useMinuteClock()
+  const collapsedSubagents = useCollapsedSubagentRows()
   const { unsettled, settled } = inbox
   const shownSettled = settled.slice(0, visibleSettled)
   const moreSettled = settled.length - shownSettled.length
-  // A chat's own row gives its fill to the child that lies over it.
+  const groupOf = (chatId: string) => (onOpenSubagent === undefined ? undefined : subagentGroups?.[chatId])
+  // A chat's own row gives its fill to the child that lies over it, unless the user
+  // folded that row with the child listed inside it.
+  const yields = (chatId: string) => {
+    const activeId = activeSubagents?.[chatId]
+    if (activeId === undefined) return false
+    return !(collapsedSubagents.has(chatId) && groupOf(chatId)?.children.some((child) => child.id === activeId) === true)
+  }
   const lit = (entry: { chat: { id: string }; selected: boolean }) =>
-    activeSubagents?.[entry.chat.id] === undefined &&
+    !yields(entry.chat.id) &&
     (occupiedChatIds !== undefined ? occupiedChatIds.has(entry.chat.id) : showChatSelection && entry.selected)
   // Split rows already have their own fill. Focus changes only the pane's wash.
-  const markedChatId =
+  const selectedChatId =
     occupiedChatIds === undefined && showChatSelection
-      ? [...unsettled, ...shownSettled].find((entry) => entry.selected && activeSubagents?.[entry.chat.id] === undefined)?.chat.id
+      ? [...unsettled, ...shownSettled].find((entry) => entry.selected)?.chat.id
       : undefined
+  const markedChatId = selectedChatId !== undefined && yields(selectedChatId) ? undefined : selectedChatId
 
   useEffect(
     () => {
@@ -210,13 +220,18 @@ export function InboxView({
             {settled.length === 0 ? 'No sessions yet' : projectWorkOpen ? 'Nothing else open' : 'All settled'}
           </li>
         ) : (
-          unsettled.map((entry) => (
+          unsettled.map((entry) => {
+            const group = groupOf(entry.chat.id)
+            return (
             <Fragment key={entry.chat.id}>
             <LiveRow
               entry={entry}
               agents={agents}
               selected={lit(entry)}
               marked={entry.chat.id === markedChatId}
+              {...(group === undefined ? {} : {
+                disclosure: <SubagentDisclosure rowKey={entry.chat.id} title={entry.chat.title} count={group.children.length} />,
+              })}
               motionClass={inboxRowMotionClass(rowMotion, entry.chat.id)}
               now={now}
               armed={armed}
@@ -228,17 +243,20 @@ export function InboxView({
               onSetSettled={moveRow}
               onSetArchived={onSetArchived}
             />
-            {onOpenSubagent === undefined || subagentGroups?.[entry.chat.id] === undefined ? null : (
+            {onOpenSubagent === undefined || group === undefined ? null : (
               <li className="m-0 list-none">
                 <SubagentChildRows
-                  group={subagentGroups[entry.chat.id]}
+                  group={group}
+                  rowKey={entry.chat.id}
+                  marked={entry.chat.id === selectedChatId}
                   {...(activeSubagents?.[entry.chat.id] === undefined ? {} : { activeId: activeSubagents[entry.chat.id] })}
                   onOpen={(toolCallId) => onOpenSubagent(entry.chat.id, toolCallId)}
                 />
               </li>
             )}
             </Fragment>
-          ))
+            )
+          })
         )}
       </ul>
 
@@ -400,6 +418,8 @@ interface RowProps {
   plan?: PlanProgress | null
   /** The side a quiet row's hover card opens on; the sessions overview asks for the left. */
   cardSide?: 'left' | 'right'
+  /** The fold for the subagents under a live row, on its second line. */
+  disclosure?: ReactNode
 }
 
 /** The confirm replaces the row it belongs to, exactly as it does in a project. */
@@ -461,6 +481,7 @@ export function LiveRow({
   detail,
   openLabel,
   plan,
+  disclosure,
 }: RowProps) {
   const { chat, projectName, projectColor, unread, running, waiting } = entry
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null)
@@ -561,6 +582,7 @@ export function LiveRow({
           ) : (
             <span className="min-w-0 truncate text-[13px] text-dim">{detail}</span>
           )}
+          {disclosure}
           <span className="min-w-0 flex-1" />
           <SessionMark chat={chat} agents={agents} onOpen={() => onOpen(chat.id)} />
         </div>
