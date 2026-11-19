@@ -420,7 +420,7 @@ export function useWorkspaceNav({
    */
   const showSidebarDestination = useCallback((next: SidebarView) => {
     pendingReload.current = null
-    // A thread's split comes back as a new visit on the thread, not on its session.
+    // A thread's split comes back as a visit on the thread; the room gives its right side back.
     const remembered = next === 'inbox' && inboxReturnId !== null && lastChatByView.current.inbox !== LEFT_ON_NEW_SESSION
       ? inboxReturnId : lastChatByView.current[next]
     const landing = landingChat(chats, next, remembered)

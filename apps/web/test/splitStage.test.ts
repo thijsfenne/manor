@@ -8,6 +8,7 @@ import {
   closeSplitPane,
   dropMissingSplit,
   focusSplitPane,
+  forgetRoomSession,
   splitLane,
   laneOfView,
   roomSplit,
@@ -16,6 +17,8 @@ import {
   newSessionOnRight,
   occupiedSplitIds,
   openOnRight,
+  pruneRoomSessions,
+  rememberRoomSession,
   replaceSplitPane,
   settleSplitChat,
   splitAvailable,
@@ -338,5 +341,30 @@ describe('a DM draft dropped into a pane', () => {
     expect(ended).toBeNull()
     expect(nextSplitDraftSide(null, 'project', focusedLeft, 'inbox', ended)).toBe('left')
     expect(parkDraftSide(parked, null, 'project', 'right', false)).toBeNull()
+  })
+})
+
+describe('project room memory', () => {
+  it('remembers the session a room opened, and swaps it when the room opens another', () => {
+    expect(rememberRoomSession({}, 'thread', 'session')).toEqual({ thread: 'session' })
+    expect(rememberRoomSession({ thread: 'session' }, 'thread', 'next')).toEqual({ thread: 'next' })
+    expect(rememberRoomSession({ thread: 'session' }, 'other', 'x')).toEqual({ thread: 'session', other: 'x' })
+  })
+
+  it('keeps the same object when nothing changed, so no render follows', () => {
+    const memory = { thread: 'session' }
+    expect(rememberRoomSession(memory, 'thread', 'session')).toBe(memory)
+    expect(forgetRoomSession(memory, 'other')).toBe(memory)
+    expect(pruneRoomSessions(memory, () => true)).toBe(memory)
+  })
+
+  it('forgets one room without touching another', () => {
+    expect(forgetRoomSession({ thread: 'session', other: 'x' }, 'thread')).toEqual({ other: 'x' })
+  })
+
+  it('falls back to the overview for a session that is gone', () => {
+    const gone = pruneRoomSessions({ thread: 'session', other: 'x' }, (_thread, sessionId) => sessionId !== 'session')
+    expect(gone).toEqual({ other: 'x' })
+    expect(gone.thread).toBeUndefined()
   })
 })

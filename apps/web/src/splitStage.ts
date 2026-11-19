@@ -59,6 +59,29 @@ export function roomSplit(threadChatId: string, sessionChatId: string): SplitSta
   return { leftChatId: threadChatId, rightChatId: sessionChatId, focus: 'right', view: 'inbox' }
 }
 
+/**
+ * What each project room had open on its right, by thread id: the session, or nothing
+ * (the overview). Leaving the room for another screen keeps it, so coming back lands
+ * where the user left; closing the sessions side or settling the session clears it.
+ */
+export type RoomSessions = Readonly<Record<string, string>>
+
+export function rememberRoomSession(memory: RoomSessions, threadChatId: string, sessionId: string): RoomSessions {
+  return memory[threadChatId] === sessionId ? memory : { ...memory, [threadChatId]: sessionId }
+}
+
+export function forgetRoomSession(memory: RoomSessions, threadChatId: string): RoomSessions {
+  if (memory[threadChatId] === undefined) return memory
+  const { [threadChatId]: _forgotten, ...rest } = memory
+  return rest
+}
+
+/** Drops the sessions that are gone (deleted, archived, moved out of the room): the room opens on its overview. */
+export function pruneRoomSessions(memory: RoomSessions, inRoom: (threadChatId: string, sessionId: string) => boolean): RoomSessions {
+  const kept = Object.entries(memory).filter(([threadChatId, sessionId]) => inRoom(threadChatId, sessionId))
+  return kept.length === Object.keys(memory).length ? memory : Object.fromEntries(kept)
+}
+
 export function splitSideOf(split: SplitStage, chatId: string): 'left' | 'right' | null {
   return split.leftChatId === chatId ? 'left' : split.rightChatId === chatId ? 'right' : null
 }

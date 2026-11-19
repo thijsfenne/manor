@@ -375,12 +375,14 @@ function Workspace({
     openChat,
   })
 
+  // A room's remembered session keeps its subagent view while the user is on another screen.
+  const subagentViewChatIds = new Set([...occupiedChatIdsOf(visibleSplit, null, open?.id ?? null), ...Object.values(stage.roomSessions)])
   const { sidebarSubagents, activeSubagents, subagentPath, pushSubagentView, popSubagentView, closeSubagentView, openSubagent } =
-    useSubagentViews(workspace, openChat, closeSidebarOverlay, occupiedChatIdsOf(visibleSplit, null, open?.id ?? null))
+    useSubagentViews(workspace, openChat, closeSidebarOverlay, subagentViewChatIds)
   useEffect(() => {
     panelsCoveredRef.current = (chatId) => subagentChrome(subagentPath(chatId)).panelHidden
   }, [subagentPath])
-  const subagentOnStage = open !== null && subagentPath(open.id).length > 0
+  const subagentOnStage = open !== null && activeView === 'chat' && subagentPath(open.id).length > 0
   // A chat's own row always lands on the chat, also from a subagent it started.
   const openChatFromSidebar = (chatId: string) => {
     closeSidebarOverlay()

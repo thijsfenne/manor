@@ -397,7 +397,7 @@ export function StageChatPane({
   const { manor, phone, open, stage, split, nav, dialogs, rightPanel, replies, reveals, focusMode } = kit
   const { workspace, status } = manor
   const { visibleSplit, roomUp, canSplit, roomThreadOf } = stage
-  const { overviewShown, stageThreadId, sessionOverview, paneSplit, closeSessionsSide, showOverview } = split
+  const { overviewShown, stageThreadId, sessionOverview, paneSplit, closeSessionsSide, showOverview, forgetRoom } = split
   const { pageContextsByChat, removePageContext } = kit.pageContexts
   const { revealEvent, clearRevealEvent, reveal } = reveals
   // Methods by name: the compiler keys a call like `replies.set(…)` on `replies`, and every
@@ -441,7 +441,10 @@ export function StageChatPane({
   )
   const backToSessions = roomThreadId === undefined ? undefined
     : roomUp && side === 'right' ? showOverview
-    : () => openChat(roomThreadId)
+    : () => {
+      forgetRoom(roomThreadId)
+      openChat(roomThreadId)
+    }
   const closePane = visibleSplit === null ? undefined
     : !roomUp ? () => closeSplitSide(side)
     : side === 'right' && visibleSplit.leftChatId !== null ? () => closeSessionsSide(visibleSplit.leftChatId!)

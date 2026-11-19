@@ -18,12 +18,15 @@ import {
   closeSplitPane,
   dropMissingSplit,
   focusSplitPane,
+  forgetRoomSession,
   laneOfView,
   navigateSplit,
   newSessionOnRight,
   nextSplitDraftSide,
   openOnRight,
   parkDraftSide,
+  pruneRoomSessions,
+  rememberRoomSession,
   replaceSplitPane,
   roomSplit,
   settleSplitChat,
@@ -32,6 +35,7 @@ import {
   splitResumeIds,
   splitSideOf,
   unloadedSplitPanes,
+  type RoomSessions,
   type SplitLane,
   type SplitStage,
 } from './splitStage'
@@ -191,21 +195,55 @@ export function useSplitStage(manor: Manor, phone: boolean, stageWidth: number, 
 
   /** Whether the stage showed chats on the last render; `useSplitActions` sets it once the view is known. */
   const chatStageShown = useRef(true)
+
+  // What each room had open on its right, so another screen and back lands on it again.
+  // Held in a ref as well, because the open callbacks read it between renders.
+  const [roomSessions, setRoomSessionsState] = useState<RoomSessions>({})
+  const roomSessionsRef = useRef(roomSessions)
+  const updateRoomSessions = useCallback((change: (current: RoomSessions) => RoomSessions) => {
+    const next = change(roomSessionsRef.current)
+    if (next === roomSessionsRef.current) return
+    roomSessionsRef.current = next
+    setRoomSessionsState(next)
+  }, [])
+  const forgetRoom = useCallback((threadChatId: string) => updateRoomSessions((current) => forgetRoomSession(current, threadChatId)), [updateRoomSessions])
+  const stillInRoom = (threadChatId: string, sessionId: string) => {
+    const chat = chatOf(workspace, sessionId)
+    return chat !== null && chat.archivedAt === null && sessionThreadOf(workspace, sessionId)?.threadChatId === threadChatId
+  }
+  // A session deleted or archived away while the room was offstage: the room opens on its
+  // overview, also when the user had folded the sessions side before opening that session.
+  useEffect(() => {
+    const current = roomSessionsRef.current
+    const kept = pruneRoomSessions(current, stillInRoom)
+    if (kept === current) return
+    for (const threadChatId of Object.keys(current)) {
+      if (kept[threadChatId] === undefined) setCollapsed(threadChatId, 'sessions-overview', false)
+    }
+    updateRoomSessions(() => kept)
+  }, [roomSessions, workspace.chats, workspace.projects, workspace.workHandoffs, updateRoomSessions])
+
   const openChatOnServer = useCallback(
     (chatId: string) => {
+      const chat = chatOf(workspace, chatId)
+      // A session the thread started opens in its room, on the right beside the thread.
+      // Stored below the split floor too, so widening brings the room back around it.
+      const thread = phone || chat === null ? undefined : sessionThreadOf(workspace, chatId)?.threadChatId
+      if (thread !== undefined) updateRoomSessions((current) => rememberRoomSession(current, thread, chatId))
+      // A project thread that is not on stage comes back with the session it held on its right.
+      const held = phone || chat === null || !isProjectThread(workspace, chatId) ? undefined : roomSessionsRef.current[chatId]
+      const restored = held !== undefined && stillInRoom(chatId, held) ? held : undefined
       setSplit((current) => {
-        const chat = chatOf(workspace, chatId)
         if (chat === null) return current
-        // A session the thread started opens in its room, on the right beside the thread.
-        // Stored below the split floor too, so widening brings the room back around it.
-        const thread = phone ? undefined : sessionThreadOf(workspace, chatId)?.threadChatId
         if (thread !== undefined) return roomSplit(thread, chatId)
+        const roomHere = current?.leftChatId === chatId && current.view === sidebarView && chatStageShown.current
+        if (restored !== undefined && !roomHere) return { ...roomSplit(chatId, restored), focus: 'left' }
         if (current === null) return current
         // A project thread opens on the left beside its overview, never into a pane of
         // another split. One already on the left is only focused there, unless its split
-        // stood offstage: coming back is a new visit, which lands on the overview again.
-        if (isProjectThread(workspace, chatId) && current.view === sidebarViewForChat(chat.kind) &&
-          (current.leftChatId !== chatId || current.view !== sidebarView || !chatStageShown.current)) return null
+        // stood offstage: coming back is a new visit, which lands on the overview again
+        // (the session it held comes back above, before this).
+        if (isProjectThread(workspace, chatId) && current.view === sidebarViewForChat(chat.kind) && !roomHere) return null
         // Anything else from the room's own list leaves the room; another list parks it.
         if (current.leftChatId !== null && isProjectThread(workspace, current.leftChatId)) {
           if (current.leftChatId === chatId) return { ...current, focus: 'left' }
@@ -216,7 +254,7 @@ export function useSplitStage(manor: Manor, phone: boolean, stageWidth: number, 
       })
       manor.openChat(chatId)
     },
-    [workspace.chats, workspace.projects, workspace.workHandoffs, sidebarView, phone, manor.openChat],
+    [workspace.chats, workspace.projects, workspace.workHandoffs, sidebarView, phone, manor.openChat, updateRoomSessions],
   )
   const inboxReturnId = split?.view === 'inbox' && split.leftChatId !== null && isProjectThread(workspace, split.leftChatId)
     ? split.leftChatId : null
@@ -245,6 +283,7 @@ export function useSplitStage(manor: Manor, phone: boolean, stageWidth: number, 
       (visibleSplit !== null || (workspace.pendingChatId ?? workspace.openChatId) === chatId)) {
       setSplit(null)
       setCollapsed(split.leftChatId, 'sessions-overview', false)
+      forgetRoom(split.leftChatId)
       return split.leftChatId
     }
     if (visibleSplit === null) return false
@@ -258,6 +297,7 @@ export function useSplitStage(manor: Manor, phone: boolean, stageWidth: number, 
   return {
     split, setSplit, splitDraftSide, setSplitDraftSide, canSplit, visibleSplit, freeSplit, roomUp, ratio,
     roomThreadOf, isRoomSplit, laneOf, chatStageShown, openChatOnServer, inboxReturnId, settle,
+    roomSessions, forgetRoom,
   }
 }
 
@@ -306,7 +346,7 @@ export function useSplitActions(
   const { workspace } = manor
   const {
     split, setSplit, splitDraftSide, setSplitDraftSide, canSplit, visibleSplit, freeSplit, roomUp,
-    roomThreadOf, isRoomSplit, laneOf,
+    roomThreadOf, isRoomSplit, laneOf, forgetRoom,
   } = stage
   const onChatStage = activeView === 'chat' || activeView === 'new-chat' || activeView === 'empty-chat'
   stage.chatStageShown.current = onChatStage
@@ -561,17 +601,21 @@ export function useSplitActions(
 
   // Back to the thread's overview: whatever stands beside the thread leaves the right pane.
   const showOverview = () => {
-    if (stageThreadId !== null) setCollapsed(stageThreadId, 'sessions-overview', false)
+    if (stageThreadId !== null) {
+      setCollapsed(stageThreadId, 'sessions-overview', false)
+      forgetRoom(stageThreadId)
+    }
     if (roomUp) closeSplitSide('right')
   }
   // The sessions side's x: the overview, or a session on it, leaves and the thread stands alone.
   const closeSessionsSide = (threadChatId: string) => {
     setCollapsed(threadChatId, 'sessions-overview', true)
+    forgetRoom(threadChatId)
     if (roomUp) closeSplitSide('right')
   }
 
   return {
-    onChatStage, stageThreadId, overviewShown, sessionOverview, paneSplit,
+    onChatStage, stageThreadId, overviewShown, sessionOverview, paneSplit, forgetRoom,
     focusSplitSide, openRight, openPinnedDm, closeSplitSide, showOverview, closeSessionsSide,
     dropLane, splitDrag, splitStage, splitRightPane, sidebarGrab, railGrab,
   }

@@ -15,7 +15,8 @@ const without = (views: SubagentViews, chatId: string): SubagentViews => {
 /**
  * A subagent's conversation on the stage of the chat that started it. The chat stays
  * mounted underneath, which is what brings Back to the same scroll position, so a view
- * lives exactly as long as its chat is on stage: leaving the chat closes it.
+ * lives exactly as long as its chat is in `stageChatIds`: leaving the chat closes it.
+ * The caller adds a project room's remembered session, so its view survives another screen.
  */
 export function useSubagentViews(
   workspace: WorkspaceShape,
