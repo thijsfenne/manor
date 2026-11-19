@@ -1,15 +1,13 @@
 import { useEffect, useState } from 'react'
-import { SINGLE_CHAT_VOICE, driverForModel, type AgentConfig, type Routine } from '@manor/contracts'
-import { calendarDaysUntil, DEFAULT_KIND, scheduledSections, type ScheduleKind } from '@manor/client-runtime/scheduled'
+import { DEFAULT_KIND, scheduledSections, type ScheduleKind } from '@manor/client-runtime/scheduled'
 import ArrowDown01Icon from '@hugeicons/core-free-icons/ArrowDown01Icon'
 import { HugeiconsIcon } from '@hugeicons/react-native'
 import { Pressable, SectionList, StyleSheet, View } from 'react-native'
 import { FadeIn, FadeOut, ReduceMotion } from 'react-native-reanimated'
 
 import { ConnectGate } from '@/components/ConnectGate'
-import { Blobatar } from '@/components/Blobatar'
 import { EmptyCard } from '@/components/EmptyCard'
-import { ProviderMark } from '@/components/ProviderMark'
+import { RoutineRow, routineOn } from '@/components/RoutineRow'
 import { DisclosureChevron } from '@/components/DisclosureChevron'
 import { SectionScaffold } from '@/components/SectionScaffold'
 import { SegmentedControl } from '@/components/SegmentedControl'
@@ -137,18 +135,8 @@ function RoutinesList() {
         const running = item.runningSince !== null
         const actionLabel = busy ? 'Starting…' : running ? 'Running' : 'Run now'
         return (
-          <View style={[styles.row, !item.enabled && item.endState === null && styles.off]}>
-            <RoutineFace agent={workspace.agents.find((agent) => agent.id === item.agentId)} routine={item} />
-            <View style={styles.copy}>
-              <Text numberOfLines={1} style={styles.title}>{item.name}</Text>
-              <Text
-                numberOfLines={2}
-                style={[styles.description, (item.endState === 'failed' || item.endState === 'expired') && styles.failed]}
-              >
-                {routineLine(item, clock)}
-              </Text>
-            </View>
-            {item.enabled && item.endState === null ? (
+          <RoutineRow agent={workspace.agents.find((agent) => agent.id === item.agentId)} at={clock} routine={item}>
+            {routineOn(item) ? (
               <Pressable
                 accessibilityRole="button"
                 disabled={status !== 'live' || busy || running}
@@ -165,73 +153,23 @@ function RoutinesList() {
                 </AnimatedText>
               </Pressable>
             ) : null}
-          </View>
+          </RoutineRow>
         )
       }}
     />
   )
 }
 
-/**
- * Who answers, as on the Mac's row: the persona's face, or for a Single run the mark
- * of the provider its model belongs to.
- */
-function RoutineFace({ routine, agent }: { routine: Routine; agent: AgentConfig | undefined }) {
-  if (routine.agentId === SINGLE_CHAT_VOICE.id) {
-    const driver = driverForModel(routine.model ?? '')
-    return <View style={styles.face}>{driver === undefined ? null : <ProviderMark driver={driver} size={20} />}</View>
-  }
-  return (
-    <View style={styles.face}>
-      <Blobatar
-        color={agent?.color ?? ''}
-        name={agent?.name ?? routine.agentId}
-        shape={agent?.avatarShape}
-        size={28}
-        src={agent?.avatar}
-        tone={agent?.avatarTone}
-      />
-    </View>
-  )
-}
-
-const MOMENT = new Intl.DateTimeFormat('en-GB', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hour12: false })
-const CLOCK = new Intl.DateTimeFormat('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false })
-const ENDED = { done: 'Done', failed: 'Failed', expired: 'Expired, did not run', cancelled: 'Cancelled' } as const
-
-/** `Today 10:00`, `Tomorrow 10:00`, otherwise the full moment, all in the phone's zone. */
-function when(ts: number, at: number): string {
-  const days = calendarDaysUntil(ts, at)
-  if (days === 0) return `Today ${CLOCK.format(new Date(ts))}`
-  if (days === 1) return `Tomorrow ${CLOCK.format(new Date(ts))}`
-  return MOMENT.format(new Date(ts))
-}
-
-/** What a row says under its name: a one-time task's kind and moment or how it ended, else as before. */
-function routineLine(routine: Routine, at: number): string {
-  if (routine.runAt === null) return routine.enabled ? routine.description || routine.cron : 'Off'
-  const kind = routine.action === 'remind' ? 'Reminder' : 'Check'
-  if (routine.endState !== null) return `${kind}, ${ENDED[routine.endState]}, ${when(routine.endedAt ?? routine.runAt, at)}`
-  return routine.enabled ? `${kind}, ${when(routine.runAt, at)}` : `${kind}, Off, ${when(routine.runAt, at)}`
-}
-
 const styles = StyleSheet.create({
   list: { padding: spacing.lg, paddingBottom: 48 },
   header: { gap: spacing.md, paddingBottom: spacing.lg },
   intro: { color: colors.muted, fontFamily: fonts.sans, fontSize: 15, lineHeight: 21 },
-  row: { minHeight: 60, flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingVertical: spacing.sm },
-  off: { opacity: 0.6 },
-  face: { width: 28, alignItems: 'center' },
-  copy: { flex: 1, minWidth: 0, gap: 2 },
-  title: { color: colors.text, fontFamily: fonts.sans, fontSize: 15, fontWeight: '500' },
-  description: { color: colors.muted, fontFamily: fonts.sans, fontSize: 13, lineHeight: 18 },
   action: { minWidth: 96, minHeight: 34, alignItems: 'center', justifyContent: 'center', borderRadius: radius.round, backgroundColor: colors.surface2, paddingHorizontal: spacing.md },
   actionText: { color: colors.text, fontFamily: fonts.sans, fontSize: 12, fontWeight: '500' },
   gap: { height: spacing.xs },
   sectionHeader: { minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingTop: spacing.md, paddingBottom: spacing.xs, paddingHorizontal: spacing.xs },
   sectionTitle: { flex: 1, color: colors.muted, fontFamily: fonts.sans, fontSize: 15, fontWeight: '500' },
   sectionCount: { color: colors.dim, fontFamily: fonts.sans, fontSize: 13, fontVariant: ['tabular-nums'] },
-  failed: { color: colors.danger },
   error: { color: colors.danger, fontFamily: fonts.sans, fontSize: 13, lineHeight: 18 },
   loading: { color: colors.dim, fontFamily: fonts.sans, fontSize: 13 },
   disabled: { opacity: 0.4 },

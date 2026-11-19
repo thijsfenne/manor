@@ -742,10 +742,10 @@ function ChatContent({ chatId }: { chatId: string | undefined }) {
   if (chatId === undefined) return null
 
   /**
-   * Who the header names. A DM is one persona, so it says her: her name, her role
-   * beside it and what she runs on underneath, the same three facts the agents list
-   * shows. A group is its own name with everyone in it under that. Every other chat
-   * keeps saying where it lives, because there the project is the identity.
+   * Who the header names. A DM is one persona, so it says her: her face, name and
+   * role, which open her overview. A group is its own name with everyone in it under
+   * that. Every other chat keeps saying where it lives, because there the project is
+   * the identity.
    */
   const dmAgent = chat?.kind === 'dm' ? roster[0] : undefined
   // Auto never claims a DM (the server skips it), so its pin reads as Auto off: the
@@ -764,12 +764,11 @@ function ChatContent({ chatId }: { chatId: string | undefined }) {
   const pairTitle = chat?.kind === 'pair'
     ? chat.memberIds.map((id) => personaOf(workspace.agents, id).name).join(' and ')
     : undefined
+  // A DM's header names her instead (see ChatHeader), so no line under it.
   const lead =
-    dmAgent !== undefined
-      ? runtimeParts(dmAgent, dmOverride, hostAuto).model
-      : sessionRuntime !== undefined
-        ? runtimeLabel(singleVoice, singleOverride, hostAuto)
-        : memberNames ?? (project !== undefined && isHomeRoom(project.id) ? 'No project' : project?.name) ?? (chat?.kind === 'side' ? 'Side chat' : 'Chat')
+    sessionRuntime !== undefined
+      ? runtimeLabel(singleVoice, singleOverride, hostAuto)
+      : memberNames ?? (project !== undefined && isHomeRoom(project.id) ? 'No project' : project?.name) ?? (chat?.kind === 'side' ? 'Side chat' : 'Chat')
   // The Mac's name lives in the side menu only; a connection that is not live
   // still earns the line.
   const connection = status === 'live' ? null : status === 'connecting' ? 'Connecting…' : 'Offline'
@@ -835,12 +834,15 @@ function ChatContent({ chatId }: { chatId: string | undefined }) {
         agentIds={chat?.kind === 'pair' ? chat.memberIds : chat?.agentIds ?? []}
         agents={workspace.agents}
         {...(chat?.kind === 'pair' ? { pair: chat.memberIds.flatMap((id) => workspace.agents.filter((agent) => agent.id === id)) } : {})}
-        {...(dmAgent !== undefined && !isAutoPending(dmAgent, dmOverride, hostAuto) ? { driver: effectiveDriver(dmAgent, dmOverride) } : {})}
         {...(sessionRuntime !== undefined && !isAutoPending(sessionRuntime, singleOverride, hostAuto) ? { driver: effectiveDriver(sessionRuntime, singleOverride) } : {})}
-        {...(isPair || singleChat || chat?.kind === 'side' ? {} : { onAgents: () => setSheet('agents') })}
+        {...(isPair || singleChat || chat?.kind === 'side' || chat?.kind === 'dm' ? {} : { onAgents: () => setSheet('agents') })}
+        {...(dmAgent === undefined ? {} : { dm: {
+          agent: dmAgent,
+          onOverview: () => router.push({ pathname: '/agent/[chatId]', params: { chatId } }),
+          onFiles: () => router.push({ pathname: '/files/[chatId]', params: { chatId } }),
+        } })}
         {...(chat?.kind === 'dm' || projectThread || subagents.length === 0 ? {} : { onSubagents: () => setSheet('subagents'), subagentsRunning })}
         onBack={() => (router.canGoBack() ? router.back() : router.replace('/'))}
-        {...(dmAgent === undefined || dmAgent.role === '' ? {} : { role: dmAgent.role })}
         subtitle={subtitle}
         {...(chat?.kind === 'project' && project !== undefined && startedBy === undefined ? { project } : {})}
         projectThread={projectThread}
@@ -1104,17 +1106,13 @@ function ChatContent({ chatId }: { chatId: string | undefined }) {
       </View>
       </KeyboardFooter>
 
-      {isPair || singleChat || chat?.kind === 'side' ? null : <RuntimeSheet
+      {isPair || singleChat || chat?.kind === 'side' || chat?.kind === 'dm' ? null : <RuntimeSheet
         {...(chat !== null && chat.agentIds.length > 0 ? { activeAgentIds: chat.agentIds } : {})}
         agents={roster}
         startedAgentIds={startedAgentIds}
         disabled={status !== 'live'}
         onChange={(agentId, override) => setChatOverride(chatId, agentId, override)}
         onClose={() => setSheet(null)}
-        {...(chat?.kind === 'dm' ? { onFiles: () => {
-          setSheet(null)
-          router.push({ pathname: '/files/[chatId]', params: { chatId } })
-        } } : {})}
         open={sheet === 'agents'}
         overrides={thread.overrides}
       />}

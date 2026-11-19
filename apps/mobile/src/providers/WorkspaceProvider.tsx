@@ -1,5 +1,6 @@
 import { createWorkAcceptance, createWorkspaceCommands, type WorkAcceptanceOptions } from '@manor/client-runtime/commands'
 import {
+  type AgentConfig,
   type SlackRichText,
   type ChatOverride,
   type ClientMessage,
@@ -154,6 +155,8 @@ export interface WorkspaceActions {
   updateProject: (projectId: string, edit: ProjectEdit) => Promise<void>
   /** Deletes the project with its thread, Sessions and chats. */
   deleteProject: (projectId: string) => Promise<void>
+  /** Renames an agent or changes her title, over the roster as it stands; resolves on the ack, rejects with the notice. */
+  saveAgent: (agentId: string, edit: Partial<AgentEdit>) => Promise<void>
   /** Pins one persona's runtime for this chat; the label moves before the server answers. */
   setChatOverride: (chatId: string, agentId: string, override: ChatOverride) => boolean
   /** Asks for a project's file listing, through the chat's checkout when there is one. */
@@ -181,6 +184,9 @@ export interface WorkspaceActions {
   listArtifacts: (query: string) => string | null
   loadMoreArtifacts: () => boolean
 }
+
+/** What the phone's agent overview edits. Everything else about an agent stays on the Mac. */
+export type AgentEdit = Pick<AgentConfig, 'name' | 'role'>
 
 /** What the project settings sheet writes: the Mac's Edit project form, field for field. */
 export type ProjectEdit = Pick<Project, 'name' | 'icon' | 'color' | 'repoPaths' | 'memoryScope'>
@@ -546,6 +552,30 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     (projectId: string) => answered((id) => send({ type: 'delete_project', projectId, requestId: id })),
     [answered, send],
   )
+  // `save_agent` carries the whole agent, so only the edited fields are the phone's: the rest
+  // comes from the roster as it is now, never from a copy a screen held while the Mac changed her.
+  // Edits ride along until the roster carrying them is applied, so a second save cannot undo the first.
+  const unansweredEdits = useRef(new Map<string, Partial<AgentEdit>>())
+  const saveAgent = useCallback((agentId: string, edit: Partial<AgentEdit>) => {
+    const agent = store.get().agents.find((candidate) => candidate.id === agentId)
+    if (agent === undefined) return Promise.reject(new Error('This agent is no longer in Manor.'))
+    const { allowedTools: _serverOwned, ...draft } = agent
+    const edits = { ...unansweredEdits.current.get(agentId), ...edit }
+    unansweredEdits.current.set(agentId, edits)
+    const settle = () => {
+      const now = unansweredEdits.current.get(agentId)
+      if (now === edits) unansweredEdits.current.delete(agentId)
+    }
+    const saved = answered((id) => send({ type: 'save_agent', agent: { ...draft, ...edits }, requestId: id }))
+    // The roster precedes the ack but reaches the store a frame later.
+    saved.then(() => {
+      const stop = store.subscribe(() => {
+        stop()
+        settle()
+      })
+    }, settle)
+    return saved
+  }, [answered, send, store])
 
   const acceptWorkHandoff = useCallback(
     (handoffId: string, options: WorkAcceptanceOptions) =>
@@ -772,6 +802,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       addFolder,
       removeFolder,
       updateProject,
+      saveAgent,
       deleteProject,
       setChatOverride,
       listRepoFiles,
@@ -788,7 +819,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       listArtifacts,
       loadMoreArtifacts,
     }),
-    [acceptWorkHandoff, answerSecretRequest, answerUserInput, changeSessionAnswer, askCheckoutStatus, askProjectCheckout, clearCreatedChat, clearCreatedProject, closeDirs, confirmWorkGoal, acceptWorkResult, reviseWorkResult, retryWorkResult, approveMergeFix, createChat, addFolder, removeFolder, deleteProject, discardOutboundDraft, ignoreOutboundDraft, listWorkflowSuggestions, listArtifacts, getDmFiles, listDirs, listRepoFiles, listVault, loadMoreArtifacts, openChat, leaveChat, openSubagentThread, readOutboundThread, readRepoFile, readVaultFile, rejectWorkHandoff, search, restoreOutboundDraft, runRoutine, sendMessage, setChatOverride, setChatSettled, forget, snoozeOutboundDraft, stopBackground, stopSubagent, stopTurn, submitOutboundDraft, updateProject],
+    [acceptWorkHandoff, answerSecretRequest, answerUserInput, changeSessionAnswer, askCheckoutStatus, askProjectCheckout, clearCreatedChat, clearCreatedProject, closeDirs, confirmWorkGoal, acceptWorkResult, reviseWorkResult, retryWorkResult, approveMergeFix, createChat, addFolder, removeFolder, deleteProject, discardOutboundDraft, ignoreOutboundDraft, listWorkflowSuggestions, listArtifacts, getDmFiles, listDirs, listRepoFiles, listVault, loadMoreArtifacts, openChat, leaveChat, openSubagentThread, readOutboundThread, readRepoFile, readVaultFile, rejectWorkHandoff, search, restoreOutboundDraft, runRoutine, sendMessage, setChatOverride, setChatSettled, forget, snoozeOutboundDraft, stopBackground, stopSubagent, stopTurn, submitOutboundDraft, updateProject, saveAgent],
   )
 
   const data = useMemo<WorkspaceData>(

@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
-import { composioLogoUrl, type WorkflowSuggestion, type McpServerConfig, type SkillConfig } from '@manor/contracts'
+import { useEffect, useMemo, useState } from 'react'
+import { composioLogoUrl, type WorkflowSuggestion } from '@manor/contracts'
 import {
   ACTIVE,
   OCCURRENCE_BAR,
@@ -8,11 +8,9 @@ import {
   occurrenceCount,
   statusStamp,
 } from '@manor/client-runtime/suggestions'
-import BoxIcon from '@hugeicons/core-free-icons/BoxIcon'
 import CancelCircleIcon from '@hugeicons/core-free-icons/CancelCircleIcon'
 import Clock01Icon from '@hugeicons/core-free-icons/Clock01Icon'
 import Flag02Icon from '@hugeicons/core-free-icons/Flag02Icon'
-import PlugSocketIcon from '@hugeicons/core-free-icons/PlugSocketIcon'
 import Tick02Icon from '@hugeicons/core-free-icons/Tick02Icon'
 import ViewIcon from '@hugeicons/core-free-icons/ViewIcon'
 import { HugeiconsIcon, type IconSvgElement } from '@hugeicons/react-native'
@@ -22,11 +20,12 @@ import { ScrollView, StyleSheet, View } from 'react-native'
 import { ConnectGate } from '@/components/ConnectGate'
 import { appLabel } from '@/components/ConnectCards'
 import { EmptyCard } from '@/components/EmptyCard'
+import { byName, ConnectorRow, PluginRow, SkillRow } from '@/components/PluginRows'
 import { SectionScaffold } from '@/components/SectionScaffold'
 import { SegmentedControl } from '@/components/SegmentedControl'
 import { useWorkspace } from '@/providers/WorkspaceProvider'
 import { Text } from '@/components/Text'
-import { colors, fonts, radius, spacing, squircle } from '@/theme'
+import { colors, fonts, radius, spacing } from '@/theme'
 
 export default function PluginsScreen() {
   return <ConnectGate><SectionScaffold title="Plugins"><PluginsRoom /></SectionScaffold></ConnectGate>
@@ -64,9 +63,6 @@ function PluginsRoom() {
   )
 }
 
-const byName = (left: { name: string }, right: { name: string }) =>
-  left.name.localeCompare(right.name, undefined, { sensitivity: 'base' })
-
 /**
  * The Mac's own connectors, then the Composio apps connected on it, read from the
  * composio row the phone already has. Browsing and connecting stay on the Mac.
@@ -93,17 +89,6 @@ function Connectors() {
   )
 }
 
-function ConnectorRow({ server }: { server: McpServerConfig }) {
-  return (
-    <PluginRow
-      icon={PlugSocketIcon}
-      title={server.name}
-      chip={server.unavailable === undefined ? undefined : 'Unavailable'}
-      description={server.unavailable ?? (server.description || 'No description yet')}
-    />
-  )
-}
-
 function Skills() {
   const { workspace } = useWorkspace()
   const skills = useMemo(() => [...workspace.skills].sort(byName), [workspace.skills])
@@ -111,59 +96,6 @@ function Skills() {
     return <EmptyCard title="No skills yet" body="Import skills in Plugins on your Mac." />
   }
   return <View style={styles.rows}>{skills.map((skill) => <SkillRow key={skill.id} skill={skill} />)}</View>
-}
-
-function SkillRow({ skill }: { skill: SkillConfig }) {
-  return (
-    <PluginRow
-      icon={BoxIcon}
-      iconColor={colors.skill}
-      title={skill.name}
-      description={skill.description || 'No description yet'}
-      trailing={skill.usageCount === undefined ? undefined : (
-        <Text style={styles.meta}>{skill.usageCount} {skill.usageCount === 1 ? 'use' : 'uses'}</Text>
-      )}
-    />
-  )
-}
-
-/** One connector or skill at list depth: its glyph on a tile, the name, one fact under it. */
-function PluginRow({
-  icon,
-  mark,
-  iconColor = colors.muted,
-  title,
-  chip,
-  description,
-  trailing,
-}: {
-  icon?: IconSvgElement
-  /** A brand mark drawn on the tile instead of a glyph, such as a Composio app's logo. */
-  mark?: ReactNode
-  iconColor?: typeof colors.muted
-  title: string
-  /** A problem worth flagging beside the name, in the danger colour. */
-  chip?: string
-  description: string
-  trailing?: ReactNode
-}) {
-  return (
-    <View accessible style={styles.row}>
-      <View style={styles.tile}>
-        {mark ?? (icon === undefined ? null : <HugeiconsIcon color={iconColor} icon={icon} size={20} strokeWidth={1.7} />)}
-      </View>
-      <View style={styles.copy}>
-        <View style={styles.titleRow}>
-          <Text numberOfLines={1} style={styles.title}>{title}</Text>
-          {chip === undefined ? null : (
-            <Text style={styles.chip}>{chip}</Text>
-          )}
-        </View>
-        <Text numberOfLines={2} style={styles.description}>{description}</Text>
-      </View>
-      {trailing}
-    </View>
-  )
 }
 
 const GROUPS: readonly { key: string; label: string; icon: IconSvgElement; holds: (status: WorkflowSuggestion['status']) => boolean }[] = [
@@ -273,13 +205,9 @@ const styles = StyleSheet.create({
   head: { gap: spacing.md, paddingBottom: spacing.lg },
   intro: { color: colors.muted, fontFamily: fonts.sans, fontSize: 15, lineHeight: 21 },
   rows: { gap: spacing.xs, marginHorizontal: -spacing.sm },
-  row: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingHorizontal: spacing.sm, paddingVertical: spacing.sm },
   logo: { width: 22, height: 22 },
-  tile: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center', borderRadius: radius.sm, ...squircle, backgroundColor: colors.surface },
   copy: { flex: 1, minWidth: 0, gap: 2 },
-  titleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   title: { flexShrink: 1, color: colors.text, fontFamily: fonts.sans, fontSize: 16, fontWeight: '500' },
-  chip: { flexShrink: 0, color: colors.danger, fontFamily: fonts.sans, fontSize: 12 },
   description: { color: colors.muted, fontFamily: fonts.sans, fontSize: 13, lineHeight: 18 },
   meta: { color: colors.dim, fontFamily: fonts.sans, fontSize: 12, fontVariant: ['tabular-nums'] },
   groups: { gap: spacing.lg },

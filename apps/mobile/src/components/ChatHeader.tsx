@@ -3,6 +3,7 @@ import ArrowLeftRightIcon from '@hugeicons/core-free-icons/ArrowLeftRightIcon'
 import AtomicPowerIcon from '@hugeicons/core-free-icons/AtomicPowerIcon'
 import CheckmarkCircle02Icon from '@hugeicons/core-free-icons/CheckmarkCircle02Icon'
 import CheckListIcon from '@hugeicons/core-free-icons/CheckListIcon'
+import Files01Icon from '@hugeicons/core-free-icons/Files01Icon'
 import { projectIcon } from '@manor/client-runtime/project-icons'
 import { isHomeRoom, knownAgentIds, type SessionsDot } from '@manor/client-runtime/state'
 import { HugeiconsIcon } from '@hugeicons/react-native'
@@ -19,7 +20,6 @@ import { GlassPressable } from '@/components/GlassPressable'
 import { GlassGroup } from '@/components/GlassSurface'
 import { ProviderMark } from '@/components/ProviderMark'
 import { ProjectBadge } from '@/components/ProjectBadge'
-import { RoleBadge } from '@/components/RoleBadge'
 import { SessionsDotMark } from '@/components/SessionsDotMark'
 import { Text } from '@/components/Text'
 import { colors, fonts, spacing } from '@/theme'
@@ -36,8 +36,6 @@ interface ChatHeaderProps {
    * title, with no badge, since the badge would only repeat the name beside it.
    */
   projectThread?: boolean
-  /** A persona's role, beside her name. Only a DM has one identity to name this way. */
-  role?: string
   /** The provider behind the line under the title, as its mark: a DM's or a Single Session's, or nothing. */
   driver?: DriverName
   /** Who has a seat in the chat, most recent first. Empty until someone has spoken. */
@@ -60,6 +58,11 @@ interface ChatHeaderProps {
   onProject?: () => void
   /** Settles an open Session, as the Mac's Settle; absent for a settled chat and anything that is not a Session. */
   onSettle?: () => void
+  /**
+   * A DM's one persona. Her face, name and role sit in the middle and open her overview;
+   * her files sit on the right. Title, subtitle, role and driver are not drawn then.
+   */
+  dm?: { agent: AgentConfig; onOverview: () => void; onFiles: () => void }
 }
 
 /**
@@ -77,7 +80,7 @@ function sessionsLabel(dot: SessionsDot | null): string {
   return base
 }
 
-export function ChatHeader({ title, subtitle, project, projectThread = false, role, driver, agentIds: participants, agents, pair, onBack, onAgents, onSubagents, subagentsRunning = 0, onSessions, sessionsDot = null, onProject, onSettle }: ChatHeaderProps) {
+export function ChatHeader({ title, subtitle, project, projectThread = false, driver, agentIds: participants, agents, pair, onBack, onAgents, onSubagents, subagentsRunning = 0, onSessions, sessionsDot = null, onProject, onSettle, dm }: ChatHeaderProps) {
   // Only personas who still exist get a face; a room of deleted ones shows the bot mark.
   const agentIds = knownAgentIds(agents, participants)
   const threadMark = projectThread && project !== undefined ? project : undefined
@@ -128,6 +131,37 @@ export function ChatHeader({ title, subtitle, project, projectThread = false, ro
     )
   }
 
+  // A DM is one persona (2026-11-19): her face, name and role in the middle open her
+  // overview, and her files sit on the right. The model stays on the composer's chip.
+  if (dm !== undefined) {
+    const { agent } = dm
+    return (
+      <View pointerEvents="box-none" style={styles.host}>
+        <EdgeScrim edge="top" height={insets.top + CHAT_HEADER_HEIGHT + 28} />
+        <View pointerEvents="box-none" style={[styles.row, { paddingTop: insets.top + 6 }]}>
+          <GlassIconButton accessibilityLabel="Back" icon={ArrowLeft01Icon} onPress={onBack} />
+          <View pointerEvents="box-none" style={styles.centre}>
+            <GlassPressable
+              accessibilityLabel={agent.role === '' ? `${agent.name}, overview` : `${agent.name}, ${agent.role}, overview`}
+              fallbackStyle={styles.floatingFallback}
+              hitSlop={6}
+              onPress={dm.onOverview}
+              radius={22}
+              style={styles.pill}
+            >
+              <View style={styles.agentPill}>
+                <Blobatar color={agent.color} name={agent.name} shape={agent.avatarShape} tone={agent.avatarTone} size={28} src={agent.avatar} />
+                <Text numberOfLines={1} style={styles.pillName}>{agent.name}</Text>
+                {agent.role === '' ? null : <Text numberOfLines={1} style={styles.pillRole}>{agent.role}</Text>}
+              </View>
+            </GlassPressable>
+          </View>
+          <GlassIconButton accessibilityLabel="Files" icon={Files01Icon} onPress={dm.onFiles} />
+        </View>
+      </View>
+    )
+  }
+
   return (
     <View pointerEvents="box-none" style={styles.host}>
       <EdgeScrim edge="top" height={insets.top + CHAT_HEADER_HEIGHT + 28} />
@@ -144,7 +178,6 @@ export function ChatHeader({ title, subtitle, project, projectThread = false, ro
               </View>
             ))}
             {project === undefined ? null : <ProjectBadge name={project.name} icon={project.icon} color={project.color} noProject={isHomeRoom(project.id)} style={styles.projectBadge} />}
-            {role === undefined ? null : <RoleBadge label={role} />}
           </View>
           <View style={styles.under}>
             {driver === undefined ? null : <ProviderMark driver={driver} size={12} />}
@@ -211,4 +244,7 @@ const styles = StyleSheet.create({
   centre: { flex: 1, minWidth: 0, alignItems: 'center' },
   projectPill: { height: 44, maxWidth: '100%', flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingHorizontal: spacing.lg },
   pillName: { flexShrink: 1, color: colors.text, fontFamily: fonts.sansMedium, fontSize: 16, letterSpacing: -0.2 },
+  // Name and role as two elements, the role muted: the design system joins no labels with a dot.
+  agentPill: { height: 44, maxWidth: '100%', flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingLeft: spacing.sm, paddingRight: spacing.lg },
+  pillRole: { flexShrink: 2, color: colors.muted, fontFamily: fonts.sans, fontSize: 15, letterSpacing: -0.2 },
 })

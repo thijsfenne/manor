@@ -48,6 +48,9 @@ export default function TabStack({ segment }: { segment: string }) {
         <Stack.Screen name="sessions/[threadId]" options={{ gestureEnabled: true }} />
         {/* A DM's Files, one step behind the chat; back lands on the chat. */}
         <Stack.Screen name="files/[chatId]" options={{ gestureEnabled: true }} />
+        {/* A DM's agent overview and its read-only lists, behind the chat. */}
+        <Stack.Screen name="agent/[chatId]/index" options={{ gestureEnabled: true }} />
+        <Stack.Screen name="agent/[chatId]/[list]" options={{ gestureEnabled: true }} />
       </Stack>
     </SafeAreaProvider>
   )

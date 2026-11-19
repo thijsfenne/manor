@@ -1269,7 +1269,9 @@ const roster = {
       model: 'claude-opus-4-6',
       effort: 'high',
       allowedTools: [],
-      mcpServers: [],
+      // One skill and one connector, so the overview's read-only lists have a row each.
+      mcpServers: [{ serverId: 'mcp-linear', disabledTools: [] }],
+      skillIds: ['humanizer'],
       memoryScope: false,
       description: 'Receives un-mentioned messages in the fixture.',
       role: 'Chief of staff',
@@ -1844,6 +1846,24 @@ server.on('connection', (socket) => {
       }
       send(socket, project === undefined
         ? { type: 'notice', kind: 'error', text: 'That project no longer exists.', requestId: message.requestId }
+        : { type: 'ack', requestId: message.requestId })
+      return
+    }
+    // The agent overview renames an agent or changes her title: store, broadcast the roster, ack.
+    if (message.type === 'save_agent' && message.agent.id !== undefined) {
+      const agent = roster.agents.find((candidate) => candidate.id === message.agent.id)
+      // The server refuses a name another agent already has; the fixture does too, so a refusal can be driven.
+      const taken = roster.agents.some((candidate) => candidate.id !== message.agent.id && candidate.name.toLowerCase() === message.agent.name.trim().toLowerCase())
+      if (taken) {
+        send(socket, { type: 'notice', kind: 'error', text: `Another agent is already called ${message.agent.name}.`, requestId: message.requestId })
+        return
+      }
+      if (agent !== undefined) {
+        Object.assign(agent, message.agent)
+        broadcast(roster)
+      }
+      send(socket, agent === undefined
+        ? { type: 'notice', kind: 'error', text: 'That agent no longer exists.', requestId: message.requestId }
         : { type: 'ack', requestId: message.requestId })
       return
     }

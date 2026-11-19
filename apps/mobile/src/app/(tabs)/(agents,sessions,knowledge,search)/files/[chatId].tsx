@@ -1,5 +1,5 @@
 /*
- * THESIS: A DM's Files is the Mac's library for that agent, one step behind the chat, with the viewer for the quick look.
+ * THESIS: A DM's Files is the Mac's library for that agent, behind the chat or its agent overview, with the viewer for the quick look.
  * FIRST VIEWPORT: Back to the chat, the title Files, the All / Media / Files chips and this week's rows.
  */
 import ArrowLeft01Icon from '@hugeicons/core-free-icons/ArrowLeft01Icon'
@@ -53,7 +53,8 @@ function DmFiles() {
         files={workspace.dmFiles[chatId]}
         onShowInChat={(eventId) => {
           leaveEventReveal(chatId, eventId)
-          back()
+          // Opened from the agent's overview too, so go to the chat itself rather than one step back.
+          router.dismissTo({ pathname: '/chat/[id]', params: { id: chatId } })
         }}
       />
     </SafeAreaView>
