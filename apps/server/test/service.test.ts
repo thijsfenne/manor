@@ -1764,7 +1764,7 @@ describe('ManorService, picking a folder while creating a project', () => {
     expect(thread?.model).toBeDefined()
     expect(off).not.toContain(thread?.model)
 
-    await manor.handle(ClientMessageSchema.parse(createChatMessage({ kind: 'browser', mode: 'single' })), reply)
+    await manor.handle(ClientMessageSchema.parse(createChatMessage({ kind: 'browser' })), reply)
     const created = replies.filter((message) => message.type === 'chat_created').at(-1)
     const browser = (await store.loadChatOverrides(created?.type === 'chat_created' ? created.chatId : '')).__single__
     expect(browser?.model).toBeDefined()
