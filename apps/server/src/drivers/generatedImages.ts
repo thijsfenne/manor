@@ -37,7 +37,9 @@ interface Candidate {
   mtimeMs: number
 }
 
-async function candidatesUnder(root: string, sinceMs: number): Promise<Candidate[]> {
+// A folder below a root that holds `.git` is a checkout: a clone writes every picture in
+// it fresh, and the agent only reads them, so none of it is a picture the agent made.
+async function candidatesUnder(root: string, sinceMs: number, nested = false): Promise<Candidate[]> {
   const rootMetadata = await stat(root).catch(() => undefined)
   if (rootMetadata?.isFile() === true) {
     return MIME_TYPES[path.extname(root).toLowerCase()] !== undefined && rootMetadata.mtimeMs >= sinceMs - 1_000
@@ -45,13 +47,14 @@ async function candidatesUnder(root: string, sinceMs: number): Promise<Candidate
       : []
   }
   const entries = await readdir(root, { withFileTypes: true }).catch(() => [])
+  if (nested && entries.some((entry) => entry.name === '.git')) return []
   const candidates: Candidate[] = []
 
   for (const entry of entries) {
     if (entry.isDirectory() && SKIPPED_DIRECTORIES.has(entry.name)) continue
     const target = path.join(root, entry.name)
     if (entry.isDirectory()) {
-      candidates.push(...(await candidatesUnder(target, sinceMs)))
+      candidates.push(...(await candidatesUnder(target, sinceMs, true)))
       continue
     }
     if (!entry.isFile() || MIME_TYPES[path.extname(entry.name).toLowerCase()] === undefined) continue

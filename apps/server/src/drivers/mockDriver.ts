@@ -7,6 +7,7 @@ import { promisify } from 'node:util'
 import { AsyncQueue } from '../asyncQueue.js'
 import { scrubCredentialText } from '../store.js'
 import { describeCommand } from './commands.js'
+import { collectGeneratedImages } from './generatedImages.js'
 import { errorLine } from './toolActivity.js'
 import { memoryRoot, resolveMemoryTarget } from '../memoryTarget.js'
 import { parseOutboundDraftIntent } from '../outboundDraftIntent.js'
@@ -317,6 +318,9 @@ const MOCK_RESULT_FILE = 'mock-result.md'
 const MOCK_CODE_FILE = 'mock-result.ts'
 /** The UI file "mock ui edit" writes, which only a screenshot proves where the project has a verify skill. */
 const MOCK_UI_FILE = 'MockResult.tsx'
+
+/** A 16 by 16 blue PNG, the picture "mock clone images" writes. */
+const MOCK_PICTURE = 'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAIAAACQkWg2AAAAFklEQVR42mOI6rlDEmIY1TCqYfhqAAC5YMIQMPZlbQAAAABJRU5ErkJggg=='
 
 async function mockGit(cwd: string, args: string[]): Promise<void> {
   const env: NodeJS.ProcessEnv = { ...process.env }
@@ -1360,6 +1364,44 @@ export function createMockDriver(options: MockDriverOptions = {}): Driver {
             }
           }
           const answer = 'Checked the screenshots.'
+          queue.push({ type: 'message', messageId, text: answer })
+          queue.push({
+            type: 'result',
+            text: answer,
+            usage: { inputTokens: 120, outputTokens: 8, costUsd: 0.0012 },
+            ...(agent.model === undefined ? {} : { reportedModel: agent.model }),
+            sessionId: sessionIdFor(input),
+          })
+          queue.close()
+          return
+        }
+        // "mock clone images" clones a repo into the working folder, reads one of its
+        // pictures, saves a screenshot of its own and then collects the turn's pictures the
+        // way the real drivers do, so the spike shows which of the two reach the chat.
+        if (/\bmock clone images\b/i.test(lastUserLine(input))) {
+          const startedAt = Date.now()
+          const picture = Buffer.from(MOCK_PICTURE, 'base64')
+          const art = path.join(input.cwd, 'repos', 'site', 'content-art', 'card')
+          const cloned = path.join(art, 'best-ai-agent-apps.webp')
+          const shot = path.join(input.cwd, 'screenshot.png')
+          await mkdir(path.join(input.cwd, 'repos', 'site', '.git'), { recursive: true })
+          await mkdir(art, { recursive: true })
+          await writeFile(cloned, picture)
+          await writeFile(shot, picture)
+          const at = `${input.threadId}-${Date.now()}`
+          const steps: Extract<RuntimeEvent, { type: 'tool_use' }>[] = [
+            { type: 'tool_use', toolCallId: `clone-${at}-git`, ...describeCommand('git clone https://example.invalid/site.git repos/site', undefined, 'Clone the repo') },
+            { type: 'tool_use', toolCallId: `clone-${at}-read`, tool: 'Read', detail: cloned, targets: [cloned] },
+            { type: 'tool_use', toolCallId: `clone-${at}-shot`, ...describeCommand('node shoot.mjs screenshot.png', undefined, 'Capture a screenshot') },
+          ]
+          for (const use of steps) {
+            if (stopped) return
+            queue.push(use)
+            await sleep(delay)
+            queue.push({ type: 'tool_result', toolCallId: use.toolCallId!, outcome: 'success' })
+          }
+          for (const image of await collectGeneratedImages([input.cwd], startedAt)) queue.push({ type: 'attachment', image })
+          const answer = 'Looked through the repo and took a screenshot.'
           queue.push({ type: 'message', messageId, text: answer })
           queue.push({
             type: 'result',

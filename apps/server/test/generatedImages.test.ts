@@ -46,4 +46,20 @@ describe('collectGeneratedImages', () => {
 
     expect(images).toEqual([])
   })
+
+  it('ignores pictures in a checkout cloned under the working folder, but keeps a screenshot the agent wrote', async () => {
+    const root = mkdtempSync(path.join(os.tmpdir(), 'manor-generated-images-'))
+    const startedAt = Date.now()
+    const art = path.join(root, 'repos', 'site', 'content-art', 'card')
+    await mkdir(art, { recursive: true })
+    await mkdir(path.join(root, 'repos', 'site', '.git'), { recursive: true })
+    await writeFile(path.join(art, 'best-ai-agent-apps.webp'), Buffer.from('cloned'))
+    await writeFile(path.join(root, 'screenshot.png'), Buffer.from('captured'))
+
+    const images = await collectGeneratedImages([root], startedAt)
+
+    expect(images).toEqual([
+      { name: 'screenshot.png', dataUrl: `data:image/png;base64,${Buffer.from('captured').toString('base64')}` },
+    ])
+  })
 })
