@@ -65,7 +65,7 @@ export function PermissionsPage({ bridge }: { bridge: DesktopPermissionsBridge |
   }
 
   return (
-    <SettingsPage title="Permissions" description="What macOS lets Manor do when you lend an agent the Mac.">
+    <SettingsPage title="Permissions">
       <SettingsGroup title="Computer use">
         {ROWS.map(({ id, label, description }) => {
           const state = status?.[id]

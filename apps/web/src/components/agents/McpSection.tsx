@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Alert01Icon } from '@hugeicons/core-free-icons'
+import { Alert01Icon, ArrowDown01Icon } from '@hugeicons/core-free-icons'
 import type { AgentDraft, McpServerConfig } from '@manor/contracts'
 import { attachmentOf, setExcludedTools, toggleAttachment, toggleExcludedTool } from '../../mcp'
 import { Icon } from '../Icon'
@@ -72,11 +72,12 @@ export function McpSection({ draft, registry, onChange }: McpSectionProps) {
                   {held && server.tools.length > 0 ? (
                     <button
                       type="button"
-                      className="mt-0.5 w-fit cursor-pointer border-0 bg-transparent p-0 text-left text-meta text-dim underline decoration-dotted underline-offset-2 hover:text-muted [font:inherit]"
+                      className="mt-0.5 inline-flex w-fit cursor-pointer items-center gap-1 border-0 bg-transparent p-0 text-left text-meta text-dim underline decoration-dotted underline-offset-2 hover:text-muted [font:inherit]"
+                      aria-expanded={open}
                       onClick={() => setExpanded(open ? null : server.id)}
                     >
                       {excluded === 0 ? 'All tools' : `${excluded} excluded`}
-                      {open ? ' — hide' : ' — change'}
+                      <Icon icon={ArrowDown01Icon} size={12} className={`flex-none transition-transform duration-200 ${open ? 'rotate-180' : ''}`} />
                     </button>
                   ) : null}
                 </div>

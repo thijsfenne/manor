@@ -1158,11 +1158,6 @@ export function Composer({ agents, commandContext, household, overrides = NO_OVE
         contentClassName="m-0 list-none"
         role="listbox"
       >
-        {completion?.kind === 'skill' || completion?.kind === 'image' ? (
-          <li className="px-[9px] pt-1.5 pb-1 text-meta font-semibold tracking-[0.08em] text-dim uppercase">
-            {completion.kind === 'skill' ? 'Skills' : 'Images'}
-          </li>
-        ) : null}
         {completion?.kind === 'skill' && matches.length === 0 ? (
           <li className="px-[9px] py-3 text-[12px] leading-relaxed text-dim">
             {skills.length === 0
