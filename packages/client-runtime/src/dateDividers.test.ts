@@ -12,10 +12,10 @@ const reply = (key: string, startedAt: number, patch: Partial<TurnRow> = {}): Tu
   kind: 'turn', key, turnId: key, agentId: 'smith', asks: [], drafts: [], activities: [], timeline: [], segments: [],
   answer: [], tail: [{ kind: 'reply', key: `${key}:r`, text: 'Hello', images: [], quoteSources: [] }], startedAt, ...patch,
 })
-const relay = (key: string, ts: number): Row => ({
+const relay = (key: string, ts: number, phase: 'sent' | 'received' = 'sent'): Row => ({
   kind: 'event', key, event: {
     id: key, ts, type: 'agent_relay', agentId: 'smith', peerAgentId: 'post',
-    pairChatId: 'pair_post', turnId: 't', relayId: key, phase: 'sent',
+    pairChatId: 'pair_post', turnId: 't', relayId: key, phase,
   },
 })
 const note = (key: string, ts: number): Row => ({
@@ -40,6 +40,11 @@ describe('date dividers', () => {
     expect(dateDividers(rows, 'gaps', now)).toEqual(['Today 10:00', undefined, 'Today 11:10'])
     const close = [user('u1', at(17, 10, 0)), relay('relay', at(17, 11, 30)), reply('t1', at(17, 10, 40))]
     expect(dateDividers(close, 'gaps', now)).toEqual(['Today 10:00', undefined, undefined])
+  })
+
+  it('puts the time above an incoming relay line that introduces the reply under it', () => {
+    expect(dateDividers([user('u1', at(17, 8, 0)), relay('from', at(17, 11, 0), 'received'), reply('t1', at(17, 11, 1))], 'gaps', now))
+      .toEqual(['Today 08:00', 'Today 11:01', undefined])
   })
 
   it('marks a day change above the first bubble of the new day, never above a line before it', () => {

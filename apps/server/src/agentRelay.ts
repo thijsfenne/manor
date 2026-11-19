@@ -8,12 +8,20 @@ export { DEFAULT_RELAY_DEPTH, DEFAULT_RELAY_CAP } from './config.js'
 import { DEFAULT_RELAY_CAP, DEFAULT_RELAY_DEPTH } from './config.js'
 export const AGENT_RELAY_OUTBOUND_MAX = 8_000
 export const AGENT_RELAY_INBOUND_MAX = 12_000
+/** A routine handing the same words to the same agent again within this window is refused. */
+export const AGENT_HANDOFF_REPEAT_MS = 14 * 24 * 60 * 60 * 1000
 
 export interface RelayTurnContext {
   originChatId: string
   originTurnId: string
   depth: number
+  /** The persona who sent this turn here; the synchronous return path replaces a callback. */
   parentAgentId?: string
+  /**
+   * A routine's one-way handoff: the message lands in the pair chat and the receiver
+   * takes it up in its own DM. No reply comes back, so the routine run keeps going.
+   */
+  handoff?: true
 }
 
 interface RelayRunInput {
@@ -31,8 +39,15 @@ interface RelayRunInput {
 interface RelayRuntime {
   isActiveTurn(chatId: string, agentId: string, turnId: string): boolean
   append(chatId: string, draft: DraftEvent): Promise<void>
+  /**
+   * Appends behind whatever turn the chat runs, so a handoff never lands inside a
+   * consultation; false when `live` says the sender was stopped while it waited.
+   */
+  appendInTurnOrder(chatId: string, draft: DraftEvent, live: () => boolean): Promise<boolean>
   run(input: RelayRunInput): Promise<TurnResult>
   synthesize(input: RelaySynthesisInput): Promise<void>
+  /** Starts the receiver's own DM turn on a handoff; never awaited by the sender. */
+  takeUp(input: { targetDm: Chat; target: AgentConfig }): void
   stopTurn(turnId: string): void
   broadcastDirectory(): Promise<void>
 }
@@ -59,7 +74,7 @@ interface PendingRelay {
   childTurnId?: string
 }
 
-type RelayStore = Pick<Store, 'getChat' | 'createChat' | 'pairChatFor'>
+type RelayStore = Pick<Store, 'getChat' | 'createChat' | 'pairChatFor' | 'loadEvents'>
 
 type AgentRelayMarker = Extract<ThreadEvent, { type: 'agent_relay' }>
 
@@ -200,6 +215,17 @@ export class AgentRelay {
         throw new Error('This turn can no longer message another agent.')
       }
       const relayId = `relay_${randomUUID()}`
+      if (relay.handoff === true) {
+        try {
+          await this.refuseRepeat(pairChat.id, asker.id, target.name, text)
+        } catch (error: unknown) {
+          held.turns -= 1
+          held.pairs.delete(key)
+          throw error
+        }
+        if (pending.cancelled) throw new Error('This turn can no longer message another agent.')
+        return await this.handOff({ context, relay, pairChat, asker, target, text, relayId, live: () => !pending.cancelled })
+      }
       const complete = async (): Promise<string> => {
         let outcome: TurnResult
         try {
@@ -329,6 +355,56 @@ export class AgentRelay {
     }
   }
 
+  /**
+   * A routine run that sends what it already sent is a schedule repeating itself, not
+   * news: the same words to the same agent within the window are refused, so the
+   * receiver is not woken again and the pair chat does not fill with copies.
+   */
+  private async refuseRepeat(pairChatId: string, askerId: string, targetName: string, text: string): Promise<void> {
+    const since = Date.now() - AGENT_HANDOFF_REPEAT_MS
+    const words = sameWords(text)
+    const earlier = (await this.options.store.loadEvents(pairChatId)).find((event) =>
+      event.type === 'user_message' && event.source === 'agent_relay' && event.authorAgentId === askerId &&
+      event.ts >= since && sameWords(event.text) === words)
+    if (earlier !== undefined) {
+      throw new Error(`You already sent ${targetName} this message on ${new Date(earlier.ts).toISOString().slice(0, 10)}, so it was not sent again.`)
+    }
+  }
+
+  /** Delivers a routine's one-way message and wakes the receiver in its own DM. */
+  private async handOff(input: {
+    context: UserInputContext
+    relay: RelayTurnContext
+    pairChat: Chat
+    asker: AgentConfig
+    target: AgentConfig
+    text: string
+    relayId: string
+    live: () => boolean
+  }): Promise<string> {
+    const { context, relay, pairChat, asker, target, relayId } = input
+    const delivered = await this.options.runtime.appendInTurnOrder(pairChat.id, {
+      type: 'user_message',
+      text: input.text,
+      mentions: [],
+      source: 'agent_relay',
+      authorAgentId: asker.id,
+      originChatId: relay.originChatId,
+      originTurnId: relay.originTurnId,
+      relayId,
+      relayDepth: 1,
+    }, input.live)
+    if (!delivered) throw new Error('This turn can no longer message another agent.')
+    // Read after the wait: the receiver's DM may have been deleted while a consultation ran.
+    const targetDm = await this.options.store.createChat({ kind: 'dm', memberIds: [target.id], title: target.name })
+    await this.options.runtime.broadcastDirectory()
+    const marker = { type: 'agent_relay' as const, pairChatId: pairChat.id, turnId: context.turnId, relayId, handoff: true as const }
+    await this.options.runtime.append(context.chatId, { ...marker, agentId: asker.id, peerAgentId: target.id, phase: 'sent' })
+    await this.options.runtime.append(targetDm.id, { ...marker, agentId: target.id, peerAgentId: asker.id, phase: 'received' })
+    this.options.runtime.takeUp({ targetDm, target })
+    return `Passed to ${target.name}. ${target.name} takes it up in their own chat with the user; no reply comes back to you. Continue your run, and say in your report that you passed this to ${target.name}.`
+  }
+
   /** Explicitly stopping an asker also stops every receiver it started. */
   stopFrom(turnId: string): void {
     for (const pending of this.pending.get(turnId) ?? []) {
@@ -387,6 +463,8 @@ function resolveTarget(agents: readonly AgentConfig[], value: string): AgentConf
   const named = agents.filter((agent) => agent.name.toLocaleLowerCase() === needle)
   return named.length === 1 ? named[0] : undefined
 }
+
+const sameWords = (text: string): string => text.trim().replace(/\s+/g, ' ').toLocaleLowerCase()
 
 function preview(text: string): string {
   return text.split(/\r?\n/, 1)[0]?.trim().slice(0, 240) ?? ''

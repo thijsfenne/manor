@@ -1139,7 +1139,7 @@ describe('composeHouseholdBlock', () => {
   it('keeps nested pair consultation synchronous', () => {
     const block = composeHouseholdBlock(specialist, [specialist, cos], {
       reachableAgentIds: ['marlow'],
-      returnsAsync: false,
+      mode: 'sync',
     })
 
     expect(block).toContain('Wait for message_agent')

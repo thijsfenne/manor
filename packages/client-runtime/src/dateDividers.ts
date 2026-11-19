@@ -67,7 +67,7 @@ export function dateDividers(rows: readonly Row[], mode: DateDividerMode, now = 
   if (mode === 'off') return rows.map(() => undefined)
   const today = new Date(now)
   let previous: Date | undefined
-  return rows.map((row) => {
+  const labels = rows.map((row) => {
     const timestamp = messageTime(row, mode, now)
     if (timestamp === undefined) return undefined
     const at = new Date(timestamp)
@@ -77,4 +77,14 @@ export function dateDividers(rows: readonly Row[], mode: DateDividerMode, now = 
     if (mode === 'days') return newDay ? DAY.format(at) : undefined
     return due ? stampLabel(at, today) : undefined
   })
+  // An incoming relay line introduces the message under it, so the time stands above both.
+  for (let index = 1; index < labels.length; index += 1) {
+    if (labels[index] === undefined) continue
+    let top = index
+    while (top > 0 && labels[top - 1] === undefined && isIncomingRelay(rows[top - 1]!)) top -= 1
+    if (top !== index) [labels[top], labels[index]] = [labels[index], undefined]
+  }
+  return labels
 }
+
+const isIncomingRelay = (row: Row): boolean => row.kind === 'event' && row.event.type === 'agent_relay' && row.event.phase === 'received'

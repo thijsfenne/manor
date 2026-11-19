@@ -1,5 +1,6 @@
 import { randomBytes } from 'node:crypto'
 import { rekeyEntry, type RekeyResult } from './capabilityRekey.js'
+import type { RelayTurnContext } from './agentRelay.js'
 
 export const USER_INPUT_CALL_LIMIT = 4
 export const OUTBOUND_DRAFT_CALL_LIMIT = 50
@@ -22,13 +23,7 @@ export interface UserInputContext {
   mayWriteInstructions?: true
   /** Only a memory-off persona's attended turn: `offer_instructions_line`, a suggestion the user may take. */
   mayOfferInstructions?: true
-  relay?: {
-    originChatId: string
-    originTurnId: string
-    depth: number
-    /** The persona who sent this turn here; the synchronous return path replaces a callback. */
-    parentAgentId?: string
-  }
+  relay?: RelayTurnContext
 }
 
 interface Capability extends UserInputContext {

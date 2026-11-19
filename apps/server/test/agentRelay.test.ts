@@ -21,7 +21,7 @@ import type { TurnResult } from '../src/turnRunner.js'
 import { createMemoryStore } from '../src/stores/memoryStore.js'
 import { AsyncQueue } from '../src/asyncQueue.js'
 import { contextWindowFor } from '@manor/contracts'
-import { renderCatchUpEvents, SESSION_CONTEXT_FRACTION } from '../src/composer.js'
+import { DM_ROUTINE_PUBLISH_MARKER, renderCatchUpEvents, SESSION_CONTEXT_FRACTION } from '../src/composer.js'
 import { closeTerminalTurn } from '../src/agentRelayLifecycle.js'
 import { createTurnContext } from '../src/turnContext.js'
 import { gated, marlow, sage, scratchFor, scripted, smith, until } from './helpers.js'
@@ -58,6 +58,7 @@ async function relayHarness(options: {
   const stopTurn = vi.fn()
   const broadcastDirectory = vi.fn().mockResolvedValue(undefined)
   const synthesize = vi.fn().mockResolvedValue(undefined)
+  const takeUp = vi.fn()
   const run = options.run ?? (async (input) => {
     await input.onMessageStored()
     input.onTurnStarted('child-turn')
@@ -69,15 +70,17 @@ async function relayHarness(options: {
     runtime: {
       isActiveTurn: () => true,
       append: (chatId, draft) => store.appendEvent(chatId, draft).then(() => undefined),
+      appendInTurnOrder: (chatId, draft, live) => live() ? store.appendEvent(chatId, draft).then(() => true) : Promise.resolve(false),
       run,
       synthesize,
+      takeUp,
       stopTurn,
       broadcastDirectory,
     },
     ...(options.maxDepth === undefined ? {} : { maxDepth: options.maxDepth }),
     ...(options.maxTurns === undefined ? {} : { maxTurns: options.maxTurns }),
   })
-  return { relay, store, dm, stopTurn, synthesize, broadcastDirectory }
+  return { relay, store, dm, stopTurn, synthesize, takeUp, broadcastDirectory }
 }
 
 interface ControlledTurn {
@@ -159,6 +162,83 @@ describe('AgentRelay', () => {
       { phase: 'received', agentId: 'sage', peerAgentId: 'marlow', pairChatId: pair?.id },
       { phase: 'sent', agentId: 'sage', peerAgentId: 'marlow', pairChatId: pair?.id },
     ])
+  })
+
+  it('hands a routine message off one way and lets the receiver take it up in its own DM', async () => {
+    const run = vi.fn<NonNullable<Parameters<typeof relayHarness>[0]>['run'] & object>()
+    const { relay, store, dm, synthesize, takeUp } = await relayHarness({ run })
+    const routine = (turnId: string): UserInputContext => ({
+      chatId: dm.id, agentId: 'marlow', turnId, canApprove: false,
+      relay: { originChatId: dm.id, originTurnId: turnId, depth: 0, handoff: true },
+    })
+
+    await expect(relay.request(routine('run-1'), 'Sage', 'Northwind confirmed the interview for Friday.'))
+      .resolves.toContain('no reply comes back')
+    const pair = await store.pairChatFor('marlow', 'sage')
+    const targetDm = (await store.listChats()).find((chat) => chat.kind === 'dm' && chat.memberIds[0] === 'sage')
+
+    expect(run).not.toHaveBeenCalled()
+    expect(synthesize).not.toHaveBeenCalled()
+    expect(takeUp).toHaveBeenCalledOnce()
+    expect(takeUp.mock.calls[0]?.[0]).toMatchObject({ targetDm: { id: targetDm?.id }, target: { id: 'sage' } })
+    expect(await store.loadEvents(pair.id)).toMatchObject([
+      { type: 'user_message', source: 'agent_relay', authorAgentId: 'marlow', text: 'Northwind confirmed the interview for Friday.' },
+    ])
+    const sent = (await store.loadEvents(dm.id)).filter((event) => event.type === 'agent_relay')
+    expect(sent).toMatchObject([{ phase: 'sent', peerAgentId: 'sage', turnId: 'run-1', handoff: true }])
+    expect(sent[0]).not.toHaveProperty('preview')
+    expect((await store.loadEvents(targetDm?.id ?? '')).filter((event) => event.type === 'agent_relay')).toMatchObject([
+      { phase: 'received', agentId: 'sage', peerAgentId: 'marlow', handoff: true },
+    ])
+
+    // The next fire of the same schedule finding the same mail is refused, and nobody is woken.
+    await expect(relay.request(routine('run-2'), 'Sage', '  Northwind confirmed the interview\nfor Friday. '))
+      .rejects.toThrow('already sent Sage this message')
+    expect(takeUp).toHaveBeenCalledOnce()
+    // The refusal spends no budget: that run can still pass on something new.
+    await expect(relay.request(routine('run-2'), 'Sage', 'Acme replied about the studio role.')).resolves.toContain('Passed to Sage')
+    expect(takeUp).toHaveBeenCalledTimes(2)
+  })
+
+  it('drops a handoff whose routine was stopped while it waited behind a pair consultation', async () => {
+    const store = createMemoryStore({ agents })
+    const dm = await store.createChat({ kind: 'dm', memberIds: ['marlow'], title: 'Marlow' })
+    let releasePair: (() => void) | undefined
+    const pairBusy = new Promise<void>((resolve) => { releasePair = resolve })
+    let waiting = false
+    const takeUp = vi.fn()
+    const relay = new AgentRelay({
+      store,
+      agents: () => agents,
+      runtime: {
+        isActiveTurn: () => true,
+        append: (chatId, draft) => store.appendEvent(chatId, draft).then(() => undefined),
+        appendInTurnOrder: async (chatId, draft, live) => {
+          waiting = true
+          await pairBusy
+          if (!live()) return false
+          await store.appendEvent(chatId, draft)
+          return true
+        },
+        run: vi.fn(),
+        synthesize: () => Promise.resolve(),
+        takeUp,
+        stopTurn: vi.fn(),
+        broadcastDirectory: () => Promise.resolve(),
+      },
+    })
+    const sent = relay.request({
+      chatId: dm.id, agentId: 'marlow', turnId: 'run-1', canApprove: false,
+      relay: { originChatId: dm.id, originTurnId: 'run-1', depth: 0, handoff: true },
+    }, 'Sage', 'Northwind confirmed the interview for Friday.')
+    await until(() => waiting, 'the handoff to wait on the pair chat')
+    relay.stopFrom('run-1')
+    releasePair?.()
+
+    await expect(sent).rejects.toThrow('can no longer message another agent')
+    expect(await store.loadEvents((await store.pairChatFor('marlow', 'sage')).id)).toEqual([])
+    expect((await store.loadEvents(dm.id)).some((event) => event.type === 'agent_relay')).toBe(false)
+    expect(takeUp).not.toHaveBeenCalled()
   })
 
   it('enforces the depth, callback and repeated-pair guards', async () => {
@@ -320,13 +400,16 @@ describe('AgentRelay', () => {
         },
         createChat: (draft) => store.createChat(draft),
         pairChatFor: (first, second) => store.pairChatFor(first, second),
+        loadEvents: (chatId) => store.loadEvents(chatId),
       },
       agents: () => agents,
       runtime: {
         isActiveTurn: () => active,
         append: (chatId, draft) => store.appendEvent(chatId, draft).then(() => undefined),
+        appendInTurnOrder: (chatId, draft, live) => live() ? store.appendEvent(chatId, draft).then(() => true) : Promise.resolve(false),
         run,
         synthesize: () => Promise.resolve(),
+        takeUp: vi.fn(),
         stopTurn: vi.fn(),
         broadcastDirectory: () => Promise.resolve(),
       },
@@ -363,16 +446,19 @@ describe('AgentRelay', () => {
         },
         createChat: (draft) => store.createChat(draft),
         pairChatFor: (first, second) => store.pairChatFor(first, second),
+        loadEvents: (chatId) => store.loadEvents(chatId),
       },
       agents: () => agents,
       runtime: {
         isActiveTurn: () => active,
         append: (chatId, draft) => store.appendEvent(chatId, draft).then(() => undefined),
+        appendInTurnOrder: (chatId, draft, live) => live() ? store.appendEvent(chatId, draft).then(() => true) : Promise.resolve(false),
         run: async (input) => {
           await input.onMessageStored()
           return new Promise<TurnResult>((resolve) => { releases.push(resolve) })
         },
         synthesize: () => Promise.resolve(),
+        takeUp: vi.fn(),
         stopTurn: vi.fn(),
         broadcastDirectory: () => Promise.resolve(),
       },
@@ -632,6 +718,101 @@ describe('agent relay orchestration', () => {
     expect(gate.forChat(dm.id)[0]?.input.agent.character).toContain('reachable names: Sage, Smith')
     expect(permissions).toContainEqual({ agentId: 'sage', canApprove: false, allowRelay: true })
     expect(connectorCapabilities).toContainEqual({ agentId: 'sage', readOnly: true })
+  })
+
+  it('lets a DM routine hand off without ending its run, and wakes the receiver unattended in its own DM', async () => {
+    const routines = controlledDriver()
+    const receiver = gated(() => 'Sage will prepare the interview.')
+    const store = createMemoryStore({ agents })
+    const dm = await store.createChat({ kind: 'dm', memberIds: ['marlow'], title: 'Marlow' })
+    const smithDm = await store.createChat({ kind: 'dm', memberIds: ['smith'], title: 'Smith' })
+    const sageDm = await store.createChat({ kind: 'dm', memberIds: ['sage'], title: 'Sage' })
+    const granted = new Map<string, { canApprove: boolean; allowRelay: boolean; relay?: RelayTurnContext }>()
+    const readOnly = new Map<string, boolean>()
+    const attachment: AttachedMcpServer = {
+      server: {
+        id: 'test-interaction', name: 'manor', command: 'node', args: [], envKeys: [],
+        description: '', writes: false, effectPolicy: 'trusted', tools: [], readOnlyTools: [], schemaChars: 0,
+      },
+      disabledTools: [],
+    }
+    const orchestrator = new Orchestrator({
+      agents: () => agents,
+      store,
+      mcpServers: () => [],
+      resolveDriver: (agent) => agent.id === 'sage' ? receiver.driver : routines.driver,
+      ensureScratchDir: scratchFor,
+      emit: () => undefined,
+      guardMcp: (attached, context) => {
+        readOnly.set(context.turnId, context.readOnly)
+        return [...attached]
+      },
+      interactionMcp: (_chatId, _agent, turnId, _allowAsk, permissions) => {
+        if (permissions !== undefined) {
+          granted.set(turnId, { canApprove: permissions.canApprove, allowRelay: permissions.allowRelay,
+            ...(permissions.relay === undefined ? {} : { relay: permissions.relay }) })
+        }
+        return attachment
+      },
+    })
+    const fire = (chatId: string, agentId: string) => orchestrator.submitUserMessage(chatId, 'Check for new mail.', [], {
+      source: 'routine', routineId: `routine-${agentId}`, routineName: 'Mail catch-up', targetAgentId: agentId, previousRunAt: null,
+    })
+    const handOff = async (chatId: string, agentId: string, text: string) => {
+      const turn = orchestrator.activeTurn(chatId)
+      const relay = turn === undefined ? undefined : granted.get(turn.turnId)?.relay
+      if (turn === undefined || relay === undefined) throw new Error(`the ${agentId} routine should carry a relay`)
+      return orchestrator.messageAgent({ chatId, agentId, turnId: turn.turnId, canApprove: false, relay }, 'Sage', text)
+    }
+
+    // Sage is busy with the user, so both handoffs queue behind that turn.
+    const busy = orchestrator.submitUserMessage(sageDm.id, 'What is on my plate?')
+    await until(() => receiver.gates.length === 1, 'the busy receiver turn')
+    const marlowRun = fire(dm.id, 'marlow')
+    const smithRun = fire(smithDm.id, 'smith')
+    await until(() => routines.turns.length === 2, 'both routine turns')
+    const marlowTurn = orchestrator.activeTurn(dm.id)
+    expect(marlowTurn === undefined ? undefined : granted.get(marlowTurn.turnId))
+      .toMatchObject({ canApprove: false, allowRelay: true, relay: { depth: 0, handoff: true } })
+    expect(routines.turns[0]?.input.agent.character).toContain('no reply comes back')
+
+    await expect(handOff(dm.id, 'marlow', 'Northwind confirmed the interview for Friday.')).resolves.toContain('Passed to Sage')
+    await expect(handOff(smithDm.id, 'smith', 'The build for the portfolio site is green.')).resolves.toContain('Passed to Sage')
+    // A successful message_agent result does not end a routine run, unlike an attended DM turn.
+    const marlowRoutine = routines.turns.find((turn) => turn.input.threadId === dm.id)
+    marlowRoutine?.queue.push({ type: 'tool_use', toolCallId: 'relay-1', tool: 'mcp__manor__message_agent', detail: 'Sage' })
+    marlowRoutine?.queue.push({ type: 'tool_result', toolCallId: 'relay-1', outcome: 'success' })
+    marlowRoutine?.queue.push({ type: 'message', messageId: 'report', text: 'Northwind confirmed Friday. I passed this to Sage.' })
+    finish(marlowRoutine, `Northwind confirmed Friday. I passed this to Sage.\n\n${DM_ROUTINE_PUBLISH_MARKER}`)
+    finish(routines.turns.find((turn) => turn.input.threadId === smithDm.id), `Passed the build news to Sage.\n\n${DM_ROUTINE_PUBLISH_MARKER}`)
+    await Promise.all([marlowRun, smithRun])
+    expect((await store.loadEvents(dm.id)).some((event) =>
+      event.type === 'agent_message' && event.text === 'Northwind confirmed Friday. I passed this to Sage.')).toBe(true)
+
+    receiver.gates[0]?.finish()
+    await busy
+    await until(() => receiver.forChat(sageDm.id).length === 2, 'the receiver take-up turn')
+    const takeUp = receiver.forChat(sageDm.id)[1]
+    const takeUpTurnId = orchestrator.activeTurn(sageDm.id)?.turnId ?? ''
+    expect(granted.get(takeUpTurnId)).toMatchObject({ canApprove: false, allowRelay: false })
+    expect(readOnly.get(takeUpTurnId)).toBe(true)
+    // One take-up reads both queued handoffs, each once.
+    const notes = (takeUp?.input.catchUp ?? []).flatMap((event) => event.type === 'system_note' ? [event.text] : [])
+    expect(notes.filter((text) => text.includes('Marlow wrote: "Northwind confirmed the interview for Friday."'))).toHaveLength(1)
+    expect(notes.filter((text) => text.includes('Smith wrote: "The build for the portfolio site is green."'))).toHaveLength(1)
+    expect(notes.some((text) => text.includes('passed you the message above from a scheduled run'))).toBe(true)
+    expect(takeUp?.input.agent.character).toContain('You cannot message another agent from this turn.')
+    takeUp?.finish()
+    await until(() => orchestrator.activeTurn(sageDm.id) === undefined, 'the receiver reply')
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    expect(receiver.forChat(sageDm.id)).toHaveLength(2)
+    expect((await store.loadEvents(sageDm.id)).filter((event) => event.type === 'agent_relay')).toMatchObject([
+      { phase: 'received', peerAgentId: 'marlow', handoff: true },
+      { phase: 'received', peerAgentId: 'smith', handoff: true },
+    ])
+    expect((await store.loadEvents(dm.id)).filter((event) => event.type === 'agent_relay')).toMatchObject([
+      { phase: 'sent', peerAgentId: 'sage', handoff: true },
+    ])
   })
 
   it('returns every inbound reply through one fully capable asker turn without mirroring it into the DM', async () => {

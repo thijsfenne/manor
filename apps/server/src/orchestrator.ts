@@ -469,6 +469,8 @@ export class Orchestrator {
   private readonly turnContext: TurnContext
   private readonly turnRunner: TurnRunner
   private readonly agentRelay: AgentRelay
+  /** Receiver DMs with a handoff take-up turn queued but not started. */
+  private readonly queuedTakeUps = new Set<string>()
   readonly subagents: Subagents
 
   constructor(private readonly options: OrchestratorOptions) {
@@ -481,8 +483,19 @@ export class Orchestrator {
         append: async (chatId, draft) => {
           await this.append(this.runtimeFor(chatId), chatId, draft)
         },
+        appendInTurnOrder: (chatId, draft, live) => {
+          const chat = this.runtimeFor(chatId)
+          return this.enqueue(chat, async () => {
+            if (!live()) return false
+            await this.append(chat, chatId, draft)
+            return true
+          })
+        },
         run: (input) => this.runRelayedTurn(input),
         synthesize: (input) => this.synthesizeRelayedReply(input),
+        takeUp: (input) => {
+          void this.takeUpHandoff(input).catch((error: unknown) => console.error('[manor] a handed-off message was not taken up', error))
+        },
         stopTurn: (turnId) => this.stop(turnId),
         broadcastDirectory: () => options.broadcastDirectory?.() ?? Promise.resolve(),
       },
@@ -1295,6 +1308,35 @@ export class Orchestrator {
         allowWorkHandoff: true,
         requireWorkHandoff: false,
         relayReturn: { catchUp },
+      })
+    })
+  }
+
+  /**
+   * The receiver's own DM turn after a routine handed it a message. It runs unattended
+   * and cannot message anyone, so a handoff never starts a second one.
+   */
+  private takeUpHandoff(input: { targetDm: import('@manor/contracts').Chat; target: AgentConfig }): Promise<void> {
+    // A take-up still waiting in the queue will read every marker that lands before it starts.
+    if (this.queuedTakeUps.has(input.targetDm.id)) return Promise.resolve()
+    this.queuedTakeUps.add(input.targetDm.id)
+    const chat = this.runtimeFor(input.targetDm.id)
+    return this.enqueue(chat, async () => {
+      this.queuedTakeUps.delete(input.targetDm.id)
+      if (chat.discarded) return
+      const room = await this.options.store.getChat(input.targetDm.id)
+      if (room?.kind !== 'dm' || !room.memberIds.includes(input.target.id)) return
+      await this.turnRunner.run({
+        chat,
+        chatId: room.id,
+        agent: input.target,
+        skillIds: [],
+        room,
+        allowRoutineManagement: false,
+        quietRoutine: false,
+        allowWorkHandoff: false,
+        requireWorkHandoff: false,
+        relayHandoff: true,
       })
     })
   }

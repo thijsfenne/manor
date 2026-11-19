@@ -997,7 +997,7 @@ async function main(): Promise<void> {
         allowSessionStatus: permissions?.allowSessionStatus ?? false,
         allowInstructions: permissions?.allowInstructions ?? false,
         allowInstructionsOffer: permissions?.allowInstructionsOffer ?? false,
-        relayMode: permissions?.relay?.depth === 0 ? 'async' : 'sync',
+        relayMode: permissions?.relay?.handoff === true ? 'handoff' : permissions?.relay?.depth === 0 ? 'async' : 'sync',
         relayBrokerUrl: agentRelayBrokerUrl,
         subagentBrokerUrl,
       },

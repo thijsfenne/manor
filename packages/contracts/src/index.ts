@@ -2611,6 +2611,8 @@ export const AgentRelayEventSchema = z.object({
   relayId: z.string(),
   phase: z.enum(['sent', 'received', 'failed']),
   preview: z.string().max(240).optional(),
+  // A routine's one-way handoff: no reply comes back, so nothing waits on it.
+  handoff: z.literal(true).optional(),
 })
 
 const ThreadEventWireSchema = z.discriminatedUnion('type', [

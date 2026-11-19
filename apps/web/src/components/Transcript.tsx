@@ -86,12 +86,12 @@ const NO_CONSULTATION_MARKERS: ReadonlyMap<string, readonly TurnConsultation[]> 
 const NO_EXCHANGES: ReadonlyMap<string, RelayExchange | null> = new Map()
 const NO_CHANGED_FILES: ReturnType<typeof turnChangedFiles> = []
 
-/** Which consultation each turn still waits on: the peer of its last relay sent and not yet answered. */
+/** Which consultation each turn still waits on: the peer of its last relay sent and not yet answered. A handoff expects no answer. */
 function waitingOnByTurnOf(rows: readonly Row[]): Map<string, string> {
   const waiting = new Map<string, string>()
   for (const row of rows) {
     if (row.kind !== 'event' || row.event.type !== 'agent_relay') continue
-    if (row.event.phase === 'sent') waiting.set(row.event.turnId, row.event.peerAgentId)
+    if (row.event.phase === 'sent' && row.event.handoff !== true) waiting.set(row.event.turnId, row.event.peerAgentId)
     else waiting.delete(row.event.turnId)
   }
   return waiting

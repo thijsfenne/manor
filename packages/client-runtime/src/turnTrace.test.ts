@@ -478,6 +478,8 @@ describe('the DM working indicator', () => {
     expect(dmWorking(rows(asked), new Set(['pair']))).toEqual({ kind: 'consult', agentId: 'smith', peerAgentId: 'iris' })
     // A restart cut the relay off without a failed marker: no spinner for dead work.
     expect(dmWorking(rows(asked), new Set())).toBeUndefined()
+    // A routine's handoff expects no reply, even while the pair chat runs something else.
+    expect(dmWorking(rows([sent, event({ type: 'turn_result', agentId: 'smith', turnId: 't1' }), { ...relay, handoff: true } as ThreadEvent]), new Set(['pair']))).toBeUndefined()
     const back = event({ type: 'agent_relay', agentId: 'smith', peerAgentId: 'iris', pairChatId: 'pair', turnId: 't1', relayId: 'r1', phase: 'received' })
     expect(dmWorking(rows([...asked, back]), new Set(['pair']))).toBeUndefined()
     const later = [...asked, event({ type: 'user_message', text: 'Never mind', mentions: [] }), event({ type: 'agent_message', agentId: 'smith', turnId: 't2', messageId: 'm2', text: 'Ok.' }), event({ type: 'turn_result', agentId: 'smith', turnId: 't2' })]

@@ -13,6 +13,7 @@ import { memoryRoot, resolveMemoryTarget } from '../memoryTarget.js'
 import { parseOutboundDraftIntent } from '../outboundDraftIntent.js'
 import { gitBinary } from '../gitBinary.js'
 import { NOTE_EDIT_AGENT_ID, noteEditParts } from '../noteEdit.js'
+import { DM_ROUTINE_PUBLISH_MARKER } from '../composer.js'
 
 const MOCK_COMPACT_MS = 1_500
 
@@ -192,6 +193,8 @@ interface MockConsultation {
   text: string
   /** "silently" skips the sentence a persona writes before the call, the way a model sometimes does. */
   silent: boolean
+  /** A routine fire saying "pass to Sage: …" hands that text off and keeps running. */
+  handoff: boolean
 }
 
 /** A deliberate dev-only phrase that exercises the real relay broker end to end. */
@@ -199,9 +202,11 @@ function consultationFor(input: TurnInput, roster: readonly AgentConfig[]): Mock
   const message = [...input.catchUp].reverse().find((event) => event.type === 'user_message')
   if (message?.type !== 'user_message' || message.source === 'agent_relay') return undefined
   const words = message.text.toLocaleLowerCase()
+  const passOn = message.source === 'routine' ? /\bpass to (\S+?):\s*(.+)/i.exec(message.text) : null
   const target = roster.find((candidate) => {
     if (candidate.id === input.agent.id) return false
     const names = [candidate.id, candidate.name].map((value) => value.toLocaleLowerCase())
+    if (passOn !== null) return names.includes(passOn[1]!.toLocaleLowerCase())
     return names.some((name) => words.includes(`ask ${name}`) || words.includes(`consult ${name}`))
   })
   if (target === undefined) return undefined
@@ -219,8 +224,9 @@ function consultationFor(input: TurnInput, roster: readonly AgentConfig[]): Mock
     target,
     brokerUrl,
     capability,
-    text: `Give ${input.agent.name} a concise answer to this question from the user: ${message.text}`.slice(0, 8_000),
+    text: (passOn === null ? `Give ${input.agent.name} a concise answer to this question from the user: ${message.text}` : passOn[2]!).slice(0, 8_000),
     silent: words.includes('silently'),
+    handoff: passOn !== null,
   }
 }
 
@@ -886,6 +892,17 @@ async function delegate(delegation: MockDelegation, request: typeof fetch, signa
     : `The subagent ended ${body.report?.status ?? 'unknown'}${body.report?.reason === undefined ? '' : `: ${body.report.reason}`}`
 }
 
+/** The message a routine handed this receiver, read back from its catch-up note. */
+function handoffFor(input: TurnInput): { from: string; text: string } | undefined {
+  if (!input.catchUp.some((event) => event.type === 'system_note' && event.text.includes('from a scheduled run;'))) return undefined
+  for (const event of [...input.catchUp].reverse()) {
+    if (event.type !== 'system_note') continue
+    const match = /^(.+?) messaged you through message_agent[\s\S]* wrote: ("[\s\S]*")$/.exec(event.text)
+    if (match !== null) return { from: match[1]!, text: JSON.parse(match[2]!) as string }
+  }
+  return undefined
+}
+
 async function consult(
   consultation: MockConsultation,
   request: typeof fetch,
@@ -1429,6 +1446,43 @@ export function createMockDriver(options: MockDriverOptions = {}): Driver {
             sessionId: sessionIdFor(input),
           })
           queue.push({ type: 'background_stopped', titles: ['Watch the build log'] })
+          queue.close()
+          return
+        }
+        if (consultation?.handoff === true) {
+          queue.push({ type: 'tool_use', toolCallId: 'mock-relay', tool: 'message_agent', detail: consultation.target.name })
+          let report: string
+          try {
+            await consult(consultation, options.request ?? fetch, controller.signal)
+            if (stopped) return
+            queue.push({ type: 'tool_result', toolCallId: 'mock-relay', outcome: 'success' })
+            report = `${consultation.text} I passed this to ${consultation.target.name}.`
+          } catch {
+            if (stopped) return
+            queue.push({ type: 'tool_result', toolCallId: 'mock-relay', outcome: 'error' })
+            report = `${consultation.text} I could not pass this to ${consultation.target.name}.`
+          }
+          queue.push({ type: 'message', messageId, text: report })
+          queue.push({
+            type: 'result',
+            text: `${report}\n\n${DM_ROUTINE_PUBLISH_MARKER}`,
+            usage: { inputTokens: 120, outputTokens: 8, costUsd: 0.0012 },
+            ...(agent.model === undefined ? {} : { reportedModel: agent.model }),
+            sessionId: sessionIdFor(input),
+          })
+          queue.close()
+          return
+        }
+        // A receiver woken by a routine's handoff says what it took up.
+        const handedOff = handoffFor(input)
+        if (handedOff !== undefined) {
+          const answer = `${handedOff.from} passed this on: ${handedOff.text} I'll take it from here.`
+          queue.push({ type: 'message', messageId, text: answer })
+          queue.push({
+            type: 'result', text: answer, usage: { inputTokens: 120, outputTokens: 8, costUsd: 0.0012 },
+            ...(agent.model === undefined ? {} : { reportedModel: agent.model }),
+            sessionId: sessionIdFor(input),
+          })
           queue.close()
           return
         }

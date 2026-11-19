@@ -76,7 +76,7 @@ export function interactionMcpAttachment(
     allowInstructions?: boolean
     /** A memory-off persona's attended turn offers a lasting rule as a line for its instructions. */
     allowInstructionsOffer?: boolean
-    relayMode?: 'async' | 'sync'
+    relayMode?: 'async' | 'sync' | 'handoff'
   } = {},
 ): AttachedMcpServer {
   const draftUrl = runtime.draftBrokerUrl ?? brokerUrl.replace(/\/internal\/user-input$/, '/internal/outbound-draft')

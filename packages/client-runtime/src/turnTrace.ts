@@ -487,7 +487,8 @@ export function dmWorking(rows: readonly Row[], runningChats?: ReadonlySet<strin
       newest ??= row
       continue
     }
-    if (row.kind !== 'event' || row.event.type !== 'agent_relay') continue
+    // A handoff expects no reply, so nothing waits on it.
+    if (row.kind !== 'event' || row.event.type !== 'agent_relay' || row.event.handoff === true) continue
     const relay = row.event
     if (relay.phase !== 'sent') answered.add(relay.relayId)
     else if (!answered.has(relay.relayId) && (runningChats === undefined || runningChats.has(relay.pairChatId))) {

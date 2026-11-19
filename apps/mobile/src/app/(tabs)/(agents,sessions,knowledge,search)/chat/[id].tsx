@@ -1324,7 +1324,7 @@ function LiveTranscript({
     const waiting = new Map<string, string>()
     for (const row of rows) {
       if (row.kind !== 'event' || row.event.type !== 'agent_relay') continue
-      if (row.event.phase === 'sent') waiting.set(row.event.turnId, row.event.peerAgentId)
+      if (row.event.phase === 'sent' && row.event.handoff !== true) waiting.set(row.event.turnId, row.event.peerAgentId)
       else waiting.delete(row.event.turnId)
     }
     return waiting
