@@ -16,12 +16,16 @@ import { SafeAreaProvider } from 'react-native-safe-area-context'
 import { ConnectionProvider } from '@/providers/ConnectionProvider'
 import { WorkspaceProvider } from '@/providers/WorkspaceProvider'
 import { WindowInsetsProvider } from '@/lib/windowInsets'
+import { lockPortrait } from '@/lib/viewerOrientation'
 import { chatIdFromNotificationResponse, Notifications } from '@/lib/notifications'
 import { notificationOpen } from '@/lib/notificationRoute'
 import { colors } from '@/theme'
 
 export default function RootLayout() {
   const scheme = useColorScheme()
+  // The app declares every orientation so a full-screen viewer may turn with the phone
+  // (see `useTurnsWithPhone`); everything else is held upright from here.
+  useEffect(lockPortrait, [])
   // The four cuts of the UI face, from the app bundle rather than the network. Nothing
   // renders until they are registered: an unknown family falls back to the system font
   // silently, which would show as one frame of the wrong typeface on every cold start.

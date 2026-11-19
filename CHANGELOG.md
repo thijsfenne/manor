@@ -4,6 +4,7 @@ What changed for someone who uses Manor, newest first. A version is a tag on `ma
 
 ## Unreleased
 
+- On the phone, a full-screen picture pinches to zoom up to 5x, pans while zoomed, and a double tap switches between fit and 2x. Letting go at or under fit springs back to fit, and swiping between pictures or down to close waits until it is back at fit. While a picture or file viewer is open it turns with the phone, and the app is upright again once it closes. The rest of the app stays portrait. This needs a new build of the phone app.
 - Settings → General has a Power group on a Mac. Keep this Mac awake offers Never, While agents work and Always, and stops the Mac from going to sleep on its own while it applies. The display can still sleep and a closed lid still sleeps the Mac. While agents work lets go about a minute after the last agent stops.
 - Settings → General has a Browser group in the desktop app. Search engine sets where words typed into the Browser's address bar are searched, with six engines to pick from. A pasted results page now opens as the address it is.
 - Quitting the desktop app while agents are working asks first, and names how many chats would be stopped. It asks only when the app runs its own server.

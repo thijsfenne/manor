@@ -7,15 +7,18 @@ import type { PendingDocument } from '@manor/client-runtime/state'
 import { describeBytes, utf8Size } from '@manor/client-runtime/attachments'
 import { Image } from 'expo-image'
 import * as WebBrowser from 'expo-web-browser'
-import { useState } from 'react'
-import { ActivityIndicator, FlatList, Modal, Pressable, StyleSheet, View, useWindowDimensions, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native'
-import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler'
+import { useRef, useState } from 'react'
+import { ActivityIndicator, FlatList, Pressable, StyleSheet, View, useWindowDimensions, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native'
+import { Gesture, GestureDetector } from 'react-native-gesture-handler'
 import Animated, { Easing, Extrapolation, interpolate, runOnJS, useAnimatedStyle, useReducedMotion, useSharedValue, withSpring, withTiming } from 'react-native-reanimated'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { GlassIconButton } from '@/components/GlassIconButton'
 import { useBubbleTint } from '@/components/bubbleTint'
 import { Text } from '@/components/Text'
+import { ViewerModal } from '@/components/ViewerModal'
+import { usePageZoom, ZoomableImage } from '@/components/ZoomableImage'
+import { useKeepPage } from '@/lib/viewerOrientation'
 import { colors, fonts, radius, spacing, squircle } from '@/theme'
 
 /**
@@ -199,21 +202,36 @@ const SPRING_BACK = { damping: 26, stiffness: 260, mass: 0.8 }
  * A message's pictures become a swipeable, full-screen gallery without leaving chat.
  * Sideways steps through them; a drag up or down carries the picture with the finger
  * while the chat shows through, and lets go of the viewer past a short distance or on
- * a flick, the way Photos does. A shorter drag springs back. The viewer has no pinch
- * zoom, so every drag starts at zoom 1; a zoom added later must gate this pan on it.
+ * a flick, the way Photos does. A shorter drag springs back. A picture pinches and
+ * double-taps to zoom; while it is zoomed a drag pans it, so paging and dismissing wait
+ * until it is back at fit. The viewer turns with the phone while it is open.
  */
-export function ImageViewer({ images, initialIndex, onClose }: { images: readonly EventImage[]; initialIndex: number; onClose: () => void }) {
+export function ImageViewer(props: { images: readonly EventImage[]; initialIndex: number; onClose: () => void }) {
+  return (
+    <ViewerModal onClose={props.onClose} transparent>
+      <ImageGallery {...props} />
+    </ViewerModal>
+  )
+}
+
+function ImageGallery({ images, initialIndex, onClose }: { images: readonly EventImage[]; initialIndex: number; onClose: () => void }) {
   const { width, height } = useWindowDimensions()
   const insets = useSafeAreaInsets()
   const still = useReducedMotion()
   const [current, setCurrent] = useState(initialIndex)
+  const { locked: zoomed, report: reportZoom } = usePageZoom(String(current), width)
+  const pager = useRef<FlatList<EventImage>>(null)
   const drag = useSharedValue(0)
   const settle = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
     setCurrent(Math.round(event.nativeEvent.contentOffset.x / width))
   }
+  useKeepPage(pager, width, current)
 
-  // Vertical only: a sideways move fails it first, so the list keeps its paging.
+  // Vertical and one finger only: a sideways move fails it first, so the list keeps its
+  // paging, and a second finger belongs to the picture's pinch.
   const dismiss = Gesture.Pan()
+    .enabled(!zoomed)
+    .maxPointers(1)
     .activeOffsetY([-12, 12])
     .failOffsetX([-12, 12])
     .onUpdate((event) => {
@@ -251,40 +269,48 @@ export function ImageViewer({ images, initialIndex, onClose }: { images: readonl
   }))
 
   return (
-    <Modal animationType="fade" onRequestClose={onClose} statusBarTranslucent transparent visible>
-      {/* A modal is its own native root, so its gestures need their own handler root. */}
-      <GestureHandlerRootView style={styles.viewer}>
-        <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.viewerBackdrop, backdrop]} />
-        <GestureDetector gesture={dismiss}>
-          <Animated.View style={[styles.viewerList, picture]}>
-            <FlatList
-              data={images}
-              getItemLayout={(_, index) => ({ index, length: width, offset: width * index })}
-              horizontal
-              initialScrollIndex={initialIndex}
-              keyExtractor={(image, index) => `${image.name}:${index}`}
-              onMomentumScrollEnd={settle}
-              pagingEnabled
-              renderItem={({ item }) => <ViewerImage image={item} width={width} />}
-              showsHorizontalScrollIndicator={false}
-              style={styles.viewerList}
-            />
-          </Animated.View>
-        </GestureDetector>
-        <Animated.View pointerEvents="box-none" style={[styles.viewerHeader, { paddingTop: Math.max(insets.top, spacing.lg) }, chrome]}>
-          <GlassIconButton accessibilityLabel="Close image" icon={Cancel01Icon} onPress={onClose} />
-          {images.length === 1 ? null : (
-            <View style={styles.counter}>
-              <Text style={styles.counterText}>{current + 1} / {images.length}</Text>
-            </View>
-          )}
+    <View style={styles.viewer}>
+      <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.viewerBackdrop, backdrop]} />
+      <GestureDetector gesture={dismiss}>
+        <Animated.View style={[styles.viewerList, picture]}>
+          <FlatList
+            data={images}
+            getItemLayout={(_, index) => ({ index, length: width, offset: width * index })}
+            horizontal
+            initialScrollIndex={initialIndex}
+            keyExtractor={(image, index) => `${image.name}:${index}`}
+            onMomentumScrollEnd={settle}
+            pagingEnabled
+            ref={pager}
+            renderItem={({ item, index }) => (
+              <ViewerImage active={index === current} height={height} image={item} onZoomedChange={reportZoom} page={String(index)} width={width} />
+            )}
+            scrollEnabled={!zoomed}
+            showsHorizontalScrollIndicator={false}
+            style={styles.viewerList}
+          />
         </Animated.View>
-      </GestureHandlerRootView>
-    </Modal>
+      </GestureDetector>
+      <Animated.View pointerEvents="box-none" style={[styles.viewerHeader, { left: spacing.lg + insets.left, right: spacing.lg + insets.right, paddingTop: Math.max(insets.top, spacing.lg) }, chrome]}>
+        <GlassIconButton accessibilityLabel="Close image" icon={Cancel01Icon} onPress={onClose} />
+        {images.length === 1 ? null : (
+          <View style={styles.counter}>
+            <Text style={styles.counterText}>{current + 1} / {images.length}</Text>
+          </View>
+        )}
+      </Animated.View>
+    </View>
   )
 }
 
-function ViewerImage({ image, width }: { image: EventImage; width: number }) {
+function ViewerImage({ image, page, active, width, height, onZoomedChange }: {
+  image: EventImage
+  page: string
+  active: boolean
+  width: number
+  height: number
+  onZoomedChange: (page: string, zoomed: boolean) => void
+}) {
   const { state, setState, uri, retry } = useImageSource(image)
   return (
     <View style={[styles.viewerPage, { width }]}>
@@ -301,18 +327,19 @@ function ViewerImage({ image, width }: { image: EventImage; width: number }) {
           </Text>
         </Pressable>
       ) : (
-        <>
-          <Image
-            accessibilityIgnoresInvertColors
-            accessibilityLabel={image.name}
-            contentFit="contain"
-            onError={() => setState('failed')}
-            onLoad={() => setState('loaded')}
-            source={{ uri }}
-            style={StyleSheet.absoluteFill}
-          />
+        <ZoomableImage
+          active={active}
+          height={height}
+          name={image.name}
+          onError={() => setState('failed')}
+          onLoad={() => setState('loaded')}
+          onZoomedChange={onZoomedChange}
+          page={page}
+          uri={uri}
+          width={width}
+        >
           {state === 'loading' ? <ActivityIndicator color={colors.muted} /> : null}
-        </>
+        </ZoomableImage>
       )}
     </View>
   )

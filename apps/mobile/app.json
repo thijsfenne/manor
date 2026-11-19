@@ -3,7 +3,7 @@
     "name": "Manor",
     "slug": "manor-mobile",
     "version": "1.0.0",
-    "orientation": "portrait",
+    "orientation": "default",
     "icon": "./assets/images/icon.png",
     "scheme": "manor",
     "userInterfaceStyle": "automatic",
@@ -44,6 +44,12 @@
         }
       ],
       "expo-secure-store",
+      [
+        "expo-screen-orientation",
+        {
+          "initialOrientation": "PORTRAIT_UP"
+        }
+      ],
       "expo-notifications",
       [
         "expo-camera",

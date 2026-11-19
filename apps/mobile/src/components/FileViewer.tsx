@@ -12,19 +12,21 @@ import { dmFileReadsAs, dmFileTypeLabel } from '@manor/client-runtime/dm-files'
 import { Image } from 'expo-image'
 import * as WebBrowser from 'expo-web-browser'
 import { useEffect, useRef, useState } from 'react'
-import { ActivityIndicator, FlatList, Modal, Pressable, ScrollView, StyleSheet, View, useWindowDimensions, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native'
-import { GestureHandlerRootView } from 'react-native-gesture-handler'
+import { ActivityIndicator, FlatList, Pressable, ScrollView, StyleSheet, View, useWindowDimensions, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import Animated, { FadeIn, useReducedMotion } from 'react-native-reanimated'
 
 import { GlassIconButton } from '@/components/GlassIconButton'
 import { GlassPressable } from '@/components/GlassPressable'
 import { Markdown } from '@/components/Markdown'
 import { Text } from '@/components/Text'
+import { ViewerModal } from '@/components/ViewerModal'
+import { usePageZoom, ZoomableImage } from '@/components/ZoomableImage'
 import { useGlassSettle } from '@/components/useGlassSettle'
 import { serverMediaUri } from '@/lib/connection'
 import { FILE_GONE, fileFailure, saveToShareSheet } from '@/lib/fileSave'
 import { colors, fonts, radius, spacing, squircle } from '@/theme'
-import { useWindowInsets } from '@/lib/windowInsets'
+import { useKeepPage } from '@/lib/viewerOrientation'
 
 const GLYPHS = { image: Image01Icon, video: Video01Icon, pdf: Pdf01Icon, file: File01Icon } as const
 /** The glyph a file of this kind wears where there is no picture to show. */
@@ -49,15 +51,19 @@ const STRIP_GAP = spacing.sm
  * current filter, or one message's pictures); the strip at the bottom jumps to one. Pictures
  * show in place, markdown and text are read into the page, anything else is a card
  * with Open and Download. The empty band under the strip is kept free for a message box.
+ * Pictures pinch and double-tap to zoom, and the viewer turns with the phone while open.
  */
-export function FileViewer({ files, initialId, agents, onClose }: {
-  files: readonly DmFile[]
-  initialId: string
-  agents: readonly AgentConfig[]
-  onClose: () => void
-}) {
-  const { width } = useWindowDimensions()
-  const insets = useWindowInsets()
+export function FileViewer(props: { files: readonly DmFile[]; initialId: string; agents: readonly AgentConfig[]; onClose: () => void }) {
+  return (
+    <ViewerModal onClose={props.onClose}>
+      <FilePager {...props} />
+    </ViewerModal>
+  )
+}
+
+function FilePager({ files, initialId, agents, onClose }: { files: readonly DmFile[]; initialId: string; agents: readonly AgentConfig[]; onClose: () => void }) {
+  const { width, height } = useWindowDimensions()
+  const insets = useSafeAreaInsets()
   const start = Math.max(0, files.findIndex((file) => file.id === initialId))
   const [current, setCurrent] = useState(start)
   const [error, setError] = useState<string | null>(null)
@@ -65,6 +71,8 @@ export function FileViewer({ files, initialId, agents, onClose }: {
   const pager = useRef<FlatList<DmFile>>(null)
   const strip = useRef<FlatList<DmFile>>(null)
   const file = files[current]
+  const { locked: zoomed, report: reportZoom } = usePageZoom(file?.id ?? '', width)
+  useKeepPage(pager, width, current)
 
   const goTo = (index: number, animated: boolean) => {
     setCurrent(index)
@@ -94,62 +102,62 @@ export function FileViewer({ files, initialId, agents, onClose }: {
   }
 
   return (
-    <Modal animationType="fade" onRequestClose={onClose} statusBarTranslucent visible>
-      {/* A modal is its own native root, so its controls need their own handler root. */}
-      <GestureHandlerRootView style={styles.viewer}>
+    <View style={styles.viewer}>
+      <FlatList
+        data={files}
+        getItemLayout={(_, index) => ({ index, length: width, offset: width * index })}
+        horizontal
+        initialNumToRender={1}
+        initialScrollIndex={start}
+        keyExtractor={(item) => item.id}
+        onMomentumScrollEnd={settle}
+        pagingEnabled
+        ref={pager}
+        renderItem={({ item, index }) => (
+          <Page active={index === current} agents={agents} file={item} height={height} onZoomedChange={reportZoom} width={width} />
+        )}
+        scrollEnabled={!zoomed}
+        showsHorizontalScrollIndicator={false}
+        style={styles.pager}
+        windowSize={3}
+      />
+      <View pointerEvents="box-none" style={[styles.header, { left: spacing.lg + insets.left, right: spacing.lg + insets.right, paddingTop: Math.max(insets.top, spacing.lg) }]}>
+        {/* Room for one more round button, which belongs here once it exists. */}
+        <View style={styles.headerSide} />
+        <View style={styles.titlePill}>
+          <Text numberOfLines={1} style={styles.titleText}>{file?.name ?? ''}</Text>
+        </View>
+        <View style={[styles.headerSide, styles.headerRight]}>
+          {file?.src === undefined ? null : (
+            <GlassIconButton accessibilityLabel="Download" accessibilityState={{ busy: saving }} icon={Download04Icon} onPress={() => void download()} />
+          )}
+          <GlassIconButton accessibilityLabel="Close" icon={Cancel01Icon} onPress={onClose} />
+        </View>
+      </View>
+      <View pointerEvents="box-none" style={[styles.footer, { left: insets.left, right: insets.right, paddingBottom: Math.max(insets.bottom, spacing.lg) }]}>
+        {error === null ? null : <Text accessibilityRole="alert" style={styles.error}>{error}</Text>}
+        {file === undefined ? null : (
+          <View style={styles.caption}>
+            <Text numberOfLines={1} style={styles.captionName}>{file.name}</Text>
+            <Text style={styles.captionPlace}>{`${current + 1} / ${files.length}`}</Text>
+          </View>
+        )}
         <FlatList
+          contentContainerStyle={styles.stripContent}
           data={files}
-          getItemLayout={(_, index) => ({ index, length: width, offset: width * index })}
+          getItemLayout={(_, index) => ({ index, length: THUMB + STRIP_GAP, offset: (THUMB + STRIP_GAP) * index })}
           horizontal
-          initialNumToRender={1}
           initialScrollIndex={start}
           keyExtractor={(item) => item.id}
-          onMomentumScrollEnd={settle}
-          pagingEnabled
-          ref={pager}
-          renderItem={({ item }) => <Page agents={agents} file={item} width={width} />}
+          ref={strip}
+          renderItem={({ item, index }) => <StripThumb file={item} onPress={() => goTo(index, false)} selected={index === current} />}
           showsHorizontalScrollIndicator={false}
-          style={styles.pager}
-          windowSize={3}
+          style={styles.strip}
         />
-        <View pointerEvents="box-none" style={[styles.header, { paddingTop: Math.max(insets.top, spacing.lg) }]}>
-          {/* Room for one more round button, which belongs here once it exists. */}
-          <View style={styles.headerSide} />
-          <View style={styles.titlePill}>
-            <Text numberOfLines={1} style={styles.titleText}>{file?.name ?? ''}</Text>
-          </View>
-          <View style={[styles.headerSide, styles.headerRight]}>
-            {file?.src === undefined ? null : (
-              <GlassIconButton accessibilityLabel="Download" accessibilityState={{ busy: saving }} icon={Download04Icon} onPress={() => void download()} />
-            )}
-            <GlassIconButton accessibilityLabel="Close" icon={Cancel01Icon} onPress={onClose} />
-          </View>
-        </View>
-        <View pointerEvents="box-none" style={[styles.footer, { paddingBottom: Math.max(insets.bottom, spacing.lg) }]}>
-          {error === null ? null : <Text accessibilityRole="alert" style={styles.error}>{error}</Text>}
-          {file === undefined ? null : (
-            <View style={styles.caption}>
-              <Text numberOfLines={1} style={styles.captionName}>{file.name}</Text>
-              <Text style={styles.captionPlace}>{`${current + 1} / ${files.length}`}</Text>
-            </View>
-          )}
-          <FlatList
-            contentContainerStyle={styles.stripContent}
-            data={files}
-            getItemLayout={(_, index) => ({ index, length: THUMB + STRIP_GAP, offset: (THUMB + STRIP_GAP) * index })}
-            horizontal
-            initialScrollIndex={start}
-            keyExtractor={(item) => item.id}
-            ref={strip}
-            renderItem={({ item, index }) => <StripThumb file={item} onPress={() => goTo(index, false)} selected={index === current} />}
-            showsHorizontalScrollIndicator={false}
-            style={styles.strip}
-          />
-          {/* Reserved for a message box; nothing draws here yet. */}
-          <View style={styles.reserved} />
-        </View>
-      </GestureHandlerRootView>
-    </Modal>
+        {/* Reserved for a message box; nothing draws here yet. */}
+        <View style={styles.reserved} />
+      </View>
+    </View>
   )
 }
 
@@ -172,31 +180,46 @@ function StripThumb({ file, selected, onPress }: { file: DmFile; selected: boole
   )
 }
 
-function Page({ file, width, agents }: { file: DmFile; width: number; agents: readonly AgentConfig[] }) {
+function Page({ file, active, width, height, agents, onZoomedChange }: {
+  file: DmFile
+  active: boolean
+  width: number
+  height: number
+  agents: readonly AgentConfig[]
+  onZoomedChange: (page: string, zoomed: boolean) => void
+}) {
   const uri = file.src === undefined ? undefined : serverMediaUri(file.src)
   const reads = dmFileReadsAs(file)
   let body = <FileCard file={file} uri={uri} {...(uri === undefined ? { note: FILE_GONE } : {})} />
-  if (uri !== undefined && file.kind === 'image') body = <PictureBody file={file} uri={uri} />
+  if (uri !== undefined && file.kind === 'image') body = <PictureBody active={active} file={file} height={height} onZoomedChange={onZoomedChange} uri={uri} width={width} />
   else if (uri !== undefined && reads !== null) body = <TextBody agents={agents} file={file} reads={reads} uri={uri} />
   return <View style={[styles.page, { width }]}>{body}</View>
 }
 
-function PictureBody({ file, uri }: { file: DmFile; uri: string }) {
+function PictureBody({ file, uri, active, width, height, onZoomedChange }: {
+  file: DmFile
+  uri: string
+  active: boolean
+  width: number
+  height: number
+  onZoomedChange: (page: string, zoomed: boolean) => void
+}) {
   const [state, setState] = useState<'loading' | 'loaded' | 'failed'>('loading')
   if (state === 'failed') return <Text style={styles.status}>The image could not be loaded.</Text>
   return (
-    <>
-      <Image
-        accessibilityIgnoresInvertColors
-        accessibilityLabel={file.name}
-        contentFit="contain"
-        onError={() => setState('failed')}
-        onLoad={() => setState('loaded')}
-        source={{ uri }}
-        style={StyleSheet.absoluteFill}
-      />
+    <ZoomableImage
+      active={active}
+      height={height}
+      name={file.name}
+      onError={() => setState('failed')}
+      onLoad={() => setState('loaded')}
+      onZoomedChange={onZoomedChange}
+      page={file.id}
+      uri={uri}
+      width={width}
+    >
       {state === 'loading' ? <ActivityIndicator color={colors.muted} /> : null}
-    </>
+    </ZoomableImage>
   )
 }
 
@@ -205,7 +228,7 @@ function TextBody({ file, uri, reads, agents }: { file: DmFile; uri: string; rea
   const still = useReducedMotion()
   const [text, setText] = useState<string | null>(null)
   const [failed, setFailed] = useState(false)
-  const insets = useWindowInsets()
+  const insets = useSafeAreaInsets()
 
   useEffect(() => {
     const abort = new AbortController()
@@ -221,7 +244,7 @@ function TextBody({ file, uri, reads, agents }: { file: DmFile; uri: string; rea
   return (
     <Animated.View entering={still ? undefined : FadeIn.duration(120)} style={styles.textFrame}>
       {/* Clear of the floating header above and the caption, strip and message room below. */}
-      <ScrollView contentContainerStyle={[styles.textContent, { paddingTop: insets.top + 76, paddingBottom: insets.bottom + 200 }]}>
+      <ScrollView contentContainerStyle={{ paddingTop: insets.top + 76, paddingBottom: insets.bottom + 200, paddingLeft: spacing.lg + insets.left, paddingRight: spacing.lg + insets.right }}>
         {reads === 'markdown' ? (
           <Markdown agents={agents} text={text} />
         ) : (
@@ -314,7 +337,6 @@ const styles = StyleSheet.create({
   reserved: { height: 56 },
   status: { color: colors.muted, fontFamily: fonts.sans, fontSize: 15, paddingHorizontal: spacing.xl, textAlign: 'center' },
   textFrame: { alignSelf: 'stretch', flex: 1 },
-  textContent: { paddingHorizontal: spacing.lg },
   mono: { color: colors.text, fontFamily: fonts.mono, fontSize: 13, lineHeight: 19 },
   card: { alignItems: 'center', gap: spacing.sm, maxWidth: 320, paddingHorizontal: spacing.xl },
   cardGlyph: { alignItems: 'center', backgroundColor: colors.surface2, borderRadius: radius.lg, ...squircle, height: 72, justifyContent: 'center', marginBottom: spacing.sm, width: 72 },
