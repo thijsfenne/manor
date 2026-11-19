@@ -113,7 +113,7 @@ export function UsageView({
 
   const subtitle =
     tab === 'limits'
-      ? "What each subscription has left, from the provider's own reading."
+      ? null
       : report !== null && report.windowDays === windowDays
         ? `${formatDayShort(report.since)} to ${formatDayShort(report.until)}`
         : `Last ${String(windowDays)} days`
@@ -124,7 +124,7 @@ export function UsageView({
         <header className="mb-8 flex flex-wrap items-start justify-between gap-x-6 gap-y-4">
           <div className="min-w-0">
             <h1 className="m-0 font-display text-[24px] leading-tight font-semibold tracking-[-0.02em]">{title}</h1>
-            <p className="m-0 mt-1 text-[14px] text-muted tabular-nums">{subtitle}</p>
+            {subtitle === null ? null : <p className="m-0 mt-1 text-[14px] text-muted tabular-nums">{subtitle}</p>}
           </div>
           <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
             <SegmentedControl label="Usage view" options={tabOptions(id)} value={tab} onChange={(value) => update({ tab: value })} />

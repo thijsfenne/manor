@@ -148,21 +148,21 @@ export function AgentSettings(props: AgentSettingsProps) {
   const own = routines.filter((routine) => routine.agentId === agent.id)
   const task = page === 'routines' && dm?.scheduled.routines.some((routine) => routine.id === taskId) === true ? taskId : null
 
-  const header = page === 'root' ? (
+  // Settings → Agents has no close and its list already names the agent, so the root page there goes without a bar.
+  const header = page === 'root' ? (onClose === undefined ? null : (
     <PanelHeader onClose={onClose}>
       <span className="truncate text-text">Agent settings</span>
     </PanelHeader>
-  ) : (
+  )) : (
     <PanelHeader onClose={onClose} onBack={() => (task !== null ? setTaskId(null) : setPage(page === 'subagents' ? 'access' : 'root'))}>
       <span className="truncate text-text">{PAGE_TITLES[page]}</span>
     </PanelHeader>
   )
 
   let body: ReactNode
-  let footnote: string | null
+  let footnote: string | null = null
   switch (page) {
     case 'root':
-      footnote = null
       body = (
         <RootPage
           draft={draft}
@@ -190,7 +190,6 @@ export function AgentSettings(props: AgentSettingsProps) {
       )
       break
     case 'face':
-      footnote = 'The face, colour and tone show wherever this agent speaks.'
       body = <AgentFacePage draft={draft} onChange={(patch) => edit(patch)} />
       break
     case 'instructions':
@@ -235,12 +234,9 @@ export function AgentSettings(props: AgentSettingsProps) {
       )
       break
     case 'files':
-      // An empty library says this itself.
-      footnote = (dm?.files.files?.length ?? 0) === 0 ? null : `What you attached and what ${name} made in this chat.`
       body = dm === undefined ? null : <AgentFiles chatId={dm.chatId} name={name} status={status} agents={agents} {...dm.files} />
       break
     case 'skills':
-      footnote = `${name} loads a skill when the task asks for it.`
       body = <SkillsSection draft={draft} skills={skills} onChange={(skillIds) => edit({ skillIds })} />
       break
     case 'connections':
@@ -248,7 +244,7 @@ export function AgentSettings(props: AgentSettingsProps) {
       body = <McpSection draft={draft} registry={registry} onChange={(mcpServers) => edit({ mcpServers })} />
       break
     case 'subagents':
-      footnote = subagents.problem ?? 'What the helpers this agent starts may run on.'
+      footnote = subagents.problem ?? null
       body = <SubagentsSection agentId={agent.id} driver={draft.driver} policy={subagentPolicy} own={subagents.own} onChange={subagents.change} />
       break
     case 'routines':
@@ -260,7 +256,6 @@ export function AgentSettings(props: AgentSettingsProps) {
       )
       break
     case 'access':
-      footnote = 'Who this agent is to the rest of the house.'
       body = <AccessPage draft={draft} agent={agent} agents={agents} subagents={subagents.own} edit={edit} onOpenSubagents={() => setPage('subagents')} />
       break
   }
@@ -437,7 +432,6 @@ function RootPage({ draft, agent, registry, notes, taskCount, hasFiles, pin, onP
           value={draft.description}
           onChange={(event) => edit({ description: event.target.value }, true)}
         />
-        <span className={formHintClass}>Routing reads this to decide who takes a task.</span>
       </label>
 
       <div className="flex flex-col gap-1.5">

@@ -152,7 +152,7 @@ function ProfileGroup({ profile, requestEvents, onSave, onProblem, onDismissNoti
 
   return (
     <SettingsGroup title="Profile" onRestore={() => save(DEFAULT_USER_PROFILE)} restoreDisabled={atDefaults || request.pending}>
-      <SettingsRow label="Photo" description="Shrunk to a small square before it is stored.">
+      <SettingsRow label="Photo">
         <img className="h-10 w-10 rounded-full object-cover" src={profile.avatar ?? DEFAULT_PROFILE_PHOTO} alt="" aria-hidden="true" />
         <Button size="compact" variant="secondary" disabled={shrinking || request.pending} onClick={() => fileRef.current?.click()}>
           {shrinking ? 'Resizing…' : 'Upload'}
@@ -164,7 +164,7 @@ function ProfileGroup({ profile, requestEvents, onSave, onProblem, onDismissNoti
         )}
         <input ref={fileRef} className="hidden" type="file" accept={AVATAR_ACCEPT} tabIndex={-1} onChange={(event) => void pickFile(event)} />
       </SettingsRow>
-      <SettingsRow label={<label htmlFor={nameId}>Name</label>} description="Shown in the rail and the account menu. Agents keep calling you by your first name.">
+      <SettingsRow label={<label htmlFor={nameId}>Name</label>} description="Agents keep calling you by your first name.">
         <input
           id={nameId}
           className={`${formInputClass} w-[220px]`}

@@ -319,7 +319,7 @@ export function RoutineDialog({
       width="wide"
       onClose={onClose}
     >
-      <FormField label="Name" hint="What the row is called, and what the transcript line says when it fires.">
+      <FormField label="Name" hint="Also the transcript line when it fires.">
         <input
           className={formInputClass}
           autoFocus
@@ -329,7 +329,7 @@ export function RoutineDialog({
         />
       </FormField>
 
-      <FormField label="Description" optional hint="One sentence about why this exists.">
+      <FormField label="Description" optional>
         <input
           className={formInputClass}
           value={draft.description ?? ''}
@@ -369,7 +369,7 @@ export function RoutineDialog({
               optional={single}
               custom
               className="min-w-0 flex-1"
-              hint="Runs appear under this task. Choose a project to include its context."
+              hint="Choose a project to include its context."
             >
               <Select
                 label="Project"
@@ -389,7 +389,7 @@ export function RoutineDialog({
             label="Agent"
             custom
             className="min-w-0 flex-1"
-            hint={single ? 'Runs without a Manor persona, using the model selected below.' : 'Answers every time this fires.'}
+            hint={single ? 'Runs without a Manor persona, using the model selected below.' : undefined}
           >
             <Select
               label="Agent"
@@ -429,7 +429,7 @@ export function RoutineDialog({
             optional={!single}
             custom
             className="min-w-0 flex-1"
-            hint={single ? 'The model used for every run.' : `Empty runs on whatever ${persona?.name ?? 'this persona'} runs on.`}
+            hint={single ? 'The model used for every run.' : undefined}
           >
             <Select
               label="Model"

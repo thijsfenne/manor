@@ -222,12 +222,7 @@ export function ConnectorsView({
     <main className="h-full min-h-0 overflow-y-auto">
       <section className="mx-auto w-full max-w-page px-8 pt-10 pb-10 max-[720px]:px-5 max-[720px]:pt-7 max-[720px]:pb-7">
         <div className="flex items-end justify-between gap-6 max-[640px]:flex-col max-[640px]:items-stretch max-[640px]:gap-4">
-          <div>
-            <h1 className="m-0 font-display text-[24px] leading-tight font-semibold tracking-[-0.02em]">Connectors</h1>
-            <p className="mt-1 mb-0 max-w-[560px] text-[16px] leading-relaxed text-muted">
-              Manage the external tools available to Manor and its agents.
-            </p>
-          </div>
+          <h1 className="m-0 font-display text-[24px] leading-tight font-semibold tracking-[-0.02em]">Connectors</h1>
           <Button variant="primary" className="inline-flex flex-none items-center gap-2 max-[640px]:self-start" onClick={dialog.openNew}>
             <Icon icon={PlusSignIcon} size={14} />
             Add server
@@ -317,9 +312,8 @@ export function ConnectorsView({
                     {group.label}
                     <span className="text-meta text-dim">{total}</span>
                   </h3>
-                  <span className="min-w-0 flex-1 truncate text-meta text-dim">{group.hint}</span>
                   {!browsingAll || total <= cards.length ? null : (
-                    <Button variant="ghost" size="compact" className="flex-none" onClick={() => chooseCategory(group.id)}>
+                    <Button variant="ghost" size="compact" className="ml-auto flex-none" onClick={() => chooseCategory(group.id)}>
                       Show all {total}
                     </Button>
                   )}
@@ -466,14 +460,8 @@ function MyMindConnectorDialog({
   return (
     <Modal title="mymind" onClose={onClose}>
       <p className="m-0 text-[13px] leading-relaxed text-muted">
-        A Manor-managed, read-only connection. It powers the Artifacts library and gives every agent
-        artifact_search and artifact_view after an explicit request.
+        Read-only. Every agent gets artifact_search and artifact_view, and uses them only when you ask.
       </p>
-
-      <section className="rounded-xl border border-line bg-surface-2 px-3.5 py-3">
-        <p className="m-0 text-[13px] font-medium text-text">2 read-only tools, available to all agents</p>
-        <p className="mt-1 mb-0 text-label text-muted">Not attached per persona and never searched automatically.</p>
-      </section>
 
       <section className="flex flex-col gap-2">
         <h3 className="m-0 text-[13px] font-medium text-text">Environment keys</h3>

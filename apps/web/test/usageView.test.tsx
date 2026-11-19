@@ -110,9 +110,19 @@ describe('UsageView cost', () => {
     const html = render({ tab: 'cost', value: report })
     expect(html).toContain('API-rate equivalent')
     expect(html).toContain('$100.00')
-    expect(html).toContain('What these tokens would cost at API rates. Not what you were billed.')
+    expect(html).toContain('Not what you were billed.')
     expect(html).toContain('85.0% of cost, 1M tokens')
     expect(html).toContain('Oct 2 to Oct 8')
+  })
+
+  it('drops the cost share when one provider holds it all', () => {
+    const html = render({ tab: 'cost', value: { ...report, rows: [report.rows[0]!] } })
+    expect(html).not.toContain('of cost,')
+    expect(html).toMatch(/[\d.]+[KM]? tokens</)
+    // A wholly unpriced provider beside it leaves the priced one holding all the cost too.
+    const mixed = render({ tab: 'cost', value: { ...report, rows: [report.rows[0]!, report.rows[2]!] } })
+    expect(mixed).not.toContain('of cost,')
+    expect(mixed).toContain('none priced')
   })
 
   it('shows the five totals with their context', () => {

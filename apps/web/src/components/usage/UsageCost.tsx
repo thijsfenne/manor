@@ -54,11 +54,11 @@ export function UsageCost({ summary, prices }: { summary: UsageSummary; prices: 
       <section className="grid gap-x-12 gap-y-8 lg:grid-cols-[minmax(0,19rem)_minmax(0,1fr)]">
         <div className="flex min-w-0 flex-col gap-6">
           <div className="flex flex-col">
-            <h2 className="m-0 text-meta font-medium tracking-[0.06em] text-muted uppercase">API-rate equivalent</h2>
+            <h2 className="m-0 text-meta font-medium text-muted">API-rate equivalent</h2>
             <p className="m-0 mt-1.5 text-[36px] leading-none font-semibold tracking-[-0.01em] text-text tabular-nums">
               <Cost totals={summary} />
             </p>
-            <p className="m-0 mt-2.5 text-label text-muted">What these tokens would cost at API rates. Not what you were billed.</p>
+            <p className="m-0 mt-2.5 text-label text-muted">Not what you were billed.</p>
           </div>
           {summary.providers.length === 0 ? (
             <p className="m-0 text-label text-dim">No activity in this window.</p>
@@ -84,7 +84,9 @@ export function UsageCost({ summary, prices }: { summary: UsageSummary; prices: 
                   <span className="mt-1.5 text-meta text-dim tabular-nums">
                     {entry.costUnknown
                       ? `${formatTokens(entry.totalTokens)} tokens, none priced`
-                      : `${formatPercent(entry.costShare)} of cost, ${formatTokens(entry.totalTokens)} tokens`}
+                      : summary.providers.filter((other) => !other.costUnknown).length === 1
+                        ? `${formatTokens(entry.totalTokens)} tokens`
+                        : `${formatPercent(entry.costShare)} of cost, ${formatTokens(entry.totalTokens)} tokens`}
                   </span>
                 </li>
               ))}

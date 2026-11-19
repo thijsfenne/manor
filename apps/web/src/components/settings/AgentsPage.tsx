@@ -76,12 +76,7 @@ export function AgentsPage({ agentId, chats, onSelect, onOpenDm, onNewAgent, ...
     <div className="h-full min-h-0 overflow-y-auto">
       <div className="mx-auto w-full max-w-page">
         <header className="flex items-end justify-between gap-6 px-8 pt-10 pb-6 @max-[560px]:px-5 @max-[560px]:pt-7">
-          <div className="min-w-0">
-            <h1 className="m-0 font-display text-[24px] leading-tight font-semibold tracking-[-0.02em]">Agents</h1>
-            <p className="mt-1 mb-0 max-w-[590px] text-[16px] leading-relaxed text-muted">
-              Every agent in one list. An agent you talk to opens its settings in its DM.
-            </p>
-          </div>
+          <h1 className="m-0 min-w-0 font-display text-[24px] leading-tight font-semibold tracking-[-0.02em]">Agents</h1>
           <Button variant="primary" className="inline-flex flex-none items-center gap-2" onClick={onNewAgent}>
             <Icon icon={PlusSignIcon} size={14} />
             New agent

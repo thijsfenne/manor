@@ -93,7 +93,7 @@ export function ProvidersPage({ info, updates, connections, onRequest, onUpdate,
   // returns a value hands React a cleanup that is not a function.
   useEffect(() => { onCheck() }, [onCheck])
   return (
-    <SettingsPage title="Providers & keys" description="The CLIs behind every agent, signed in with your own subscriptions.">
+    <SettingsPage title="Providers & keys">
       {info === null ? <Reading /> : (
         <SettingsGroup title="Provider CLIs">
           {info.providers.length === 0 ? (
