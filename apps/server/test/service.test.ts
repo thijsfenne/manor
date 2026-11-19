@@ -664,6 +664,13 @@ describe('ManorService', () => {
     expect(replies.at(-1)).toMatchObject({ type: 'notice', kind: 'error' })
     expect(await store.getHouseSettings()).toEqual(DEFAULT_HOUSE_SETTINGS)
 
+    // An app newer than the running server sends a setting the server has never heard of.
+    await manor.handle({ type: 'save_house_settings', settings: { ...DEFAULT_HOUSE_SETTINGS, archiveRetentionDays: null, browserSearchEngine: 'kagi', fromNewerApp: true } }, reply)
+    expect(replies.at(-1)).toMatchObject({ type: 'notice', kind: 'error', text: expect.stringContaining('Restart Manor') })
+    expect(await store.getHouseSettings()).toEqual(DEFAULT_HOUSE_SETTINGS)
+    await manor.handle({ type: 'save_house_settings', settings: { ...DEFAULT_HOUSE_SETTINGS, browserSearchEngine: 'kagi' } }, reply)
+    expect((await store.getHouseSettings()).browserSearchEngine).toBe('kagi')
+
     const threeDays = 3 * 24 * 60 * 60 * 1000
     expect(await manor.purgeExpiredArchivedChats(archivedAt + threeDays)).toEqual([])
     await manor.handle({ type: 'save_house_settings', settings: { ...DEFAULT_HOUSE_SETTINGS, archiveRetentionDays: 3, autoSettleDays: null } }, reply)

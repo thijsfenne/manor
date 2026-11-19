@@ -141,7 +141,7 @@ function Workspace({
   // The server keeps one notice at a time, so exactly one place on screen may
   // show it. While a registry dialog is up, that place is the dialog.
   const [editingSettings, setEditingSettings] = useState(false)
-  const settings = useSettings()
+  const settings = useSettings(manor.status === 'live')
   const settingsOpen = settings.location !== null
   const reveals = useRevealRequests()
   const { noteRequest, clearNoteRequest } = reveals

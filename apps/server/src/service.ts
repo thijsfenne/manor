@@ -1026,9 +1026,14 @@ export class ManorService {
         return
       }
       case 'save_house_settings': {
-        const checked = HouseSettingsSchema.safeParse(message.settings)
+        // Strict, so an app built after this server gets refused rather than told it saved a
+        // setting the server dropped. That happens while a running server outlives an update.
+        const checked = HouseSettingsSchema.strict().safeParse(message.settings)
         if (!checked.success) {
-          reply({ type: 'notice', kind: 'error', text: checked.error.issues[0]?.message ?? 'invalid settings' })
+          const text = checked.error.issues.some((issue) => issue.code === 'unrecognized_keys')
+            ? 'Restart Manor to save this setting. The running server does not know it yet.'
+            : checked.error.issues[0]?.message ?? 'invalid settings'
+          reply({ type: 'notice', kind: 'error', text })
           return
         }
         if (everyModelOff(checked.data.disabledModels)) {

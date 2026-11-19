@@ -28,8 +28,8 @@ const key = (key: string, mods: Partial<Record<'metaKey' | 'ctrlKey' | 'altKey' 
 
 describe('settings guard', () => {
   let controller: SettingsController
-  const Harness = () => {
-    controller = useSettings()
+  const Harness = ({ live = true }: { live?: boolean }) => {
+    controller = useSettings(live)
     return null
   }
 
@@ -56,6 +56,44 @@ describe('settings guard', () => {
     act(() => controller.open('general'))
     act(() => controller.close())
     expect(controller.leaving).toBe(false)
+    expect(controller.location).toBeNull()
+  })
+
+  it('reopens the same page after a reload of the tab, and stays closed once closed', () => {
+    const stored = new Map<string, string>()
+    vi.stubGlobal('window', { sessionStorage: {
+      getItem: (key: string) => stored.get(key) ?? null,
+      setItem: (key: string, value: string) => { stored.set(key, value) },
+      removeItem: (key: string) => { stored.delete(key) },
+    } })
+    const reload = () => {
+      act(() => tree?.unmount())
+      act(() => { tree = create(<Harness />) })
+    }
+
+    act(() => { tree = create(<Harness />) })
+    expect(controller.location).toBeNull()
+    act(() => controller.open('permissions'))
+    // The restored page waits for the socket, since it asks for its data once on mount.
+    act(() => tree?.unmount())
+    act(() => { tree = create(<Harness live={false} />) })
+    expect(controller.location).toBeNull()
+    act(() => tree?.update(<Harness live />))
+    expect(controller.location).toEqual({ section: 'permissions' })
+    // A later reconnect leaves the open page where it is.
+    act(() => tree?.update(<Harness live={false} />))
+    expect(controller.location).toEqual({ section: 'permissions' })
+
+    act(() => controller.open('agents', 'sage'))
+    reload()
+    expect(controller.location).toEqual({ section: 'agents', agentId: 'sage' })
+
+    act(() => controller.close())
+    reload()
+    expect(controller.location).toBeNull()
+
+    stored.set('manor:settings-location', '{"section":"retired-page"}')
+    reload()
     expect(controller.location).toBeNull()
   })
 })
