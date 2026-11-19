@@ -4,6 +4,7 @@ What changed for someone who uses Manor, newest first. A version is a tag on `ma
 
 ## Unreleased
 
+- Knowledge and Files open notes and files in tabs. A click in the sidebar replaces the active tab; ⌘-click, a middle click or a drag onto the strip opens a new one, and tabs reorder by drag. Knowledge keeps its tabs in the top bar, the Knowledge and Files panels beside a chat keep theirs per chat in the panel header. The plus opens an empty tab, which a pick from the sidebar or New note then fills. ⌘W closes the active tab while that surface has focus, and the tabs come back after a restart.
 - Settings → General has a Power group on a Mac. Keep this Mac awake offers Never, While agents work and Always, and stops the Mac from going to sleep on its own while it applies. The display can still sleep and a closed lid still sleeps the Mac. While agents work lets go about a minute after the last agent stops.
 - Settings → General has a Browser group in the desktop app. Search engine sets where words typed into the Browser's address bar are searched, with six engines to pick from. A pasted results page now opens as the address it is.
 - Quitting the desktop app while agents are working asks first, and names how many chats would be stopped. It asks only when the app runs its own server.

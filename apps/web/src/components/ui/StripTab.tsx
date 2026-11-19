@@ -33,6 +33,7 @@ export function StripTab({
   disabled,
   pinned = false,
   closeOnActive = false,
+  slim = false,
   badge,
   menu,
   onSelect,
@@ -52,6 +53,8 @@ export function StripTab({
   pinned?: boolean
   /** The active tab keeps its close mark showing, not only on hover. */
   closeOnActive?: boolean
+  /** Two px shorter, for a strip in the 38px top bar: as far from its edges as from its neighbours. */
+  slim?: boolean
   /** A mark after the label, such as the Browser's unseen dot. */
   badge?: ReactNode
   /** The context menu's items (also on Shift+F10); absent, the tab has no menu. */
@@ -101,7 +104,7 @@ export function StripTab({
     onAuxClick: (event: ReactMouseEvent) => { if (event.button === 1 && !pinned && !disabled) { event.preventDefault(); onClose() } },
     // The title runs to the tab's edge and only gives way, by the close mark's own
     // width, while the mark is showing on hover or keyboard focus.
-    className: `group relative flex h-8 items-center rounded-button ${pinned ? 'w-9 flex-none justify-center' : `min-w-[90px] max-w-[200px] flex-[1_1_200px] gap-1.5 px-2 hover:pr-6 has-[:focus-visible]:pr-6 ${closeShown ? 'pr-6' : ''}`} ${
+    className: `group relative flex ${slim ? 'h-[30px]' : 'h-8'} items-center rounded-button ${pinned ? 'w-9 flex-none justify-center' : `min-w-[90px] max-w-[200px] flex-[1_1_200px] gap-1.5 px-2 hover:pr-6 has-[:focus-visible]:pr-6 ${closeShown ? 'pr-6' : ''}`} ${
       active ? 'bg-surface-2 text-text' : 'text-muted hover:bg-surface-2/60'
     }`,
   }

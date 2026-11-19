@@ -278,7 +278,7 @@ export function NoteRail({
             ? 'sticky top-0 z-[1] bg-sidebar pb-2'
             : `border-b border-line ${
               embedded
-                ? 'grid h-11 items-center px-2'
+                ? 'grid h-11 grid-cols-[minmax(0,1fr)] items-center px-2'
                 : sidebarCollapsed
                   ? 'px-3 pb-2.5 pt-[var(--titlebar-row-pad)] pl-[calc(1rem+var(--titlebar-inset))]'
                   : 'px-3 pt-3 pb-2.5'

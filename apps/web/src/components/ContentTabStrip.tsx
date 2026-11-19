@@ -4,13 +4,15 @@ import { useRef, useState, type DragEvent, type ReactNode } from 'react'
 import { TAB_REORDER } from '../motion'
 import { IconButton } from './ui/IconButton'
 import { ScrollFade } from './ui/ScrollFade'
-import { StripTab } from './ui/StripTab'
+import { StripTab, type StripTabMenuItem } from './ui/StripTab'
 
 export interface StripItem {
   id: string
   name: string
   title: string
   leading?: ReactNode
+  /** The surface's own menu items, ahead of the strip's move and close. */
+  menu?: readonly StripTabMenuItem[]
 }
 
 /** A sidebar entry dragged onto the strip; the surface decides which drags it takes. */
@@ -38,6 +40,7 @@ export function ContentTabStrip({
   activeId,
   disabled = false,
   newLabel,
+  slim = false,
   onSelect,
   onClose,
   onMove,
@@ -50,6 +53,8 @@ export function ContentTabStrip({
   activeId: string | null
   disabled?: boolean
   newLabel: string
+  /** Tabs sized for the top bar rather than a panel header. */
+  slim?: boolean
   onSelect: (id: string) => void
   onClose: (id: string) => void
   onMove: (id: string, index: number) => void
@@ -122,10 +127,11 @@ export function ContentTabStrip({
           {shown.map((item) => {
             const at = items.indexOf(item)
             return (
-              <StripTab key={item.id} id={item.id} name={item.name} title={item.title} leading={item.leading}
+              <StripTab key={item.id} id={item.id} name={item.name} title={item.title} leading={item.leading} slim={slim}
                 active={item.id === activeId} disabled={disabled} closeOnActive
                 onSelect={() => onSelect(item.id)} onClose={() => onClose(item.id)}
                 menu={[
+                  ...(item.menu ?? []),
                   ...(at > 0 ? [{ label: 'Move tab left', onSelect: () => onMove(item.id, at - 1) }] : []),
                   ...(at < items.length - 1 ? [{ label: 'Move tab right', onSelect: () => onMove(item.id, at + 1) }] : []),
                   { label: 'Close tab', onSelect: () => onClose(item.id) },
