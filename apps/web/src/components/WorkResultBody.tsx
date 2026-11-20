@@ -4,7 +4,7 @@ import { AlertCircleIcon, CheckmarkCircle02Icon, Tick02Icon } from '@hugeicons/c
 import { readWorkChanges, subscribeWorkChanges, writeWorkChanges } from '@manor/client-runtime/work-changes'
 import { readWorkChangesOpen, setWorkChangesOpen, subscribeWorkProposals } from '@manor/client-runtime/work-proposals'
 import type { GoalChoice } from '@manor/contracts'
-import { WORK_RESULT_CONNECTION_LOST, evidenceThumbnailRatio, evidenceVisibleCount, workBlockedReason, workCardStatus, workConfirmTitle, pickWorkChoice, workChangesAsked, workChoicePicked, workResultActionLabels, workResultChoiceList, workResultFiles, workResultLines, type WorkHandoffRow, type WorkResult, type WorkStatus } from '../state'
+import { WORK_RESULT_CONNECTION_LOST, evidenceThumbnailRatio, evidenceVisibleCount, workBlockedReason, workCardStatus, workConfirmTitle, workConfirmWait, pickWorkChoice, workChangesAsked, workChoicePicked, workResultActionLabels, workResultChoiceList, workResultFiles, workResultLines, type WorkHandoffRow, type WorkResult, type WorkStatus } from '../state'
 import { TEXT_SWAP, TEXT_SWAP_ABOVE, TEXT_SWAP_BELOW, TEXT_SWAP_REST } from '../motion'
 import { useRequest, type RequestEvents } from '../useRequest'
 import { sendWorkChanges } from '../workChanges'
@@ -110,7 +110,8 @@ function ResultLines({ result, settled }: { result: WorkResult; settled: boolean
  * on up to two lines (its title on one line for an older report) and its options as small
  * grey buttons, the picked one in a blue wash. A press writes `Title: option` into Follow up,
  * which opens, so several picks go to the Session as one message. Follow up stays closed
- * while it holds only picks of a choice's `noChange` option, so Confirm stays in reach.
+ * while it holds only picks of a choice's `noChange` option, and Confirm waits until every
+ * choice has one (`workConfirmWait`).
  */
 function YourCall({ result, picked, disabled, onPick }: {
   result: WorkResult
@@ -138,7 +139,7 @@ function YourCall({ result, picked, disabled, onPick }: {
                   label={option}
                   on={on}
                   disabled={disabled}
-                  hint={`${recommended ? 'Recommended. ' : ''}${option === choice.noChange ? 'Needs no change, so you can confirm right away.' : 'Adds this answer to your Follow up message.'}`}
+                  hint={`${recommended ? 'Recommended. ' : ''}${option === choice.noChange ? 'Needs no change.' : 'Adds this answer to your Follow up message.'}`}
                   onToggle={() => onPick(choice, option)}
                 />
               )
@@ -335,6 +336,9 @@ export function WorkResultBody({
     setWriting(workChangesAsked(next, result.choices))
   }
   const actionRow = open && !writing
+  // Open choices hold Confirm, and its tooltip says why instead of what it commits.
+  const confirmWait = workConfirmWait(picked, result)
+  const primaryTitle = confirmWait ?? confirmTitle
   // The file count stays while the user writes changes or a commit is blocked: that is when the diff matters.
   const footer = result.evidence.length > 0 || actionRow || openDiff !== undefined
 
@@ -384,9 +388,9 @@ export function WorkResultBody({
                   <Button
                     size="compact"
                     variant="primary"
-                    disabled={request.pending || !connected}
+                    disabled={request.pending || !connected || confirmWait !== undefined}
                     onClick={accept}
-                    {...(confirmTitle === undefined ? {} : { title: confirmTitle })}
+                    {...(primaryTitle === undefined ? {} : { title: primaryTitle })}
                   >
                     {request.pending ? labels.pending : labels.primary}
                   </Button>
@@ -409,6 +413,15 @@ export function WorkResultBody({
       {error === null ? null : <p role="alert" className="m-0 text-[13px] text-danger">{error}</p>}
     </div>
   )
+}
+
+/**
+ * Why a result's Confirm waits on its open choices, read live from the Follow up text the
+ * card's picks write, for the surfaces that offer Confirm away from the card.
+ */
+export function useConfirmWait(handoffId: string, result: Pick<WorkResult, 'choices'>): string | undefined {
+  const read = () => readWorkChanges(handoffId)
+  return workConfirmWait(useSyncExternalStore(subscribeWorkChanges, read, read), result)
 }
 
 const NO_EVENTS: RequestEvents = { subscribe: () => () => undefined }

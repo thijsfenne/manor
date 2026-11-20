@@ -131,10 +131,12 @@ export function ChatPanelRegion({
   )
   const confirmTitle = ready?.report === undefined ? undefined : workConfirmTitle(ready.report)
   const operation = ready?.report?.operation
+  const choices = ready?.report?.choices
   const goal = waiting === undefined || ready === undefined ? undefined : {
     ...waiting,
     ...(confirmTitle === undefined ? {} : { confirmTitle }),
     ...(operation === undefined ? {} : { operation }),
+    ...(choices === undefined ? {} : { choices }),
   }
   const filesProjectId = openProject?.id
   const filesChatId = open.id

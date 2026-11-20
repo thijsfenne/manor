@@ -14,7 +14,7 @@ import { DOCK_PANEL_GAP, DOCK_PANEL_SHELL, dockPanelLayoutClass } from '../ui/do
 import { ContextMenu, type ContextMenuItem } from '../ui/ContextMenu'
 import { Icon } from '../Icon'
 import { WorkChangesField } from '../WorkChangesField'
-import type { WorkResultActions } from '../WorkResultBody'
+import { useConfirmWait, type WorkResultActions } from '../WorkResultBody'
 import { DiffFileCard, type DiffLayout } from './DiffFileCard'
 import { SESSION_CONNECTION_LOST } from './SessionSections'
 import { DiffFileJump } from './DiffFileJump'
@@ -48,6 +48,8 @@ export interface WaitingGoal {
   confirmTitle?: string
   /** Nothing to commit: the actions read Follow up and Close, as on the card. */
   operation?: WorkResult['operation']
+  /** The report's open choices, which hold Confirm until answered, as on the card. */
+  choices?: WorkResult['choices']
 }
 
 interface DiffPanelProps {
@@ -395,6 +397,8 @@ function WaitingBar({ goal, actions, excluded }: { goal: WaitingGoal; actions: W
   const [error, setError] = useState<string | null>(null)
   const { pending, cancel } = request
   const labels = workResultActionLabels({ operation: goal.operation ?? 'commit' })
+  const confirmWait = useConfirmWait(handoffId, goal)
+  const confirmTitle = confirmWait ?? goal.confirmTitle
   useEffect(() => {
     if (!actions.connected && pending) {
       cancel()
@@ -428,8 +432,8 @@ function WaitingBar({ goal, actions, excluded }: { goal: WaitingGoal; actions: W
             }}>
             {labels.secondary}
           </Button>
-          <Button size="compact" variant="primary" className="flex-none" disabled={pending || !actions.connected} onClick={confirm}
-            {...(goal.confirmTitle === undefined ? {} : { title: goal.confirmTitle })}>
+          <Button size="compact" variant="primary" className="flex-none" disabled={pending || !actions.connected || confirmWait !== undefined} onClick={confirm}
+            {...(confirmTitle === undefined ? {} : { title: confirmTitle })}>
             {pending ? labels.pending : labels.primary}
           </Button>
         </div>

@@ -8,7 +8,7 @@ import { EASE_OUT } from '../motion'
 import { useRequest } from '../useRequest'
 import { useWorkProposal } from '../useWorkProposal'
 import { Button } from './ui/Button'
-import { WORK_CHANGES_FIELD, type WorkResultActions } from './WorkResultBody'
+import { WORK_CHANGES_FIELD, useConfirmWait, type WorkResultActions } from './WorkResultBody'
 
 // Rows come and go as their cards scroll past, so the fade stays short and quiet.
 const FADE = { duration: 0.2, ease: EASE_OUT }
@@ -131,7 +131,8 @@ function ResultRow({ row, result, actions, readiness, onReveal }: {
   const { connected, askCheckout } = actions
   const [error, setError] = useState<string | null>(null)
   const sessionId = result.workChatId
-  const confirmTitle = workConfirmTitle(result)
+  const confirmWait = useConfirmWait(result.handoffId, result)
+  const confirmTitle = confirmWait ?? workConfirmTitle(result)
   const labels = workResultActionLabels(result)
   const excluded = sessionId === null ? undefined : readiness?.excluded(sessionId)
   const updatedAt = sessionId === null ? undefined : readiness?.updatedAt(sessionId)
@@ -175,7 +176,7 @@ function ResultRow({ row, result, actions, readiness, onReveal }: {
       primary={{
         label: pending ? labels.pending : labels.primary,
         action: labels.primary,
-        disabled: pending || !connected,
+        disabled: pending || !connected || confirmWait !== undefined,
         ...(confirmTitle === undefined ? {} : { title: confirmTitle }),
         onClick: () => {
           setError(null)

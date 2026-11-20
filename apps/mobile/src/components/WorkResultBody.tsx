@@ -10,7 +10,7 @@ import Animated, { FadeIn, FadeOut, LinearTransition, ReduceMotion } from 'react
 import { WORK_CHANGES_LIMIT, readWorkChangeImages, readWorkChanges, settleWorkChanges, subscribeWorkChanges, writeWorkChangeImages, writeWorkChanges } from '@manor/client-runtime/work-changes'
 import { readWorkChangesOpen, setWorkChangesOpen, subscribeWorkProposals } from '@manor/client-runtime/work-proposals'
 import { ImageAttachmentSchema, MAX_MESSAGE_ATTACHMENTS, type GoalChoice, type ImageAttachment } from '@manor/contracts'
-import { WORK_RESULT_CONNECTION_LOST, evidenceThumbnailRatio, workBlockedReason, workCardStatus, workConfirmTitle, pickWorkChoice, workChangesAsked, workChoicePicked, workResultActionLabels, workResultChoiceList, workResultFiles, workResultLines, workResultWaits, type WorkHandoffRow, type WorkResult, type WorkStatus } from '@manor/client-runtime/state'
+import { WORK_RESULT_CONNECTION_LOST, evidenceThumbnailRatio, workBlockedReason, workCardStatus, workConfirmTitle, workConfirmWait, pickWorkChoice, workChangesAsked, workChoicePicked, workResultActionLabels, workResultChoiceList, workResultFiles, workResultLines, workResultWaits, type WorkHandoffRow, type WorkResult, type WorkStatus } from '@manor/client-runtime/state'
 import { addImagePasteListener, setImagePasteEnabled } from '../../modules/manor-image-paste/src'
 import { useWorkspaceActions, useWorkspaceStatus } from '@/providers/WorkspaceProvider'
 import { colors, fonts, radius, spacing, squircle } from '@/theme'
@@ -77,7 +77,8 @@ function ResultLines({ result, settled }: { result: WorkResult; settled: boolean
  * on up to two lines (its title on one line for an older report) and its options as small
  * grey buttons, the picked one in a blue wash. A tap writes `Title: option` into Follow up,
  * which opens, so several picks go to the Session as one message. Follow up stays closed
- * while it holds only picks of a choice's `noChange` option, so Confirm stays in reach.
+ * while it holds only picks of a choice's `noChange` option, and Confirm waits until every
+ * choice has one (`workConfirmWait`).
  */
 function YourCall({ result, picked, disabled, onPick }: {
   result: WorkResult
@@ -101,7 +102,7 @@ function YourCall({ result, picked, disabled, onPick }: {
                   key={option}
                   accessibilityRole="button"
                   accessibilityLabel={recommended ? `${option}, recommended` : option}
-                  accessibilityHint={option === choice.noChange ? 'Needs no change, so you can confirm right away' : 'Adds this answer to your Follow up message'}
+                  accessibilityHint={option === choice.noChange ? 'Needs no change' : 'Adds this answer to your Follow up message'}
                   accessibilityState={{ disabled, selected: on }}
                   disabled={disabled}
                   onPress={() => onPick(choice, option)}
@@ -265,7 +266,9 @@ export function WorkResultBody({ result, docked: inDock = false, blocked = false
   const connected = useWorkspaceStatus() === 'live'
   const open = result.decision === 'open' && waits
   const writing = open && changesOpen
-  const confirmHint = open ? workConfirmTitle(result) : undefined
+  // Open choices hold Confirm, and its hint says why instead of what it commits.
+  const confirmWait = workConfirmWait(feedback, result)
+  const confirmHint = open ? confirmWait ?? workConfirmTitle(result) : undefined
   const labels = workResultActionLabels(result)
   const openReport = open && (result.operation === 'none' || result.choices !== undefined) ? onOpenSession : undefined
   const reason = blocked ? workBlockedReason(result) : undefined
@@ -394,7 +397,7 @@ export function WorkResultBody({ result, docked: inDock = false, blocked = false
                 <CardButton
                   {...(confirmHint === undefined ? {} : { accessibilityHint: confirmHint })}
                   busy={busy}
-                  disabled={busy || !connected}
+                  disabled={busy || !connected || confirmWait !== undefined}
                   label={busy ? labels.pending : labels.primary}
                   onPress={() => void run(() => acceptWorkResult(result.handoffId, result.mergeInto, result.version))}
                   variant="primary"
@@ -478,6 +481,15 @@ export function WorkResultBody({ result, docked: inDock = false, blocked = false
       {error === null ? null : <Text accessibilityRole="alert" style={styles.error}>{error}</Text>}
     </View>
   )
+}
+
+/**
+ * Why a result's Confirm waits on its open choices, read live from the Follow up text the
+ * card's picks write, for the bar that offers Confirm away from the card.
+ */
+export function useConfirmWait(handoffId: string, result: Pick<WorkResult, 'choices'>): string | undefined {
+  const read = () => readWorkChanges(handoffId)
+  return workConfirmWait(useSyncExternalStore(subscribeWorkChanges, read, read), result)
 }
 
 const styles = StyleSheet.create({

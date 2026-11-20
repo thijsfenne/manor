@@ -1,5 +1,6 @@
 import { NEW_SINGLE_CHAT_DEFAULT, type AgentConfig, type Project, type ThreadEvent } from '@manor/contracts'
 import { emptyThread, rowsOf } from '@manor/client-runtime/state'
+import { clearWorkChanges, writeWorkChanges } from '@manor/client-runtime/work-changes'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { describe, expect, it } from 'vitest'
@@ -516,6 +517,20 @@ describe('the two result cards (2026-10-14)', () => {
     expect(markup).not.toContain('more in the report')
     expect(markup).not.toContain('>Open report<')
     expect(markup).not.toContain('>Close<')
+  })
+
+  it('holds Confirm until the choices are answered with the options that need no change (2026-11-20)', () => {
+    const fonts = { title: 'Fonts', question: 'Should they stay?', options: ['Keep them', 'Remove them'], noChange: 'Keep them' }
+    const result = () => render({ ...base, result: 'Fonts added.', files: 1, operation: 'commit', choices: [fonts] })
+    try {
+      expect(result()).toMatch(/<button[^>]*disabled=""[^>]*title="Pick an answer first"[^>]*>Confirm</)
+      writeWorkChanges('handoff_1', 'Fonts: Keep them')
+      expect(result()).toMatch(/<button(?![^>]*disabled="")[^>]*title="Commits the file\."[^>]*>Confirm</)
+      writeWorkChanges('handoff_1', 'Fonts: Remove them')
+      expect(result()).toMatch(/<button[^>]*disabled=""[^>]*title="Your answer asks for a change, so send it instead"[^>]*>Confirm</)
+    } finally {
+      clearWorkChanges()
+    }
   })
 })
 

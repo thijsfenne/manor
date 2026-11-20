@@ -1,7 +1,7 @@
 import type { AgentConfig, Chat, Project, ServerMessage, ThreadEvent, WorkHandoff } from '@manor/contracts'
 import { ClientMessageSchema } from '@manor/contracts'
 import { describe, expect, it } from 'vitest'
-import { evidenceVisibleCount, firstSentence, goalReportEventId, messageBrief, rowsOf, threadWorkCard, workByline, openWorkDecisions, projectWorkHandoffs, sessionReadyRow, workCardInView, workCardLine, workBlockedReason, workCardStatus, workConfirmTitle, pickWorkChoice, workChangesAsked, workChoicePicked, workResultActionLabels, workResultChoiceList, workResultFiles, workResultLines, type Row, type WorkHandoffRow } from './transcriptState'
+import { evidenceVisibleCount, firstSentence, goalReportEventId, messageBrief, rowsOf, threadWorkCard, workByline, openWorkDecisions, projectWorkHandoffs, sessionReadyRow, workCardInView, workCardLine, workBlockedReason, workCardStatus, workConfirmTitle, pickWorkChoice, workChangesAsked, workChoicePicked, workConfirmWait, workResultActionLabels, workResultChoiceList, workResultFiles, workResultLines, type Row, type WorkHandoffRow } from './transcriptState'
 import { emptyThread } from './threadState'
 import { acceptWorkProposal, updateWorkProposal, workProposalDraft, workProposalOptions, workProposalSingleOnly } from './workProposals'
 import { createWorkspaceCommands } from './commands'
@@ -503,6 +503,29 @@ describe('a result card that tells the truth (2026-10-14)', () => {
     expect(workChangesAsked(kept)).toBe(true)
     const twin = { title: 'Stale checks', options: ['Leave them', 'Remove them'], noChange: 'Remove them' }
     expect(workChangesAsked(kept, [cleanup, twin])).toBe(true)
+  })
+
+  it('holds Confirm until every shown choice is answered with the option that needs no change', () => {
+    const fonts = { title: 'Fonts', options: ['Keep them', 'Remove them'], noChange: 'Keep them' }
+    const height = { title: 'Height', options: ['fixed', 'fit'] }
+    const one = { choices: [fonts] }
+    expect(workConfirmWait('', {})).toBeUndefined()
+    expect(workConfirmWait('Also rename it.', { choices: [] })).toBeUndefined()
+    expect(workConfirmWait('', one)).toBe('Pick an answer first')
+    expect(workConfirmWait('Also rename it.', one)).toBe('Pick an answer first')
+    expect(workConfirmWait(pickWorkChoice('', fonts, 'Keep them'), one)).toBeUndefined()
+    expect(workConfirmWait(pickWorkChoice('', fonts, 'Remove them'), one)).toBe('Your answer asks for a change, so send it instead')
+    expect(workConfirmWait(`Also rename it.\n${pickWorkChoice('', fonts, 'Keep them')}`, one)).toBe('Your answer asks for a change, so send it instead')
+    // A choice without a no-change option asks a change whatever is picked.
+    expect(workConfirmWait(pickWorkChoice('', height, 'fixed'), { choices: [height] })).toBe('Your answer asks for a change, so send it instead')
+    // Mixed: one kept, one still open, then one kept and one changed.
+    const kept = pickWorkChoice('', fonts, 'Keep them')
+    expect(workConfirmWait(kept, { choices: [fonts, height] })).toBe('Pick an answer first')
+    expect(workConfirmWait(pickWorkChoice(kept, height, 'fit'), { choices: [fonts, height] })).toBe('Your answer asks for a change, so send it instead')
+    // Only the choices the card shows can be answered there; the rest stay in the report.
+    const shown = [1, 2, 3].map((n) => ({ title: `Q${n}`, options: ['yes', 'no'], noChange: 'yes' }))
+    const all = shown.reduce((text, choice) => pickWorkChoice(text, choice, 'yes'), '')
+    expect(workConfirmWait(all, { choices: [...shown, { title: 'Q4', options: ['yes', 'no'], noChange: 'yes' }] })).toBeUndefined()
   })
 
   it('reads Closed after Close on a report, on the card and in the project thread', () => {

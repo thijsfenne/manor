@@ -12,6 +12,7 @@ import { CardButton } from './CardButton'
 import { FadingScrollView } from './FadingScrollView'
 import { GlassSurface } from './GlassSurface'
 import { Text } from './Text'
+import { useConfirmWait } from './WorkResultBody'
 
 const ROW_HEIGHT = 48
 /** Three rows show; the top of a fourth peeks in under the cut, which says the list scrolls. */
@@ -149,7 +150,8 @@ function ResultRow({ row, result, onReveal, onRequestChanges }: {
     }
   }
 
-  const confirmHint = workConfirmTitle(result)
+  const confirmWait = useConfirmWait(result.handoffId, result)
+  const confirmHint = confirmWait ?? workConfirmTitle(result)
   const labels = workResultActionLabels(result)
   return (
     <DecisionRow
@@ -166,7 +168,7 @@ function ResultRow({ row, result, onReveal, onRequestChanges }: {
         label: busy ? labels.pending : labels.primary,
         action: labels.primary,
         busy,
-        disabled: busy || !connected,
+        disabled: busy || !connected || confirmWait !== undefined,
         ...(confirmHint === undefined ? {} : { hint: confirmHint }),
         onPress: () => void confirm(),
       }}

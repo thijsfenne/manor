@@ -26,7 +26,7 @@ Preconditions:
 
 - **Memory in a consultation.** Marlow's last seeded turn asks Sage and wrote a memory line. The thread shows `Messaged Smith` (no reply yet), then `2 messages with Sage` (one line for the send and its reply, opening the view-only pair `Marlow and Sage`) and no memory row. `long-press --name "Ik vraag het Sage; haar antwoord volgt."` opens the action sheet with `Geheugen bijgewerkt`, which opens the added line.
 
-- **Result cards in Smith's DM.** `tap --name "Open het menu"`, `tap --name "Agents"`, `tap --name "Smith.*"`, then `tap --name "Ready, Export a chat as Markdown"` in the bar to bring the cards in. The Ready card has three screenshots (`Open icon.png`, …) served by the fixture under `/media/evidence/`; a tap opens the viewer at `1 / 3` and a horizontal swipe (a Maestro `swipe` flow; the CLI has none) steps on. `Sluit afbeelding` closes it. Above it a confirmed result reads `Merge blocked` with its reason and `Open Session`.
+- **Result cards in Smith's DM.** `tap --name "Open het menu"`, `tap --name "Agents"`, `tap --name "Smith.*"`, then `tap --name "Ready, Export a chat as Markdown"` in the bar to bring the cards in. The Ready card has two choices, each with a no-change option (`Keep it as is`, `Title only`): Confirm stays disabled until both are picked, and `Skip empty chats` or `Add the date` opens Follow up instead. It has three screenshots (`Open icon.png`, …) served by the fixture under `/media/evidence/`; a tap opens the viewer at `1 / 3` and a horizontal swipe (a Maestro `swipe` flow; the CLI has none) steps on. `Sluit afbeelding` closes it. Above it a confirmed result reads `Merge blocked` with its reason and `Open Session`.
 
 ## Gotchas
 

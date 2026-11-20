@@ -1855,6 +1855,20 @@ export function workChangesAsked(text: string, choices: readonly Pick<GoalChoice
 }
 
 /**
+ * Why Confirm (or Close) waits on the card's choices, said in its tooltip, or undefined
+ * when it may go (2026-11-20). It waits until every choice the card shows has a pick, and
+ * after that while the Follow up text asks a change, which goes with Request changes
+ * instead. A result without choices never waits here. Every Confirm surface reads this,
+ * with the same Follow up text, so the card, the bar and the phone agree.
+ */
+export function workConfirmWait(text: string, result: Pick<WorkResult, 'choices'>): string | undefined {
+  const { choices } = workResultChoiceList(result)
+  if (choices.length === 0) return undefined
+  if (!choices.every((choice) => choice.options.some((option) => workChoicePicked(text, choice.title, option)))) return 'Pick an answer first'
+  return workChangesAsked(text, result.choices) ? 'Your answer asks for a change, so send it instead' : undefined
+}
+
+/**
  * A result that waits on the user right now: open, and its Session finished. A Session the user
  * sent a new instruction keeps its result open, but reads Working, or Waiting while it
  * asks the user something, until it ends.
