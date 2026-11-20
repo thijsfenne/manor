@@ -35,7 +35,7 @@ import { File } from 'expo-file-system'
 import { Image } from 'expo-image'
 import { manipulateAsync, SaveFormat } from 'expo-image-manipulator'
 import * as ImagePicker from 'expo-image-picker'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type Ref } from 'react'
 import { Pressable, ScrollView, StyleSheet, View, type LayoutChangeEvent, type TextInputSelectionChangeEventData, type NativeSyntheticEvent } from 'react-native'
 import { TextInput } from '@/components/TextInput'
 import Animated, { FadeIn, FadeOut, LinearTransition, ReduceMotion } from 'react-native-reanimated'
@@ -119,6 +119,8 @@ type MentionRow =
   | { kind: 'command'; command: ChatCommandRow }
 
 export interface ComposerProps {
+  /** The text field itself, for a screen that measures where a sent message leaves from. */
+  fieldRef?: Ref<TextInput>
   /** Read only when a draft opens with `/`, because it walks the transcript. Absent while a quote or reply rides along, which makes any text a message. */
   commandContext?: (() => ChatCommandContext) | undefined
   draft: string
@@ -222,6 +224,7 @@ export interface ComposerProps {
  * picked. Both cards are the same material as the composer under them.
  */
 export function Composer({
+  fieldRef,
   commandContext,
   draft,
   onChangeDraft,
@@ -785,6 +788,7 @@ export function Composer({
         <View style={expanded ? styles.body : styles.pill}>
           {expanded ? null : <Animated.View entering={BUTTON_IN} key="plus-resting">{plusButton}</Animated.View>}
           <TextInput
+            ref={fieldRef}
             autoFocus={autoFocus}
             editable={!disabled && !submitting}
             multiline

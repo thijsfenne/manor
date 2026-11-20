@@ -31,16 +31,19 @@ import { dateDividers } from '@manor/client-runtime/date-dividers'
 import { historyStart, olderHistoryKey } from '@manor/client-runtime/history-window'
 import { plainDraftText } from '@manor/client-runtime/plain-preview'
 import type { LegendListRef } from '@legendapp/list/react-native'
-import { memo, useCallback, useContext, useEffect, useMemo, useRef, useState, type RefObject } from 'react'
+import { memo, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from 'react'
 import { Platform, Pressable, StyleSheet, View, useWindowDimensions, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native'
 import { useKeyboardState } from 'react-native-keyboard-controller'
-import Animated, { useSharedValue, type SharedValue } from 'react-native-reanimated'
+import Animated, { useReducedMotion, useSharedValue, type SharedValue } from 'react-native-reanimated'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
+import { ARRIVAL_SPENT_MS, ArrivalRow, FIELD_FLIGHT_MS, SendFlightField, armArrival, claimFlight, disarmArrival, requestFlight, useArrivalMotion, type ArrivalMotion, type FieldFlight } from '@/components/ArrivalMotion'
 import { AskCard } from '@/components/AskCard'
 import { SecretCard } from '@/components/SecretCard'
-import { DmWorkingIndicator } from '@/components/DmWorkingIndicator'
+import { DM_FACE_ROOM, DmWorkingIndicator } from '@/components/DmWorkingIndicator'
 import { carryPendingKeys } from '@/lib/listKeys'
+import { NO_ARRIVALS, tailArrivals } from '@/lib/arrival'
+import type { TextInput } from '@/components/TextInput'
 import { cardsShownInThread, workCardOut } from '@/lib/workDock'
 import { Attachments, ImageViewer } from '@/components/Attachments'
 import { ConnectGate } from '@/components/ConnectGate'
@@ -96,6 +99,8 @@ const ESTIMATED_ROW = 120
 
 /** What the footer stands on before its first layout, so the list opens at the right floor. */
 const ESTIMATED_FOOTER = 120
+/** The feed's own padding under its last row, `styles.feed`. */
+const FEED_END_GAP = spacing.xl
 /** One identity, so a chat that offers no skills does not re-render the composer. */
 const NO_SKILLS: SkillConfig[] = []
 const isUserBubbleRow = (row: Row | undefined): boolean =>
@@ -179,6 +184,12 @@ function ChatContent({ chatId }: { chatId: string | undefined }) {
   const showJump = jumpForChat === chatId
   const listRef = useRef<LegendListRef>(null)
   const footerRef = useRef<View>(null)
+  // A DM's arrival motion: the chat rises as a message lands, and a sent one leaves the field.
+  const arrivalMotion = useArrivalMotion()
+  const still = useReducedMotion()
+  const screenRef = useRef<View>(null)
+  const fieldRef = useRef<TextInput>(null)
+  const [fieldFlight, setFieldFlight] = useState<FieldFlight | null>(null)
   const insets = useSafeAreaInsets()
   const covered = useScreenCovered()
   // The footer is an overlay that sticks to the keyboard, and its measured height is
@@ -679,9 +690,33 @@ function ChatContent({ chatId }: { chatId: string | undefined }) {
   }, [headerFloor])
   const landedMessage = useMemo<LandedMessage | null>(() => landed === null ? null : { ...landed, onLanded }, [landed, onLanded])
 
+  // Where a DM message leaves from and where its row will rest, read before the field
+  // clears. Both sit in the keyboard's footer, so a keyboard shift the layout has not
+  // caught up with yet cancels out of the difference.
+  const measureFlight = () => {
+    const field = measureNow(fieldRef.current)
+    const footer = measureNow(footerRef.current)
+    const screen = measureNow(screenRef.current)
+    if (field === undefined || footer === undefined || screen === undefined) return undefined
+    // The face comes in under a DM send, if it is not there already.
+    const slotBottom = footer.y - FEED_END_GAP - DM_FACE_ROOM
+    return {
+      dx: field.x + field.width - (screen.x + screen.width - spacing.lg),
+      dy: field.y + field.height - slotBottom,
+      field: { x: field.x - screen.x, y: field.y - screen.y, width: field.width, height: field.height },
+    }
+  }
+
   const submit = (text: string, images: ImageAttachment[], textFiles: StagedFile[]) => {
     const placed = placeQuotesAfterText({ text, ...(quote === undefined ? {} : { quote }) })
+    // Only from the end of the chat: scrolled up, the send keeps its jump.
+    const flight = chat?.kind === 'dm' && !still && !showJump && text.trim() !== '' ? measureFlight() : undefined
     if (chatId === undefined || !sendMessage(chatId, placed.text, images, textFiles, replyTo, placed.quotes)) return false
+    if (flight !== undefined) {
+      const id = requestFlight(arrivalMotion, flight.dx, flight.dy)
+      setFieldFlight({ id, text, field: flight.field })
+      setTimeout(() => setFieldFlight((current) => current?.id === id ? null : current), FIELD_FLIGHT_MS)
+    }
     setReplyTo(undefined)
     setQuote(undefined)
     writeDraft(chatId, EMPTY_DRAFT)
@@ -798,7 +833,7 @@ function ChatContent({ chatId }: { chatId: string | undefined }) {
     <SubagentLaunchesContext.Provider value={launches}>
     <AnswerChange.Provider value={answerChange}>
     <TranscriptCovered.Provider value={covered}>
-    <View style={styles.screen}>
+    <View ref={screenRef} style={styles.screen}>
       <LandedMessageContext.Provider value={landedMessage}>
       <LiveTranscript
         chatId={chatId}
@@ -827,6 +862,7 @@ function ChatContent({ chatId }: { chatId: string | undefined }) {
         onOpenQuoteSource={openQuoteSourceStable}
         onReply={chooseReply}
         onQuoteSource={quoteSource}
+        {...(chat?.kind === 'dm' ? { arrival: { motion: arrivalMotion, still, followEnd: !showJump, flightId: fieldFlight?.id ?? 0 } } : {})}
       />
       </LandedMessageContext.Provider>
 
@@ -1055,6 +1091,7 @@ function ChatContent({ chatId }: { chatId: string | undefined }) {
           ) : (
             <ChatComposer
               chatId={chatId}
+              fieldRef={fieldRef}
               {...(chat === null || replyTo !== undefined || quote !== undefined ? {} : { commandContext: () => chatCommandContext(chat, project, thread?.events ?? [], workspace.workHandoffs,
                 activeTurn !== null || sessionLive(chat.id).running || waiting || (thread?.pending.length ?? 0) > 0) })}
               busy={activeTurn !== null || waiting}
@@ -1095,6 +1132,9 @@ function ChatContent({ chatId }: { chatId: string | undefined }) {
         </Animated.View>
       </View>
       </KeyboardFooter>
+      {fieldFlight === null || userBubbleTint === undefined ? null : (
+        <SendFlightField flight={fieldFlight} motion={arrivalMotion} tint={userBubbleTint} />
+      )}
 
       {isPair || singleChat || chat?.kind === 'side' || chat?.kind === 'dm' ? null : <RuntimeSheet
         {...(chat !== null && chat.agentIds.length > 0 ? { activeAgentIds: chat.agentIds } : {})}
@@ -1274,6 +1314,17 @@ interface LiveTranscriptProps {
   onOpenQuoteSource: (eventId: string) => void
   onReply: (reply: MessageReply) => void
   onQuoteSource: (source: QuoteSelectionSource) => void
+  /** A DM's arrival motion, see `ArrivalMotion`. Other rooms keep rows that just appear. */
+  arrival?: TranscriptArrival
+}
+
+interface TranscriptArrival {
+  motion: ArrivalMotion
+  still: boolean
+  /** At the end of the chat; scrolled up, nothing moves when a row lands. */
+  followEnd: boolean
+  /** Counts the sends the composer asked to fly. */
+  flightId: number
 }
 
 /**
@@ -1285,7 +1336,7 @@ interface LiveTranscriptProps {
 function LiveTranscript({
   chatId, listRef, sessionLive, projectThread, firstKey, onLoadOlder, openBundles, onBundleOpen, connected, covered, links, draftActions,
   repoFiles, userBubbleTint, topInset, keyboardSink, contentInsetEndAdjustment, freeze, onScroll, onOpenAgentRelay, onRejectWork, onReveal,
-  onOpenSubagent, onOpenQuoteSource, onReply, onQuoteSource,
+  onOpenSubagent, onOpenQuoteSource, onReply, onQuoteSource, arrival,
 }: LiveTranscriptProps) {
   const { workspace } = useWorkspaceData()
   const thread = useLiveThread(chatId)
@@ -1336,6 +1387,42 @@ function LiveTranscript({
     const state = dmWorking(rows, runningChatIds)
     return projectThread && state?.kind === 'consult' ? undefined : state
   }, [chatKind, projectThread, rows, runningChatIds])
+  // What came in at the end since the last pass, worked out while rendering like the list
+  // keys above, so a new row mounts knowing how it arrives. A message, a reply's first
+  // words and the working face each arm the slide once; a reply growing as it streams does not.
+  const [arrivals, setArrivals] = useState(() => ({ rows: pageRows, keys: NO_ARRIVALS, flightId: arrival?.flightId ?? 0, working: working !== undefined, armed: 0 }))
+  if (arrival !== undefined && listKeys.rows === pageRows && (arrivals.rows !== pageRows || arrivals.working !== (working !== undefined))) {
+    const moving = arrival.followEnd && !covered
+    const flying = moving && !arrival.still && arrival.flightId > arrivals.flightId
+    const keys = !moving || arrivals.rows === pageRows ? NO_ARRIVALS : tailArrivals(arrivals.rows, pageRows, listKeyOf, flying)
+    const flew = [...keys.values()].includes('send')
+    const faceCame = working !== undefined && !arrivals.working
+    setArrivals({
+      rows: pageRows,
+      keys,
+      flightId: flew ? arrival.flightId : arrivals.flightId,
+      working: working !== undefined,
+      armed: arrivals.armed + (moving && !arrival.still && (keys.size > 0 || faceCame) ? 1 : 0),
+    })
+  }
+  const arrivalMotion = arrival?.motion
+  useLayoutEffect(() => {
+    if (arrivalMotion === undefined || arrivals.armed === 0) return
+    armArrival(arrivalMotion)
+  }, [arrivalMotion, arrivals.armed])
+  useLayoutEffect(() => {
+    if (arrivalMotion === undefined) return
+    for (const [key, kind] of arrivals.keys) if (kind === 'send') claimFlight(arrivalMotion, key)
+  }, [arrivalMotion, arrivals.keys])
+  // Spent once its motion is over, so a row the list unmounts and draws again later just appears.
+  useEffect(() => {
+    if (arrivals.keys.size === 0) return undefined
+    const spent = arrivals.keys
+    const timer = setTimeout(() => setArrivals((current) => current.keys === spent ? { ...current, keys: NO_ARRIVALS } : current), ARRIVAL_SPENT_MS)
+    return () => clearTimeout(timer)
+  }, [arrivals.keys])
+  // The scroll offset the slide follows, on the UI thread.
+  const sharedValues = useMemo(() => arrivalMotion === undefined ? undefined : { scrollOffset: arrivalMotion.scrollOffset }, [arrivalMotion])
   /**
    * What a row draws from the rows around it and from the thread as a whole. Rows keep
    * their objects across an event that did not change them, so the list would not redraw
@@ -1388,6 +1475,44 @@ function LiveTranscript({
     [openBundles, connected, links, draftActions, repoFiles, latestTurnKey, agents, around, project, userBubbleTint, isolatedBranch, kickoffKey, skills],
   )
 
+  const renderRow = (item: Row) => (
+    <TranscriptRow
+      agents={agents}
+      connected={connected}
+      bubbleReplies={chatKind === 'dm'}
+      {...(userBubbleTint === undefined ? {} : { userBubbleTint })}
+      showSpeaker={!singleChat}
+      quoteAuthors={chat !== null && quoteNamesAuthor(chat, projectThread)}
+      skills={skills}
+      {...(projectThread && project !== undefined ? { threadProject: project } : {})}
+      pinPlan={chatKind === 'project' && !projectThread}
+      {...(isolatedBranch === undefined || item.key !== kickoffKey ? {} : { isolatedBranch })}
+      compactUser={around.places.get(item.key)?.compactUser === true}
+      latest={item.key === latestTurnKey}
+      links={links}
+      draftActions={draftActions}
+      repoFiles={repoFiles}
+      row={item}
+      {...(item.kind === 'thread_bundle' ? { bundleOpen: threadBundleOpen(openBundles, around.stretch, item.key), bundleOpenItems: threadBundleOpenItems(openBundles, around.stretch, item), onBundleOpen } : {})}
+      dateLabel={around.places.get(item.key)?.dateLabel}
+      waitingOnAgentId={item.kind === 'turn' ? around.waitingOnByTurn.get(item.turnId) : undefined}
+      consultationMarker={item.kind === 'event' ? around.consultationMarkers.get(item.event.id) : undefined}
+      exchange={item.kind === 'event' ? around.exchanges.get(item.event.id) ?? undefined : undefined}
+      unannounced={item.kind === 'event' && item.event.type === 'agent_relay' && item.event.phase === 'sent' ? around.unannounced.get(item.event.turnId) : undefined}
+      relayOffset={around.places.get(item.key)?.relayOffset}
+      {...(around.places.get(item.key)?.threadOffset === undefined ? {} : { threadOffset: around.places.get(item.key)?.threadOffset })}
+      onOpenAgentRelay={onOpenAgentRelay}
+      {...(project === undefined || project.name === '' ? {} : { forwardSource: project.name })}
+      onRejectWork={onRejectWork}
+      onReveal={onReveal}
+      {...(around.memoryMarks === undefined || item.kind !== 'turn' ? {} : { memoryChanges: around.memoryMarks.get(item.key) })}
+      onOpenSubagent={onOpenSubagent}
+      onOpenQuoteSource={onOpenQuoteSource}
+      {...(chatKind === 'dm' || chatKind === 'group' ? { onReply } : {})}
+      {...(isPair ? {} : { onQuoteSource })}
+    />
+  )
+
   return (
     <KeyboardAwareLegendList
       // Short chats sit at the bottom, except a Session, which reads from its brief down
@@ -1433,43 +1558,13 @@ function LiveTranscript({
           : <View style={styles.empty}><Text style={styles.emptyCopy}>Loading conversation…</Text></View>
       }
       onScroll={onScroll}
+      {...(sharedValues === undefined ? {} : { sharedValues })}
+      {...(arrivalMotion === undefined ? {} : { onScrollBeginDrag: () => disarmArrival(arrivalMotion) })}
       ref={listRef}
-      renderItem={({ item, index }) => (
-        <TranscriptRow
-          agents={agents}
-          connected={connected}
-          bubbleReplies={chatKind === 'dm'}
-          {...(userBubbleTint === undefined ? {} : { userBubbleTint })}
-          showSpeaker={!singleChat}
-          quoteAuthors={chat !== null && quoteNamesAuthor(chat, projectThread)}
-          skills={skills}
-          {...(projectThread && project !== undefined ? { threadProject: project } : {})}
-          pinPlan={chatKind === 'project' && !projectThread}
-          {...(isolatedBranch === undefined || item.key !== kickoffKey ? {} : { isolatedBranch })}
-          compactUser={around.places.get(item.key)?.compactUser === true}
-          latest={item.key === latestTurnKey}
-          links={links}
-          draftActions={draftActions}
-          repoFiles={repoFiles}
-          row={item}
-          {...(item.kind === 'thread_bundle' ? { bundleOpen: threadBundleOpen(openBundles, around.stretch, item.key), bundleOpenItems: threadBundleOpenItems(openBundles, around.stretch, item), onBundleOpen } : {})}
-          dateLabel={around.places.get(item.key)?.dateLabel}
-          waitingOnAgentId={item.kind === 'turn' ? around.waitingOnByTurn.get(item.turnId) : undefined}
-          consultationMarker={item.kind === 'event' ? around.consultationMarkers.get(item.event.id) : undefined}
-          exchange={item.kind === 'event' ? around.exchanges.get(item.event.id) ?? undefined : undefined}
-          unannounced={item.kind === 'event' && item.event.type === 'agent_relay' && item.event.phase === 'sent' ? around.unannounced.get(item.event.turnId) : undefined}
-          relayOffset={around.places.get(item.key)?.relayOffset}
-          {...(around.places.get(item.key)?.threadOffset === undefined ? {} : { threadOffset: around.places.get(item.key)?.threadOffset })}
-          onOpenAgentRelay={onOpenAgentRelay}
-          {...(project === undefined || project.name === '' ? {} : { forwardSource: project.name })}
-          onRejectWork={onRejectWork}
-          onReveal={onReveal}
-          {...(around.memoryMarks === undefined || item.kind !== 'turn' ? {} : { memoryChanges: around.memoryMarks.get(item.key) })}
-          onOpenSubagent={onOpenSubagent}
-          onOpenQuoteSource={onOpenQuoteSource}
-          {...(chatKind === 'dm' || chatKind === 'group' ? { onReply } : {})}
-          {...(isPair ? {} : { onQuoteSource })}
-        />
+      renderItem={({ item }) => arrivalMotion === undefined ? renderRow(item) : (
+        <ArrivalRow arrival={arrivals.keys.get(listKeyOf(item))} motion={arrivalMotion} rowKey={listKeyOf(item)} still={arrival?.still ?? false}>
+          {renderRow(item)}
+        </ArrivalRow>
       )}
       scrollEventThrottle={80}
       scrollIndicatorInsets={{ top: topInset - spacing.lg }}
@@ -1485,6 +1580,20 @@ function sameKeys(a: ReadonlySet<string>, b: ReadonlySet<string>): boolean {
 function measureInWindow(view: unknown): Promise<ScreenSpan | undefined> {
   if (!isMeasurable(view)) return Promise.resolve(undefined)
   return new Promise((resolve) => view.measureInWindow((_x, y, _width, height) => resolve({ top: y, bottom: y + height })))
+}
+
+/**
+ * Where a view sits in the window, read at once. The layout is read synchronously from the
+ * shadow tree; where the callback would come later, this reads nothing and the caller
+ * goes without.
+ */
+function measureNow(view: unknown): { x: number; y: number; width: number; height: number } | undefined {
+  if (!isMeasurable(view)) return undefined
+  let rect: { x: number; y: number; width: number; height: number } | undefined
+  view.measureInWindow((x, y, width, height) => {
+    rect = { x, y, width, height }
+  })
+  return rect
 }
 
 function isMeasurable(view: unknown): view is Pick<View, 'measureInWindow'> {

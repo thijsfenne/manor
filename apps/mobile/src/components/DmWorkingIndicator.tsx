@@ -4,9 +4,10 @@ import { turnFace } from '@manor/client-runtime/face-activity'
 import { dmWorkingLabel, type DmWorking } from '@manor/client-runtime/turn-trace'
 import { useEffect, useRef, useState } from 'react'
 import { StyleSheet, View } from 'react-native'
-import Animated, { Easing, Keyframe, LayoutAnimationConfig, ReduceMotion } from 'react-native-reanimated'
+import Animated, { Easing, FadeOut, Keyframe, LayoutAnimationConfig, ReduceMotion, withSpring, withTiming } from 'react-native-reanimated'
 
 import { Blobatar } from '@/components/Blobatar'
+import { ARRIVAL_SPRING } from '@/lib/arrival'
 import { useFaceState } from '@/lib/useFaceState'
 import { ShimmerText } from '@/components/ShimmerText'
 import { colors, fonts, spacing } from '@/theme'
@@ -25,6 +26,29 @@ const leave = new Keyframe({
   0: { opacity: 1, transform: [{ translateY: 0 }] },
   100: { opacity: 0, transform: [{ translateY: -4 }], easing: swapEase },
 }).duration(SWAP_MS).reduceMotion(ReduceMotion.System)
+
+const FACE_SIZE = 32
+/** The room the face takes at the foot of a DM, with the gap above it: a sent row rests above it. */
+export const DM_FACE_ROOM = FACE_SIZE + spacing.xl
+
+/**
+ * A DM's face comes in like a typing bubble: from a little under half size at its foot on
+ * the left, on the arrival spring, while the rows above make room for it. Under Reduce
+ * Motion it only fades.
+ */
+function growIn() {
+  'worklet'
+  return {
+    initialValues: { opacity: 0, transform: [{ scale: 0.4 }] },
+    animations: {
+      opacity: withTiming(1, { duration: 120, reduceMotion: ReduceMotion.Never }),
+      transform: [{ scale: withSpring(1, { ...ARRIVAL_SPRING, reduceMotion: ReduceMotion.System }) }],
+    },
+  }
+}
+
+/** It fades where it stands as her reply slides in above it. */
+const faceOut = FadeOut.duration(120).reduceMotion(ReduceMotion.Never)
 
 /**
  * A DM's one sign of life, as on the Mac: her face and a shimmering label at the foot
@@ -56,8 +80,9 @@ export function DmWorkingIndicator({ working, persona, agents, bare = false }: {
     <Animated.View
       accessibilityLabel={bare ? shown : `${persona.name}: ${shown}`}
       accessible
-      entering={arrive}
-      style={styles.indicator}
+      entering={bare ? arrive : growIn}
+      {...(bare ? {} : { exiting: faceOut })}
+      style={[styles.indicator, !bare && styles.grows]}
     >
       {bare ? null : (
         <View style={styles.face}>
@@ -68,7 +93,7 @@ export function DmWorkingIndicator({ working, persona, agents, bare = false }: {
             color={persona.color}
             name={persona.name}
             shape={persona.avatarShape}
-            size={32}
+            size={FACE_SIZE}
             src={persona.avatar}
             tone={persona.avatarTone}
           />
@@ -111,7 +136,8 @@ function useHeldLabel(label: string): string {
 const styles = StyleSheet.create({
   // The list cancels its last row's gap, so the footer brings the feed's own gap: the
   // distance a reply keeps from the bubble above it.
-  indicator: { minHeight: 32, marginTop: spacing.xl, flexDirection: 'row', alignItems: 'center', gap: 6 },
+  indicator: { minHeight: FACE_SIZE, marginTop: spacing.xl, flexDirection: 'row', alignItems: 'center', gap: 6 },
+  grows: { transformOrigin: 'left bottom' },
   face: { marginLeft: -4 },
   label: { flex: 1, minWidth: 0, flexDirection: 'row' },
   text: { color: colors.muted, fontFamily: fonts.sans, fontSize: 15 },

@@ -17,6 +17,7 @@ const HOT: Record<string, readonly string[]> = {
   'app/(tabs)/(agents,sessions,knowledge,search)/chat/[id].tsx': ['ChatContent', 'ChatComposer', 'LiveTranscript', 'useTranscriptRows', 'TranscriptRowBody'],
   'components/SubagentConversation.tsx': ['ChildConversation'],
   'components/Composer.tsx': ['Composer'],
+  'components/ArrivalMotion.tsx': ['ArrivalRow'],
   'components/Turn.tsx': ['Turn'],
   'app/(tabs)/(sessions)/sessions.tsx': ['ProjectInbox'],
   'app/(tabs)/(agents)/index.tsx': ['DirectList'],
