@@ -490,7 +490,7 @@ export function RepoFilesPanel({
         </div>
       )}
 
-      <div className="border-b border-line">
+      <div className="min-w-0 border-b border-line">
         {fileActions}
 
         {conflict === null ? null : (

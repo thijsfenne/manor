@@ -1015,7 +1015,7 @@ export function KnowledgePanel({
           </div>
         )}
 
-        <div className="border-b border-line">
+        <div className="min-w-0 border-b border-line">
           <div role="toolbar" aria-label="Knowledge actions" className="flex min-h-11 min-w-0 items-center gap-1 px-2 py-1">
             <div className="flex min-w-0 flex-1 items-center gap-1">
               {path === null ? null : (

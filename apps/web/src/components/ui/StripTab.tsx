@@ -102,9 +102,10 @@ export function StripTab({
     onContextMenu: (event: ReactMouseEvent) => { event.preventDefault(); if (!disabled && hasMenu) openMenu() },
     // A middle click closes a tab, as in a browser.
     onAuxClick: (event: ReactMouseEvent) => { if (event.button === 1 && !pinned && !disabled) { event.preventDefault(); onClose() } },
-    // The title runs to the tab's edge and only gives way, by the close mark's own
-    // width, while the mark is showing on hover or keyboard focus.
-    className: `group relative flex ${slim ? 'h-[30px]' : 'h-8'} items-center rounded-button ${pinned ? 'w-9 flex-none justify-center' : `min-w-[90px] max-w-[200px] flex-[1_1_200px] gap-1.5 px-2 hover:pr-6 has-[:focus-visible]:pr-6 ${closeShown ? 'pr-6' : ''}`} ${
+    // Every tab has one width, whatever its title, and all of them shrink alike, to
+    // 90px, only once the strip runs out of room. Hover and the active state never
+    // change it: the room the close mark needs is taken inside the tab.
+    className: `group relative flex ${slim ? 'h-[30px]' : 'h-8'} items-center rounded-button ${pinned ? 'w-9 flex-none justify-center' : 'w-[200px] min-w-[90px] px-2'} ${
       active ? 'bg-surface-2 text-text' : 'text-muted hover:bg-surface-2/60'
     }`,
   }
@@ -119,7 +120,9 @@ export function StripTab({
           {leading}
         </button>
       ) : (
-        <>
+        // The title runs to the tab's edge and only gives way, by the close mark's own
+        // width, while the mark is showing on hover or keyboard focus.
+        <span className={`flex min-w-0 flex-1 items-center gap-1.5 group-hover:pr-4 group-has-[:focus-visible]:pr-4 ${closeShown ? 'pr-4' : ''}`}>
           {leading}
           <button type="button"
             className="min-w-0 flex-1 cursor-pointer truncate border-0 bg-transparent p-0 text-left text-meta disabled:cursor-default"
@@ -127,9 +130,10 @@ export function StripTab({
             disabled={disabled} onClick={onSelect} onKeyDown={openMenuKey}>
             {name}
           </button>
-        </>
+          {badge}
+        </span>
       )}
-      {badge}
+      {pinned ? badge : null}
       {pinned ? null : <IconButton
         icon={Cancel01Icon}
         iconSize={12}
