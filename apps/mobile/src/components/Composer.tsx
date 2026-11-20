@@ -1010,6 +1010,9 @@ function Recipients({ recipients }: { recipients: AgentConfig[] | 'unknown' }) {
   )
 }
 
+/** Where the open field's first line starts, which a sent message's blue copy starts from. */
+export const OPEN_FIELD_INSET = { left: spacing.lg + 2, top: 13 }
+
 const styles = StyleSheet.create({
   /* The same inset the pictures above them stand in: two strips of attachments on
      one card have to line up with each other and with the text under them. */
@@ -1080,7 +1083,7 @@ const styles = StyleSheet.create({
   body: { flexDirection: 'column' },
   input: { maxHeight: 140, color: colors.text, fontFamily: fonts.sans, fontSize: 17, letterSpacing: tracking.body, lineHeight: 23 },
   inputResting: { flex: 1, minHeight: 36, paddingHorizontal: spacing.xs, paddingTop: 7, paddingBottom: 6 },
-  inputOpen: { minHeight: 44, paddingHorizontal: spacing.lg + 2, paddingTop: 13, paddingBottom: 3 },
+  inputOpen: { minHeight: 44, paddingHorizontal: OPEN_FIELD_INSET.left, paddingTop: OPEN_FIELD_INSET.top, paddingBottom: 3 },
   actions: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingHorizontal: (PILL_HEIGHT - 36) / 2, paddingTop: spacing.xs, paddingBottom: (PILL_HEIGHT - 36) / 2 },
   plus: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center', borderRadius: 18, backgroundColor: colors.fill },
   plusOn: { backgroundColor: colors.chip },

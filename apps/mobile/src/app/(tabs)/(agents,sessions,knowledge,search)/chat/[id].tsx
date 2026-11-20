@@ -37,7 +37,7 @@ import { useKeyboardState } from 'react-native-keyboard-controller'
 import Animated, { useReducedMotion, useSharedValue, type SharedValue } from 'react-native-reanimated'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
-import { ARRIVAL_SPENT_MS, ArrivalRow, FIELD_FLIGHT_MS, SendFlightField, armArrival, claimFlight, disarmArrival, requestFlight, useArrivalMotion, type ArrivalMotion, type FieldFlight } from '@/components/ArrivalMotion'
+import { ARRIVAL_SPENT_MS, ArrivalRow, FIELD_FLIGHT_MS, SENT_BUBBLE_PAD, SendFlightField, armArrival, claimFlight, disarmArrival, requestFlight, useArrivalMotion, type ArrivalMotion, type FieldFlight } from '@/components/ArrivalMotion'
 import { AskCard } from '@/components/AskCard'
 import { SecretCard } from '@/components/SecretCard'
 import { DM_FACE_ROOM, DmWorkingIndicator } from '@/components/DmWorkingIndicator'
@@ -101,6 +101,8 @@ const ESTIMATED_ROW = 120
 const ESTIMATED_FOOTER = 120
 /** The feed's own padding under its last row, `styles.feed`. */
 const FEED_END_GAP = spacing.xl
+/** How much of the feed's width a sent bubble may take. */
+const SENT_BUBBLE_SHARE = 0.86
 /** One identity, so a chat that offers no skills does not re-render the composer. */
 const NO_SKILLS: SkillConfig[] = []
 const isUserBubbleRow = (row: Row | undefined): boolean =>
@@ -704,17 +706,20 @@ function ChatContent({ chatId }: { chatId: string | undefined }) {
       dx: field.x + field.width - (screen.x + screen.width - spacing.lg),
       dy: field.y + field.height - slotBottom,
       field: { x: field.x - screen.x, y: field.y - screen.y, width: field.width, height: field.height },
+      // The bubble's widest, from the feed's padding and the bubble's own, as the chat styles them.
+      textWidth: (screen.width - spacing.lg * 2) * SENT_BUBBLE_SHARE - SENT_BUBBLE_PAD.x * 2,
     }
   }
 
   const submit = (text: string, images: ImageAttachment[], textFiles: StagedFile[]) => {
     const placed = placeQuotesAfterText({ text, ...(quote === undefined ? {} : { quote }) })
     // Only from the end of the chat: scrolled up, the send keeps its jump.
-    const flight = chat?.kind === 'dm' && !still && !showJump && text.trim() !== '' ? measureFlight() : undefined
+    const plain = images.length === 0 && textFiles.length === 0 && replyTo === undefined && quote === undefined
+    const flight = chat?.kind === 'dm' && !still && !showJump && plain && text.trim() !== '' ? measureFlight() : undefined
     if (chatId === undefined || !sendMessage(chatId, placed.text, images, textFiles, replyTo, placed.quotes)) return false
     if (flight !== undefined) {
       const id = requestFlight(arrivalMotion, flight.dx, flight.dy)
-      setFieldFlight({ id, text, field: flight.field })
+      setFieldFlight({ id, text, field: flight.field, textWidth: flight.textWidth })
       setTimeout(() => setFieldFlight((current) => current?.id === id ? null : current), FIELD_FLIGHT_MS)
     }
     setReplyTo(undefined)
@@ -1133,7 +1138,7 @@ function ChatContent({ chatId }: { chatId: string | undefined }) {
       </View>
       </KeyboardFooter>
       {fieldFlight === null || userBubbleTint === undefined ? null : (
-        <SendFlightField flight={fieldFlight} motion={arrivalMotion} tint={userBubbleTint} />
+        <SendFlightField flight={fieldFlight} key={fieldFlight.id} motion={arrivalMotion} tint={userBubbleTint} />
       )}
 
       {isPair || singleChat || chat?.kind === 'side' || chat?.kind === 'dm' ? null : <RuntimeSheet
@@ -2026,8 +2031,8 @@ const styles = StyleSheet.create({
   empty: { flex: 1, minHeight: 360, alignItems: 'center', justifyContent: 'center', gap: spacing.sm },
   emptyTitle: { color: colors.text, fontFamily: fonts.sans, fontSize: 20, fontWeight: '500' },
   emptyCopy: { color: colors.muted, fontFamily: fonts.sans, fontSize: 15 },
-  userMessage: { maxWidth: '86%', alignSelf: 'flex-end', alignItems: 'flex-end', gap: spacing.xs + 2 },
-  userBubble: { maxWidth: '100%', gap: spacing.sm, borderRadius: radius.composer, ...squircle, backgroundColor: colors.userBubble, paddingHorizontal: spacing.md + 2, paddingVertical: spacing.sm + 1 },
+  userMessage: { maxWidth: `${SENT_BUBBLE_SHARE * 100}%`, alignSelf: 'flex-end', alignItems: 'flex-end', gap: spacing.xs + 2 },
+  userBubble: { maxWidth: '100%', gap: spacing.sm, borderRadius: radius.composer, ...squircle, backgroundColor: colors.userBubble, paddingHorizontal: SENT_BUBBLE_PAD.x, paddingVertical: SENT_BUBBLE_PAD.y },
   userBubbleWash: { borderRadius: radius.composer, ...squircle },
   pending: { opacity: 0.55 },
   note: { color: colors.muted, fontFamily: fonts.sans, fontSize: 13, lineHeight: 19, textAlign: 'center' },
