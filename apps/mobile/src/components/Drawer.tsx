@@ -2,8 +2,9 @@ import type { ReactNode } from 'react'
 import { useEffect } from 'react'
 import { Pressable, StyleSheet, View, useWindowDimensions } from 'react-native'
 import { Gesture, GestureDetector } from 'react-native-gesture-handler'
-import Animated, { interpolate, runOnJS, useAnimatedStyle, useReducedMotion, useSharedValue, withSpring } from 'react-native-reanimated'
+import Animated, { Extrapolation, interpolate, runOnJS, useAnimatedStyle, useReducedMotion, useSharedValue, withSpring } from 'react-native-reanimated'
 
+import { rubberBand } from '@/lib/rubberBand'
 import { colors, squircle } from '@/theme'
 
 /** How far the page slides, and how wide the menu behind it is. */
@@ -37,23 +38,35 @@ export function Drawer({ open, onOpenChange, menu, children, swipeEnabled = true
   const travel = Math.round(width * OPEN_FRACTION)
   const still = useReducedMotion()
   const progress = useSharedValue(open ? 1 : 0)
+  // Where the page is heading, so a swipe's own settle is not restarted without its
+  // speed when the `open` it reports comes back.
+  const heading = useSharedValue(open ? 1 : 0)
   const dragStart = useSharedValue(0)
 
   // `.get()`/`.set()` rather than `.value`: the compiler treats a shared value as
   // frozen state, and these are the accessors Reanimated offers for exactly that.
   useEffect(() => {
-    progress.set(still ? (open ? 1 : 0) : withSpring(open ? 1 : 0, SPRING))
-  }, [open, progress, still])
+    const to = open ? 1 : 0
+    if (heading.get() === to) return
+    heading.set(to)
+    progress.set(still ? to : withSpring(to, SPRING))
+  }, [open, heading, progress, still])
 
-  const settle = (to: boolean) => {
+  /**
+   * `velocity` is the release speed in progress per second, so the spring carries the
+   * fling on. A fast open may swing a little past open; closed stays a hard edge.
+   */
+  const settle = (to: boolean, velocity: number) => {
     'worklet'
-    progress.set(still ? (to ? 1 : 0) : withSpring(to ? 1 : 0, SPRING))
+    heading.set(to ? 1 : 0)
+    progress.set(still ? (to ? 1 : 0) : withSpring(to ? 1 : 0, { ...SPRING, velocity, overshootClamping: !to }))
     runOnJS(onOpenChange)(to)
   }
 
   // Closed: only a swipe that starts in the edge strip is ours, so the inbox rows
   // keep their own swipe. Open: a swipe anywhere on the page closes. Both follow
-  // the finger and settle on release by where it left.
+  // the finger, give a little past open but stop at closed, and settle on release by
+  // where it left.
   const pan = Gesture.Pan()
     .enabled(open || swipeEnabled)
     .hitSlop(open ? { left: 0, right: 0, top: 0, bottom: 0 } : { left: 0, width: EDGE })
@@ -63,16 +76,22 @@ export function Drawer({ open, onOpenChange, menu, children, swipeEnabled = true
       dragStart.set(progress.get())
     })
     .onUpdate((event) => {
-      progress.set(Math.min(1, Math.max(0, dragStart.get() + event.translationX / travel)))
+      // Grabbed mid-swing past open, it resists only beyond that point.
+      progress.set(Math.max(0, rubberBand(dragStart.get() + event.translationX / travel, 0, Math.max(1, dragStart.get()), 0.2)))
     })
-    .onEnd((event) => {
+    .onEnd((event, success) => {
+      // A swipe the system cancelled goes back where it was heading and changes nothing.
+      if (!success) {
+        settle(heading.get() === 1, 0)
+        return
+      }
       const flung = Math.abs(event.velocityX) > 500
-      settle(flung ? event.velocityX > 0 : progress.get() > 0.5)
+      settle(flung ? event.velocityX > 0 : progress.get() > 0.5, event.velocityX / travel)
     })
 
   const page = useAnimatedStyle(() => ({
     transform: [{ translateX: progress.get() * travel }],
-    borderRadius: interpolate(progress.get(), [0, 1], [0, 32]),
+    borderRadius: interpolate(progress.get(), [0, 1], [0, 32], Extrapolation.CLAMP),
     ...squircle,
   }))
   const scrim = useAnimatedStyle(() => ({
@@ -80,7 +99,7 @@ export function Drawer({ open, onOpenChange, menu, children, swipeEnabled = true
   }))
   const panel = useAnimatedStyle(() => ({
     opacity: interpolate(progress.get(), [0, 0.4, 1], [0, 0.8, 1]),
-    transform: [{ translateX: interpolate(progress.get(), [0, 1], [-travel * 0.3, 0]) }],
+    transform: [{ translateX: interpolate(progress.get(), [0, 1], [-travel * 0.3, 0], Extrapolation.CLAMP) }],
   }))
 
   return (

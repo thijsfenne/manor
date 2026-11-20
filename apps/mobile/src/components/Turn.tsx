@@ -50,7 +50,7 @@ import { Image } from 'expo-image'
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Modal, Pressable, StyleSheet, View, useWindowDimensions, type AccessibilityState, type ColorValue } from 'react-native'
 import { Gesture, GestureDetector } from 'react-native-gesture-handler'
-import Animated, { Easing, FadeIn, ReduceMotion, runOnJS, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated'
+import Animated, { Extrapolation, FadeIn, interpolate, ReduceMotion, runOnJS, useAnimatedStyle, useReducedMotion, useSharedValue, withSpring } from 'react-native-reanimated'
 
 import { Attachments, ImageViewer } from '@/components/Attachments'
 import { FileViewer } from '@/components/FileViewer'
@@ -58,6 +58,7 @@ import { AgentStack } from '@/components/AgentStack'
 import { DiffSheet } from '@/components/DiffSheet'
 import { Blobatar } from '@/components/Blobatar'
 import { useFaceState } from '@/lib/useFaceState'
+import { rubberBand } from '@/lib/rubberBand'
 import { LandedMessageContext, LandingWash } from '@/components/LandingWash'
 import { Markdown, type MarkdownLinks } from '@/components/Markdown'
 import { MemoryChangesSheet, hasMemoryChanges, memoryChangesLabel } from '@/components/MemoryChangesSheet'
@@ -1125,6 +1126,11 @@ function AskAnswers({ questions, answers }: { questions: readonly UserInputQuest
   )
 }
 
+// How far a message is swiped before letting go replies to it.
+const SWIPE_REPLY_AT = 52
+// Stiff and clamped: the message is home fast with no bounce past its edge.
+const SWIPE_HOME = { stiffness: 520, damping: 46, mass: 1, overshootClamping: true }
+
 function Reply({
   text,
   images = [],
@@ -1146,19 +1152,27 @@ function Reply({
   onSwipeReply?: () => void
   bubble?: boolean
 }) {
+  const still = useReducedMotion()
   const drag = useSharedValue(0)
+  // The message follows the finger to the trigger, then gives only a fifth of the rest.
+  // A drag the system cancelled never replies; either way it springs home at the speed
+  // it was let go with.
   const pan = Gesture.Pan()
     .enabled(onSwipeReply !== undefined)
     .activeOffsetX(12)
     .failOffsetY([-10, 10])
-    .onUpdate((event) => drag.set(Math.max(0, Math.min(event.translationX, 72))))
-    .onEnd((event) => {
-      if (onSwipeReply !== undefined && (drag.get() >= 52 || event.velocityX >= 650)) {
+    .onUpdate((event) => drag.set(rubberBand(Math.max(0, event.translationX), 0, SWIPE_REPLY_AT, 0.2)))
+    .onEnd((event, success) => {
+      if (success && onSwipeReply !== undefined && (drag.get() >= SWIPE_REPLY_AT || event.velocityX >= 650)) {
         runOnJS(onSwipeReply)()
       }
+      drag.set(still ? 0 : withSpring(0, { ...SWIPE_HOME, velocity: event.velocityX }))
     })
-    .onFinalize(() => drag.set(withTiming(0, { duration: 160, easing: Easing.linear })))
   const swipeStyle = useAnimatedStyle(() => ({ transform: [{ translateX: drag.get() }] }))
+  const cueStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(drag.get(), [16, SWIPE_REPLY_AT], [0, 1], Extrapolation.CLAMP),
+    transform: [{ scale: interpolate(drag.get(), [16, SWIPE_REPLY_AT], [0.6, 1], Extrapolation.CLAMP) }],
+  }))
   // The file viewer over this message's pictures only, opened at the one pressed.
   const [viewing, setViewing] = useState<number | null>(null)
   const pictures = viewing === null ? [] : eventImageFiles(images)
@@ -1167,9 +1181,9 @@ function Reply({
   return (
     <View style={[styles.replySwipe, bubble && styles.replySwipeBubble]}>
       {onSwipeReply === undefined ? null : (
-        <View style={styles.replyCue}>
+        <Animated.View style={[styles.replyCue, cueStyle]}>
           <HugeiconsIcon color={colors.dim} icon={ReplyIcon} size={21} strokeWidth={1.8} />
-        </View>
+        </Animated.View>
       )}
       <GestureDetector gesture={pan}>
         <Animated.View style={[swipeStyle, styles.reply]}>

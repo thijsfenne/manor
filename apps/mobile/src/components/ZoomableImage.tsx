@@ -4,6 +4,7 @@ import { StyleSheet, View } from 'react-native'
 import { Gesture, GestureDetector } from 'react-native-gesture-handler'
 import Animated, { runOnJS, useAnimatedStyle, useReducedMotion, useSharedValue, withDecay, withSpring } from 'react-native-reanimated'
 
+import { rubberBand } from '@/lib/rubberBand'
 import { clamp, clampPan, DOUBLE_TAP_ZOOM, fittedSize, MAX_ZOOM, MIN_PINCH, panLimit, zoomAround } from '@/lib/zoom'
 
 const SPRING = { damping: 28, stiffness: 300, mass: 0.8 }
@@ -28,8 +29,9 @@ export function usePageZoom(page: string, width: number) {
 
 /**
  * One full-screen picture that zooms: pinch between fit and 5x around the fingers,
- * drag while zoomed, double-tap between fit and 2x. Letting go at or under fit springs
- * back to fit. `onZoomedChange` reports when the picture leaves fit and when it is back,
+ * drag while zoomed, double-tap between fit and 2x. Past 5x and past the picture's
+ * edges it gives a little under the fingers. Letting go at or under fit springs back to
+ * fit, past 5x back to 5x. `onZoomedChange` reports when the picture leaves fit and when it is back,
  * for `usePageZoom`. A new frame size, such as a rotation, or the page leaving view
  * starts the picture over at fit. `children` draws over it, such as a loading spinner.
  */
@@ -52,6 +54,8 @@ export function ZoomableImage({ uri, name, page, active, width, height, onZoomed
   const x = useSharedValue(0)
   const y = useSharedValue(0)
   const start = useSharedValue({ scale: 1, x: 0, y: 0, focalX: 0, focalY: 0 })
+  // The fingers' point on the pinch's last move; its end event may count only the finger still down.
+  const focal = useSharedValue({ x: 0, y: 0 })
   const fitted = fittedSize(width, height, aspect)
 
   useEffect(() => {
@@ -71,14 +75,26 @@ export function ZoomableImage({ uri, name, page, active, width, height, onZoomed
     y.set(move(0))
     runOnJS(onZoomedChange)(page, false)
   }
+  // Past the most zoom it comes back to MAX_ZOOM around the fingers' last point.
   const settle = () => {
     'worklet'
-    if (scale.get() <= 1) {
+    const current = scale.get()
+    if (current <= 1) {
       toFit()
       return
     }
-    x.set(move(clampPan(x.get(), width, fitted.width, scale.get())))
-    y.set(move(clampPan(y.get(), height, fitted.height, scale.get())))
+    const to = Math.min(current, MAX_ZOOM)
+    const { x: focalX, y: focalY } = focal.get()
+    if (to !== current) scale.set(move(to))
+    x.set(move(clampPan(zoomAround(focalX, focalX, x.get(), current, to), width, fitted.width, to)))
+    y.set(move(clampPan(zoomAround(focalY, focalY, y.get(), current, to), height, fitted.height, to)))
+  }
+  // Let go past an edge, an axis springs back to it; inside, a fling glides to a stop at the edges.
+  const release = (offset: number, velocity: number, limit: number) => {
+    'worklet'
+    const inside = clamp(offset, -limit, limit)
+    if (still) return inside
+    return inside === offset ? withDecay({ velocity, clamp: [-limit, limit] }) : withSpring(inside, { ...SPRING, velocity, overshootClamping: true })
   }
 
   const pinch = Gesture.Pinch()
@@ -88,10 +104,13 @@ export function ZoomableImage({ uri, name, page, active, width, height, onZoomed
     })
     .onUpdate((event) => {
       const from = start.get()
-      const next = clamp(from.scale * event.scale, MIN_PINCH, MAX_ZOOM)
+      // Scale is a ratio, so the give past MAX_ZOOM is too: a pinch twice too wide shows 1.15x past it.
+      const next = Math.exp(rubberBand(Math.log(Math.max(MIN_PINCH, from.scale * event.scale)), Math.log(MIN_PINCH), Math.log(Math.max(MAX_ZOOM, from.scale)), 0.2))
+      const at = { x: event.focalX - width / 2, y: event.focalY - height / 2 }
+      focal.set(at)
       scale.set(next)
-      x.set(zoomAround(event.focalX - width / 2, from.focalX, from.x, from.scale, next))
-      y.set(zoomAround(event.focalY - height / 2, from.focalY, from.y, from.scale, next))
+      x.set(zoomAround(at.x, from.focalX, from.x, from.scale, next))
+      y.set(zoomAround(at.y, from.focalY, from.y, from.scale, next))
     })
     .onEnd(settle)
 
@@ -108,15 +127,17 @@ export function ZoomableImage({ uri, name, page, active, width, height, onZoomed
     })
     .onUpdate((event) => {
       const from = start.get()
-      x.set(clampPan(from.x + event.translationX, width, fitted.width, scale.get()))
-      y.set(clampPan(from.y + event.translationY, height, fitted.height, scale.get()))
-    })
-    .onEnd((event) => {
-      if (still) return
       const limitX = panLimit(width, fitted.width, scale.get())
       const limitY = panLimit(height, fitted.height, scale.get())
-      x.set(withDecay({ velocity: event.velocityX, clamp: [-limitX, limitX] }))
-      y.set(withDecay({ velocity: event.velocityY, clamp: [-limitY, limitY] }))
+      // Grabbed while still out past an edge on its way back, it resists only beyond that point.
+      x.set(rubberBand(from.x + event.translationX, Math.min(-limitX, from.x), Math.max(limitX, from.x), 0.3))
+      y.set(rubberBand(from.y + event.translationY, Math.min(-limitY, from.y), Math.max(limitY, from.y), 0.3))
+    })
+    .onEnd((event) => {
+      // The edges of the zoom it settles at, when a pinch past MAX_ZOOM is still springing back.
+      const to = Math.min(scale.get(), MAX_ZOOM)
+      x.set(release(x.get(), event.velocityX, panLimit(width, fitted.width, to)))
+      y.set(release(y.get(), event.velocityY, panLimit(height, fitted.height, to)))
     })
 
   const doubleTap = Gesture.Tap()

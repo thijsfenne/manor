@@ -197,6 +197,8 @@ const DISMISS_DISTANCE = 0.15
 const DISMISS_VELOCITY = 800
 const FADE_DISTANCE = 0.4
 const SPRING_BACK = { damping: 26, stiffness: 260, mass: 0.8 }
+// The longest a dismissed picture takes to leave; a faster flick leaves faster.
+const EXIT_MS = 180
 
 /**
  * A message's pictures become a swipeable, full-screen gallery without leaving chat.
@@ -241,7 +243,7 @@ function ImageGallery({ images, initialIndex, onClose }: { images: readonly Even
       // A drag the system cancelled, rather than one the finger let go of, never dismisses.
       const away = success && (Math.abs(event.translationY) > height * DISMISS_DISTANCE || Math.abs(event.velocityY) > DISMISS_VELOCITY)
       if (!away) {
-        drag.set(still ? 0 : withSpring(0, SPRING_BACK))
+        drag.set(still ? 0 : withSpring(0, { ...SPRING_BACK, velocity: event.velocityY }))
         return
       }
       // Leave in the direction of the flick, or of the drag when it was let go slowly.
@@ -250,7 +252,10 @@ function ImageGallery({ images, initialIndex, onClose }: { images: readonly Even
         runOnJS(onClose)()
         return
       }
-      drag.set(withTiming(direction * height, { duration: 180, easing: Easing.out(Easing.quad) }, (finished) => {
+      // Off at a steady speed: the finger's own, or faster when that would take over EXIT_MS.
+      const remaining = Math.abs(direction * height - drag.get())
+      const duration = Math.min(EXIT_MS, (remaining / Math.abs(event.velocityY)) * 1000)
+      drag.set(withTiming(direction * height, { duration, easing: Easing.linear }, (finished) => {
         if (finished === true) runOnJS(onClose)()
       }))
     })
