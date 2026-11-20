@@ -22,17 +22,21 @@ It is a Mac app for Apple Silicon. Everything stays on your Mac: the chats, the 
 
 Manor has no GitHub sign in of its own. An agent that works in a linked folder uses the git and `gh` sign in of your Mac user, the same one your Terminal uses. Manor stores and passes no token of its own. If you have never signed in, run `gh auth login` once first. A Grok agent is the exception: it runs with a home folder of its own and sees your ssh keys, but not your git settings or your `gh` sign in.
 
+## Install
+
+Download `Manor-<version>-arm64.dmg` from the [latest release](https://github.com/thijsfenne/manor/releases/latest). The DMG is signed and notarized, and it is for Apple Silicon only. Open it, drag Manor to Applications, then open Manor.
+
+The app carries its own server and starts it when you open it. The first time, a short setup asks for your name, helps you sign in to a provider and creates your first agent.
+
 ## Build and run from source
 
-There is no download yet. You build the app on your own Mac, which takes a few minutes. An app you build yourself opens without a Gatekeeper warning.
+You can also build the app on your own Mac, which takes a few minutes.
 
 ```sh
 pnpm install
 pnpm --filter @manor/desktop package:mac
 open apps/desktop/release/mac-arm64/Manor.app
 ```
-
-The app carries its own server and starts it when you open it. The first time, a short setup asks for your name, helps you sign in to a provider and creates your first agent.
 
 For development, run the server and the web client with live reload, then the desktop shell on top of them.
 
