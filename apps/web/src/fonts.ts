@@ -35,10 +35,10 @@ const mono = <Id extends string>(id: Id, label: string, family: string, load: ()
   load,
 })
 
-/* Figtree, Instrument Sans and Geist are imported by styles.css as part of the default stack.
-   After the default the list runs alphabetically. Faces without an italic cut get a slanted upright. */
+/* Geist is imported by styles.css as the default. After the default the list runs
+   alphabetically. Faces without an italic cut get a slanted upright. */
 export const SANS_FONTS = [
-  sans('figtree', 'Figtree', 'Figtree Variable'),
+  sans('geist', 'Geist', 'Geist Variable'),
   sans('albert-sans', 'Albert Sans', 'Albert Sans Variable', () => Promise.all([import('@fontsource-variable/albert-sans'), import('@fontsource-variable/albert-sans/wght-italic.css')])),
   sans('archivo', 'Archivo', 'Archivo Variable', () => Promise.all([import('@fontsource-variable/archivo'), import('@fontsource-variable/archivo/wght-italic.css')])),
   sans('atkinson-hyperlegible-next', 'Atkinson Hyperlegible Next', 'Atkinson Hyperlegible Next Variable', () => Promise.all([import('@fontsource-variable/atkinson-hyperlegible-next'), import('@fontsource-variable/atkinson-hyperlegible-next/wght-italic.css')])),
@@ -48,14 +48,14 @@ export const SANS_FONTS = [
   ),
   sans('bricolage-grotesque', 'Bricolage Grotesque', 'Bricolage Grotesque Variable', () => import('@fontsource-variable/bricolage-grotesque')),
   sans('dm-sans', 'DM Sans', 'DM Sans Variable', () => Promise.all([import('@fontsource-variable/dm-sans'), import('@fontsource-variable/dm-sans/wght-italic.css')])),
+  sans('figtree', 'Figtree', 'Figtree Variable', () => Promise.all([import('@fontsource-variable/figtree'), import('@fontsource-variable/figtree/wght-italic.css')])),
   // No variable cut exists, so the two house weights come as static files.
   sans('fira-sans', 'Fira Sans', 'Fira Sans', () =>
     Promise.all([import('@fontsource/fira-sans/400.css'), import('@fontsource/fira-sans/500.css'), import('@fontsource/fira-sans/400-italic.css'), import('@fontsource/fira-sans/500-italic.css')]),
   ),
-  sans('geist', 'Geist', 'Geist Variable'),
   sans('hanken-grotesk', 'Hanken Grotesk', 'Hanken Grotesk Variable', () => Promise.all([import('@fontsource-variable/hanken-grotesk'), import('@fontsource-variable/hanken-grotesk/wght-italic.css')])),
   sans('ibm-plex-sans', 'IBM Plex Sans', 'IBM Plex Sans Variable', () => Promise.all([import('@fontsource-variable/ibm-plex-sans'), import('@fontsource-variable/ibm-plex-sans/wght-italic.css')])),
-  sans('instrument-sans', 'Instrument Sans', 'Instrument Sans Variable'),
+  sans('instrument-sans', 'Instrument Sans', 'Instrument Sans Variable', () => Promise.all([import('@fontsource-variable/instrument-sans'), import('@fontsource-variable/instrument-sans/wght-italic.css')])),
   sans('inter', 'Inter', 'Inter Variable', () => Promise.all([import('@fontsource-variable/inter'), import('@fontsource-variable/inter/wght-italic.css')])),
   sans('karla', 'Karla', 'Karla Variable', () => Promise.all([import('@fontsource-variable/karla'), import('@fontsource-variable/karla/wght-italic.css')])),
   // No variable cut, and no 500 either: Lato's medium text shows at 400.

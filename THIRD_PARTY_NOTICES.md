@@ -14,7 +14,7 @@ Manor is MIT licensed, see `LICENSE`. This file lists code and assets from other
 | What | Licence |
 |---|---|
 | HugeIcons free icons (`@hugeicons/core-free-icons`, `@hugeicons/react`) | MIT |
-| Figtree, Geist, Geist Mono and Instrument Sans fonts (`@fontsource-variable/*`) | SIL Open Font License 1.1 |
+| Geist, Geist Mono, Figtree, Instrument Sans and the other Appearance fonts (`@fontsource-variable/*`, `@fontsource/*`), and Geist in the phone companion (`@expo-google-fonts/geist`) | SIL Open Font License 1.1 |
 | Ghostery adblocker (`@ghostery/adblocker`, `@ghostery/adblocker-electron`) | MPL 2.0, unchanged, source at github.com/ghostery/adblocker |
 | `@pierre/trees` and `@pierre/theming` file tree and file icons | Apache 2.0 |
 | Electron and Chromium | MIT and the Chromium licences, in the app's `LICENSES.chromium.html` |

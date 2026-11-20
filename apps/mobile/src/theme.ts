@@ -145,21 +145,21 @@ export const shimmerTones = {
 export const useScheme = () => (useColorScheme() === 'light' ? 'light' : 'dark')
 
 export const fonts = {
-  // Figtree on trial as the UI face, bundled and loaded in the root layout.
+  // Geist is the UI face, bundled and loaded in the root layout.
   // Native text resolves a face by family name alone and synthesizes neither a weight
   // nor a slant, so every cut the app uses is registered as its own family; the shared
   // Text component picks between them from the weight and style a screen asks for.
   // To hand the room back to SF Pro Rounded, put `Platform.select({ ios: 'ui-rounded',
   // default: 'System' })` back on `sans` and drop the loader; iOS hands that face over
   // without shipping a byte of it, the only route Apple's licence allows.
-  sans: 'Figtree_400Regular',
-  sansMedium: 'Figtree_500Medium',
-  sansItalic: 'Figtree_400Regular_Italic',
-  sansMediumItalic: 'Figtree_500Medium_Italic',
+  sans: 'Geist_400Regular',
+  sansMedium: 'Geist_500Medium',
+  sansItalic: 'Geist_400Regular_Italic',
+  sansMediumItalic: 'Geist_500Medium_Italic',
   // Place titles only, once per screen, as on the Mac: the room heading, the house
   // menu's name and the sign-in welcome. Never chat, sheets or list rows. It is a
   // single Medium cut, so a title in it sets no fontWeight of its own.
-  display: 'Figtree_500Medium',
+  display: 'Geist_500Medium',
   mono: Platform.select({ ios: 'SF Mono', android: 'monospace', default: 'monospace' }),
 } as const
 
@@ -189,6 +189,14 @@ export const radius = {
  * ignores it, and on a full capsule both curves draw the same shape anyway.
  */
 export const squircle = { borderCurve: 'continuous' } as const
+
+/**
+ * The one size dial for text, the phone's counterpart to `font-size-adjust` on the Mac.
+ * Geist's lowercase is 0.53 of its size where Figtree's was 0.50, so every size a screen
+ * states is drawn at 0.94 of it and the text keeps the height it had. The shared Text
+ * and TextInput apply it; line heights stay as stated.
+ */
+export const fontScale = 0.94
 
 /**
  * The optical tracking iOS gives the system font natively but RN leaves out, so

@@ -1,14 +1,17 @@
 import { StyleSheet, Text as RNText, type TextProps, type TextStyle } from 'react-native'
 import Animated from 'react-native-reanimated'
 
-import { fonts, tracking } from '@/theme'
+import { fonts, fontScale, tracking } from '@/theme'
 
 /**
- * The one Text the app renders. It does two things a native app gets for free.
+ * The one Text the app renders. It does three things a native app gets for free.
  *
  * Tracking: RN draws the font without the optical tracking iOS applies natively, so
  * this puts it back by size. A style without a fontSize inherits its parent's
  * tracking, an explicit `letterSpacing` always wins, and mono keeps its own rhythm.
+ *
+ * Size: a stated fontSize is drawn at `fontScale` of itself, see the theme; mono keeps its own. Tracking
+ * still reads the stated size, since its steps were tuned on it.
  *
  * Face: the sans is four registered families rather than one with four cuts, because
  * native text finds a face by family name and drops a weight or a slant it cannot
@@ -22,7 +25,8 @@ export function Text({ style, ...props }: TextProps) {
     size === undefined || flat?.fontFamily === fonts.mono || size < 13 || size > 17
       ? {}
       : { letterSpacing: size >= 15 ? tracking.body : tracking.small }
-  return <RNText style={[tracked, style, face(flat)]} {...props} />
+  const scaled: TextStyle | null = size === undefined || flat?.fontFamily === fonts.mono ? null : { fontSize: size * fontScale }
+  return <RNText style={[tracked, style, scaled, face(flat)]} {...props} />
 }
 
 /**

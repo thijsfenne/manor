@@ -42,9 +42,9 @@ import {
   ScrollView,
   StyleSheet,
   Switch,
-  TextInput,
   View,
 } from 'react-native'
+import { TextInput } from '@/components/TextInput'
 import { SafeAreaView } from 'react-native-safe-area-context'
 
 import { ConnectGate } from '@/components/ConnectGate'

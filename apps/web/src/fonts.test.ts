@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { applyFont, MONO, readFont, SANS } from './fonts'
+import { applyFont, MONO, readFont, SANS, SANS_FONTS } from './fonts'
 
 let props: Map<string, string>
 let store: Map<string, string>
@@ -37,9 +37,16 @@ describe('fonts', () => {
 
   it('hands the default back to styles.css and forgets the pick', () => {
     applyFont(SANS, 'manrope')
-    applyFont(SANS, 'figtree')
+    applyFont(SANS, 'geist')
     expect(props.has('--font-sans')).toBe(false)
     expect(store.has(SANS.key)).toBe(false)
+  })
+
+  it('lists Geist first, then the rest from A to Z', () => {
+    expect(SANS_FONTS[0].id).toBe('geist')
+    const rest = SANS_FONTS.slice(1).map((font) => font.label)
+    expect(rest).toEqual([...rest].sort((a, b) => a.localeCompare(b)))
+    expect(SANS_FONTS.find((font) => font.id === 'figtree')).toHaveProperty('load')
   })
 
   it('reads an unknown stored value as the default', () => {

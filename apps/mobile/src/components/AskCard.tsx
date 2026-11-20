@@ -1,7 +1,8 @@
 import { USER_INPUT_ANSWER_MAX, type UserInputAnswers } from '@manor/contracts'
 import type { OpenAsk } from '@manor/client-runtime/state'
 import { useEffect, useRef, useState } from 'react'
-import { Pressable, StyleSheet, TextInput, View } from 'react-native'
+import { Pressable, StyleSheet, View } from 'react-native'
+import { TextInput } from '@/components/TextInput'
 import Animated, { Easing, FadeInLeft, FadeInRight, ReduceMotion, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated'
 
 import { CardButton } from '@/components/CardButton'
@@ -221,8 +222,8 @@ const styles = StyleSheet.create({
   optionLabelSelected: { color: colors.onPrimary },
   // The label's own colour, softened, so it reads on the plain and the picked fill alike.
   optionDescription: { color: colors.text, opacity: 0.7, fontFamily: fonts.sans, fontSize: 13, lineHeight: 18 },
-  // A fixed height, so iOS centres the line and its placeholder. Figtree's tall ascender
-  // sets that line low; the bottom padding lifts the letters to the optical middle.
+  // A fixed height, so iOS centres the line and its placeholder. The line sits low in it;
+  // the bottom padding lifts the letters to the optical middle.
   custom: { height: 44, borderRadius: radius.md, ...squircle, backgroundColor: colors.chip, color: colors.text, fontFamily: fonts.sans, fontSize: 15, letterSpacing: tracking.small, paddingHorizontal: spacing.md, paddingTop: 0, paddingBottom: 7 },
   macOnly: { color: colors.muted, fontFamily: fonts.sans, fontSize: 14, lineHeight: 20 },
   actions: { gap: spacing.xs },

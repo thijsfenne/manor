@@ -244,6 +244,8 @@ describe('chat media', () => {
     expect(injectManorPrelude('<p>x</p>', 'light')).toContain(`<head>${style}`)
     expect(injectManorPrelude('<!-- styles go in <head> --><html><head><title>t</title>', 'dark')).toMatch(/^<!-- styles go in <head> --><html><head><style id="manor-theme">/)
     expect(injectManorPrelude('<head data-label="a > b"><title>t</title>', 'dark')).toMatch(/^<head data-label="a > b"><style id="manor-theme">/)
+    // The house sans travels inside the page, so a widget needs no network for its font.
+    expect(inHead).toMatch(/@font-face\{font-family:'Geist Variable'[^}]*url\(data:font\/woff2;base64,/)
     // The size reporter stays quiet at the top level and re-posts when only the viewport changed.
     expect(inHead).toContain('window.top===window')
     expect(inHead).toContain('type:"manor:size",height:a,width:b,viewport:c')

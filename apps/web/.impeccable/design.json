@@ -262,7 +262,7 @@
       { "name": "The One Chromatic Voice Rule", "body": "House chrome stays achromatic. Persona colors carry identity, while violet and status colors appear only when their semantics are active.", "section": "colors" },
       { "name": "The Theme Polarity Rule", "body": "Light is not an inversion of dark. Token roles stay fixed while the luminance stack reverses around a white upper surface.", "section": "colors" },
       { "name": "The Nudge, Never Shout Rule", "body": "Emphasis stops at weight 600. Manor does not use bold as a substitute for hierarchy.", "section": "typography" },
-      { "name": "The Rounded First Rule", "body": "SF Pro Rounded leads on Apple devices. Geist preserves the same spacing logic wherever the rounded face is unavailable.", "section": "typography" },
+      { "name": "The House Sans Rule", "body": "Geist is the house sans on the Mac, the web and the phone. SF Pro Rounded and the system face only stand in until it has loaded.", "section": "typography" },
       { "name": "The Least Shadow Rule", "body": "Use tone first, a hairline second, and shadow only for unavoidable overlap. Resting cards, rows, and panels stay shadowless.", "section": "elevation" },
       { "name": "The One House Radius Rule", "body": "Use the shared radius tokens. A one off radius is justified only by a measured silhouette that the scale cannot express.", "section": "shapes" }
     ],

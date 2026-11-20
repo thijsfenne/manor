@@ -9,9 +9,9 @@ import {
   KeyboardAvoidingView,
   Platform,
   StyleSheet,
-  TextInput,
   View,
 } from 'react-native'
+import { TextInput } from '@/components/TextInput'
 import { SafeAreaView } from 'react-native-safe-area-context'
 
 import { CardButton } from '@/components/CardButton'

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import { Linking, Pressable, ScrollView, StyleSheet, TextInput, View, type TextStyle } from 'react-native'
+import { Linking, Pressable, ScrollView, StyleSheet, View, type TextStyle } from 'react-native'
+import { TextInput } from '@/components/TextInput'
 import { SlackRichTextSchema, type SlackRichText, type SlackRichTextInline } from '@manor/contracts'
 import { blockText, commitDraftEdit, createDraftEditor, draftDocument, editDraftBlock, formatDraftBlock, formatDraftInline, inlineText, joinDraftBlock, selectionStyle, travelDraftHistory, validDraftLink, type BlockKind, type DraftEditorState, type DraftSelection, type InlineStyle } from '@manor/client-runtime/slack-draft-formatting'
 import CodeIcon from '@hugeicons/core-free-icons/CodeIcon'

@@ -37,28 +37,28 @@ colors:
   persona-accent-foreground: "var(--accent-fg)"
 typography:
   display:
-    fontFamily: "Season Mix, Figtree Variable, Instrument Sans Variable, SF Pro Rounded, ui-rounded, Geist Variable, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    fontFamily: "Season Mix, Geist Variable, SF Pro Rounded, ui-rounded, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
     fontSize: "24px"
     fontWeight: 500
     letterSpacing: "-0.02em"
   headline:
-    fontFamily: "Figtree Variable, Instrument Sans Variable, SF Pro Rounded, ui-rounded, Geist Variable, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    fontFamily: "Geist Variable, SF Pro Rounded, ui-rounded, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
     fontSize: "20px"
     fontWeight: 500
     letterSpacing: "-0.01em"
   title:
-    fontFamily: "Figtree Variable, Instrument Sans Variable, SF Pro Rounded, ui-rounded, Geist Variable, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    fontFamily: "Geist Variable, SF Pro Rounded, ui-rounded, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
     fontSize: "16px"
     fontWeight: 500
     letterSpacing: "-0.01em"
   body:
-    fontFamily: "Figtree Variable, Instrument Sans Variable, SF Pro Rounded, ui-rounded, Geist Variable, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    fontFamily: "Geist Variable, SF Pro Rounded, ui-rounded, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
     fontSize: "16px"
     fontWeight: 400
     lineHeight: 1.6
     letterSpacing: "-0.011em"
   label:
-    fontFamily: "Figtree Variable, Instrument Sans Variable, SF Pro Rounded, ui-rounded, Geist Variable, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    fontFamily: "Geist Variable, SF Pro Rounded, ui-rounded, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
     fontSize: "13px"
     fontWeight: 500
     lineHeight: "18px"
@@ -203,13 +203,13 @@ The desktop window is an L-frame (`--color-frame`, `--color-sidebar`, `--color-s
 
 ## Typography
 
-**Display Font:** Season Mix Medium on trial (`--font-display` on the Mac, `fonts.display` on the phone) for place and document titles only, once per screen: page headings, the sidebar and house menu name, the sign-in welcome. Never chat, dialogs, sheets or rows. The trial files are gitignored on both platforms, so a fresh checkout falls back to Figtree Medium. Without the trial the display stack is Figtree, with Instrument Sans next, SF Pro Rounded behind that on Apple devices, and Geist Variable as the portable fallback.
+**Display Font:** Season Mix Medium on trial (`--font-display` on the Mac, `fonts.display` on the phone) for place and document titles only, once per screen: page headings, the sidebar and house menu name, the sign-in welcome. Never chat, dialogs, sheets or rows. The trial files are gitignored on both platforms, so a fresh checkout falls back to Geist Medium. Without the trial the display stack is Geist, with SF Pro Rounded behind it on Apple devices and the system face as the portable fallback.
 
-**Body Font:** Figtree, same stack.
+**Body Font:** Geist, same stack.
 
 **Label/Mono Font:** SF Mono, the system face, for paths, shortcuts, code, and exact identifiers. Code never forms ligatures, so `!=` stays two characters in every code font.
 
-**Font Choice:** On desktop and web, Settings → Appearance swaps the body font and the code font for one of a fixed bundled list, each with a live sample under its row (a message with chips, a diff). Figtree and SF Mono stay the defaults, a choice is kept per device, and page titles follow the body font. Figtree sits in the main stylesheet and SF Mono is the system face; every other face is bundled, never fetched from a font service, and loads only once chosen or once its menu opens to show the names. The phone keeps its own fonts.
+**Font Choice:** On desktop and web, Settings → Appearance swaps the body font and the code font for one of a fixed bundled list, each with a live sample under its row (a message with chips, a diff). Geist and SF Mono are the defaults, a choice is kept per device, and page titles follow the body font. Geist sits in the main stylesheet and SF Mono is the system face; every other face is bundled, never fetched from a font service, and loads only once chosen or once its menu opens to show the names. The phone keeps its own fonts.
 
 **Character:** Even, open letterforms with a tall x-height, quiet enough to read all day and precise rather than technical. The house gets its softness from continuous corners and tonal fills, not from the type.
 
@@ -229,7 +229,7 @@ Markdown inside a message is the one place sized in em rather than pixels, becau
 
 **The Two Weights Rule.** The house has 400 and 500 and nothing else. Emphasis nudges rather than shouts, so a heading earns its rank from size, color and case, never from a heavier cut. The `font-semibold` utility survives because it marks intent, but it resolves to 500.
 
-**The Trial Face Rule.** Figtree is on trial and Instrument Sans is what it replaced, so Instrument stays next in the desktop stack rather than being deleted. Native loads Figtree as four registered cuts instead, because a family stack does not exist there. The way back on desktop is the first entry of the family, not a rewrite. Geist preserves the same spacing logic wherever neither face is available.
+**The House Sans Rule.** Geist is the house sans on the Mac, the web and the phone, because it reads neutral. The phone loads it as four registered cuts (400 and 500, each upright and italic), because a family stack does not exist there, and draws every size at 0.94 of its stated value (`fontScale` in the theme) as its own size dial, since Geist's lowercase is taller than Figtree's. Figtree stays a pick in Appearance, and where Geist is not yet loaded the stack falls to SF Pro Rounded and the system face.
 
 **The One Family Per Cut Rule.** Native text finds a face by family name and synthesizes neither a weight nor a slant, so every cut the phone uses is registered as its own family and the shared Text component resolves which one a run needs. A design that asks for a weight the app does not register renders as regular, silently.
 

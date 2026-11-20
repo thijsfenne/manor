@@ -1,6 +1,7 @@
 import { secretCardNote, type UserInputQuestion } from '@manor/contracts'
 import { useRef, useState } from 'react'
-import { ScrollView, StyleSheet, TextInput, View } from 'react-native'
+import { ScrollView, StyleSheet, View } from 'react-native'
+import { TextInput } from '@/components/TextInput'
 import { KeyboardController } from 'react-native-keyboard-controller'
 
 import { CardButton } from '@/components/CardButton'

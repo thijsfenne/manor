@@ -9,7 +9,8 @@ import { draftSettled, draftShown, draftStatus, draftStatusLabel, snoozeUntilTom
 import type { OutboundDraftThread, SlackRichText } from '@manor/contracts'
 import { slackRichTextFallback, SlackRichTextSchema, isOutboundSlackChannelId, OUTBOUND_DRAFT_BODY_MAX, OUTBOUND_DRAFT_SUBJECT_MAX, OUTBOUND_DRAFT_TO_MAX } from '@manor/contracts'
 import { useRef, useState, type ReactNode } from 'react'
-import { Keyboard, Linking, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native'
+import { Keyboard, Linking, Pressable, ScrollView, StyleSheet, View } from 'react-native'
+import { TextInput } from '@/components/TextInput'
 import Animated, { Easing, FadeIn, FadeOut, LinearTransition, ReduceMotion } from 'react-native-reanimated'
 
 import { CardButton } from '@/components/CardButton'

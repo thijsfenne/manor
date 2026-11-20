@@ -1,9 +1,8 @@
-import {
-  Figtree_400Regular,
-  Figtree_400Regular_Italic,
-  Figtree_500Medium,
-  Figtree_500Medium_Italic,
-} from '@expo-google-fonts/figtree'
+// Per-cut modules, so the other fourteen cuts of the family stay out of the bundle.
+import { Geist_400Regular } from '@expo-google-fonts/geist/400Regular'
+import { Geist_400Regular_Italic } from '@expo-google-fonts/geist/400Regular_Italic'
+import { Geist_500Medium } from '@expo-google-fonts/geist/500Medium'
+import { Geist_500Medium_Italic } from '@expo-google-fonts/geist/500Medium_Italic'
 import { useFonts } from 'expo-font'
 import { DarkTheme, DefaultTheme, router, Stack, ThemeProvider, useNavigationContainerRef } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
@@ -30,10 +29,10 @@ export default function RootLayout() {
   // renders until they are registered: an unknown family falls back to the system font
   // silently, which would show as one frame of the wrong typeface on every cold start.
   const [fontsLoaded] = useFonts({
-    Figtree_400Regular,
-    Figtree_500Medium,
-    Figtree_400Regular_Italic,
-    Figtree_500Medium_Italic,
+    Geist_400Regular,
+    Geist_500Medium,
+    Geist_400Regular_Italic,
+    Geist_500Medium_Italic,
   })
 
   if (!fontsLoaded) return null

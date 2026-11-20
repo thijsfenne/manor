@@ -1,4 +1,5 @@
-import { Pressable, StyleSheet, TextInput, View } from 'react-native'
+import { Pressable, StyleSheet, View } from 'react-native'
+import { TextInput } from '@/components/TextInput'
 
 import { Sheet } from '@/components/Sheet'
 import { Text } from '@/components/Text'

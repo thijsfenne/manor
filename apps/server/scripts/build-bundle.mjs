@@ -55,8 +55,8 @@ await build({
 await cp(resolve(server, 'sqlite/migrations'), resolve(out, 'sqlite/migrations'), { recursive: true })
 await cp(resolve(server, 'auto-runtime.json'), resolve(out, 'auto-runtime.json'))
 await cp(
-  createRequire(import.meta.url).resolve('@fontsource-variable/figtree/files/figtree-latin-wght-normal.woff2'),
-  resolve(out, 'assets/figtree-latin-wght-normal.woff2'),
+  createRequire(import.meta.url).resolve('@fontsource-variable/geist/files/geist-latin-wght-normal.woff2'),
+  resolve(out, 'assets/geist-latin-wght-normal.woff2'),
 )
 
 const version = JSON.parse(await readFile(resolve(server, '../desktop/package.json'), 'utf8')).version

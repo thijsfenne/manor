@@ -14,7 +14,8 @@ import { effectiveDriver, runtimeParts } from '@manor/client-runtime/runtime-cho
 import type { AgentConfig } from '@manor/contracts'
 import { router, useLocalSearchParams } from 'expo-router'
 import { useState, type ReactNode } from 'react'
-import { Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native'
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native'
+import { TextInput } from '@/components/TextInput'
 import { SafeAreaView } from 'react-native-safe-area-context'
 
 import { Blobatar } from '@/components/Blobatar'

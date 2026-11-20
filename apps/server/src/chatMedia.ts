@@ -399,7 +399,7 @@ const VIEW_THEMES = {
 
 const BASE_CSS =
   ':root{--manor-radius:12px;--manor-radius-sm:8px;' +
-  "--manor-font:'Figtree Variable','SF Pro Rounded',ui-rounded,system-ui,-apple-system,sans-serif;" +
+  "--manor-font:'Geist Variable','SF Pro Rounded',ui-rounded,system-ui,-apple-system,sans-serif;" +
   '--manor-mono:ui-monospace,SFMono-Regular,Menlo,monospace}' +
   ':where(html){background:transparent;color:var(--manor-text);font:15px/1.5 var(--manor-font);-webkit-font-smoothing:antialiased;scrollbar-width:none}' +
   ':where(html)::-webkit-scrollbar,:where(body)::-webkit-scrollbar{display:none}' +
@@ -438,29 +438,29 @@ const KEY_REPORTER =
   'if(k!=="Escape"&&t&&t.closest&&t.closest("input,textarea,select,[contenteditable]"))return;' +
   'setTimeout(function(){if(!e.defaultPrevented)window.top.postMessage({type:"manor:key",key:k},"*")})})})()'
 
-let figtreeFace: string | undefined
+let geistFace: string | undefined
 
-/** Figtree as an embedded `@font-face`, read once; empty when the package file is missing. */
-function figtreeFontFace(): string {
-  if (figtreeFace !== undefined) return figtreeFace
+/** Geist as an embedded `@font-face`, read once; empty when the package file is missing. */
+function geistFontFace(): string {
+  if (geistFace !== undefined) return geistFace
   try {
     // A bundle carries the file itself; from source it comes out of the package.
-    const bundled = serverFile('assets', 'figtree-latin-wght-normal.woff2')
+    const bundled = serverFile('assets', 'geist-latin-wght-normal.woff2')
     const file = existsSync(bundled)
       ? bundled
-      : createRequire(import.meta.url).resolve('@fontsource-variable/figtree/files/figtree-latin-wght-normal.woff2')
-    figtreeFace =
-      "@font-face{font-family:'Figtree Variable';font-style:normal;font-display:block;font-weight:300 900;" +
+      : createRequire(import.meta.url).resolve('@fontsource-variable/geist/files/geist-latin-wght-normal.woff2')
+    geistFace =
+      "@font-face{font-family:'Geist Variable';font-style:normal;font-display:block;font-weight:300 900;" +
       `src:url(data:font/woff2;base64,${readFileSync(file).toString('base64')}) format('woff2')}`
   } catch {
-    figtreeFace = ''
+    geistFace = ''
   }
-  return figtreeFace
+  return geistFace
 }
 
 function themeStyle(theme: ViewTheme): string {
   const tokens = Object.entries(VIEW_THEMES[theme]).map(([name, value]) => `--manor-${name}:${value}`).join(';')
-  return `<style id="manor-theme">${figtreeFontFace()}:root{color-scheme:${theme};${tokens}}${BASE_CSS}</style><script>${SIZE_REPORTER};${KEY_REPORTER}</script>`
+  return `<style id="manor-theme">${geistFontFace()}:root{color-scheme:${theme};${tokens}}${BASE_CSS}</style><script>${SIZE_REPORTER};${KEY_REPORTER}</script>`
 }
 
 /**

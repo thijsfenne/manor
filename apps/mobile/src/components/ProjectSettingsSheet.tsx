@@ -10,7 +10,8 @@ import { PROJECT_ICON_OPTIONS, projectColorChoices, projectIcon } from '@manor/c
 import { HugeiconsIcon } from '@hugeicons/react-native'
 import { MAX_PROJECT_FOLDERS, type Project } from '@manor/contracts'
 import { useEffect, useRef, useState } from 'react'
-import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native'
+import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, View } from 'react-native'
+import { TextInput } from '@/components/TextInput'
 
 import { Checkbox } from '@/components/Checkbox'
 import { GlassPressable } from '@/components/GlassPressable'
