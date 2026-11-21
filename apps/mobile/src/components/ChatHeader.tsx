@@ -177,9 +177,9 @@ export function ChatHeader({ title, subtitle, project, projectThread = false, dr
                 <Text numberOfLines={1} style={styles.title}>{member.name}</Text>
               </View>
             ))}
-            {project === undefined ? null : <ProjectBadge name={project.name} icon={project.icon} color={project.color} noProject={isHomeRoom(project.id)} style={styles.projectBadge} />}
           </View>
           <View style={styles.under}>
+            {project === undefined ? null : <ProjectBadge name={project.name} icon={project.icon} color={project.color} noProject={isHomeRoom(project.id)} style={styles.projectBadge} />}
             {driver === undefined ? null : <ProviderMark driver={driver} size={12} />}
             <Text numberOfLines={1} style={styles.subtitle}>{subtitle}</Text>
           </View>
@@ -235,7 +235,7 @@ const styles = StyleSheet.create({
   titles: { flex: 1, minWidth: 0, gap: 3 },
   identity: { minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   pairMember: { flexShrink: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  // Under half the row, as on the desktop: a long project name leaves the title readable.
+  // On the line under the title, beside the runtime: a long project name leaves the runtime readable.
   projectBadge: { maxWidth: '45%' },
   title: { flexShrink: 1, color: colors.text, fontFamily: fonts.sans, fontSize: 17, fontWeight: '500', letterSpacing: -0.2 },
   under: { minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 5 },
