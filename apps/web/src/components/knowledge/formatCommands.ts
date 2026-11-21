@@ -1,5 +1,5 @@
 import { EditorSelection, type ChangeSpec, type EditorState, type SelectionRange } from '@codemirror/state'
-import { codeBlockAt, inFrontmatter, inTable, linePrefix, noteTree, ownStep, type NoteTransform, type SyntaxNode } from './noteSyntax'
+import { codeBlockAt, inFrontmatter, inTable, linePrefix, noteTree, ownStep, wikilinksIn, type NoteTransform, type SyntaxNode, type Wikilink } from './noteSyntax'
 
 /**
  * Inline formatting for the note editor: bold, italic, strikethrough, inline code and
@@ -110,9 +110,6 @@ interface Atom {
   labelTo: number
 }
 
-/** The same `[[...]]` reading as the live preview. */
-const WIKILINK = /\[\[([^[\]\n]+?)\]\]/g
-
 function atomsOn(state: EditorState, from: number, to: number): Atom[] {
   const first = state.doc.lineAt(from)
   const last = state.doc.lineAt(to)
@@ -138,11 +135,9 @@ function atomsOn(state: EditorState, from: number, to: number): Atom[] {
       return undefined
     },
   })
-  const text = state.doc.sliceString(first.from, last.to)
-  WIKILINK.lastIndex = 0
-  for (let match = WIKILINK.exec(text); match !== null; match = WIKILINK.exec(text)) {
-    const start = first.from + match.index
-    atoms.push({ from: start, to: start + match[0].length, kind: 'wikilink', labelFrom: start, labelTo: start })
+  // The same `[[...]]` reading as the live preview.
+  for (const link of wikilinksIn(state.doc.sliceString(first.from, last.to), first.from)) {
+    atoms.push({ from: link.from, to: link.to, kind: 'wikilink', labelFrom: link.from, labelTo: link.from })
   }
   return atoms
 }
@@ -495,5 +490,51 @@ export const removeLink: NoteTransform = (state) => {
     selection: EditorSelection.range(link.from, link.from + text.length),
     userEvent: 'input.format',
     annotations: ownStep,
+  }
+}
+
+/** A link label as the reader sees it: `\[` and `\]` without their backslash. */
+export const linkLabelText = (raw: string): string => raw.replace(/\\([[\]])/g, '$1')
+
+/** The wikilink whose span holds `pos` (either edge counts), or null. */
+export function wikilinkAt(state: EditorState, pos: number): Wikilink | null {
+  const line = state.doc.lineAt(pos)
+  return wikilinksIn(line.text, line.from).find((link) => pos >= link.from && pos <= link.to) ?? null
+}
+
+/**
+ * The link at the caret given new text and a new destination, as the link field
+ * edits it: a markdown link rewrites only its text or its url, so a title or an
+ * escape it already has stays; a wikilink writes `[[target]]` or `[[target|text]]`.
+ * An empty destination unlinks, leaving the text.
+ */
+export function editLinkAt(pos: number, text: string, destination: string): NoteTransform {
+  return (state) => {
+    const wiki = wikilinkAt(state, pos)
+    const link = wiki === null ? linkAt(state, pos) : null
+    const span = wiki === null ? link : { ...wiki, textFrom: wiki.labelFrom, textTo: wiki.labelTo }
+    if (span === null) return null
+    const current = linkLabelText(state.doc.sliceString(span.textFrom, span.textTo))
+    const shown = text.trim() === '' ? current : text.trim()
+    const target = destination.trim()
+    const changes: { from: number; to: number; insert: string }[] = []
+    if (target === '') changes.push({ from: span.from, to: span.to, insert: shown })
+    else if (wiki !== null) {
+      const insert = shown === target ? `[[${target}]]` : `[[${target}|${shown.replace(/[[\]|]/g, '')}]]`
+      if (insert !== state.doc.sliceString(wiki.from, wiki.to)) changes.push({ from: wiki.from, to: wiki.to, insert })
+    }
+    else if (link !== null) {
+      if (shown !== current) changes.push({ from: link.textFrom, to: link.textTo, insert: shown.replace(/([[\]])/g, '\\$1') })
+      // An untouched destination stays as written; formatting it could turn `docs.md` into a website.
+      if (target !== link.url && target !== state.doc.sliceString(link.urlFrom, link.urlTo)) changes.push({ from: link.urlFrom, to: link.urlTo, insert: formatUrl(target) })
+    }
+    if (changes.length === 0) return null
+    const set = state.changes(changes)
+    return {
+      changes: set,
+      selection: EditorSelection.cursor(set.mapPos(span.to, 1)),
+      userEvent: 'input.format',
+      annotations: ownStep,
+    }
   }
 }

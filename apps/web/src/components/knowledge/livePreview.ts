@@ -3,12 +3,10 @@ import { HighlightStyle, syntaxHighlighting, syntaxTree } from '@codemirror/lang
 import { StateField, type EditorState, type Extension, type Range } from '@codemirror/state'
 import { Decoration, EditorView, ViewPlugin, WidgetType, type DecorationSet, type ViewUpdate } from '@codemirror/view'
 import { tags } from '@lezer/highlight'
-import { createElement } from 'react'
-import { createRoot, type Root } from 'react-dom/client'
-import { calloutTitle, calloutTone, readProperties } from '../../vaultNotes'
+import { calloutTitle, calloutTone } from '../../vaultNotes'
+import { caretAtoms, noteCaretExtensions, pendingItem } from './noteCaret'
 import { noteEditingExtensions } from './noteEditing'
-import { blockGap, frontmatterRange, inFrontmatter } from './noteSyntax'
-import { NoteProperties } from './NoteProperties'
+import { blockGap, frontmatterRange, inFrontmatter, wikilinksIn, type Wikilink } from './noteSyntax'
 import { tablePreviewField, tablePreviewTheme } from './tablePreview'
 
 /**
@@ -17,10 +15,11 @@ import { tablePreviewField, tablePreviewTheme } from './tablePreview'
  * The text stays markdown, because the file on disk is markdown and anything that
  * edits a parsed tree instead has to answer what happens to the syntax it did not
  * understand. What changes is what you *see*: every heading, bold run and link is
- * styled as the thing it means, and the punctuation that says so is hidden on every
- * line the cursor is not on. List markers become a disc (or the number) and the item
- * is indented. Put the caret in a line and its markers come back, which is what makes
- * them editable at all.
+ * styled as the thing it means, and the punctuation that says so is hidden, on the
+ * caret's line too. List markers become a disc (or the number) and the item is
+ * indented. Hidden ranges are atomic (`noteCaret.ts` steps over them), formatting
+ * changes through the shortcuts, the toolbar and the link field, and only a fenced
+ * code block shows its fences while the caret is inside it.
  */
 
 /**
@@ -52,63 +51,16 @@ const MARKER_NODES = new Set(['HeaderMark', 'EmphasisMark', 'StrikethroughMark',
 const LIST_INDENT_EM = 1.5
 const MARK_GAP_EM = 0.375
 
+/** A heading line whose `#` run is followed by its space, so it is a heading being written. */
+const HEADING_OPEN = /^ {0,3}#{1,6}[ \t]/
+
 /** A quote's `>` markers (and the space after each) at the head of a line. */
 const QUOTE_PREFIX = /^(?:[ \t]*>[ \t]?)*/
 
 const hidden = Decoration.replace({})
-const listSource = Decoration.mark({ class: 'cm-manor-listsrc' })
-/** Source shown on the caret's line that takes no width: it hangs left of the text. */
-const hang = Decoration.mark({ class: 'cm-manor-hang' })
+const plainText = Decoration.mark({ class: 'cm-manor-plain' })
 const fenceLine = Decoration.line({ class: 'cm-manor-codeblock-fence' })
-const frontmatter = Decoration.line({ class: 'cm-manor-frontmatter' })
 
-/**
- * The frontmatter as Obsidian shows it: a properties panel instead of raw YAML.
- *
- * It replaces the block rather than hiding it, so the note still starts with its own
- * metadata and the file is untouched. Clicking it puts the caret in the YAML, which
- * makes the panel vanish and the source appear — the same bargain every other marker
- * in this editor strikes, and the reason no field here needs to be separately editable.
- */
-const propertyRoots = new WeakMap<HTMLElement, Root>()
-
-class PropertiesWidget extends WidgetType {
-  constructor(private readonly source: string) {
-    super()
-  }
-
-  eq(other: PropertiesWidget) {
-    return other.source === this.source
-  }
-
-  toDOM(view: EditorView) {
-    const wrap = view.dom.ownerDocument.createElement('div')
-    wrap.className = 'cm-manor-properties-gap'
-    const root = createRoot(wrap)
-    propertyRoots.set(wrap, root)
-    root.render(createElement(NoteProperties, {
-      properties: readProperties(this.source.split('\n').slice(1, -1)),
-      onEdit: (line) => {
-        const fence = view.state.doc.lineAt(view.posAtDOM(wrap))
-        const target = view.state.doc.line(fence.number + 1 + line)
-        view.dispatch({ selection: { anchor: target.to }, scrollIntoView: true })
-        view.focus()
-      },
-    }))
-    return wrap
-  }
-
-  destroy(dom: HTMLElement) {
-    const root = propertyRoots.get(dom)
-    propertyRoots.delete(dom)
-    // A document can close during a React commit.
-    queueMicrotask(() => root?.unmount())
-  }
-
-  ignoreEvent(event: Event) {
-    return event.type !== 'dragover' && event.type !== 'drop'
-  }
-}
 const heading = HEADING_SCALE.map(({ size, above, below }) =>
   Decoration.line({ attributes: { class: 'cm-manor-heading', style: `font-size:${size};padding-top:${above};padding-bottom:${below}` } }),
 )
@@ -155,8 +107,6 @@ class RuleWidget extends WidgetType {
 const rule = Decoration.replace({ widget: new RuleWidget() })
 
 /** `[[target]]` and `[[target|label]]`, the vault's own link syntax. */
-const WIKILINK = /\[\[([^[\]\n]+?)\]\]/g
-
 /** A task item's box, at the head of a list item. */
 const TASK = /^(\s*(?:[-*+]|\d+[.)])\s+)\[([ xX])\]\s/
 
@@ -271,15 +221,17 @@ function listItemDepth(start: { parent: { name: string; parent: unknown } | null
 
 class LivePreview {
   decorations: DecorationSet
+  /** The replaced ranges alone: what the caret steps over as one unit. */
+  atoms: DecorationSet
 
   constructor(view: EditorView) {
-    this.decorations = build(view)
+    ;({ decorations: this.decorations, atoms: this.atoms } = build(view))
   }
 
   update(update: ViewUpdate) {
-    // Selection counts: moving the caret onto a line is what reveals its markers.
+    // Selection counts: moving the caret into a code block is what shows its fences.
     if (update.docChanged || update.viewportChanged || update.selectionSet || update.focusChanged) {
-      this.decorations = build(update.view)
+      ;({ decorations: this.decorations, atoms: this.atoms } = build(update.view))
     }
   }
 }
@@ -288,17 +240,20 @@ function buildFrom(
   state: EditorState,
   visible: readonly { from: number; to: number }[],
   editing: Set<number>,
-): DecorationSet {
+): { decorations: DecorationSet; atoms: DecorationSet } {
   // Collected rather than streamed into a RangeSetBuilder, because two passes produce
   // these and only one of them walks the document in order. `Decoration.set` sorts.
   const ranges: Range<Decoration>[] = []
+  const atoms: Range<Decoration>[] = []
+  const hide = (range: Range<Decoration>) => {
+    ranges.push(range)
+    atoms.push(range)
+  }
   const meta = frontmatterRange(state)
   const links = wikilinkRanges(state, visible)
   // Fenced blocks seen so far. Their fence lines are settled as a whole below, so the
   // generic marker pass leaves the backticks and the language tag inside them alone.
   const fences: { from: number; to: number }[] = []
-  // Quote lines whose markers already hang; a nested quote is entered once per level.
-  const hung = new Set<number>()
 
   for (const { from, to } of visible) {
     syntaxTree(state).iterate({
@@ -311,9 +266,12 @@ function buildFrom(
         // The table widget owns its inline rendering. Revealed tables keep source.
         if (name === 'Table') return false
 
+        // The sealed frontmatter is the property list's; nothing in it is drawn here.
+        if (meta !== null && node.to <= meta.to) return false
+        // A heading needs its space: a bare `#` is still being typed, and stays text.
         if (name.startsWith('ATXHeading')) {
           const decoration = heading[Number(name.slice('ATXHeading'.length)) - 1]
-          if (decoration !== undefined) ranges.push(decoration.range(line.from))
+          if (decoration !== undefined && HEADING_OPEN.test(line.text)) ranges.push(decoration.range(line.from))
           return
         }
         // A quote's bar belongs on every line it covers, not only its first. A callout
@@ -324,23 +282,16 @@ function buildFrom(
           numbers.forEach((number, index) => {
             const quoted = state.doc.line(number)
             ranges.push(blockLine(opener === null ? 'cm-manor-quote' : 'cm-manor-callout', index, numbers.length).range(quoted.from))
-            // On the caret's line the `>` comes back without moving the text after it.
-            const prefix = QUOTE_PREFIX.exec(quoted.text)?.[0].length ?? 0
-            if (editing.has(number) && prefix > 0 && !hung.has(number)) {
-              hung.add(number)
-              ranges.push(hang.range(quoted.from, quoted.from + prefix))
-            }
           })
           if (opener === null) return
           const type = opener[1] as string
           ranges.push(toneLine(type).range(line.from))
-          if (editing.has(line.number)) return
           // From just past the last `>` so this never overlaps the QuoteMark the walk
           // above already replaced; two replacements over one character is an error.
           // The space after it goes with the QuoteMark too.
           const marker = opener[0].lastIndexOf('>')
           const tokenFrom = line.from + marker + 1 + (/[ \t]/.test(opener[0].charAt(marker + 1)) ? 1 : 0)
-          ranges.push(hidden.range(tokenFrom, line.from + opener[0].length))
+          if (line.from + opener[0].length > tokenFrom) hide(hidden.range(tokenFrom, line.from + opener[0].length))
           if (line.text.slice(opener[0].length).trim() === '') {
             ranges.push(Decoration.widget({ widget: new LabelWidget(calloutTitle(type)) }).range(line.to))
           }
@@ -361,12 +312,12 @@ function buildFrom(
           const language = FENCE.exec(first.text)?.[1] ?? ''
           ranges.push(fenceLine.range(first.from))
           if (first.to > first.from) {
-            ranges.push((language === '' ? hidden : Decoration.replace({ widget: new CodeLanguageWidget(language) })).range(first.from, first.to))
+            hide((language === '' ? hidden : Decoration.replace({ widget: new CodeLanguageWidget(language) })).range(first.from, first.to))
           }
           const last = state.doc.line(numbers[numbers.length - 1]!)
           if (numbers.length > 1 && /^\s*(?:`{3,}|~{3,})\s*$/.test(last.text)) {
             ranges.push(fenceLine.range(last.from))
-            if (last.to > last.from) ranges.push(hidden.range(last.from, last.to))
+            if (last.to > last.from) hide(hidden.range(last.from, last.to))
           }
           return
         }
@@ -376,60 +327,48 @@ function buildFrom(
         }
         if ((name === 'CodeMark' || name === 'CodeInfo') && fences.some((fence) => node.from >= fence.from && node.to <= fence.to)) return
         if (name === 'HorizontalRule') {
-          // The frontmatter's opening fence parses as a rule; the properties panel owns it.
-          if (meta !== null && node.from <= meta.to) return
           ranges.push(ruleLine.range(line.from))
-          if (!editing.has(line.number) && node.to > node.from) ranges.push(rule.range(node.from, node.to))
+          if (node.to > node.from) hide(rule.range(node.from, node.to))
           return
         }
-        // Links read as links and open on a click. On the line being edited the click
-        // places the caret instead, so only Mod-click opens there.
+        // Links read as their label and open on a click. Option-click puts the caret in
+        // one, and the link field (⌘K, or the chip over a link) changes where it points.
         if (name === 'Link' || (name === 'URL' && node.node.parent?.name !== 'Link')) {
           const link = linkRange(state, node.node)
           if (link !== null) {
-            const key = editing.has(line.number) ? 'data-href-edit' : 'data-href'
-            ranges.push(Decoration.mark({ class: 'cm-manor-link', attributes: { [key]: link.href } }).range(link.from, link.to))
+            ranges.push(Decoration.mark({ class: 'cm-manor-link', attributes: { 'data-href': link.href } }).range(link.from, link.to))
           }
-          // Off the caret's line a link reads as its label alone: the destination between
-          // `(` and `)` goes with the brackets, which the marker pass below hides.
-          if (name === 'Link' && !editing.has(line.number)) {
+          // The destination between `(` and `)` goes with the brackets, which the marker
+          // pass below hides.
+          if (name === 'Link') {
             const marks = node.node.getChildren('LinkMark')
-            if (marks.length >= 4 && marks[3]!.from > marks[2]!.to) ranges.push(hidden.range(marks[2]!.to, marks[3]!.from))
+            if (marks.length >= 4 && marks[3]!.from > marks[2]!.to) hide(hidden.range(marks[2]!.to, marks[3]!.from))
           }
           return
         }
         // The marker hangs in the indent's slot, so the item text starts on the same
         // edge whatever the marker is and whether or not the caret is on the line.
         // A task's marker runs through its box, which the checkbox replaces.
+        // A bare mark without its space is still being typed, and stays text until the
+        // space turns it into the block.
         if (name === 'ListMark') {
-          ranges.push(listLine(listItemDepth(node.node)).range(line.from))
           const task = TASK.exec(line.text)
+          const space = node.to < line.to && /[ \t]/.test(state.doc.sliceString(node.to, node.to + 1)) ? 1 : 0
+          if (task === null && space === 0) return
+          ranges.push(listLine(listItemDepth(node.node)).range(line.from))
           const start = line.from + (QUOTE_PREFIX.exec(line.text)?.[0].length ?? 0)
-          const space = node.to < line.to && state.doc.sliceString(node.to, node.to + 1) === ' ' ? 1 : 0
           const end = task === null ? node.to + space : line.from + task[0].length
-          if (editing.has(line.number)) {
-            // The indent is drawn by the line's padding; the spaces would double it.
-            if (node.from > start) ranges.push(hidden.range(start, node.from))
-            ranges.push(listSource.range(node.from, end))
-            return
-          }
           const mark = state.doc.sliceString(node.from, node.to)
           const widget = task !== null
             ? new TaskWidget((task[2] as string).toLowerCase() === 'x', line.from + (task[1] as string).length + 1)
             : /^\d+[.)]$/.test(mark) ? new NumberWidget(mark) : new BulletWidget()
-          ranges.push(Decoration.replace({ widget }).range(start, end))
+          hide(Decoration.replace({ widget }).range(start, end))
           return
         }
         if (!MARKER_NODES.has(name)) return
-        // The line being edited shows its own punctuation. Without this the markers
-        // vanish under the caret and the text cannot be unformatted again. A heading's
-        // `#` hangs to the left of the title, so the title stays where it was.
-        if (editing.has(line.number)) {
-          if (name === 'HeaderMark' && node.from === line.from + (line.text.length - line.text.trimStart().length)) {
-            ranges.push(hang.range(line.from, Math.min(node.to + 1, line.to)))
-          }
-          return
-        }
+        // A setext underline stays as written; hiding it would hide a line being typed.
+        if (name === 'HeaderMark' && node.node.parent?.name.startsWith('SetextHeading') === true) return
+        if (name === 'HeaderMark' && node.from === line.from + (line.text.length - line.text.trimStart().length) && !HEADING_OPEN.test(line.text)) return
         // A wikilink's brackets are handled below as one unit; letting the built-in
         // link parser hide half of them is what turned `[[a|b]]` into `[a|b]`.
         if (links.some((link) => node.from >= link.from && node.to <= link.to)) return
@@ -437,18 +376,22 @@ function buildFrom(
         // starts indented by a space.
         const spaced = (name === 'HeaderMark' || name === 'QuoteMark') && /[ \t]/.test(state.doc.sliceString(node.to, node.to + 1))
         const end = spaced ? Math.min(node.to + 1, line.to) : node.to
-        if (end > node.from) ranges.push(hidden.range(node.from, end))
+        if (end > node.from) hide(hidden.range(node.from, end))
       },
     })
   }
 
-  // Only the revealed state belongs here. The panel that replaces it is a block
-  // decoration, and CodeMirror refuses those from a view plugin, so it lives in the
-  // state field below; the two agree because they ask the same question of the state.
-  if (meta !== null && editingFrontmatter(state)) {
-    for (const number of lineRange(state, meta)) {
-      ranges.push(frontmatter.range(state.doc.line(number).from))
-    }
+  // `- ` typed under a paragraph is a list item from its space on, before the parse agrees.
+  for (const number of visibleLines(state, visible)) {
+    const line = state.doc.line(number)
+    const start = pendingItem(state, line)
+    if (start === null) continue
+    const mark = line.text.trim()
+    ranges.push(listLine(0).range(line.from))
+    hide(Decoration.replace({ widget: /^\d/.test(mark) ? new NumberWidget(mark) : new BulletWidget() }).range(start, line.to))
+    // Read as a heading underline, the `-` would make the paragraph above a heading.
+    const heading = syntaxTree(state).resolveInner(start, 1).parent
+    if (heading?.name.startsWith('SetextHeading') === true && line.from - 1 > heading.from) ranges.push(plainText.range(heading.from, line.from - 1))
   }
 
   // A done item stays readable but steps back, on every line including the caret's.
@@ -462,18 +405,18 @@ function buildFrom(
   }
 
   for (const link of links) {
-    if (editing.has(state.doc.lineAt(link.from).number)) continue
+    if (meta !== null && link.from <= meta.to) continue
     // `[[`, and everything up to and including the `|`, disappear; the label is what
     // a reader wants and the target is what the file needs.
-    ranges.push(hidden.range(link.from, link.labelFrom))
+    hide(hidden.range(link.from, link.labelFrom))
     ranges.push(Decoration.mark({ class: 'cm-manor-wikilink', attributes: {
       role: 'link', tabindex: '0', 'data-note-target': link.target,
       title: 'Open note. Option-click to edit the link.',
     } }).range(link.labelFrom, link.labelTo))
-    ranges.push(hidden.range(link.labelTo, link.to))
+    hide(hidden.range(link.labelTo, link.to))
   }
 
-  return Decoration.set(ranges, true)
+  return { decorations: Decoration.set(ranges, true), atoms: Decoration.set(atoms, true) }
 }
 
 /**
@@ -481,10 +424,15 @@ function buildFrom(
  * The live plugin still builds only the visible range.
  */
 export function livePreviewDecorationSet(state: EditorState, editingLines: readonly number[] = []): DecorationSet {
-  return buildFrom(state, [{ from: 0, to: state.doc.length }], new Set(editingLines))
+  return buildFrom(state, [{ from: 0, to: state.doc.length }], new Set(editingLines)).decorations
 }
 
-function build(view: EditorView): DecorationSet {
+/** The ranges the caret steps over as one unit, for the whole document. Tests read these. */
+export function livePreviewAtoms(state: EditorState, editingLines: readonly number[] = []): DecorationSet {
+  return buildFrom(state, [{ from: 0, to: state.doc.length }], new Set(editingLines)).atoms
+}
+
+function build(view: EditorView) {
   return buildFrom(view.state, view.visibleRanges, activeLines(view))
 }
 
@@ -504,34 +452,9 @@ function linkRange(state: EditorState, node: { name: string; from: number; to: n
   return to > from ? { from, to, href } : null
 }
 
-interface WikilinkRange {
-  target: string
-  from: number
-  to: number
-  labelFrom: number
-  labelTo: number
-}
-
 /** Every `[[link]]` in view, with the slice of it a reader should actually see. */
-function wikilinkRanges(
-  state: EditorState,
-  visible: readonly { from: number; to: number }[],
-): WikilinkRange[] {
-  const found: WikilinkRange[] = []
-  for (const { from, to } of visible) {
-    const text = state.doc.sliceString(from, to)
-    WIKILINK.lastIndex = 0
-    for (let match = WIKILINK.exec(text); match !== null; match = WIKILINK.exec(text)) {
-      const inner = match[1] as string
-      const pipe = inner.indexOf('|')
-      const start = from + match.index
-      const labelFrom = start + 2 + (pipe === -1 ? 0 : pipe + 1)
-      const labelTo = start + 2 + inner.length
-      if (labelTo <= labelFrom) continue
-      found.push({ from: start, to: start + match[0].length, labelFrom, labelTo, target: (pipe === -1 ? inner : inner.slice(0, pipe)).trim() })
-    }
-  }
-  return found
+function wikilinkRanges(state: EditorState, visible: readonly { from: number; to: number }[]): Wikilink[] {
+  return visible.flatMap(({ from, to }) => wikilinksIn(state.doc.sliceString(from, to), from))
 }
 
 /** A word the document does not contain, for a callout that named no title. */
@@ -609,8 +532,7 @@ function lineRange(state: EditorState, range: { from: number; to: number }): num
   return numbers
 }
 
-/** The leading `---` block, when the note opens with one. */
-/** Every line any cursor or selection touches. Those keep their markers. */
+/** Every line any cursor or selection touches; a code block there shows its fences. */
 function activeLines(view: EditorView): Set<number> {
   const lines = new Set<number>()
   if (!view.hasFocus) return lines
@@ -620,36 +542,6 @@ function activeLines(view: EditorView): Set<number> {
     for (let line = first; line <= last; line += 1) lines.add(line)
   }
   return lines
-}
-
-/** Whether any cursor sits in the frontmatter, which is what swaps panel for YAML. */
-function editingFrontmatter(state: EditorState): boolean {
-  const meta = frontmatterRange(state)
-  if (meta === null) return false
-  return state.selection.ranges.some((range) => range.from <= meta.to && range.to >= meta.from)
-}
-
-/**
- * The properties panel, as a state field rather than a view plugin: block decorations
- * change the document's line layout, so CodeMirror insists they be derivable from the
- * state alone rather than from whatever a plugin happens to have measured.
- */
-const propertiesField = StateField.define<DecorationSet>({
-  create: (state) => propertiesDecoration(state),
-  update: (value, transaction) =>
-    transaction.docChanged || transaction.selection ? propertiesDecoration(transaction.state) : value,
-  provide: (field) => EditorView.decorations.from(field),
-})
-
-function propertiesDecoration(state: EditorState): DecorationSet {
-  const meta = frontmatterRange(state)
-  if (meta === null || editingFrontmatter(state)) return Decoration.none
-  return Decoration.set([
-    Decoration.replace({
-      widget: new PropertiesWidget(state.doc.sliceString(meta.from, meta.to)),
-      block: true,
-    }).range(meta.from, meta.to),
-  ])
 }
 
 /**
@@ -725,7 +617,13 @@ const gapField = StateField.define<DecorationSet>({
   provide: (field) => EditorView.decorations.from(field),
 })
 
-const livePreviewPlugin = ViewPlugin.fromClass(LivePreview, { decorations: (plugin) => plugin.decorations })
+const livePreviewPlugin = ViewPlugin.fromClass(LivePreview, {
+  decorations: (plugin) => plugin.decorations,
+  provide: (plugin) => [
+    EditorView.atomicRanges.of((view) => view.plugin(plugin)?.atoms ?? Decoration.none),
+    caretAtoms.of((view) => view.plugin(plugin)?.atoms ?? Decoration.none),
+  ],
+})
 
 /**
  * What each kind of run looks like once its markers are gone. Colours come from the
@@ -758,17 +656,17 @@ const theme = EditorView.theme({
   },
   // Prose keeps its reading measure; block tables may use the whole note pane.
   '.cm-line': { padding: '0', maxWidth: '46rem', marginLeft: 'auto', marginRight: 'auto' },
-  '.cm-manor-properties-gap': { paddingBottom: '0.75em', whiteSpace: 'normal' },
   // Padding, never margin. CodeMirror's height map is built from each line's
   // offsetHeight, which counts padding and ignores margin; a margined line therefore
   // measures short, the map drifts, and every click below it lands further down the
   // document than the pointer did. That was the misplaced-caret bug.
   // Weight 500, not bold: the house has two weights (docs/DESIGN.md), so a heading
   // earns its rank from size and the room around it.
+  '.cm-manor-plain, .cm-manor-plain *': { fontWeight: '400' },
   '.cm-manor-heading': { lineHeight: '1.3', fontWeight: 'var(--font-weight-medium)', letterSpacing: '-0.01em' },
   // The list marker's slot: as wide as one indent step, hung into it, the marker set
   // against the slot's right so its gap to the text is the same for every kind.
-  '.cm-manor-bullet, .cm-manor-olmark, .cm-manor-taskslot, .cm-manor-listsrc': {
+  '.cm-manor-bullet, .cm-manor-olmark, .cm-manor-taskslot': {
     display: 'inline-block',
     boxSizing: 'border-box',
     width: `${LIST_INDENT_EM}em`,
@@ -776,26 +674,9 @@ const theme = EditorView.theme({
     paddingRight: `${MARK_GAP_EM}em`,
     textAlign: 'right',
     whiteSpace: 'pre',
+    pointerEvents: 'none',
   },
-  '.cm-manor-bullet, .cm-manor-olmark, .cm-manor-taskslot': { pointerEvents: 'none' },
-  '.cm-manor-hang': {
-    display: 'inline-flex',
-    justifyContent: 'flex-end',
-    width: '0',
-    whiteSpace: 'pre',
-    color: 'var(--color-muted)',
-  },
-  // Syntax, not text: muted even where the heading's own colour would reach it.
-  '.cm-manor-hang *, .cm-manor-listsrc *': { color: 'var(--color-muted)' },
   '.cm-manor-olmark': { color: 'var(--color-muted)', fontVariantNumeric: 'tabular-nums' },
-  // The source on the caret's line hangs in the same slot, growing to the left when
-  // it is wider (a task's \`- [ ] \`), so the text after it never moves.
-  '.cm-manor-listsrc': {
-    display: 'inline-flex',
-    justifyContent: 'flex-end',
-    paddingRight: '0',
-    color: 'var(--color-muted)',
-  },
   // A quote is a solid bar in the text colour, upright; a callout is a soft surface
   // the note raises for itself. Both pad only their outer lines, so a long one reads
   // as one block with the same rhythm as a code block.
@@ -867,14 +748,6 @@ const theme = EditorView.theme({
   '.cm-manor-link': { color: 'var(--accent-fg)', textDecoration: 'underline', textUnderlineOffset: '2px' },
   '.cm-manor-link *': { color: 'inherit' },
   '.cm-manor-link[data-href]': { cursor: 'pointer' },
-  // Metadata, not prose: still yours to edit, but it stops shouting over the note.
-  '.cm-manor-frontmatter': {
-    fontFamily: 'var(--font-mono)',
-    fontVariantLigatures: 'none',
-    fontSize: '0.78em',
-    lineHeight: '1.6',
-    color: 'var(--color-muted)',
-  },
   // A rounded square that fills with the accent when done. Drawn here rather than
   // left to the platform, which renders a different box on every OS.
   // \`middle\` sets the box's centre on the x-height's, whatever the line's size.
@@ -924,8 +797,8 @@ export const livePreviewExtensions = (): Extension[] => [
   // lang-markdown's own Enter and Backspace are replaced by `noteEditingExtensions`.
   markdown({ base: markdownLanguage, addKeymap: false }),
   noteEditingExtensions(),
+  noteCaretExtensions(),
   syntaxHighlighting(highlight),
-  propertiesField,
   gapField,
   tablePreviewField,
   tablePreviewTheme,

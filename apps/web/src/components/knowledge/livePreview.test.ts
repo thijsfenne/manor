@@ -44,10 +44,19 @@ describe('live preview lists', () => {
     expect(listPadding(note('- Alpha\n  - Nested'))).toEqual(['padding-left:1.5em', 'padding-left:3em'])
   })
 
-  it('gives the markdown marker back on the line being edited', () => {
+  it('keeps the disc on the line being edited', () => {
     const state = note('- Alpha\n- Beta')
-    expect(widgetNames(state, [1])).toEqual(['BulletWidget'])
+    expect(widgetNames(state, [1])).toEqual(['BulletWidget', 'BulletWidget'])
     expect(listPadding(state, [1])).toEqual(['padding-left:1.5em', 'padding-left:1.5em'])
+  })
+
+  it('leaves a bare mark as text until its space makes it a list item or heading', () => {
+    expect(widgetNames(note('Text\n\n-'))).toEqual([])
+    expect(widgetNames(note('- '))).toEqual(['BulletWidget'])
+    const bare = note('#')
+    let headings = 0
+    livePreviewDecorationSet(bare).between(0, 1, (_from, _to, deco) => { if (deco.spec.attributes?.class === 'cm-manor-heading') headings += 1 })
+    expect(headings).toBe(0)
   })
 
   it('keeps ordered marks as numbers', () => {
@@ -60,13 +69,14 @@ describe('live preview lists', () => {
     expect(listPadding(state)).toEqual(['padding-left:1.5em', 'padding-left:3em'])
   })
 
-  it('hangs the revealed source in the marker slot on the caret line', () => {
+  it('keeps the checkbox, with the indent and the whole mark behind it, on the caret line', () => {
     const state = note('  - [ ] Two')
-    const hung: string[] = []
+    expect(widgetNames(state, [1])).toEqual(['TaskWidget'])
+    const covered: string[] = []
     livePreviewDecorationSet(state, [1]).between(0, state.doc.length, (from, to, deco) => {
-      if (deco.spec.class === 'cm-manor-listsrc') hung.push(state.doc.sliceString(from, to))
+      if (deco.spec.widget?.constructor.name === 'TaskWidget') covered.push(state.doc.sliceString(from, to))
     })
-    expect(hung).toEqual(['- [ ] '])
+    expect(covered).toEqual(['  - [ ] '])
   })
 })
 
@@ -136,7 +146,7 @@ describe('live preview links and done to-dos', () => {
     return found
   }
 
-  it('shows only the label of a markdown link off the caret line', () => {
+  it('shows only the label of a markdown link, on the caret line too', () => {
     const state = note('See [the site](https://example.com) now')
     const hidden = (editing: number[]) => {
       const text: string[] = []
@@ -146,13 +156,13 @@ describe('live preview links and done to-dos', () => {
       return text.join('')
     }
     expect(hidden([])).toBe('[](https://example.com)')
-    expect(hidden([1])).toBe('')
+    expect(hidden([1])).toBe('[](https://example.com)')
   })
 
-  it('opens a markdown link on a plain click only when its line is not being edited', () => {
+  it('opens a markdown link on a plain click, wherever the caret is', () => {
     const state = note('See [the site](https://example.com) now')
     expect(attributes(state, [])).toEqual([{ 'data-href': 'https://example.com' }])
-    expect(attributes(state, [1])).toEqual([{ 'data-href-edit': 'https://example.com' }])
+    expect(attributes(state, [1])).toEqual([{ 'data-href': 'https://example.com' }])
   })
 
   it('mutes a done item and leaves an open one alone', () => {

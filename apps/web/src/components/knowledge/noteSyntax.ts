@@ -20,6 +20,32 @@ export const asCommand = (transform: NoteTransform): StateCommand => ({ state, d
 /** One undo step per command, never merged into the typing around it. */
 export const ownStep = isolateHistory.of('full')
 
+/** `[[target]]` or `[[target|label]]`, on one line. */
+const WIKILINK = /\[\[([^[\]\n]+?)\]\]/g
+
+/** A wikilink: its whole span, its target, and the label a reader sees. */
+export interface Wikilink {
+  from: number
+  to: number
+  target: string
+  labelFrom: number
+  labelTo: number
+}
+
+/** Every wikilink with a visible label in `text`, which starts at `offset` in the document. */
+export function wikilinksIn(text: string, offset: number): Wikilink[] {
+  const found: Wikilink[] = []
+  for (const match of text.matchAll(WIKILINK)) {
+    const inner = match[1] as string
+    const pipe = inner.indexOf('|')
+    const from = offset + match.index
+    const labelFrom = from + 2 + (pipe === -1 ? 0 : pipe + 1)
+    const labelTo = from + 2 + inner.length
+    if (labelTo > labelFrom) found.push({ from, to: from + match[0].length, target: (pipe === -1 ? inner : inner.slice(0, pipe)).trim(), labelFrom, labelTo })
+  }
+  return found
+}
+
 type Tree = ReturnType<typeof syntaxTree>
 export type SyntaxNode = ReturnType<Tree['resolveInner']>
 

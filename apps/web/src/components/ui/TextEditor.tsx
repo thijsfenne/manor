@@ -37,6 +37,15 @@ export function typingElsewhere(document: Document): boolean {
 }
 
 /**
+ * The line break a file is written back with. The editor holds LF inside, so offsets
+ * and inserted text stay simple; a file with CRLF throughout gets CRLF back on every
+ * change. Mixed endings cannot round-trip and write as LF.
+ */
+export function lineBreakOf(text: string): '\r\n' | '\n' {
+  return text.includes('\r\n') && !/(^|[^\r])\n/.test(text) ? '\r\n' : '\n'
+}
+
+/**
  * The editing surface, shared by the vault and the repo files panel. CodeMirror
  * rather than a textarea, because the user asked for Obsidian's reading experience
  * while editing a note and a textarea can only ever show one font at one size.
@@ -57,6 +66,7 @@ export function TextEditor({ path, documentKey, text, extensions, cursor = 0, cl
     const pos = editor.state.selection.main.head
     editor.dispatch({ selection: { anchor: pos } })
   })
+  const lineBreak = useRef<'\r\n' | '\n'>('\n')
   const build = useRef({ text, extensions, cursor, onChange })
   build.current = { text, extensions, cursor, onChange }
 
@@ -67,6 +77,7 @@ export function TextEditor({ path, documentKey, text, extensions, cursor = 0, cl
     if (host.current === null) return
     const opening = build.current
     const editable = opening.onChange !== undefined
+    lineBreak.current = lineBreakOf(opening.text)
     const editor = new EditorView({
       parent: host.current,
       state: EditorState.create({
@@ -83,7 +94,7 @@ export function TextEditor({ path, documentKey, text, extensions, cursor = 0, cl
             : [EditorState.readOnly.of(true), EditorView.editable.of(false)]),
           ...opening.extensions,
           EditorView.updateListener.of((update) => {
-            if (update.docChanged) emit.current?.(update.state.doc.toString())
+            if (update.docChanged) emit.current?.(update.state.doc.sliceString(0, update.state.doc.length, lineBreak.current))
             if (update.selectionSet || update.docChanged) {
               const sel = update.state.selection.main
               const from = sel.empty ? null : update.view.coordsAtPos(sel.from)
@@ -110,7 +121,11 @@ export function TextEditor({ path, documentKey, text, extensions, cursor = 0, cl
   // reset the cursor to where the state happened to say it was.
   useEffect(() => {
     const editor = view.current
-    if (editor === null || editor.state.doc.toString() === text) return
+    if (editor === null) return
+    // The editor holds LF, so the same text in other line endings is no outside change,
+    // though the next save writes those endings.
+    lineBreak.current = lineBreakOf(text)
+    if (editor.state.doc.toString() === text.replace(/\r\n?/g, '\n')) return
     editor.dispatch({ changes: { from: 0, to: editor.state.doc.length, insert: text } })
   }, [text])
 

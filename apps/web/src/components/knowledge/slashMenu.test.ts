@@ -19,12 +19,15 @@ describe('where "/" opens the menu', () => {
     expect(isOpen(typed('- ‸'))).toBe(true)
   })
 
-  it('stays closed after a letter, in code, in the frontmatter and in a link target', () => {
+  it('stays closed after a letter, in code and in a link target', () => {
     expect(isOpen(typed('and‸'))).toBe(false)
     expect(isOpen(typed('```\n‸\n```'))).toBe(false)
     expect(isOpen(typed('a `b ‸c` d'))).toBe(false)
-    expect(isOpen(typed('---\ntitle: a ‸\n---\nbody'))).toBe(false)
     expect(isOpen(typed('[a](<b ‸c>)'))).toBe(false)
+  })
+
+  it('never types into the sealed frontmatter', () => {
+    expect(typed('---\ntitle: a ‸\n---\nbody').doc.toString()).toBe('---\ntitle: a \n---\n/body')
   })
 
   it('stays closed while an input method is composing, and for a paste', () => {

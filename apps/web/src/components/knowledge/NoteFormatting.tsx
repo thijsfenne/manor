@@ -30,7 +30,7 @@ import { createPortal } from 'react-dom'
 import { Icon } from '../Icon'
 import { Popover } from '../ui/Popover'
 import { turnInto } from './blockCommands'
-import { activeMarks, linkAt, linkTarget, markAvailable, removeLink, setLink, toggleMark, type InlineMark } from './formatCommands'
+import { activeMarks, editLinkAt, linkAt, linkLabelText, linkTarget, markAvailable, removeLink, setLink, toggleMark, wikilinkAt, type InlineMark } from './formatCommands'
 import { linkDraftEffect } from './noteEditing'
 import { blockKindAt, type BlockKind } from './noteSyntax'
 import { applySlashItem, openSlashMenu, slashEffect, type SlashItem } from './slashMenu'
@@ -102,12 +102,12 @@ export interface FormatToolbarProps {
    */
   menuPlace?: MenuPlace
   quote: readonly QuoteAction[]
-  /** The link field, while it is open. */
-  linkDraft: { url: string; existing: boolean } | null
+  /** The link field, while it is open. `text` is there when an existing link is edited. */
+  linkDraft: LinkDraftView | null
   onTurnInto: (kind: BlockKind) => void
   onToggle: (mark: InlineMark) => void
   onLink: () => void
-  onLinkSubmit: (url: string) => void
+  onLinkSubmit: (url: string, text?: string) => void
   onLinkRemove: () => void
   onLinkCancel: () => void
   onQuote: (action: QuoteAction) => void
@@ -122,6 +122,14 @@ const menuRow =
 
 /** The buttons never take the caret: pressing one keeps the selection it acts on. */
 const keep = (event: { preventDefault: () => void }) => event.preventDefault()
+
+export interface LinkDraftView {
+  url: string
+  existing: boolean
+  text?: string
+  /** A `[[wikilink]]`: its destination is a note name, not an address. */
+  wiki?: boolean
+}
 
 export interface MenuPlace {
   side: 'up' | 'down'
@@ -342,8 +350,16 @@ function MenuRow({ icon, label, hint, checked, disabled = false, onPick }: { ico
   )
 }
 
-function LinkField({ draft, onLinkSubmit, onLinkRemove, onLinkCancel }: FormatToolbarProps & { draft: { url: string; existing: boolean } }) {
+function LinkField({ draft, onLinkSubmit, onLinkRemove, onLinkCancel }: FormatToolbarProps & { draft: LinkDraftView }) {
   const [url, setUrl] = useState(draft.url)
+  const [text, setText] = useState(draft.text ?? '')
+  const cancel = (event: ReactKeyboardEvent<HTMLInputElement>) => {
+    if (event.key !== 'Escape') return
+    event.preventDefault()
+    event.stopPropagation()
+    onLinkCancel()
+  }
+  const input = 'h-7 min-w-0 flex-1 rounded-md border-0 bg-surface-2 px-2 text-label text-text outline-none placeholder:text-dim'
   return (
     <form
       role="group"
@@ -351,24 +367,31 @@ function LinkField({ draft, onLinkSubmit, onLinkRemove, onLinkCancel }: FormatTo
       className="flex min-w-0 items-center gap-1"
       onSubmit={(event) => {
         event.preventDefault()
-        onLinkSubmit(url)
+        if (draft.text === undefined) onLinkSubmit(url)
+        else onLinkSubmit(url, text)
       }}
     >
+      {draft.text === undefined ? null : (
+        <input
+          aria-label="Link text"
+          placeholder="Text"
+          value={text}
+          spellCheck={false}
+          className={`${input} w-36`}
+          onChange={(event) => setText(event.target.value)}
+          onKeyDown={cancel}
+        />
+      )}
       <input
         // eslint-disable-next-line jsx-a11y/no-autofocus -- the field is what the user just asked for
         autoFocus
-        aria-label="Link address"
-        placeholder="Paste or type a link"
+        aria-label={draft.wiki === true ? 'Linked note' : 'Link address'}
+        placeholder={draft.wiki === true ? 'Note name' : 'Paste or type a link'}
         value={url}
         spellCheck={false}
-        className="h-7 w-56 min-w-0 flex-1 rounded-md border-0 bg-surface-2 px-2 text-label text-text outline-none placeholder:text-dim"
+        className={`${input} w-56`}
         onChange={(event) => setUrl(event.target.value)}
-        onKeyDown={(event) => {
-          if (event.key !== 'Escape') return
-          event.preventDefault()
-          event.stopPropagation()
-          onLinkCancel()
-        }}
+        onKeyDown={cancel}
       />
       <button type="submit" aria-label="Apply link" title="Apply (Enter)" className={barButton} onMouseDown={keep}>
         <Icon icon={Tick02Icon} size={15} />
@@ -478,7 +501,7 @@ export function NoteFormatting({ view, version, quote, handle }: NoteFormattingP
   const [menuPlace, setMenuPlace] = useState<MenuPlace>(MENU_DOWN)
   const [barFocused, setBarFocused] = useState(false)
   const [dragging, setDragging] = useState(false)
-  const [linkDraft, setLinkDraft] = useState<{ from: number; to: number; url: string; existing: boolean } | null>(null)
+  const [linkDraft, setLinkDraft] = useState<(LinkDraftView & { from: number; to: number; at: number }) | null>(null)
   const [, setTick] = useState(0)
 
   const state = view?.state ?? null
@@ -582,12 +605,23 @@ export function NoteFormatting({ view, version, quote, handle }: NoteFormattingP
 
   const openLink = (target: EditorView): boolean => {
     const current = target.state
+    const head = current.selection.main.head
+    // A caret in a link edits that link whole: its text and where it points.
+    const wiki = current.selection.main.empty ? wikilinkAt(current, head) : null
+    const here = current.selection.main.empty && wiki === null ? linkAt(current, head) : null
+    if (wiki !== null || here !== null) {
+      const from = wiki?.labelFrom ?? here!.textFrom
+      const to = wiki?.labelTo ?? here!.textTo
+      target.dispatch({ effects: linkDraftEffect.of({ from, to }) })
+      setLinkDraft({ from, to, at: head, url: wiki?.target ?? here!.url, existing: true, text: linkLabelText(current.doc.sliceString(from, to)), wiki: wiki !== null })
+      return true
+    }
     const existing = linkAt(current, current.selection.main.from, current.selection.main.to)
     const span = existing === null ? linkTarget(current) : { from: existing.textFrom, to: existing.textTo }
     const from = span?.from ?? current.selection.main.head
     const to = span?.to ?? current.selection.main.head
     target.dispatch({ selection: EditorSelection.range(from, to), effects: linkDraftEffect.of({ from, to }) })
-    setLinkDraft({ from, to, url: existing?.url ?? '', existing: existing !== null })
+    setLinkDraft({ from, to, at: head, url: existing?.url ?? '', existing: existing !== null })
     return true
   }
 
@@ -630,14 +664,15 @@ export function NoteFormatting({ view, version, quote, handle }: NoteFormattingP
         compact={compact}
         menuPlace={menuPlace}
         quote={quote}
-        linkDraft={linkDraft === null ? null : { url: linkDraft.url, existing: linkDraft.existing }}
+        linkDraft={linkDraft}
         onTurnInto={(kind) => finish(turnInto(kind)(view.state))}
         onToggle={(mark) => finish(toggleMark(mark)(view.state))}
         onLink={() => { openLink(view) }}
-        onLinkSubmit={(url) => {
+        onLinkSubmit={(url, text) => {
           const draft = linkDraft
           endLink()
           if (draft === null) return
+          if (text !== undefined) { finish(editLinkAt(draft.at, text, url)(view.state)); return }
           const scoped = view.state.update({ selection: EditorSelection.range(draft.from, draft.to) }).state
           const spec = setLink(url)(scoped)
           finish(spec === null ? null : { ...spec, selection: spec.selection ?? EditorSelection.range(draft.from, draft.to) })
@@ -646,6 +681,7 @@ export function NoteFormatting({ view, version, quote, handle }: NoteFormattingP
           const draft = linkDraft
           endLink()
           if (draft === null) return
+          if (draft.wiki === true) { finish(editLinkAt(draft.at, draft.text ?? '', '')(view.state)); return }
           const scoped = view.state.update({ selection: EditorSelection.range(draft.from, draft.to) }).state
           finish(removeLink(scoped))
         }}
@@ -686,11 +722,57 @@ export function NoteFormatting({ view, version, quote, handle }: NoteFormattingP
     </Popover>
   )
 
+  // A caret resting in a link gets a small chip naming where it goes, with the way in
+  // to change it: the link's own markdown is never on screen to edit.
+  const peekWiki = view !== null && state !== null && range !== null && focused && range.empty && linkDraft === null && slash === null ? wikilinkAt(state, range.head) : null
+  const peekLink = view !== null && state !== null && range !== null && focused && range.empty && linkDraft === null && slash === null && peekWiki === null ? linkAt(state, range.head) : null
+  const peek = view === null || (peekWiki === null && peekLink === null) ? null : (
+    <LinkPeek
+      view={view}
+      from={peekWiki?.labelFrom ?? peekLink!.textFrom}
+      destination={peekWiki?.target ?? peekLink!.url}
+      onEdit={() => { openLink(view) }}
+    />
+  )
+
   return createPortal(
     <>
       <AnimatePresence>{toolbar}</AnimatePresence>
       {slashMenu}
+      {peek}
     </>,
     document.body,
+  )
+}
+
+/** Where the link at the caret points, and Edit (⌘K), just under the link. */
+function LinkPeek({ view, from, destination, onEdit }: { view: EditorView; from: number; destination: string; onEdit: () => void }) {
+  const chip = useRef<HTMLDivElement>(null)
+  useLayoutEffect(() => {
+    const element = chip.current
+    const at = view.coordsAtPos(from, 1)
+    if (element === null) return
+    const box = boundsOf(view)
+    if (at === null || at.bottom < box.top || at.top > box.bottom) {
+      element.style.visibility = 'hidden'
+      return
+    }
+    const width = element.offsetWidth
+    element.style.left = `${Math.round(Math.max(box.left + INSET, Math.min(at.left, box.right - INSET - width)))}px`
+    element.style.top = `${Math.round(at.bottom + 6)}px`
+    element.style.visibility = 'visible'
+  })
+  return (
+    <div
+      ref={chip}
+      data-link-peek
+      className="invisible fixed top-0 left-0 z-40 flex max-w-[22rem] items-center gap-1 rounded-lg border border-line surface-floating py-0.5 pr-0.5 pl-2 shadow-popover"
+    >
+      <Icon icon={Link01Icon} size={13} className="flex-none text-muted" />
+      <span className="min-w-0 flex-1 truncate text-meta text-muted" title={destination}>{destination}</span>
+      <button type="button" title="Edit link (⌘K)" className={`${barButton} text-label text-text`} onMouseDown={keep} onClick={onEdit}>
+        Edit
+      </button>
+    </div>
   )
 }

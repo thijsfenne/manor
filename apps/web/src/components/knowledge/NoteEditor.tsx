@@ -13,10 +13,13 @@ import { NoteAiLayer } from './NoteAiUi'
 import { noteUi } from './noteEditing'
 import { insertPictures, landImage, noteImageAccept, noteImageConfig, noteImageExtensions, picturePickerSpot, type NoteImageConfig } from './noteImages'
 import { frontmatterRange } from './noteSyntax'
+import { bodyStart } from './noteCaret'
+import { addProperty, propertyKeyError, propertyRows, removeProperty, setPropertyValue, type PropertyRow } from './frontmatterEdits'
+import { NoteProperties } from './NoteProperties'
 import { SLASH_ITEMS } from './slashMenu'
 import type { NoteAi } from './useNoteAi'
 import type { VaultImageSaveResult } from '../../state'
-import { Compartment, type Extension } from '@codemirror/state'
+import { Compartment, EditorState, type Extension, type TransactionSpec } from '@codemirror/state'
 import { EditorView, ViewPlugin, placeholder, type ViewUpdate } from '@codemirror/view'
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
@@ -36,6 +39,8 @@ interface NoteEditorProps {
   ai?: NoteAi
   /** Pictures: the vault's listing and the way a paste or drop saves one. Absent shows embeds as text. */
   pictures?: NotePictures
+  /** Handed a way to put the caret at the start of the body, for the title's Enter. */
+  bodyFocus?: { current: (() => void) | null }
 }
 
 export interface NotePictures {
@@ -60,7 +65,7 @@ const editLabel = (path: string) =>
  * is still plain markdown; only the rendering of it and the ways to write it changed.
  * The caret opens past the frontmatter, because nobody starts a note by editing its YAML.
  */
-export function NoteEditor({ toolsSlot, path, document, text, onChange, onFollowNote, quote = NO_QUOTE, ai, pictures }: NoteEditorProps) {
+export function NoteEditor({ toolsSlot, path, document, text, onChange, onFollowNote, quote = NO_QUOTE, ai, pictures, bodyFocus }: NoteEditorProps) {
   const followNote = useRef(onFollowNote)
   followNote.current = onFollowNote
   const openWebsite = useOpenWebsite()
@@ -140,6 +145,27 @@ export function NoteEditor({ toolsSlot, path, document, text, onChange, onFollow
     ]
   }
 
+  useEffect(() => {
+    if (bodyFocus === undefined) return
+    bodyFocus.current = view === null ? null : () => {
+      view.dispatch({ selection: { anchor: bodyStart(view.state) ?? 0 }, scrollIntoView: true })
+      view.focus()
+    }
+    return () => { bodyFocus.current = null }
+  }, [view, bodyFocus])
+
+  // The property list reads the live document; before the view exists, the text it opens with.
+  const current = view?.state ?? EditorState.create({ doc: text })
+  const rows = propertyRows(current)
+  const propertyEdit = (make: (state: EditorState, row: PropertyRow | undefined) => TransactionSpec | null, row?: PropertyRow) => {
+    if (view === null) return
+    // The row as it stands now, in case the text moved under the list since it drew.
+    const live = row === undefined ? undefined : propertyRows(view.state)?.find((each) => each.line === row.line && each.key === row.key)
+    if (row !== undefined && live === undefined) return
+    const spec = make(view.state, live)
+    if (spec !== null) view.dispatch(spec)
+  }
+
   const follow = (event: { target: EventTarget | null; preventDefault: () => void; stopPropagation: () => void }) => {
     const target = event.target instanceof Element ? event.target.closest<HTMLElement>('[data-note-target]') : null
     if (!target?.dataset.noteTarget) return false
@@ -150,14 +176,12 @@ export function NoteEditor({ toolsSlot, path, document, text, onChange, onFollow
   }
 
   /**
-   * A markdown link: a plain click opens it when its line is not being edited (the
-   * live preview only marks those `data-href`), Mod-click always. Websites go through
-   * the app's link policy; anything else is read as a note in this vault.
+   * A markdown link opens on a plain click; Option-click puts the caret in it instead.
+   * Websites go through the app's link policy; anything else is read as a note in this vault.
    */
   const openLink = (event: React.MouseEvent) => {
-    const target = event.target instanceof Element ? event.target.closest<HTMLElement>('[data-href],[data-href-edit]') : null
-    if (target === null) return false
-    const href = target.dataset.href ?? (event.metaKey || event.ctrlKey ? target.dataset.hrefEdit : undefined)
+    const target = event.target instanceof Element ? event.target.closest<HTMLElement>('[data-href]') : null
+    const href = target?.dataset.href
     if (href === undefined || href === '') return false
     event.preventDefault()
     event.stopPropagation()
@@ -181,6 +205,21 @@ export function NoteEditor({ toolsSlot, path, document, text, onChange, onFollow
       }}
       onKeyDownCapture={(event) => { if (event.key === 'Enter') follow(event) }}
     >
+      {rows === null ? null : (
+        <NoteProperties
+          rows={rows}
+          editable={view !== null && !view.state.readOnly}
+          onSet={(row, value) => propertyEdit((state, live) => live === undefined ? null : setPropertyValue(state, live, value), row)}
+          onAdd={(key, value) => {
+            if (view === null) return 'The note is still opening.'
+            const error = propertyKeyError(propertyRows(view.state) ?? [], key)
+            if (error !== null) return error
+            propertyEdit((state) => addProperty(state, key, value))
+            return null
+          }}
+          onRemove={(row) => propertyEdit((state, live) => live === undefined ? null : removeProperty(state, live), row)}
+        />
+      )}
       <TextEditor
         path={path}
         {...(document === undefined ? {} : { documentKey: String(document) })}
@@ -194,7 +233,7 @@ export function NoteEditor({ toolsSlot, path, document, text, onChange, onFollow
           placeholder("Start writing, or press '/' for blocks. Changes save automatically."),
           label.current.of(editLabel(path)),
         ]}
-        cursor={bodyOffset(text)}
+        cursor={bodyOffset(text.replace(/\r\n/g, '\n'))}
         className="cm-manor"
         onChange={onChange}
       />

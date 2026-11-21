@@ -707,6 +707,13 @@ export function KnowledgePanel({
     onSubmit: submitRename,
   } : null
 
+  const titleProps = path !== null && editor !== null && editor.path === path ? {
+    busy: renameRequest !== null,
+    error: renameError,
+    onSubmit: submitRename,
+    onDismissError: () => setRenameError(null),
+  } : null
+
   const toggleFolder = useCallback((folder: string) => {
     setExpanded((current) => {
       const next = new Set(current)
@@ -840,6 +847,7 @@ export function KnowledgePanel({
       setEditor((current) => (current === null ? null : { ...current, text }))
     },
     rename: renameProps,
+    title: titleProps,
     onOverwrite: () => save(conflict?.revision ?? null),
     onTakeTheirs: () => {
       if (conflict === null) return

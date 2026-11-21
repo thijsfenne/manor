@@ -1,6 +1,6 @@
 import { undo } from '@codemirror/commands'
 import { describe, expect, it } from 'vitest'
-import { activeMarks, formatUrl, linkDestination, markAvailable, removeLink, setLink, toggleMark } from './formatCommands'
+import { activeMarks, editLinkAt, formatUrl, linkDestination, markAvailable, removeLink, setLink, toggleMark } from './formatCommands'
 import { markStates } from './NoteFormatting'
 import { apply, note, run, show } from './noteTestState'
 
@@ -167,5 +167,27 @@ describe('links', () => {
 
   it('round trips through show', () => {
     expect(show(note('a «b» c'))).toBe('a «b» c')
+  })
+})
+
+describe('editing a link from its field', () => {
+  const edit = (doc: string, pos: number, text: string, destination: string) => {
+    const state = note(doc)
+    const spec = editLinkAt(pos, text, destination)(state)
+    return spec === null ? null : state.update(spec).state.doc.toString()
+  }
+
+  it('rewrites only the part that changed, so a title and escapes stay', () => {
+    expect(edit('a [x](https://u.com "Tip") b', 3, 'x', 'https://v.com')).toBe('a [x](https://v.com "Tip") b')
+    expect(edit('a [x](https://u.com "Tip") b', 3, 'y', 'https://u.com')).toBe('a [y](https://u.com "Tip") b')
+    expect(edit('[a \\[b\\]](https://u.com)', 1, 'a [b]', 'https://u.com')).toBeNull()
+    expect(edit('[a \\[b\\]](https://u.com)', 1, 'a [b] c', 'https://u.com')).toBe('[a \\[b\\] c](https://u.com)')
+    // A vault path the user did not touch is not turned into a website.
+    expect(edit('[note](docs.md "tip")', 1, 'new label', 'docs.md')).toBe('[new label](docs.md "tip")')
+  })
+
+  it('retargets a wikilink and unlinks on an empty destination', () => {
+    expect(edit('see [[Note|alias]]', 12, 'alias', 'Other')).toBe('see [[Other|alias]]')
+    expect(edit('a [x](https://u.com) b', 3, 'x', '')).toBe('a x b')
   })
 })

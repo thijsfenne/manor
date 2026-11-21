@@ -2,7 +2,7 @@ import { deleteMarkupBackward, insertNewlineContinueMarkupCommand } from '@codem
 import { EditorState, Facet, Prec, StateEffect, StateField, type Extension } from '@codemirror/state'
 import { Decoration, EditorView, ViewPlugin, WidgetType, keymap, type Command, type DecorationSet, type KeyBinding, type ViewUpdate } from '@codemirror/view'
 import { exitEmptyQuote, indentList, moveLines, renumberFollowUp, todoTrigger, turnInto, unwrapBlockBackward } from './blockCommands'
-import { toggleMark } from './formatCommands'
+import { linkAt, toggleMark, wikilinkAt } from './formatCommands'
 import { asCommand, codeBlockAt, inFrontmatter, type NoteTransform } from './noteSyntax'
 import { applyHighlighted, closeSlashMenu, moveSlashIndex, openSlashMenu, slashEffect, slashField } from './slashMenu'
 
@@ -28,9 +28,15 @@ const always = (transform: NoteTransform): Command => (view) => {
   return true
 }
 
+/** A caret in a link's text: ⌘K there edits that link instead of opening search. */
+const caretInLink = (state: EditorState) => {
+  const head = state.selection.main.head
+  return wikilinkAt(state, head) !== null || linkAt(state, head) !== null
+}
+
 // The app binds ⌘B (right panel) on the window. Inside a note it formats instead, so
 // the key stops here rather than runs twice. ⌘D (sidebar list) is not bound here at
-// all, and ⌘K (search) only over a selection, which makes a link.
+// all, and ⌘K (search) only over a selection or in a link, where it edits the link.
 const own = (key: string, run: Command): KeyBinding => ({ key, run, preventDefault: true, stopPropagation: true })
 
 const formatKeys: KeyBinding[] = [
@@ -42,7 +48,7 @@ const formatKeys: KeyBinding[] = [
   // declines. Without it, an empty selection returns false, CodeMirror neither prevents
   // nor stops the key, and the window's search shortcut fires as it does everywhere
   // else; over a selection the command handles it and `stopPropagation` keeps search shut.
-  { key: 'Mod-k', run: (view) => (view.state.selection.main.empty ? false : view.state.facet(noteUi)?.openLink(view) ?? false), stopPropagation: true },
+  { key: 'Mod-k', run: (view) => (view.state.selection.main.empty && !caretInLink(view.state) ? false : view.state.facet(noteUi)?.openLink(view) ?? false), stopPropagation: true },
   own('Mod-Alt-0', always(turnInto('text'))),
   own('Mod-Alt-1', always(turnInto('h1'))),
   own('Mod-Alt-2', always(turnInto('h2'))),
@@ -78,7 +84,7 @@ const slashKeys: KeyBinding[] = [
   { key: 'Escape', run: asCommand(closeSlashMenu), stopPropagation: true },
 ]
 
-/** Typed `[]` then space becomes a to-do. Never during composition. */
+/** Typed `[]` or `[ ]` then space becomes a to-do. Never during composition. */
 const typingRules = EditorView.inputHandler.of((view, from, to, text) => {
   if (view.composing) return false
   const spec = todoTrigger(view.state, from, to, text)

@@ -8,8 +8,8 @@ import {
   Tick02Icon,
 } from '@hugeicons/core-free-icons'
 import type { RepoFileResult } from '@manor/contracts'
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { NoteName } from './NoteName'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { NoteTitle, type NoteName, type NoteTitleProps } from './NoteName'
 import { NoteAiComposer } from './NoteAiUi'
 import { NoteEditor, type NotePictures } from './NoteEditor'
 import { pageFileDrag } from './noteImages'
@@ -100,7 +100,10 @@ interface NoteDocumentProps {
   onChange: (text: string) => void
   onFollowNote: (target: string) => void
   linkError: string | null
+  /** A rename asked for from the tree or a tab: the panel's field, or the page's title. */
   rename: React.ComponentProps<typeof NoteName> | null
+  /** The page title as the rename field, while the note is open for editing. */
+  title?: NoteTitleProps | null
 
   onOverwrite: () => void
   onTakeTheirs: () => void
@@ -138,6 +141,7 @@ export function NoteDocument({
   onFollowNote,
   linkError,
   rename,
+  title = null,
   onOverwrite,
   onTakeTheirs,
   onCopyMine,
@@ -147,6 +151,9 @@ export function NoteDocument({
   clearsSidebarToggle = false,
 }: NoteDocumentProps) {
   const scroller = useRef<HTMLDivElement>(null)
+  const bodyFocus = useRef<(() => void) | null>(null)
+  const cancelRename = rename?.onCancel
+  const renameHandled = useCallback(() => cancelRename?.(), [cancelRename])
   const [toolsSlot, setToolsSlot] = useState<HTMLDivElement | null>(null)
   // Where the reader was, as a fraction of the column, put back after a mode switch.
   // Rough on a long note (an edited line does not sit at the same fraction as its
@@ -214,10 +221,6 @@ export function NoteDocument({
             {conflict !== null || rejected !== null ? 'Not saved' : editBlocked !== '' ? 'Editing paused' : saving ? 'Saving…' : dirty ? 'Unsaved changes' : fresh ? 'New note' : !editing ? 'Opening…' : 'Saved'}
           </span>
         </div>
-
-        {rename !== null ? (
-          <div className={`mx-auto mt-3 w-full ${COLUMN} text-label text-text`}><NoteName key={path} {...rename} /></div>
-        ) : null}
 
         {editBlocked === '' ? null : (
           <p className={`mx-auto mt-2 w-full ${COLUMN} text-meta text-muted`}>{editBlocked}</p>
@@ -288,16 +291,22 @@ export function NoteDocument({
       <div ref={scroller} onScroll={rememberScroll} onDragOver={editing ? fileDrag : undefined} onDrop={editing ? fileDrag : undefined} className={`min-h-0 min-w-0 overflow-y-auto ${chrome === 'page' ? 'px-10 py-7 max-[760px]:px-6' : 'px-8 py-4'} ${editing && ai !== undefined ? 'pb-24' : ''}`}>
         {chrome === 'page' ? (
           <div className={`mx-auto mb-4 w-full ${COLUMN}`}>
-            <h1 className="m-0 font-display text-[clamp(26px,4vw,34px)] leading-[1.15] font-medium tracking-[-0.02em] wrap-anywhere text-text">
-              {fileTitle(path)}
-            </h1>
+            {editing && title !== null ? (
+              <h1 className="m-0">
+                <NoteTitle {...title} path={path} focusRequest={rename !== null} onFocusHandled={renameHandled} onEnter={() => bodyFocus.current?.()} />
+              </h1>
+            ) : (
+              <h1 className="m-0 font-display text-[clamp(26px,4vw,34px)] leading-[1.15] font-medium tracking-[-0.02em] wrap-anywhere text-text">
+                {fileTitle(path)}
+              </h1>
+            )}
             {parsed.frontmatter === null || editing ? null : <div className="mt-3"><Chips front={parsed.frontmatter} /></div>}
           </div>
         ) : null}
         {linkError === null ? null : <p role="alert" className={`mx-auto mb-4 w-full ${COLUMN} text-[13px] text-danger`}>{linkError}</p>}
         {editing ? (
           <div className="min-w-0 w-full text-[16px] leading-[1.7] text-text">
-            <NoteEditor toolsSlot={toolsSlot} path={editor.path} {...(editor.document === undefined ? {} : { document: editor.document })} text={editor.text} onChange={onChange} onFollowNote={onFollowNote} {...(quote === undefined ? {} : { quote })} {...(ai === undefined ? {} : { ai })} {...(pictures === undefined ? {} : { pictures })} />
+            <NoteEditor toolsSlot={toolsSlot} path={editor.path} {...(editor.document === undefined ? {} : { document: editor.document })} text={editor.text} onChange={onChange} onFollowNote={onFollowNote} {...(quote === undefined ? {} : { quote })} {...(ai === undefined ? {} : { ai })} {...(pictures === undefined ? {} : { pictures })} bodyFocus={bodyFocus} />
           </div>
         ) : (
           <NoteReader path={path} result={result} body={parsed.body} plugins={plugins} components={components} />

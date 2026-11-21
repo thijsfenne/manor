@@ -530,10 +530,10 @@ export function todoTrigger(state: EditorState, from: number, to: number, text: 
   if (from !== to || state.selection.ranges.length !== 1 || !text.includes(' ') || text.includes('\n')) return null
   const line = state.doc.lineAt(from)
   const before = line.text.slice(0, from - line.from)
-  // Fast typing delivers several characters at once (`[] first`), so the rule reads the
+  // `[]` and `[ ]` both count. Fast typing delivers several characters at once (`[] first`), so the rule reads the
   // line as it will be. The space that completes `[]` must be one of the new characters.
   const typed = before + text
-  const match = /^([ \t]*)(?:[-*+][ \t]+)?\[\] /.exec(typed)
+  const match = /^([ \t]*)(?:[-*+][ \t]+)?\[ ?\] /.exec(typed)
   if (match === null || match[0].length <= before.length) return null
   if (inFrontmatter(state, from) || codeBlockAt(state, line) !== null) return null
   const insert = `${match[1]}- [ ] ${typed.slice(match[0].length)}`
