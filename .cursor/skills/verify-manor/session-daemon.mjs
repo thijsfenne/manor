@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { execFileSync } from 'node:child_process'
 import { createServer } from 'node:http'
-import { writeFileSync } from 'node:fs'
+import { statSync, writeFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { chromium } from 'playwright'
@@ -203,6 +203,29 @@ async function handle(body) {
     try { await page.mouse.move(x + dx, y + dy, { steps }) } finally { await page.mouse.up() }
     await page.waitForTimeout(300)
     return { dx, dy, steps }
+  }
+  // Files from disk dragged onto the located element through Chromium's own drag pipeline
+  // (CDP Input.dispatchDragEvent), like a drag from the desktop: the drop only fires when the
+  // page accepted the dragover, so check the page afterwards for what it did with them.
+  if (cmd === 'drop-files') {
+    const files = String(flags.file ?? '').split(',').filter(Boolean).map((file) => resolve(file))
+    if (files.length === 0 || typeof flags.file !== 'string') throw new Error('drop-files needs --file <path>[,<path>…]')
+    const missing = files.find((file) => !statSync(file, { throwIfNoEntry: false })?.isFile())
+    if (missing !== undefined) throw new Error(`No file at ${missing}; give absolute paths`)
+    const box = await locatorFor(flags).boundingBox()
+    if (box === null) throw new Error('Nothing visible to drop on')
+    const x = Math.round(box.x + box.width / 2 + Number(flags.dx ?? 0)), y = Math.round(box.y + Number(flags.dy ?? box.height / 2))
+    const cdp = await page.context().newCDPSession(page)
+    const data = { items: [], files, dragOperationsMask: 1 }
+    try {
+      await cdp.send('Input.dispatchDragEvent', { type: 'dragEnter', x, y, data })
+      await cdp.send('Input.dispatchDragEvent', { type: 'dragOver', x, y, data })
+      await cdp.send('Input.dispatchDragEvent', { type: 'drop', x, y, data })
+    } finally {
+      await cdp.detach().catch(() => {})
+    }
+    await page.waitForTimeout(600)
+    return { files: files.length, x, y }
   }
   if (cmd === 'wait-settle') {
     await page.waitForLoadState('networkidle').catch(() => {})

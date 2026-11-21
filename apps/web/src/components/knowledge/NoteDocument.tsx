@@ -12,6 +12,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { NoteName } from './NoteName'
 import { NoteAiComposer } from './NoteAiUi'
 import { NoteEditor, type NotePictures } from './NoteEditor'
+import { pageFileDrag } from './noteImages'
 import type { QuoteAction } from './NoteFormatting'
 import type { NoteAi } from './useNoteAi'
 import type { Components } from 'react-markdown'
@@ -172,6 +173,7 @@ export function NoteDocument({
     const span = element.scrollHeight - element.clientHeight
     ratio.current = span <= 0 ? 0 : element.scrollTop / span
   }
+  const fileDrag = (event: React.DragEvent<HTMLDivElement>) => pageFileDrag(event.currentTarget, event.nativeEvent)
 
   const source = editor?.text ?? (result?.status === 'ready' ? result.content : '')
   const parsed = parseNote(path, source)
@@ -288,7 +290,7 @@ export function NoteDocument({
         </div>
       )}
 
-      <div ref={scroller} onScroll={rememberScroll} className={`min-h-0 min-w-0 overflow-y-auto ${chrome === 'page' ? 'px-10 py-7 max-[760px]:px-6' : 'px-8 py-4'} ${editing && ai !== undefined ? 'pb-24' : ''}`}>
+      <div ref={scroller} onScroll={rememberScroll} onDragOver={editing ? fileDrag : undefined} onDrop={editing ? fileDrag : undefined} className={`min-h-0 min-w-0 overflow-y-auto ${chrome === 'page' ? 'px-10 py-7 max-[760px]:px-6' : 'px-8 py-4'} ${editing && ai !== undefined ? 'pb-24' : ''}`}>
         {linkError === null ? null : <p role="alert" className={`mx-auto mb-4 w-full ${COLUMN} text-[13px] text-danger`}>{linkError}</p>}
         {editing ? (
           <div className="min-w-0 w-full text-[16px] leading-[1.7] text-text">

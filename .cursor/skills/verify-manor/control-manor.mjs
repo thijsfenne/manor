@@ -550,6 +550,7 @@ const commands = {
   resize: passthrough('resize'),
   wheel: passthrough('wheel'),
   drag: passthrough('drag'),
+  'drop-files': passthrough('drop-files'),
   hover: passthrough('hover'),
   attach: passthrough('attach'),
   scheme: passthrough('scheme'),
@@ -558,7 +559,7 @@ const commands = {
 }
 
 if (!command || !commands[command]) {
-  fail(`Unknown command ${command ?? '(none)'}. Use launch|doctor|home|open|snapshot|screenshot|click|hover|fill|attach|type|press|wheel|drag|resize|scheme|clock|wait-settle|cleanup`)
+  fail(`Unknown command ${command ?? '(none)'}. Use launch|doctor|home|open|snapshot|screenshot|click|hover|fill|attach|type|press|wheel|drag|drop-files|resize|scheme|clock|wait-settle|cleanup`)
 }
 
 await commands[command]()

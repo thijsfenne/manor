@@ -5,7 +5,7 @@ import { MAX_VAULT_IMAGE_BYTES, MAX_VAULT_IMAGE_NAME, embedWithWidth, imageEmbed
 import { useState, type PointerEvent as ReactPointerEvent } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { ImageLightbox } from '../ui/ZoomableImage'
-import { inFrontmatter, ownStep } from './noteSyntax'
+import { enclosing, frontmatterRange, inFrontmatter, ownStep } from './noteSyntax'
 
 /**
  * Pictures in a note, the way a block editor handles them, while the file stays plain
@@ -502,7 +502,11 @@ export function landing(state: EditorState, id: string, result: { status: 'saved
   if (item === undefined) return null
   if (result.status === 'rejected') return { effects: settlePending.of({ id, error: result.message }) }
   const line = state.doc.lineAt(item.from)
-  const before = item.from > line.from ? '\n' : ''
+  // A line right under a table reads as one more row, so a blank line keeps the picture out.
+  const above = item.from > line.from ? line : line.number > 1 ? state.doc.line(line.number - 1) : null
+  const table = above === null ? null : enclosing(state, above.to, TABLES)
+  const underTable = above !== null && table !== null && table.to <= above.to
+  const before = `${item.from > line.from ? '\n' : ''}${underTable ? '\n' : ''}`
   const insert = `${before}![[${result.name}]]\n`
   return {
     changes: { from: item.from, to: item.to, insert },
@@ -565,6 +569,47 @@ function sendPictures(view: EditorView, files: File[], from: number, to: number,
   }
 }
 
+const WHOLE_BLOCKS: ReadonlySet<string> = new Set([...CODE_NODES, 'Table', 'SetextHeading1', 'SetextHeading2'])
+const TABLES: ReadonlySet<string> = new Set(['Table'])
+
+/**
+ * Where a dropped picture lands for a drop over `pos`: on the line after the one under the
+ * pointer, so it never splits a line. A table, code block or underlined heading counts as
+ * one line, and a drop on the properties lands after them.
+ */
+export function dropSpot(state: EditorState, pos: number): number {
+  const meta = frontmatterRange(state)
+  if (meta !== null && pos <= meta.to) return Math.min(meta.to + 1, state.doc.length)
+  const under = state.doc.lineAt(pos)
+  const line = state.doc.lineAt(enclosing(state, under.to, WHOLE_BLOCKS)?.to ?? under.to)
+  return Math.min(line.to + 1, state.doc.length)
+}
+
+/** Takes the pictures among files dropped on the note, at `dropSpot` of the pointer. */
+export function dropPictures(view: EditorView, event: DragEvent): boolean {
+  const files = pictures(event.dataTransfer?.files)
+  if (files.length === 0 || view.state.readOnly || view.state.facet(noteImageConfig)?.save == null) return false
+  event.preventDefault()
+  const pos = dropSpot(view.state, view.posAtCoords({ x: event.clientX, y: event.clientY }, false))
+  sendPictures(view, files, pos, pos, false)
+  return true
+}
+
+/**
+ * For the scrolling page around a note: the editor only hears drags over its text, so a
+ * file dragged into the margin or below a short note would otherwise open in the window.
+ */
+export function pageFileDrag(page: HTMLElement, event: DragEvent) {
+  // React also bubbles drags from portaled layers, such as the comment field, through here.
+  if (event.defaultPrevented || !(event.target instanceof Node) || !page.contains(event.target)) return
+  if (!event.dataTransfer?.types.includes('Files')) return
+  const editor = page.querySelector<HTMLElement>('.cm-editor')
+  const view = editor === null ? null : EditorView.findFromDOM(editor)
+  if (view === null || view.state.readOnly) return
+  event.preventDefault()
+  if (event.type === 'drop') dropPictures(view, event)
+}
+
 const pasteAndDrop = EditorView.domEventHandlers({
   // Without this the browser opens a dropped file itself instead of handing it to the note.
   dragover(event, view) {
@@ -580,14 +625,7 @@ const pasteAndDrop = EditorView.domEventHandlers({
     sendPictures(view, files, main.from, main.to, true)
     return true
   },
-  drop(event, view) {
-    const files = pictures(event.dataTransfer?.files)
-    if (files.length === 0 || view.state.readOnly || view.state.facet(noteImageConfig)?.save == null) return false
-    event.preventDefault()
-    const pos = view.posAtCoords({ x: event.clientX, y: event.clientY }) ?? view.state.selection.main.head
-    sendPictures(view, files, pos, pos, false)
-    return true
-  },
+  drop: (event, view) => dropPictures(view, event),
 })
 
 const imageTheme = EditorView.theme({

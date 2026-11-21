@@ -141,6 +141,7 @@ Drive commands print one JSON line (`{"ok":true,…}`), `launch`, `doctor` and `
 | `clock --days-ago <n>` | Set the server's clock back `n` days, so what is sent next is stamped then; `0` puts it back. `launch --fresh` resets it |
 | `wheel <locator> [--dy -600]` | Real mouse wheel over that element; negative scrolls up |
 | `drag <locator> --dx <px> [--dy <px>] [--steps 20]` | Press, move by `dx` (and `dy`) in steps, release: a panel's resize grip, a Browser tab, a note picture |
+| `drop-files <locator> --file <path>[,<path>…] [--dx <px>] [--dy <px>]` | Drags files from disk through Chromium's own drag pipeline, like a drag from the desktop. The drop fires only when the page accepted the dragover, so check the page state afterwards; a refused drag still exits 0. Lands at the element's centre moved by `dx`, or `dy` below its top |
 | `resize --width <px> [--height 800]` | Viewport size, for narrow-window layouts |
 | `wait-settle` | Quiet network + 400ms |
 | `cleanup` | Stop this Session's spike now |
