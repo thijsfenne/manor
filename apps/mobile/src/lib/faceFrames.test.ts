@@ -35,9 +35,24 @@ describe('a gesture as native keyframes', () => {
     expect(Object.values(turn.loop.keyframes).some((key) => value(key.transform, 'scale') === moves.fit.drawIn)).toBe(true)
   })
 
+  it('keeps a full turn tucked in while it spins, counted as well as held', () => {
+    // A square's corners sweep past the slot's edge on a turn.
+    const square = frameOf(Array.from({ length: 40 }, (_, i) => {
+      const side = Math.floor(i / 10)
+      const u = -40 + (i % 10) * 8
+      return [[50 + u, 10], [90, 50 + u], [50 - u, 90], [10, 50 - u]][side]! as unknown as readonly [number, number]
+    }))
+    const moves = plan('roll', square)
+    expect(moves.fit.tuck).toBeLessThan(1)
+    const { turn } = gestureFrames(moves, 0.32, 1)
+    const least = Math.min(...Object.values(turn.loop.keyframes).map((key) => Number(value(key.transform, 'scale'))))
+    expect(least).toBeCloseTo(moves.fit.tuck * moves.fit.drawIn)
+  })
+
   it('keeps every keyframe the same shape, which the native runtime needs', () => {
-    for (const id of ['nod', 'shake', 'tilt', 'sink', 'follow', 'bounce'] as const) {
-      const { fig, turn } = gestureFrames(plan(id, ring(36)), 0.32, id === 'tilt' || id === 'sink' || id === 'follow' ? undefined : 1)
+    const held = new Set(['tilt', 'sink', 'follow', 'lean'])
+    for (const id of ['nod', 'shake', 'tilt', 'sink', 'follow', 'bounce', 'rock', 'roll', 'jelly', 'lean', 'shiver'] as const) {
+      const { fig, turn } = gestureFrames(plan(id, ring(36)), 0.32, held.has(id) ? undefined : 1)
       for (const layer of [fig, turn]) {
         const shape = layer.rest.map((step) => Object.keys(step)[0])
         for (const key of Object.values(layer.loop.keyframes)) expect(key.transform.map((step) => Object.keys(step)[0])).toEqual(shape)

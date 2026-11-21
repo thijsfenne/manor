@@ -9,9 +9,10 @@ import type { GesturePlan } from '@manor/client-runtime/face-gesture'
  * where a running animation is. Declared keyframes cannot be asked that. So a layer
  * here is two nested views. The outer one rests at the first key and eases there as a
  * plain style change once the face is drawn. The inner one plays the loop measured
- * from that key, so it starts at nothing. A counted gesture starts and ends at home,
- * so it needs no rest: it draws in and lets go inside its own run. Leaving a move is
- * not walked at all: the face fades over to what comes next (see `Blobatar`).
+ * from that key, so it starts at nothing. A counted gesture starts and ends at home
+ * (each one a state plays counted is authored that way), so it needs no rest: it
+ * draws in and lets go inside its own run. Leaving a move is not walked at all: the
+ * face fades over to what comes next (see `Blobatar`).
  */
 
 /** A transform as a view's style takes it: one operation per entry, applied last to first. */
@@ -103,9 +104,11 @@ export function gestureFrames(plan: GesturePlan, unit: number, passes?: number):
   const lead = WALK / duration
   const rot = repeated(plan.rot, passes).map((key) => [key.offset, key.degrees] as const)
   // Drawn in over the first moments, held for the whole of the run, let go at the end.
+  // A full turn tucks in further on top of that while it spins.
   const draw = plan.fit.drawIn
   const drawn = [[0, 1], [lead, draw], [1 - lead, draw], [1, 1]] as const
-  const offsets = [...new Set([...rot, ...drawn].map(([offset]) => offset))].sort((a, b) => a - b)
+  const tucked = repeated(plan.draw, passes).map((key) => [key.offset, key.d / draw] as const)
+  const offsets = [...new Set([...rot, ...drawn, ...tucked].map(([offset]) => offset))].sort((a, b) => a - b)
   return {
     fig: {
       home: figure(HOME, unit),
@@ -117,7 +120,7 @@ export function gestureFrames(plan: GesturePlan, unit: number, passes?: number):
       rest: turned(0, 1),
       // Straight between keys: the keys that draw the body in fall mid swing, and an
       // eased segment on each side of one would stall the turn there.
-      loop: { duration, passes: 1, keyframes: Object.fromEntries(offsets.map((offset) => [percent(offset), { transform: turned(at(rot, offset), at(drawn, offset)), ease: 'linear' }])) },
+      loop: { duration, passes: 1, keyframes: Object.fromEntries(offsets.map((offset) => [percent(offset), { transform: turned(at(rot, offset), at(drawn, offset) * at(tucked, offset)), ease: 'linear' }])) },
     },
   }
 }

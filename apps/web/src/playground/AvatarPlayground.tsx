@@ -308,7 +308,7 @@ function Face({ settings }: { settings: Settings }) {
   const drawn = JSON.stringify([name, color, tone, traits, size])
   const run = useBusyFace(slot, busy, look?.eyes === 'dots' ? { ...settings.busy, variation: 'dots', dots: true } : settings.busy, drawn)
   const gesture = look === undefined ? settings.gesture : (look.gesture ?? '')
-  useFaceGesture(slot, animate && gesture !== '' ? (gesture as GestureId) : undefined, drawn)
+  useFaceGesture(slot, animate && gesture !== '' ? (gesture as GestureId) : undefined, drawn, look?.passes)
   useFaceEyes(slot, look?.eyes === 'scan' || look?.eyes === 'toward' || look?.eyes === 'seesaw' ? look.eyes : undefined, drawn)
   const [segment, setSegment] = useState<Segment>()
   useEffect(() => {

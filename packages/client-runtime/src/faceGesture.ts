@@ -50,8 +50,8 @@ export const GESTURES = {
   },
   /** Head cocked, with a slow sway. */
   tilt: { ms: 3600, rot: [[0, 9], [0.5, 5], [1, 9]] },
-  /** A seesaw around the middle. */
-  rock: { ms: 1900, rot: [[0, -10], [0.5, 10], [1, -10]] },
+  /** A seesaw around the middle. It starts and ends level, so a counted pass needs no walk out to its first key. */
+  rock: { ms: 1900, rot: [[0, 0], [0.125, -7], [0.25, -10], [0.375, -7], [0.5, 0], [0.625, 7], [0.75, 10], [0.875, 7], [1, 0]] },
   /** One full turn in place, with a squash on landing. */
   roll: { ms: 3000, rot: [[0, 0], [0.42, 360], [1, 360]], fig: [[0, {}], [0.06, { tuck: true }], [0.42, { tuck: true }], [0.5, { sx: 1.07, sy: 0.93 }], [0.6, {}], [1, {}]] },
   /** Anticipate, jump, land, settle. */

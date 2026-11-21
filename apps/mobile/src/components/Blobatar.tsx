@@ -2,13 +2,13 @@ import { accentHue } from '@manor/client-runtime/accent-hue'
 import { BLOB_FACE_TRAITS, DEFAULT_BLOB_TONE, SIDEBAR_WORKING_GAZE, WORKING_GAZE, blobShapeOf, blobShapeTraits } from '@manor/client-runtime/blob-shapes'
 import { BUSY_LOOK, DOT, order, timeline, type Key, type Pair } from '@manor/client-runtime/busy-face'
 import { EYE_MOVE_MS, FACE_LOOK, scanStops, seesawStops, towardStops, type FaceLook, type FaceState } from '@manor/client-runtime/face-activity'
-import { frameOf, outlinePoints, plan } from '@manor/client-runtime/face-gesture'
+import { frameOf, outlinePoints, plan, type GestureId } from '@manor/client-runtime/face-gesture'
 import { CLAY, clayTones, palette, sheenInk, traits as seedTraits, type Glow, type Tones } from '@manor/blobatar'
 import { happy, sad, sleepy, thinking, unsure } from '@manor/blobatar/expression'
 import { _parts } from '@manor/blobatar/internal'
 import MaskedView from '@react-native-masked-view/masked-view'
 import { Image } from 'expo-image'
-import { Fragment, useEffect, useId, useMemo, useState } from 'react'
+import { Fragment, useEffect, useId, useMemo, useState, type ReactNode } from 'react'
 import { StyleSheet, View, type ColorValue, type ViewStyle } from 'react-native'
 import Animated, { cubicBezier, useReducedMotion, type CSSAnimationKeyframes, type CSSAnimationTimingFunction, type CSSStyle, FadeIn, FadeOut, LayoutAnimationConfig, ReduceMotion } from 'react-native-reanimated'
 import Svg, { Circle, ClipPath, Defs, G, Path, RadialGradient, Rect, Stop } from 'react-native-svg'
@@ -131,11 +131,7 @@ export function Blobatar({ name, color, src, shape, tone = DEFAULT_BLOB_TONE, si
   // The triangle draws its ink high in its viewBox; the lift levels it with a name.
   const lift = worn?.lift === undefined ? 0 : (worn.lift / 100) * size
 
-  const drawn = own?.eyes === 'dots' ? (
-    <BusyFace face={face} size={size} held />
-  ) : own !== undefined ? (
-    <StateFace face={face} look={own} size={size} />
-  ) : busy ? (
+  const plain = busy ? (
     <BusyFace face={face} size={size} />
   ) : sidebarWorking && animate ? (
     <LiveFace face={face} size={size} blinkOnly />
@@ -146,9 +142,20 @@ export function Blobatar({ name, color, src, shape, tone = DEFAULT_BLOB_TONE, si
   ) : (
     <StillFace face={face} size={size} />
   )
+  const chosen = own?.eyes === 'dots' ? (
+    <BusyFace face={face} size={size} held />
+  ) : own !== undefined ? (
+    <StateFace face={face} look={own} size={size} />
+  ) : plain
+  // The body gesture of the moment moves whichever face is drawn, so the whole figure moves as one.
+  const drawn = look?.gesture === undefined ? chosen : (
+    <GestureLayers face={face} gesture={look.gesture} size={size} {...(look.passes === undefined ? {} : { passes: look.passes })}>
+      {chosen}
+    </GestureLayers>
+  )
   // Which way she is drawn, and for a state which look: a change of either is a fade.
   // The live face is one way whether she works or rests, so its pose still eases in place.
-  const way = own?.eyes === 'dots' ? 'held' : own !== undefined ? `state ${state}` : busy ? 'busy' : 'live'
+  const way = own?.eyes === 'dots' ? 'held' : own !== undefined ? `state ${state}` : `${busy ? 'busy' : 'live'} ${look?.gesture ?? ''}`
 
   return (
     <View style={[square, lift === 0 ? null : { transform: [{ translateY: lift }] }]}>
@@ -950,66 +957,86 @@ function layerMotion(layer: Layer | undefined, arrived: boolean): { rest: Motion
   }
 }
 
-/**
- * A face in a state with a look of its own: the pose the library gave her eyes, a small
- * eye move added on top, and a body gesture from the shared plan, sized for her
- * silhouette. The body layers hold the head and the eyes, so the whole figure moves as
- * one. She does not breathe, bob or glance here: the gesture is the body's motion, and
- * it means something.
- */
-function StateFace({ face, size, look }: { face: Face; size: number; look: FaceLook }) {
-  const unit = size / BOX
+/** Whether a face has been drawn for a frame yet, so a layer eases into its rest instead of being born there. */
+function useArrived() {
   const [arrived, setArrived] = useState(false)
   useEffect(() => {
     const frame = requestAnimationFrame(() => setArrived(true))
     return () => cancelAnimationFrame(frame)
   }, [])
-  const { gesture, passes, eyes: move } = look
+  return arrived
+}
+
+const frameOfFace = (face: Face) => frameOf(outlinePoints(
+  face.body.flatMap((part) => (part.kind === 'path' ? [part.d] : [])),
+  face.body.flatMap((part) => (part.kind === 'circle' ? [part] : [])),
+))
+
+const about = ([x, y]: readonly [number, number]) => ({ transformOrigin: [`${x}%`, `${y}%`, 0] as (string | number)[] })
+
+/**
+ * The body gesture of a moment, from the shared plan and sized for her silhouette, as
+ * the layers around whatever draws the figure: the pose with its added eye move, or
+ * her working face.
+ */
+function GestureLayers({ face, size, gesture, passes, children }: { face: Face; size: number; gesture: GestureId; passes?: number; children: ReactNode }) {
+  const unit = size / BOX
+  const arrived = useArrived()
   const layers = useMemo(() => {
-    const frame = frameOf(outlinePoints(
-      face.body.flatMap((part) => (part.kind === 'path' ? [part.d] : [])),
-      face.body.flatMap((part) => (part.kind === 'circle' ? [part] : [])),
-    ))
-    const moves = gesture === undefined ? undefined : plan(gesture, frame)
-    const body = moves === undefined ? undefined : gestureFrames(moves, unit, passes)
+    const moves = plan(gesture, frameOfFace(face))
+    return { body: gestureFrames(moves, unit, passes), foot: moves.foot, middle: moves.middle }
+  }, [face, gesture, passes, unit])
+  const fig = layerMotion(layers.body.fig, arrived)
+  const turn = layerMotion(layers.body.turn, arrived)
+  return (
+    <Animated.View style={[StyleSheet.absoluteFill, about(layers.foot), fig.rest]}>
+      <Animated.View style={[StyleSheet.absoluteFill, about(layers.foot), fig.loop]}>
+        <Animated.View style={[StyleSheet.absoluteFill, about(layers.middle), turn.rest]}>
+          <Animated.View style={[StyleSheet.absoluteFill, about(layers.middle), turn.loop]}>
+            {children}
+          </Animated.View>
+        </Animated.View>
+      </Animated.View>
+    </Animated.View>
+  )
+}
+
+/**
+ * A face in a state with a look of its own: the pose the library gave her eyes and a
+ * small eye move added on top; the body gesture is played around it. She does not
+ * breathe, bob or glance here: the gesture is the body's motion, and it means something.
+ */
+function StateFace({ face, size, look }: { face: Face; size: number; look: FaceLook }) {
+  const unit = size / BOX
+  const arrived = useArrived()
+  const move = look.eyes
+  const eyes = useMemo(() => {
     // From the middle of the pair, where the resting gaze leaves it, to the middle of the face.
-    const toMiddle = frame.middle[0] - face.eyes.reduce((sum, eye) => sum + eye.cx, 0) / Math.max(face.eyes.length, 1)
-    const eyes = new Map(face.eyes.map((eye) => [
+    const toMiddle = frameOfFace(face).middle[0] - face.eyes.reduce((sum, eye) => sum + eye.cx, 0) / Math.max(face.eyes.length, 1)
+    return new Map(face.eyes.map((eye) => [
       eye.wrap,
       move === 'scan' ? eyeFrames(scanStops(toMiddle), unit, EYE_MOVE_MS.scan)
         : move === 'toward' ? eyeFrames(towardStops(toMiddle), unit, EYE_MOVE_MS.toward)
         : move === 'seesaw' ? eyeFrames(seesawStops(thinking.p.edy2, eye.wrap < 0 ? -1 : 1), unit, EYE_MOVE_MS.seesaw)
         : undefined,
     ]))
-    return { body, eyes, foot: moves?.foot ?? frame.foot, middle: frame.middle }
-  }, [face, gesture, move, passes, unit])
+  }, [face, move, unit])
 
-  const about = ([x, y]: readonly [number, number]) => ({ transformOrigin: [`${x}%`, `${y}%`, 0] as (string | number)[] })
-  const fig = layerMotion(layers.body?.fig, arrived)
-  const turn = layerMotion(layers.body?.turn, arrived)
   return (
     <>
-      <Animated.View style={[StyleSheet.absoluteFill, about(layers.foot), fig.rest]}>
-        <Animated.View style={[StyleSheet.absoluteFill, about(layers.foot), fig.loop]}>
-          <Animated.View style={[StyleSheet.absoluteFill, about(layers.middle), turn.rest]}>
-            <Animated.View style={[StyleSheet.absoluteFill, about(layers.middle), turn.loop]}>
-              <Svg height={size} viewBox={`0 0 ${BOX} ${BOX}`} width={size}>
-                <Body face={face} />
-              </Svg>
-              {face.eyes.map((eye) => {
-                const added = layerMotion(layers.eyes.get(eye.wrap), arrived)
-                return (
-                  <Animated.View key={eye.wrap} pointerEvents="none" style={[StyleSheet.absoluteFill, added.rest]}>
-                    <Animated.View style={[StyleSheet.absoluteFill, added.loop]}>
-                      <EyeLayer eye={eye} fill={face.eyeFill} pose={face.pose} sheen={face.sheen} size={size} still={false} timing={face} />
-                    </Animated.View>
-                  </Animated.View>
-                )
-              })}
+      <Svg height={size} viewBox={`0 0 ${BOX} ${BOX}`} width={size}>
+        <Body face={face} />
+      </Svg>
+      {face.eyes.map((eye) => {
+        const added = layerMotion(eyes.get(eye.wrap), arrived)
+        return (
+          <Animated.View key={eye.wrap} pointerEvents="none" style={[StyleSheet.absoluteFill, added.rest]}>
+            <Animated.View style={[StyleSheet.absoluteFill, added.loop]}>
+              <EyeLayer eye={eye} fill={face.eyeFill} pose={face.pose} sheen={face.sheen} size={size} still={false} timing={face} />
             </Animated.View>
           </Animated.View>
-        </Animated.View>
-      </Animated.View>
+        )
+      })}
     </>
   )
 }

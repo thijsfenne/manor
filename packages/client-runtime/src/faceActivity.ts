@@ -13,12 +13,12 @@
 import { isCompacting } from './compacting'
 import type { EyePose } from './busyFace'
 import type { GestureId } from './faceGesture'
-import { isToolStep, liveWritten, type TurnRow } from './state'
-import { activityKind } from './turnLabels'
+import { isToolStep, liveWritten, type Row, type TurnRow } from './state'
+import { activityKind, type ActivityKind } from './turnLabels'
 import { backgroundWaitLabel, isWaiting } from './turnTrace'
 
 /** What a running turn is doing, as far as a face can show it. */
-export type FaceActivity = 'working' | 'thinking' | 'reading' | 'typing' | 'waiting'
+export type FaceActivity = 'working' | 'thinking' | 'reading' | 'searching' | 'editing' | 'running' | 'snagged' | 'compacting' | 'typing' | 'waiting'
 /** A moment that is not work: she needs the user, or her turn just ended. */
 export type FaceMoment = 'needs' | 'done' | 'failed'
 export type FaceState = FaceActivity | FaceMoment
@@ -45,12 +45,22 @@ export const FACE_LOOK: Record<FaceState, FaceLook> = {
   working: { eyes: 'loop' },
   thinking: { eyes: 'seesaw', pose: 'thinking', gesture: 'tilt' },
   reading: { eyes: 'scan', gesture: 'follow' },
+  // The kinds of work below keep the busy loop and add a body move of their own. One
+  // that would read as fidgeting if it held says its piece and stops.
+  searching: { eyes: 'loop', gesture: 'rock', passes: 2 },
+  editing: { eyes: 'loop', gesture: 'lean' },
+  running: { eyes: 'loop', gesture: 'jelly', passes: 1 },
+  /** The newest call failed and the turn carries on: a small start, not the shake of a failed turn. */
+  snagged: { eyes: 'loop', gesture: 'shiver', passes: 1 },
+  compacting: { eyes: 'loop', gesture: 'roll', passes: 1 },
   typing: { eyes: 'dots' },
   waiting: { eyes: 'still', pose: 'sleepy', gesture: 'sink' },
   needs: { eyes: 'toward', gesture: 'bounce', passes: 2 },
   done: { eyes: 'still', pose: 'happy', gesture: 'nod', passes: 1 },
   failed: { eyes: 'still', pose: 'sad', gesture: 'shake', passes: 1 },
 }
+
+const WORK_FACE: Record<ActivityKind, FaceActivity> = { read: 'reading', search: 'searching', edit: 'editing', shell: 'running', reasoning: 'thinking', other: 'working' }
 
 /**
  * What a turn asks its face to show while it is live, or nothing for a turn that is
@@ -65,14 +75,15 @@ export function turnFace(turn: TurnRow, waitingOnAgent = false): FaceState | und
   if (turn.live?.state !== 'running') return undefined
   if (isWaiting(turn)) return 'needs'
   if (waitingOnAgent || backgroundWaitLabel(turn) !== undefined) return 'waiting'
-  if (isCompacting(turn)) return 'working'
+  if (isCompacting(turn)) return 'compacting'
   if (liveWritten(turn.live)) return 'typing'
   for (let index = turn.activities.length - 1; index >= 0; index -= 1) {
     const step = turn.activities[index]!
     if (step.kind === 'say') return 'thinking'
     if (!isToolStep(step)) return 'thinking'
     if (step.parentToolCallId !== undefined || step.background === true) continue
-    return activityKind(step) === 'read' ? 'reading' : 'working'
+    if (step.status === 'error') return 'snagged'
+    return WORK_FACE[activityKind(step)]
   }
   return 'thinking'
 }
@@ -87,6 +98,21 @@ export function endFace(turn: TurnRow): FaceMoment | undefined {
   if (turn.note?.kind === 'error') return 'failed'
   if (turn.note?.kind === 'aborted') return undefined
   return 'done'
+}
+
+/**
+ * The last row of a DM turn that has just stopped, when it ended well, so the working
+ * indicator can stay a moment for her nod under the reply. Only a written result counts:
+ * a live turn can also vanish because a reconnect found it gone. A stop, a failure or an
+ * open question gets nothing: in a DM a broken turn just ends.
+ */
+export function endedWell(rows: readonly Row[], turnId: string): TurnRow | undefined {
+  for (let index = rows.length - 1; index >= 0; index -= 1) {
+    const row = rows[index]!
+    if (row.kind !== 'turn' || row.turnId !== turnId) continue
+    return row.completed === true && endFace(row) === 'done' ? row : undefined
+  }
+  return undefined
 }
 
 /** How long a state holds before another may replace it, so a 200 ms tool call cannot make a face twitch. */

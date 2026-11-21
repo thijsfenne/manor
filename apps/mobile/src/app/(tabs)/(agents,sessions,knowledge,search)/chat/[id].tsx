@@ -77,6 +77,7 @@ import { takeEventReveal, takeThreadReveal } from '@/lib/threadReveal'
 import { EMPTY_DRAFT, readDraft, writeDraft } from '@/lib/drafts'
 import { glassRise, glassSink } from '@/lib/glassMotion'
 import { useScreenCovered } from '@/lib/useScreenCovered'
+import { useDoneMoment } from '@/lib/useFaceState'
 import { useLiveThread, useWorkspace, useWorkspaceData } from '@/providers/WorkspaceProvider'
 import { Text } from '@/components/Text'
 import { colors, fonts, radius, spacing, squircle } from '@/theme'
@@ -1387,11 +1388,14 @@ function LiveTranscript({
     [workspace.activity],
   )
   // A project thread's face leaves with its own turn; it never waits on a consult.
-  const working = useMemo(() => {
+  const found = useMemo(() => {
     if (chatKind !== 'dm' && !projectThread) return undefined
     const state = dmWorking(rows, runningChatIds)
     return projectThread && state?.kind === 'consult' ? undefined : state
   }, [chatKind, projectThread, rows, runningChatIds])
+  // A DM's face stays a moment to nod under a reply that landed whole. A project thread's line has no face to nod.
+  const moment = useDoneMoment(projectThread ? undefined : found, rows)
+  const working = projectThread ? found : moment.working
   // What came in at the end since the last pass, worked out while rendering like the list
   // keys above, so a new row mounts knowing how it arrives. A message, a reply's first
   // words and the working face each arm the slide once; a reply growing as it streams does not.
@@ -1553,6 +1557,7 @@ function LiveTranscript({
           agents={agents}
           persona={personaOf(agents, working.kind === 'turn' ? working.turn.agentId : working.kind === 'consult' ? working.agentId : projectThread ? SINGLE_CHAT_VOICE.id : chat?.memberIds[0] ?? 'unknown')}
           working={working}
+          done={moment.done}
           bare={projectThread}
         />
       )}

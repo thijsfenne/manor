@@ -45,7 +45,7 @@ import {
 } from '../state'
 import { chatSubagents, dmWorking, hasFold, hasStatus, isCompactNote } from '../turnTrace'
 import { endFace, turnFace } from '@manor/client-runtime/face-activity'
-import { useFaceState } from '../useFaceState'
+import { useDoneMoment, useFaceState } from '../useFaceState'
 import { SubagentLaunchesContext, type SubagentLaunches } from '../subagentContext'
 import { WakeNotices } from './SubagentRows'
 import { Icon } from './Icon'
@@ -369,7 +369,7 @@ export function Transcript({
   const start = historyStart(visibleRows, firstKey)
   const pageRows = visibleRows.slice(start)
   const dateLabels = dateDividers(pageRows, bubbleReplies ? 'gaps' : showDates ? 'days' : 'off')
-  const working = bubbleReplies ? dmWorking(rows, runningChatIds) : undefined
+  const { working, done: workDone } = useDoneMoment(bubbleReplies ? dmWorking(rows, runningChatIds) : undefined, rows)
   const workingPersona = working === undefined
     ? undefined
     : personaOf(agents, working.kind === 'turn' ? working.turn.agentId : working.kind === 'consult' ? working.agentId : dmAgentId ?? 'unknown')
@@ -858,7 +858,7 @@ export function Transcript({
             })
           )}
           {working === undefined || workingPersona === undefined ? null : (
-            <DmWorkingIndicator working={working} persona={workingPersona} agents={agents} />
+            <DmWorkingIndicator working={working} done={workDone} persona={workingPersona} agents={agents} />
           )}
         </div>
       </div>

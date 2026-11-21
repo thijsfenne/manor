@@ -4,7 +4,7 @@ import { turnFace } from '@manor/client-runtime/face-activity'
 import { dmWorkingLabel, type DmWorking } from '@manor/client-runtime/turn-trace'
 import { useEffect, useRef, useState } from 'react'
 import { StyleSheet, View } from 'react-native'
-import Animated, { Easing, FadeOut, Keyframe, LayoutAnimationConfig, ReduceMotion, withSpring, withTiming } from 'react-native-reanimated'
+import Animated, { Easing, FadeOut, Keyframe, LayoutAnimationConfig, ReduceMotion, useReducedMotion, withSpring, withTiming } from 'react-native-reanimated'
 
 import { Blobatar } from '@/components/Blobatar'
 import { ARRIVAL_SPRING } from '@/lib/arrival'
@@ -47,23 +47,27 @@ function growIn() {
   }
 }
 
-/** It fades where it stands as her reply slides in above it. */
+/** It fades where it stands, as her reply slides in above it or once her nod is over. */
 const faceOut = FadeOut.duration(120).reduceMotion(ReduceMotion.Never)
 
 /**
  * A DM's one sign of life, as on the Mac: her face and a shimmering label at the foot
  * of the chat, under the last message, from the send until her reply is whole.
- * Finished bubbles carry no face; this is the only place it appears. It leaves the
- * moment the reply lands, is stopped or breaks off, without a word about why.
+ * Finished bubbles carry no face; this is the only place it appears. A reply that
+ * lands whole keeps it a moment longer for her nod; a stop or a break takes it away
+ * at once, without a word about why.
  * A project thread speaks as the project and has no face: on the phone (`bare`) it is
  * this same indicator with the label alone.
  */
-export function DmWorkingIndicator({ working, persona, agents, bare = false }: {
+export function DmWorkingIndicator({ working, done = false, persona, agents, bare = false }: {
   working: DmWorking
+  /** Her reply landed whole: the row stays a moment, wordless, while her face nods. */
+  done?: boolean
   persona: Persona
   agents: AgentConfig[]
   bare?: boolean
 }) {
+  const still = useReducedMotion()
   const [now, setNow] = useState(() => Date.now())
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 1_000)
@@ -72,13 +76,17 @@ export function DmWorkingIndicator({ working, persona, agents, bare = false }: {
   const label = working.kind === 'consult'
     ? `Waiting for ${personaOf(agents, working.peerAgentId).name}…`
     : dmWorkingLabel(working.kind === 'turn' ? working.turn : undefined, now)
-  const shown = useHeldLabel(label)
+  const held = useHeldLabel(label)
+  const shown = done ? '' : held
   // The face says what the words say: waiting on a colleague, thinking before a turn has
   // drawn anything, and otherwise whatever her turn is doing.
-  const face = useFaceState(working.kind === 'consult' ? 'waiting' : working.kind === 'turn' ? turnFace(working.turn) : 'thinking', undefined, true)
+  const live = useFaceState(working.kind === 'consult' ? 'waiting' : working.kind === 'turn' ? turnFace(working.turn) : 'thinking', undefined, true)
+  const face = done ? 'done' : live
+  // A nod nobody would see is a face left standing under the reply for nothing.
+  if (done && (still || (persona.avatar ?? '') !== '')) return null
   return (
     <Animated.View
-      accessibilityLabel={bare ? shown : `${persona.name}: ${shown}`}
+      accessibilityLabel={bare ? shown : done ? persona.name : `${persona.name}: ${shown}`}
       accessible
       entering={bare ? arrive : growIn}
       {...(bare ? {} : { exiting: faceOut })}
@@ -88,7 +96,7 @@ export function DmWorkingIndicator({ working, persona, agents, bare = false }: {
         <View style={styles.face}>
           <Blobatar
             animate
-            busy
+            busy={!done}
             face={face}
             color={persona.color}
             name={persona.name}
