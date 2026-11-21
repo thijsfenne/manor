@@ -1,4 +1,4 @@
-import { palette } from '@manor/blobatar'
+import { fromHex } from '@manor/blobatar'
 import { describe, expect, it } from 'vitest'
 import { DEFAULT_PROJECT_COLOR } from '@manor/contracts'
 import { avatarBubbleTint, projectBubbleTint } from './avatarBubble'
@@ -36,14 +36,20 @@ describe('avatarBubbleTint', () => {
     }
   })
 
-  it('writes white and keeps the face colour when it is already dark enough, darkening it otherwise', () => {
-    const color = '#4a9eff'
-    const ink = BLOB_TONES.find((entry) => entry.label === 'Ink')?.value
-    expect(avatarBubbleTint({ color })?.ink).toBe('#ffffff')
-    expect(avatarBubbleTint({ color, avatarTone: ink })?.fill).toBe(palette(accentHue(color) ?? 0, true, ink).head)
-    const pastel = palette(accentHue(color) ?? 0, true, 0.1).head ?? ''
-    const fill = avatarBubbleTint({ color, avatarTone: 0.1 })?.fill ?? ''
-    expect(luminance(fill)).toBeLessThan(luminance(pastel))
+  it('writes white on a vivid fill in the face hue, whatever the tone, and never on brown', () => {
+    for (const tone of [...BLOB_TONES.map((entry) => entry.value), 0.3]) {
+      for (let hue = 0; hue < 360; hue += 3) {
+        const tint = avatarBubbleTint({ color: hexAt(hue), avatarTone: tone })
+        expect(tint?.ink).toBe('#ffffff')
+        const fill = fromHex(tint?.fill ?? '#000000')
+        // Teal tops out near 0.09 in sRGB at this lightness; a dulled face colour sits near 0.05.
+        expect(fill.c).toBeGreaterThan(0.085)
+        const h = (fill.h + 360) % 360
+        expect(h < 50 || h > 135).toBe(true)
+      }
+    }
+    // The tone sets the face, not the bubble.
+    expect(avatarBubbleTint({ color: '#4a9eff', avatarTone: 0.1 })?.fill).toBe(avatarBubbleTint({ color: '#4a9eff' })?.fill)
   })
 
   it('keeps the plain bubble for a portrait or a colour that is not a hex', () => {

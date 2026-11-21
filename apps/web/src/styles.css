@@ -1331,7 +1331,7 @@ input:focus-visible + .checkbox-box {
 /*
  * The typed text of a DM bubble filled with the face they are talking to
  * (`avatarBubbleTint`). Every theme token the text and its inline chips read becomes
- * white, which clears AA on the darkened fill in both themes, and a chip's fill
+ * white, which clears AA on the fill in both themes, and a chip's fill
  * becomes the wash, which only ever moves away from the ink. Unlayered so it
  * beats the chips' own colour utilities.
  */

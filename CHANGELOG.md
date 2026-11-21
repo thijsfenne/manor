@@ -4,6 +4,7 @@ What changed for someone who uses Manor, newest first. A version is a tag on `ma
 
 ## Unreleased
 
+- In a direct message, your bubbles are always a vivid colour in the hue of the face you talk to, whatever tone the face wears. Yellow and olive faces get a warm orange or a green bubble instead of a muddy brown one. On the Mac, the web and the phone.
 - The light at the top left of a persona's face is fainter and spreads wider over the head, so it reads as light falling on the face instead of a spot on it. On the Mac, the web and the phone.
 - On desktop and web, Knowledge notes show the filename as a large title, with the folder path and editing tools above it. Note properties appear in rows with tag chips and a status pill. Click a value to edit its YAML.
 
