@@ -400,6 +400,24 @@ describe('the shared Work handoff projection', () => {
     expect(sent).toEqual([{ mode: 'single', runtime: { driver: 'claude', model: 'claude-opus-5-5', effort: 'high' } }])
   })
 
+  it('keeps a persona brief Single when its project has a live thread, and offers Multiple without one', async () => {
+    const sessionLead = { ...lead, placement: 'session' as const }
+    const thread: Chat = { ...target, id: 'thread_1', kind: 'project', title: 'Manor' }
+    const brief = (projects: Project[], chats: Chat[]) => ({ ...projectWorkHandoffs(rows, [{ ...handoff, workChatId: null }], chats, projects, [sessionLead, support])
+      .find((candidate): candidate is WorkHandoffRow => candidate.kind === 'work_handoff')!, handoffId: 'dm-brief' })
+    const threaded = brief([{ ...project, threadChatId: thread.id }], [thread])
+    expect(threaded.threadBound).toBe(true)
+    expect(workProposalSingleOnly(threaded, [sessionLead])).toBe(true)
+    // An old draft that held Multiple does not travel to the thread.
+    updateWorkProposal('dm-brief', { mode: 'house' })
+    expect(workProposalDraft(threaded, [sessionLead]).mode).toBe('single')
+    // No thread, or a hidden project's archived one: the brief starts its own Session and may run Multiple.
+    for (const loose of [brief([project], []), brief([{ ...project, threadChatId: thread.id }], [{ ...thread, archivedAt: 2 }])]) {
+      expect(loose.threadBound).toBeUndefined()
+      expect(workProposalDraft(loose, [sessionLead]).mode).toBe('house')
+    }
+  })
+
   it('accepts a proposal with what was chosen on its card, once, from either surface', async () => {
     const row = projectWorkHandoffs(rows, [{ ...handoff, workChatId: null }], [], [project], [lead, support])
       .find((candidate): candidate is WorkHandoffRow => candidate.kind === 'work_handoff')!

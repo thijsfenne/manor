@@ -229,7 +229,7 @@ export interface ProjectReportInput {
 
 const normalize = (text: string): string => text.toLowerCase().replace(/\s+/g, ' ').trim()
 
-const BRIEF_KEY = /^brief-(.+)$/
+export const BRIEF_KEY = /^brief-(.+)$/
 
 /** A server-owned approval card (computer use, a connector write): only the user answers it. */
 const isPermission = (questions: readonly UserInputQuestion[]): boolean => questions.some((question) => question.optionsOnly === true)
@@ -1131,7 +1131,7 @@ export class ProjectThreads {
    * are stored on the brief, so only the card made for it inherits them, also after a
    * restart. True when it was handed over.
    */
-  async forwardBrief(handoff: WorkHandoff, options: AcceptOptions, task?: string): Promise<boolean> {
+  async forwardBrief(handoff: WorkHandoff, options: Omit<AcceptOptions, 'mode'>, task?: string): Promise<boolean> {
     const project = await this.options.store.getProject(handoff.projectId)
     const threadChatId = await this.liveThread(project)
     if (project === undefined || threadChatId === undefined || handoff.sourceChatId === threadChatId) return false

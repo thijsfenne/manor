@@ -5,7 +5,7 @@ import { MAX_CATCH_UP_CHARS, catchUpCut, renderCatchUpEvents } from './composer.
 import { SUPERSEDED_PROPOSAL, type ChatWorktree, type LandedAttempt, type Store } from './store.js'
 import { singleRuntime } from './singleChat.js'
 import { PROJECT_THREAD_WRITER } from './projectFiles.js'
-import { liveProjectThread } from './projectThreads.js'
+import { BRIEF_KEY, liveProjectThread } from './projectThreads.js'
 import { commitsNotIn, currentBranch, effectiveRepoPaths } from './worktree.js'
 import { approvalHolds, assertSameWorkResult, attemptOf, beyondApproval, beyondLine, checkoutBranches, leftStartBranch, observeWorkCompletion, ownCommitsSince, prepareWorkCompletion, repoHead, repoSteps, retryRefusal, stepTips, unconfirmedCompletion, undoCommit } from './workCompletion.js'
 import { MergeLanes, committedTips, mergeSession, troubleText, type MergeOutcome } from './workMerge.js'
@@ -24,7 +24,7 @@ type HandoffAuthor = Pick<AgentConfig, 'id' | 'name' | 'placement' | 'mentionAll
 /** The project thread's part in the Work lifecycle (decided 2026-10-10). */
 export interface WorkProjectThreads {
   /** Hands a DM brief to its project's thread at Accept, with the user's edit of its task; true when it did. */
-  forwardBrief(handoff: WorkHandoff, options: Pick<WorkAcceptanceOptions, 'checkout' | 'mode' | 'runtime'>, task?: string): Promise<boolean>
+  forwardBrief(handoff: WorkHandoff, options: Pick<WorkAcceptanceOptions, 'checkout' | 'runtime'>, task?: string): Promise<boolean>
   /** A thread published a proposal; one for a waiting brief is accepted at once. */
   proposed(handoff: WorkHandoff): Promise<void>
   /** Writes the thread proposal's own marked Notes row, so the thread never writes one. */
@@ -507,10 +507,10 @@ export class WorkModule {
       const awaiting = handoff.acceptedAt === null && handoff.workChatId === null && handoff.state === 'active'
       // Read from their source chat before anything moves, so a missing one refuses this Accept.
       const attachments = awaiting ? await loadHandoffAttachments(store, handoff.attachments ?? []) : undefined
-      // The thread receives the prompt the user approved, their edit included.
+      // The thread receives the prompt the user approved, their edit included. Its card is
+      // always Single, so the mode does not travel.
       if (awaiting &&
           await this.options.projectThreads?.forwardBrief(handoff, {
-            ...(options.mode === undefined ? {} : { mode: options.mode }),
             ...(options.runtime === undefined ? {} : { runtime: options.runtime }),
             ...(checkout === undefined ? {} : { checkout }),
           }, edit) === true) {
@@ -529,8 +529,11 @@ export class WorkModule {
       if (handoff.state !== 'active') throw new Error('This session is no longer awaiting acceptance.')
       // A project thread's card is Single unless the user picks Multiple, on the thread's
       // proposed runtime or else the house default. A persona's card names its own mode.
+      // The card for a forwarded brief is always Single (2026-11-21), whatever mode the
+      // brief's stored choices or an Accept from an older client send.
       const threadCard = handoff.authorAgentId === SINGLE_CHAT_VOICE.id
-      const single = (options.mode ?? (threadCard ? 'single' : 'house')) === 'single'
+      const briefCard = threadCard && BRIEF_KEY.test(handoff.assignmentKey ?? '')
+      const single = briefCard || (options.mode ?? (threadCard ? 'single' : 'house')) === 'single'
       const fallback = threadCard ? handoff.proposedRuntime?.runtime ?? workSingleDefault(this.options.agents(), this.options.offModels?.()) : undefined
       const runtime = single ? singleRuntime(options.runtime ?? fallback) : undefined
       if (!single && options.runtime !== undefined) throw new Error('Runtime selection requires Single mode.')

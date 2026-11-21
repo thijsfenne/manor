@@ -112,7 +112,7 @@ describe('Work handoff card verbs', () => {
     }))
     const markup = renderToStaticMarkup(<Transcript rows={rows} agents={[sage]} skills={[]} hasSnapshot
       onAcceptWork={() => undefined} onRejectWork={() => undefined} />)
-    for (const row of rows) expect(markup).toContain(row.title)
+    for (const row of rows) expect(markup.replace(/<[^>]+>/g, '')).toContain(row.title)
     expect(markup.match(/>Accept</g)).toHaveLength(3)
     expect(markup.match(/>Reject</g)).toHaveLength(3)
   })
@@ -300,7 +300,7 @@ describe('Work handoff card verbs', () => {
     expect(working).toContain('bg-primary')
     expect(working).toContain('Accept')
     expect(working).toContain('Reject')
-    expect(working).toContain('Keep DM browser tabs')
+    expect(working.replace(/<[^>]+>/g, '')).toContain('Keep DM browser tabs')
 
     const accepted = renderToStaticMarkup(
       <Transcript
@@ -555,6 +555,18 @@ describe('the mode on a proposal', () => {
       expect(multiple).toBeUndefined()
       expect(single).toBeUndefined()
       expect(text).not.toContain('session agent')
+    }
+  })
+
+  it('offers no mode on a DM brief that goes to a project thread, and keeps it on one that starts its own Session', () => {
+    let tree!: ReactTestRenderer
+    const household = [{ ...sage, placement: 'session' as const }]
+    for (const [row, offered] of [[{ ...card('Working'), handoffId: 'handoff_bound', threadBound: true as const }, false], [{ ...card('Working'), handoffId: 'handoff_loose' }, true]] as const) {
+      act(() => {
+        tree = create(<WorkHandoffCard row={row} agents={[]} identityAgents={household} onReveal={() => undefined} onAccept={() => undefined} onReject={() => undefined} />)
+      })
+      const multiple = tree.root.findAll((node) => node.type === 'button' && textOf(node) === 'Multiple')[0]
+      expect(multiple !== undefined).toBe(offered)
     }
   })
 

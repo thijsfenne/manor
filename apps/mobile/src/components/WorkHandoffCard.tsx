@@ -10,7 +10,7 @@ import Animated, { Easing, FadeIn, FadeOut, LinearTransition, ReduceMotion, useA
 import { router } from 'expo-router'
 import { workReopenedLine, type AgentConfig, type ChatMode, type SingleRuntime } from '@manor/contracts'
 import { projectIcon } from '@manor/client-runtime/project-icons'
-import { acceptWorkProposal, updateWorkProposal, workProposalAttachmentCount, workProposalMultipleBlock, workProposalRuntimeName } from '@manor/client-runtime/work-proposals'
+import { acceptWorkProposal, updateWorkProposal, workProposalAttachmentCount, workProposalInThread, workProposalMultipleBlock, workProposalRuntimeName } from '@manor/client-runtime/work-proposals'
 import { closedWorkHandoff, forwardedLine, threadWorkCard, workCardLine, workCardStatus, workByline, workResultWaits, type Row } from '@manor/client-runtime/state'
 import { modelLabel } from '@manor/client-runtime/runtimes'
 import { useWorkspaceActions } from '@/providers/WorkspaceProvider'
@@ -192,18 +192,30 @@ export function WorkHandoffCard({ row, agents, onReject, onReveal, inThread = fa
   const head = (
     <View style={styles.workMain}>
       <View style={styles.workBody}>
-        <View style={styles.workHead}>
+        <View style={[styles.workHead, !inThread && styles.workHeadWrapped]}>
           {/* The version label stays visible however long the title runs. */}
-          <View style={styles.titleLine}>
-            <Text numberOfLines={1} style={styles.workTitle}>{row.title}</Text>
-            {row.revision === undefined ? null : <Text style={styles.revision}>v{row.revision}</Text>}
-          </View>
+          {inThread ? (
+            <View style={styles.titleLine}>
+              <Text numberOfLines={1} style={styles.workTitle}>{row.title}</Text>
+              {row.revision === undefined ? null : <Text style={styles.revision}>v{row.revision}</Text>}
+            </View>
+          ) : (
+            // The project pill follows the title's last word, so a long title wraps instead of truncating.
+            <Text style={[styles.workTitle, styles.wrappedTitle]}>
+              {row.title}
+              {row.revision === undefined ? null : <Text style={styles.revision}>{`\u00a0v${row.revision}`}</Text>}
+              {/* A word joiner: the pill never breaks away from the last word onto a line of its own. */}
+              {'\u2060'}
+              <View style={styles.inlineBadge}>
+                <ProjectBadge name={row.projectName} icon={row.projectIcon} color={row.projectColor} />
+              </View>
+            </Text>
+          )}
           <WorkCardStatusLabel row={row} />
         </View>
-        {inThread && metaByline === undefined ? null : (
+        {metaByline === undefined && (inThread || pending || !row.worktreeBranch) ? null : (
           <View style={styles.workMeta}>
-            {/* The thread is the project's own room: its name and the branch are noise there. */}
-            {!inThread ? <ProjectBadge name={row.projectName} icon={row.projectIcon} color={row.projectColor} style={styles.projectBadge} /> : null}
+            {/* The thread is the project's own room: the branch is noise there. */}
             {metaByline === undefined ? null : <Text numberOfLines={1} style={[styles.workMetaText, styles.shrink]}>{metaByline}</Text>}
             {!inThread && !pending && row.worktreeBranch ? <Text numberOfLines={1} style={[styles.workMetaText, styles.shrink]}>{row.worktreeBranch}</Text> : null}
           </View>
@@ -247,7 +259,7 @@ export function WorkHandoffCard({ row, agents, onReject, onReveal, inThread = fa
           runtime={singleMode ? runtime : undefined}
           attachments={workProposalAttachmentCount(row)}
           // A thread's card is always Single (2026-11-17); only a persona's card offers the mode.
-          {...(row.threadAuthored === true ? {} : { mode: { value: mode, block: multipleBlock, onChange: chooseMode } })}
+          {...(workProposalInThread(row) ? {} : { mode: { value: mode, block: multipleBlock, onChange: chooseMode } })}
           onModel={() => setRuntimeOpen(true)}
           {...(proposedTask === undefined ? {} : { prompt: { edited: editedTask !== undefined, onOpen: () => setPromptDraft(editedTask ?? proposedTask) } })}
         />
@@ -474,7 +486,11 @@ const styles = StyleSheet.create({
   titleLine: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'baseline', gap: 6 },
   workTitle: { flexShrink: 1, color: colors.text, fontFamily: fonts.sans, fontSize: 15, fontWeight: '500' },
   workMeta: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, minWidth: 0 },
-  projectBadge: { flexShrink: 1, maxWidth: '50%' },
+  // A wrapping title keeps the status on its first line.
+  workHeadWrapped: { alignItems: 'flex-start' },
+  wrappedTitle: { flex: 1, lineHeight: 21 },
+  // An inline view sits on the text's baseline; this lowers the pill to the line's middle.
+  inlineBadge: { marginLeft: 6, transform: [{ translateY: 3 }] },
   workMetaText: { color: colors.muted, fontFamily: fonts.sans, fontSize: 12 },
   shrink: { flexShrink: 1 },
   workTask: { color: colors.muted, fontFamily: fonts.sans, fontSize: 13, lineHeight: 18 },

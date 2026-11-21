@@ -2,7 +2,7 @@ import { useContext, useEffect, useLayoutEffect, useRef, useState, type MouseEve
 import { motion, useReducedMotion } from 'motion/react'
 import type { WorkAcceptanceOptions } from '@manor/client-runtime/commands'
 import { Attachment01Icon, CellsIcon, CheckmarkCircle02Icon } from '@hugeicons/core-free-icons'
-import { acceptWorkProposal, updateWorkProposal, workProposalAttachmentLine, workProposalMultipleBlock } from '@manor/client-runtime/work-proposals'
+import { acceptWorkProposal, updateWorkProposal, workProposalAttachmentLine, workProposalInThread, workProposalMultipleBlock } from '@manor/client-runtime/work-proposals'
 import { SingleRuntimeSchema, workReopenedLine, type AgentConfig } from '@manor/contracts'
 import { closedWorkHandoff, forwardedLine, threadWorkCard, workCardLine, workCardStatus, workDecisionOpen, workByline, workResultWaits, type ThreadWorkCard, type WorkHandoffRow, type WorkStatus } from '../state'
 import { modelLabel } from '../runtimes'
@@ -12,8 +12,8 @@ import { useWorkProposal } from '../useWorkProposal'
 import { AgentStack } from './inbox/AgentStack'
 import { Icon } from './Icon'
 import { NewChatModeControl } from './NewChatModeControl'
+import { ProjectBadge } from './ProjectBadge'
 import { SingleRuntimeControl } from './SingleRuntimeControl'
-import { Badge } from './ui/Badge'
 import { Button } from './ui/Button'
 import { Checkbox } from './ui/Checkbox'
 import { SIDE_SURFACE } from './ui/dockPanel'
@@ -172,8 +172,9 @@ export function WorkHandoffCard({
     // Only a proposal whose session does not exist yet can still take an edit.
     const proposedTask = canAccept && sessionId === null ? row.task : undefined
     const multipleBlock = canAccept ? workProposalMultipleBlock(row, identityAgents) : undefined
-    // A thread's card is always Single (2026-11-17), so only a persona's card offers the mode.
-    const modeChoice = canAccept && row.threadAuthored !== true
+    // A card that starts in a project thread is always Single (2026-11-17), so only a brief
+    // that starts its own Session offers the mode.
+    const modeChoice = canAccept && !workProposalInThread(row)
     // The model is named once, on its button; the summary stands alone under the title.
     // A result reads without it (2026-11-07): its lines and status say what matters.
     const summary = canAccept ? row.summary ?? row.task : undefined
@@ -182,6 +183,36 @@ export function WorkHandoffCard({
     const accept = () => {
       if (onAccept !== undefined) void acceptWorkProposal(row, agents, onAccept, identityAgents)
     }
+    const revision = row.revision === undefined ? null : <span className="shrink-0 text-[12px] font-normal text-dim">v{row.revision}</span>
+    // A DM card wraps its title instead of truncating it and names the project after the last word, kept on
+    // that word's line so the pill never takes a line of its own. The thread's card keeps one line.
+    const lastWord = row.title.lastIndexOf(' ') + 1
+    const titleText = inThread ? row.title : (
+      <>
+        {row.title.slice(0, lastWord)}
+        <span className="whitespace-nowrap">
+          {row.title.slice(lastWord)}
+          {revision === null ? null : <>{' '}{revision}</>}
+          {/* The badge's own max-w-full would win over a width set on it, so its box bounds it instead. */}
+          <span className="ml-1.5 inline-flex max-w-[45%] align-[-1px]">
+            <ProjectBadge name={row.projectName} icon={row.projectIcon} color={row.projectColor} />
+          </span>
+        </span>
+      </>
+    )
+    const fit = inThread ? 'truncate' : 'leading-[1.45]'
+    const title = openSession === undefined ? (
+      <span className={`min-w-0 ${fit} text-[14px] font-medium text-text`}>{titleText}</span>
+    ) : (
+      <button
+        type="button"
+        onClick={openSession}
+        aria-label={`Open Session ${row.title}`}
+        className={`min-w-0 cursor-pointer ${fit} rounded-sm border-0 bg-transparent p-0 text-left text-[14px] font-medium text-text [font-family:inherit]`}
+      >
+        {titleText}
+      </button>
+    )
     const pressCard = openSession === undefined ? undefined : (event: MouseEvent<HTMLDivElement>) => {
       if (event.target instanceof Element && event.target.closest(CONTROLS) !== null) return
       // Selecting text in the result is reading it, not opening the Session.
@@ -201,33 +232,17 @@ export function WorkHandoffCard({
       >
         <div className="flex items-start">
           <span className="min-w-0 flex-1">
-            <span className="flex items-center gap-2">
+            <span className={`flex gap-2 ${inThread ? 'items-center' : 'items-start'}`}>
               <span className="flex min-w-0 flex-1 items-baseline gap-1.5">
-                {openSession === undefined ? (
-                  <span className="min-w-0 truncate text-[14px] font-medium text-text">{row.title}</span>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={openSession}
-                    aria-label={`Open Session ${row.title}`}
-                    className="min-w-0 cursor-pointer truncate rounded-sm border-0 bg-transparent p-0 text-left text-[14px] font-medium text-text [font-family:inherit]"
-                  >
-                    {row.title}
-                  </button>
-                )}
-                {row.revision === undefined ? null : <span className="shrink-0 text-[12px] text-dim">v{row.revision}</span>}
+                {title}
+                {inThread ? revision : null}
               </span>
               <WorkCardStatusLabel row={row} />
             </span>
-            {inThread && metaByline === undefined ? null : (
+            {metaByline === undefined && (inThread || pending || !row.worktreeBranch) ? null : (
               <span className="mt-0.5 flex min-w-0 items-center gap-2 text-[12px] text-muted">
-                {/* The thread is the project's own room: its name and the branch are noise there. */}
-                {!inThread ? (
-                  <Badge icon={projectIcon(row.projectIcon)} tint={row.projectColor} size="inline" className="shrink-0 max-w-[45%]">
-                    {row.projectName}
-                  </Badge>
-                ) : null}
                 {metaByline === undefined ? null : <span className="min-w-0 truncate">{metaByline}</span>}
+                {/* The thread is the project's own room: the branch is noise there. */}
                 {!inThread && !pending && row.worktreeBranch ? <span className="min-w-0 truncate">{row.worktreeBranch}</span> : null}
               </span>
             )}

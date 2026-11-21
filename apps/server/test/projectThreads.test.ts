@@ -1400,7 +1400,7 @@ describe('DM briefs and reports', () => {
     const brief = await h.acceptBrief('export')
     const forwarded = (await h.store.listWorkHandoffs()).find((row) => row.id === brief.id)!
     expect(forwarded.forwardedAt).toBeDefined()
-    expect(forwarded.forwardAccept).toEqual({ mode: 'house' })
+    expect(forwarded.forwardAccept).toEqual({})
     expect(forwarded.workChatId).toBeNull()
     const wake = h.wakes.at(-1)!
     expect(wake.origin.reason).toBe('brief')
@@ -1484,6 +1484,43 @@ describe('DM briefs and reports', () => {
     expect(error).toBeGreaterThan(receipt)
   })
 
+  it('starts a forwarded brief as Single, also one stored with Multiple before cards dropped it', async () => {
+    const h = await harness()
+    const brief = await h.acceptBrief('export', { mode: 'house' })
+    await h.propose(`brief-${brief.id}`)
+    await until(() => h.started.length === 1, 'the brief session to start')
+    expect((await h.store.getChat(h.started[0]!.chatId))?.mode).toBe('single')
+    // A brief forwarded by an older server kept Multiple in its stored choices.
+    const k = await harness()
+    const old = await k.acceptBrief('legacy')
+    await k.store.linkWorkHandoff(old.id, { forwardAccept: { mode: 'house' } })
+    await k.propose(`brief-${old.id}`)
+    await until(() => k.started.length === 1, 'the old brief session to start')
+    expect((await k.store.getChat(k.started[0]!.chatId))?.mode).toBe('single')
+    // An Accept with Multiple that reaches the brief's card before Manor accepts it starts Single too.
+    const raced = await k.acceptBrief('raced')
+    const { handoff: card } = await k.store.reserveWorkHandoff({
+      sourceChatId: k.threadChatId, sourceTurnId: 'raced', authorAgentId: '__single__', assignmentKey: `brief-${raced.id}`, task: 'Add an export button.',
+      projectId: k.projectId, projectName: 'Manor', title: 'Export button', leadAgentId: 'wren', leadAgentName: 'Wren',
+      supportingAgentIds: [], supportingAgentNames: [],
+    })
+    expect((await k.store.getChat(await k.work.accept(card.id, { mode: 'house' })))?.mode).toBe('single')
+  })
+
+  it('starts a brief for a project without a thread directly, as Multiple when chosen', async () => {
+    const h = await harness()
+    const loose = await h.store.createProject('Example App', [])
+    const dm = await h.store.createChat({ kind: 'dm', memberIds: ['sage'], title: 'Sage' })
+    await h.work.useTool({ chatId: dm.id, agentId: 'sage', turnId: 'dm_loose' }, {
+      assignmentKey: 'loose', project: loose.id, title: 'Export button', task: 'Add an export button.', firstExecutor: 'Wren',
+    })
+    const brief = (await h.store.listWorkHandoffs()).find((row) => row.sourceChatId === dm.id)!
+    const session = await h.work.accept(brief.id, { mode: 'house' })
+    expect(session).not.toBe(h.threadChatId)
+    expect((await h.store.getChat(session))?.mode).toBe('house')
+    expect((await h.store.listWorkHandoffs()).find((row) => row.id === brief.id)?.forwardedAt).toBeUndefined()
+  })
+
   it('accepts only the card made for the brief, and runs the prompt the user edited', async () => {
     const h = await harness()
     const brief = await h.acceptBrief('export', { mode: 'house', task: 'Add an export button to the toolbar.' })
@@ -1522,7 +1559,7 @@ describe('DM briefs and reports', () => {
     expect(h.wakes.at(-1)?.origin.reason).toBe('brief')
     // The card exists but was never accepted: recovery accepts it with the stored choices.
     await h.store.reserveWorkHandoff({
-      sourceChatId: h.threadChatId, sourceTurnId: 'crashed', assignmentKey: `brief-${brief.id}`, task: 'Add an export button.',
+      sourceChatId: h.threadChatId, sourceTurnId: 'crashed', authorAgentId: '__single__', assignmentKey: `brief-${brief.id}`, task: 'Add an export button.',
       projectId: h.projectId, projectName: 'Manor', title: 'Export button', leadAgentId: 'wren', leadAgentName: 'Wren',
       supportingAgentIds: [], supportingAgentNames: [],
     })
@@ -1537,7 +1574,7 @@ describe('DM briefs and reports', () => {
     const h = await harness()
     const brief = await h.acceptBrief('export')
     const card = await h.store.reserveWorkHandoff({
-      sourceChatId: h.threadChatId, sourceTurnId: 'crashed', assignmentKey: `brief-${brief.id}`, task: 'Add an export button.',
+      sourceChatId: h.threadChatId, sourceTurnId: 'crashed', authorAgentId: '__single__', assignmentKey: `brief-${brief.id}`, task: 'Add an export button.',
       projectId: h.projectId, projectName: 'Manor', title: 'Export button', leadAgentId: 'wren', leadAgentName: 'Wren',
       supportingAgentIds: [], supportingAgentNames: [],
     })
@@ -2270,7 +2307,7 @@ describe('waiting thread wakes', () => {
         { name: 'mockup.html', kind: 'file', chatId: dm.id, eventId: (await w.store.loadEvents(dm.id)).at(-1)!.id },
       ],
     })
-    expect(await w.threads().forwardBrief(handoff, { mode: 'house' })).toBe(true)
+    expect(await w.threads().forwardBrief(handoff, {})).toBe(true)
     const turn = await w.next(2)
     const brief = turn.input.catchUp.at(-1)
     expect(brief).toMatchObject({ source: 'project_thread', threadReason: 'brief', images: [{ name: 'screen.png', dataUrl: PNG }], files: [{ name: 'mockup.html', content: '<p>mockup</p>' }] })

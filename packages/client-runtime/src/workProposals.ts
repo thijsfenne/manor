@@ -56,8 +56,8 @@ export function setWorkChangesOpen(handoffId: string, open: boolean): void {
 }
 
 /**
- * The card's defaults with the user's edits on top. A project thread's card is always Single
- * (2026-11-17), on the runtime it proposed; any other card is Multiple for a team and Single
+ * The card's defaults with the user's edits on top. A card that starts in a project thread is
+ * always Single (2026-11-17, DM briefs 2026-11-21), on the runtime the thread proposed; any other card is Multiple for a team and Single
  * for one agent. `household` is every agent, for the Multiple block; it defaults to `agents`.
  */
 export function workProposalDraft(row: WorkHandoffRow, agents: readonly AgentConfig[], changed = readWorkProposalEdits(row.handoffId), household: readonly AgentConfig[] = agents, off: readonly string[] = readOffModels()): WorkProposalDraft {
@@ -74,11 +74,16 @@ export function workProposalDraft(row: WorkHandoffRow, agents: readonly AgentCon
 }
 
 /**
- * True when the card offers no Single/Multiple choice: a project thread's card, which
- * always starts Single, or one that Multiple cannot start.
+ * True when the card offers no Single/Multiple choice: a card that starts in a project
+ * thread, which is always Single, or one that Multiple cannot start.
  */
-export function workProposalSingleOnly(row: Pick<WorkHandoffRow, 'leadAgentId' | 'threadAuthored'>, household: readonly AgentConfig[]): boolean {
-  return row.threadAuthored === true || workProposalMultipleBlock(row, household) !== undefined
+export function workProposalSingleOnly(row: Pick<WorkHandoffRow, 'leadAgentId' | 'threadAuthored' | 'threadBound'>, household: readonly AgentConfig[]): boolean {
+  return workProposalInThread(row) || workProposalMultipleBlock(row, household) !== undefined
+}
+
+/** A project thread's own card, or a brief that Accept hands to one: both start Single and show no mode switch. */
+export function workProposalInThread(row: Pick<WorkHandoffRow, 'threadAuthored' | 'threadBound'>): boolean {
+  return row.threadAuthored === true || row.threadBound === true
 }
 
 /**

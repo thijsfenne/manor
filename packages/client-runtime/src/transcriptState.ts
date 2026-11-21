@@ -867,6 +867,11 @@ export interface WorkHandoffRow {
   supportingAgentNames: string[]
   /** A project thread wrote this card, so it opens in Single (2026-10-11). */
   threadAuthored?: true
+  /**
+   * A persona's brief whose project has a live thread: Accept hands it to that thread,
+   * so like the thread's own card it starts Single (2026-11-21).
+   */
+  threadBound?: true
   /** The Single runtime the thread proposed and its one-line reason; the card opens on it. */
   proposedRuntime?: WorkHandoff['proposedRuntime']
   /** Names of the images and files that go along with the kickoff. */
@@ -1580,6 +1585,8 @@ function workHandoffRow(
   live: (chatId: string) => SessionLive,
 ): WorkHandoffRow {
   const project = projects.find((candidate) => candidate.id === handoff.projectId)
+  // A hidden project's archived thread is not somewhere to open or to hand a brief to.
+  const liveThreadId = chats.some((chat) => chat.id === project?.threadChatId && chat.archivedAt === null) ? project?.threadChatId : undefined
   // A forwarded brief has no session of its own: it reads the one its thread started.
   const linked = handoff.forwardedAt === undefined || handoff.threadHandoffId === undefined ? undefined : byId.get(handoff.threadHandoffId)
   if (handoff.forwardedAt !== undefined) {
@@ -1593,8 +1600,7 @@ function workHandoffRow(
       // Accepted in the DM already, so the card never offers Accept again.
       acceptedAt: handoff.acceptedAt,
       forwarded: {
-        // A hidden project's archived thread is not somewhere to open.
-        threadChatId: chats.some((chat) => chat.id === project?.threadChatId && chat.archivedAt === null) ? project?.threadChatId ?? null : null,
+        threadChatId: liveThreadId ?? null,
         // Ready only while the linked Session waits, as on its own card.
         phase: linked?.goalConfirmedAt !== undefined ? 'confirmed'
           : linked?.goalReport !== undefined && own.session !== 'working' && own.session !== 'waiting' && own.session !== 'background' ? 'ready'
@@ -1640,7 +1646,8 @@ function workHandoffRow(
       : agents.find((agent) => agent.id === handoff.firstExecutor?.agentId)?.name ?? handoff.firstExecutor.agentName,
     supportingAgentIds: supporting.map((agent) => agent.id),
     supportingAgentNames: supporting.map((agent) => agent.name),
-    ...(handoff.authorAgentId === SINGLE_CHAT_VOICE.id ? { threadAuthored: true as const } : {}),
+    ...(handoff.authorAgentId === SINGLE_CHAT_VOICE.id ? { threadAuthored: true as const }
+      : liveThreadId !== undefined ? { threadBound: true as const } : {}),
     ...(handoff.proposedRuntime === undefined ? {} : { proposedRuntime: handoff.proposedRuntime }),
     ...(handoff.attachments === undefined || handoff.attachments.length === 0 ? {} : {
       attachments: handoff.attachments.map((attachment) => attachment.name),
