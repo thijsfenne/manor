@@ -539,10 +539,10 @@ export function LiveRow({
         <div className="relative flex min-w-0 items-center gap-1.5 text-[14px] text-inherit">
           <span className="min-w-0 flex-1 truncate">{chat.title}</span>
 
-          {/* The slot only reserves what its resting state needs, then grows to fit
-              both actions on hover. Long titles therefore keep the unused space. */}
+          {/* The slot only reserves what its resting state needs, then settles to the
+              one settle control on hover. Long titles therefore keep the unused space. */}
           <span
-            className={`relative h-5 flex-none duration-150 ease-arrive ${standingWidth} group-hover/chat-row:w-14 group-focus-within/chat-row:w-14 [@media(hover:none)]:w-14 motion-safe:transition-[width]`}
+            className={`relative h-5 flex-none duration-150 ease-arrive ${standingWidth} group-hover/chat-row:w-7 group-focus-within/chat-row:w-7 [@media(hover:none)]:w-7 motion-safe:transition-[width]`}
           >
             <span className="pointer-events-none absolute inset-y-0 right-0 flex items-center justify-end text-right duration-150 ease-fade group-hover/chat-row:opacity-0 group-focus-within/chat-row:opacity-0 [@media(hover:none)]:opacity-0 motion-safe:transition-opacity">
               {plan !== undefined ? (plan === null ? null : <PlanCount plan={plan} />) : (
@@ -559,7 +559,7 @@ export function LiveRow({
             {/* Archive is the right-click menu's and the hover card's, never a one-click
                 button here: a stray click on it once archived an open Session. The
                 settle control keeps the slot's right edge, where it already sat. */}
-            <span className="pointer-events-none absolute top-1/2 -right-1.5 flex h-11 w-14 -translate-y-1/2 items-center justify-end text-muted opacity-0 duration-150 ease-fade group-hover/chat-row:opacity-100 group-focus-within/chat-row:opacity-100 [@media(hover:none)]:opacity-100 motion-safe:transition-opacity">
+            <span className="pointer-events-none absolute top-1/2 -right-1.5 flex h-11 w-7 -translate-y-1/2 items-center justify-end text-muted opacity-0 duration-150 ease-fade group-hover/chat-row:opacity-100 group-focus-within/chat-row:opacity-100 [@media(hover:none)]:opacity-100 motion-safe:transition-opacity">
               <button
                 type="button"
                 className="pointer-events-auto grid h-11 w-7 cursor-pointer place-items-center border-0 bg-transparent text-inherit [font:inherit] hover:text-text"

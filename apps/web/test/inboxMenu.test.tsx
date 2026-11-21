@@ -87,7 +87,7 @@ describe('the inbox row menu', () => {
     expect(running).toContain('grid size-4 place-items-center leading-none')
     expect(running.match(/block size-4 flex-none/g)).toHaveLength(2)
     expect(running).toContain('width="16" height="16"')
-    expect(running).toContain('group-hover/chat-row:w-14')
+    expect(running).toContain('group-hover/chat-row:w-7')
     expect(running).toContain('style="width:20px;height:20px"')
     expect(running).toContain('flex-col gap-1 overflow-hidden')
     expect(running).not.toContain('>Working</span>')
@@ -97,7 +97,7 @@ describe('the inbox row menu', () => {
     expect(running).toContain('aria-label="Settle Thread title"')
     expect(running).toContain('aria-label="Settle Thread title"')
     expect(running).not.toContain('Archive Thread title')
-    expect(running).toContain('top-1/2 -right-1.5 flex h-11 w-14')
+    expect(running).toContain('top-1/2 -right-1.5 flex h-11 w-7')
     expect(running).not.toContain('>Settle</button>')
   })
 
