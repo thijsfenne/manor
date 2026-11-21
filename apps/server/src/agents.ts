@@ -1,18 +1,6 @@
 import { PERSONA_TOOLS, type AgentConfig } from '@manor/contracts'
 
 /**
- * Seed data for `createMemoryStore`, and nothing else. The live roster comes from
- * the `agents` table via `Store.loadRoster()`; this copy exists so tests and
- * `MANOR_STORE=memory` have a working household without a database.
- *
- * Expect drift, by design. The live roster was seeded from this list once and
- * has moved on since (personas added, tools granted, characters rewritten in the
- * UI). This file is not a mirror of them and must not be kept in sync with them,
- * it is a fixture: three personas covering one chief of staff and one driver each
- * (claude and codex). Every persona holds `PERSONA_TOOLS`, as the store reads them. Edit a real persona in the app, not here; edit here only
- * when a test or a database-less run needs a different shape.
- */
-/**
  * The colour the invisible infrastructure agents (chat naming, memory distillation)
  * wear. They never reach a screen, so this exists only because `AgentConfig` requires
  * a colour; it lives here beside the other persona colours, which are runtime data
@@ -20,6 +8,18 @@ import { PERSONA_TOOLS, type AgentConfig } from '@manor/contracts'
  */
 export const INFRASTRUCTURE_COLOR = '#8B7EC8'
 
+/**
+ * Seed data for `createMemoryStore`, and nothing else. The live roster comes from
+ * the stored roster via `Store.loadRoster()`; this copy exists so tests and
+ * `MANOR_STORE=memory` have a working household in an in-memory database.
+ *
+ * Expect drift, by design. The live roster was seeded from this list once and
+ * has moved on since (personas added, tools granted, characters rewritten in the
+ * UI). This file is not a mirror of them and must not be kept in sync with them,
+ * it is a fixture: three personas covering one chief of staff and one driver each
+ * (claude and codex). Every persona holds `PERSONA_TOOLS`, as the store reads them. Edit a real persona in the app, not here; edit here only
+ * when a test or an in-memory run needs a different shape.
+ */
 export const agents: AgentConfig[] = [
   {
     id: 'marlow',

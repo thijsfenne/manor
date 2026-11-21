@@ -533,11 +533,6 @@ async function expireOneTime(
 }
 
 /**
- * The target persona's `turn_result` from after the routine's message went in, or
- * nothing. Its presence is what "the run happened" means; it is handed back rather
- * than reduced to a boolean because the same event carries what the run cost.
- */
-/**
  * Whether this run may move the incremental lower bound the next prompt names. An
  * answered run that says it did not read its whole window still counts as answered
  * (no failure, no disable), but it keeps the old watermark so a mail or message that
@@ -547,6 +542,11 @@ function advancesWatermark(answer: ThreadEvent | undefined): boolean {
   return answer?.type === 'turn_result' && answer.routineIncomplete !== true
 }
 
+/**
+ * The target persona's `turn_result` from after the routine's message went in, or
+ * nothing. Its presence is what "the run happened" means; it is handed back rather
+ * than reduced to a boolean because the same event carries what the run cost.
+ */
 function resultOf(ownTurn: readonly ThreadEvent[], agentId: string): ThreadEvent | undefined {
   return ownTurn.find((event) => event.type === 'turn_result' && event.agentId === agentId)
 }

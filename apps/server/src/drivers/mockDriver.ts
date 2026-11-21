@@ -98,7 +98,6 @@ const SOURCES_REPLY = [
   '- [Missing icon](https://no-icon.invalid/x)\n', '- https://pubmed.ncbi.nlm.nih.gov/123/\n',
 ]
 
-/** Last thing the human said in the catch-up, so the scripted reply looks responsive. */
 /**
  * A built-in's broker URL, read from its stdio flag. Manor now serves its built-ins over
  * HTTP, which drops those flags; the brokers keep their fixed paths on the same origin.
@@ -149,6 +148,7 @@ function mockNoteEdit(input: TurnInput, queue: AsyncQueue<RuntimeEvent>): TurnHa
   }
 }
 
+/** Last thing the human said in the catch-up, so the scripted reply looks responsive. */
 function lastUserLine(input: TurnInput): string {
   for (let index = input.catchUp.length - 1; index >= 0; index -= 1) {
     const event = input.catchUp[index]
@@ -578,19 +578,6 @@ function injectedPreferences(input: TurnInput): string[] {
 }
 
 /**
- * Spike-only project thread script (2026-10-10). "mock ask: <question> | <a> | <b>" asks
- * through the real ask broker, so a thread-started session's question lands in the
- * thread. "mock preference: <line>" in a thread turn writes preferences.md through the
- * real tool ("mock note: <line>" writes notes.md, "&&" joins lines); "mock replace preference: <old> => <new>" and "mock remove preference: <old>"
- * change or drop a line the same way. A question wake answers itself when an option appears in a preferences
- * line, and leaves the card otherwise. A brief wake proposes its session through the
- * real work broker. "mock report <Project>: <text>" in a DM reports a preference.
- * "mock status: <line>" in a thread-started Session writes its notes.md line through the
- * real `set_session_status`.
- * "mock send to <Session title or id>: <message>" in a thread turn the user started sends
- * the message on to that Session through the real `send_to_session`.
- */
-/**
  * Spike-only secret card script. "mock secret command" asks through the real broker for
  * a value that a real command echoes, so a run shows Manor hiding it from the output;
  * "mock secret browser" fills the open page, and a trailing "posted" asks the way Codex
@@ -756,6 +743,19 @@ function ruleScriptFor(input: TurnInput, request: typeof fetch): MockWorkStep | 
   }
 }
 
+/**
+ * Spike-only project thread script (2026-10-10). "mock ask: <question> | <a> | <b>" asks
+ * through the real ask broker, so a thread-started session's question lands in the
+ * thread. "mock preference: <line>" in a thread turn writes preferences.md through the
+ * real tool ("mock note: <line>" writes notes.md, "&&" joins lines); "mock replace preference: <old> => <new>" and "mock remove preference: <old>"
+ * change or drop a line the same way. A question wake answers itself when an option appears in a preferences
+ * line, and leaves the card otherwise. A brief wake proposes its session through the
+ * real work broker. "mock report <Project>: <text>" in a DM reports a preference.
+ * "mock status: <line>" in a thread-started Session writes its notes.md line through the
+ * real `set_session_status`.
+ * "mock send to <Session title or id>: <message>" in a thread turn the user started sends
+ * the message on to that Session through the real `send_to_session`.
+ */
 function projectScriptFor(input: TurnInput, request: typeof fetch): MockWorkStep | undefined {
   const text = lastUserLine(input)
   // "mock ask <id>: …" asks under that question id, such as the verify skills offer's.

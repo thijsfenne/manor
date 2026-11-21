@@ -260,10 +260,10 @@ function shellWords(value: string): string[] {
   return words
 }
 
-/** Splits command chains without treating separators inside quotes as commands. */
 /** The operator that follows a shell segment; a newline counts as `;`, the last segment has none. */
 type ShellJoin = ';' | '&&' | '||' | '|' | undefined
 
+/** Splits command chains without treating separators inside quotes as commands. */
 function shellSegments(value: string, joins?: ShellJoin[]): string[] {
   const segments: string[] = []
   let current = ''

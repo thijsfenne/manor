@@ -522,8 +522,6 @@ const steeringNudge = (): ThreadEvent => ({
   text: 'The user added this while you were working. Treat it as steering for the same answer, respond to the combined request once, and do not repeat tools or external actions that already completed.',
 })
 
-// Only the tool name counts: a ToolSearch whose detail is `select:mcp__manor__message_agent`
-// is loading the relay, not sending it, and must not end the turn.
 /** Spread into a terminal note: what a turn that writes no `turn_result` changed. */
 async function changedFilesOf(state: ActiveTurn): Promise<{ changedFiles?: string[]; fileChangesFailed?: true }> {
   return await state.measureFiles?.().catch(() => ({ fileChangesFailed: true as const })) ?? {}
@@ -927,6 +925,8 @@ export class TurnRunner {
       finishOnToolResult: (tool, outcome) => {
         if (outcome === 'success' && turn.goal?.owner.id === agent.id && isManorTool(tool, GOAL_REACHED_TOOL)) goalReached = true
         // A routine's handoff returns at once and its run keeps going.
+        // Only the tool name counts: a ToolSearch whose detail is `select:mcp__manor__message_agent`
+        // is loading the relay, not sending it, and must not end the turn.
         const finish = room?.kind === 'dm' && relayContext === undefined && !quietRoutine && outcome === 'success' && isManorTool(tool, 'message_agent')
         if (finish) state.steerable = false
         return finish

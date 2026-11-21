@@ -324,7 +324,7 @@ async function main(): Promise<void> {
   // The desktop shell on this Mac reads this key from the data directory; other devices pair.
   const localAccessToken = auth.config.mode === 'on' ? ensureLocalAccessToken(paths.localAccessToken) : undefined
   // One cell for the household, read through `agents` by the service, the orchestrator
-  // and all three drivers. Nothing captures the list itself, so a persona saved from
+  // and the drivers. Nothing captures the list itself, so a persona saved from
   // the UI is live on the next turn instead of after the next restart.
   let roster = await store.loadRoster()
   const agents = () => roster

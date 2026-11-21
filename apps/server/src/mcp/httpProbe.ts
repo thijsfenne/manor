@@ -2,16 +2,6 @@ import type { McpServerDraft } from '@manor/contracts'
 import { mcpHttpUrl } from '@manor/contracts'
 import { readOnlyToolNames, type McpProbeResult } from './probeResult.js'
 
-/**
- * Speaks MCP over streamable HTTP, once, for the same reasons the stdio probe
- * exists: a URL that does not answer would otherwise become a silent missing
- * capability on the next turn, and `schemaChars` is what the persona form prices.
- *
- * Unparked 2026-08-20 for Figma's desktop server at `http://127.0.0.1:3845/mcp`.
- * Authentication values arrive already resolved from the host environment. The
- * registry and provider argv carry only the variable names.
- */
-
 const PROTOCOL_VERSION = '2025-06-18'
 
 /** A tools/list for a large connector is tens of kilobytes; anything near this is not MCP. */
@@ -35,6 +25,14 @@ interface HttpSession {
   headers: Readonly<Record<string, string>>
 }
 
+/**
+ * Speaks MCP over streamable HTTP, once, for the same reasons the stdio probe
+ * exists: a URL that does not answer would otherwise become a silent missing
+ * capability on the next turn, and `schemaChars` is what the persona form prices.
+ *
+ * Authentication values arrive already resolved from the host environment. The
+ * registry and provider argv carry only the variable names.
+ */
 export async function probeHttpMcpServer(
   draft: McpServerDraft,
   options: { timeoutMs?: number; bearer?: string; headers?: Readonly<Record<string, string>> } = {},

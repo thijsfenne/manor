@@ -1,4 +1,3 @@
-/** What moving a capability to another token did. */
 export type RekeyResult = 'rekeyed' | 'unknown' | 'conflict'
 
 /**

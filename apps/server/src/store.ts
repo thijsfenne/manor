@@ -140,8 +140,8 @@ export interface SkillBundleFile {
  */
 export interface Store {
   /**
-   * Watches writes made outside this server process. The memory store has no such
-   * writer and returns a no-op; SQLite polls its data version.
+   * Watches writes made outside this server process by polling SQLite's data version.
+   * The memory store runs the same watch on its in-memory database.
    */
   subscribeHouseholdChanges(
     onChange: (change: HouseholdChange) => void,
@@ -434,7 +434,7 @@ export interface Store {
   ): Promise<McpServerConfig>
   /**
    * Removes a server and detaches it from every persona holding it. The attachment
-   * list is a jsonb column, not a foreign key, so nothing in the database does this;
+   * list is a JSON field, not a foreign key, so nothing in the database does this;
    * without it a deleted server would linger as an id no registry can resolve.
    */
   deleteMcpServer(serverId: string): Promise<void>
@@ -581,8 +581,7 @@ export interface Store {
   listRuns(routineId: string): Promise<Chat[]>
   /**
    * Turns a routine on or off and settles its `nextRunAt` in the same write:
-   * recomputed from the cron when it goes on, cleared when it goes off, which is
-   * what the `routines_disabled_has_no_next_run` constraint holds either way.
+   * recomputed from the schedule when it goes on, cleared when it goes off.
    * Enabling also clears `disabledReason`, since the reason Manor gave for turning
    * it off stops being true the moment it is back on.
    */
@@ -791,12 +790,7 @@ export interface CheckedChatDraft {
   settled: boolean
 }
 
-/**
- * Longest one-line preview the sidebar shows. Its twin lives in SQL, in the
- * `chat_events` insert trigger that fills `chats.last_message_preview`
- * (`20260812224500_chat_metadata_materialised.sql`), so the number now exists in two
- * languages and both have to move together.
- */
+/** Longest one-line preview the sidebar shows. */
 export const MAX_PREVIEW_CHARS = 120
 
 /**
@@ -851,15 +845,13 @@ export function checkChatDraft(draft: ChatDraft): CheckedChatDraft {
     if (kind === 'side' && memberIds.length > 0) throw new Error('a side chat holds a model, not members')
     if (kind === 'browser' && memberIds.length > 0) throw new Error('a browser session derives its participants and takes no members')
   }
-  // Both directions, the way the `chats_run_shape` constraint holds it: an orphan run
-  // is a chat nothing lists, and a routine id on any other kind is a chat claiming to
-  // be a run while being filed as something else.
+  // Both directions: an orphan run is a chat nothing lists, and a routine id on any
+  // other kind is a chat claiming to be a run while being filed as something else.
   if ((kind === 'run') !== (routineId !== null)) {
     throw new Error('a run chat belongs to exactly one routine, and only a run chat does')
   }
-  // The same shape for `chats_side_shape`: a side chat with no parent is a panel
-  // attached to nothing, and a parent on any other kind claims a relationship that
-  // nothing reads.
+  // The same shape for side chats: one with no parent is a panel attached to nothing,
+  // and a parent on any other kind claims a relationship that nothing reads.
   if ((kind === 'side') !== (parentChatId !== null)) {
     throw new Error('a side chat hangs off exactly one chat, and only a side chat does')
   }

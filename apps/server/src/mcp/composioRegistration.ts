@@ -614,7 +614,6 @@ export type ComposioExecution =
   | { status: 'refused'; message: string }
   | { status: 'unknown'; message: string }
 
-/** One Composio tool on one connected account, outside any agent session. */
 /**
  * Answers Composio gives before a tool runs: bad key, unknown tool or account, arguments
  * that fail its schema. Any other status, a 400, 408 or 429 included, may come after the
@@ -622,6 +621,7 @@ export type ComposioExecution =
  */
 const COMPOSIO_REFUSED_BEFORE_RUN = new Set([401, 403, 404, 422])
 
+/** One Composio tool on one connected account, outside any agent session. */
 export async function executeComposioTool(
   apiKey: string,
   toolSlug: string,

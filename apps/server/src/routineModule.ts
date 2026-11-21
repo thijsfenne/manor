@@ -94,8 +94,8 @@ export class RoutineModule {
 
   async broadcast(): Promise<void> {
     const routines = await this.options.store.listRoutines()
-    // A normal broadcast may race ahead of an external delete's Realtime event. It
-    // may teach the snapshot about new rows, but only that event may prune old ones
+    // A normal broadcast may run before the change watch sees an external delete. It
+    // may teach the snapshot about new rows, but only `refresh` may prune old ones
     // after their active runs and native state have been cleaned up.
     const known = new Map((this.knownRoutines ?? []).map((routine) => [routine.id, routine]))
     for (const routine of routines) known.set(routine.id, routine)
@@ -103,7 +103,7 @@ export class RoutineModule {
     this.options.broadcast({ type: 'routines', routines })
   }
 
-  /** Baseline needed to identify rows that vanished during a Realtime gap. */
+  /** Baseline `refresh` compares against to find rows deleted outside Manor. */
   async prime(): Promise<void> {
     this.knownRoutines = await this.options.store.listRoutines()
   }

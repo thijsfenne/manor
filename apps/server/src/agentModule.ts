@@ -44,7 +44,7 @@ export class AgentModule {
     return { type: 'roster', agents: [...this.options.agents()] }
   }
 
-  /** Absorbs the Realtime echo of Manor's own writes and publishes external ones. */
+  /** Publishes the roster when a write outside Manor changed it; an unchanged roster is a no-op. */
   async refresh(): Promise<void> {
     const agents = await this.options.store.loadRoster()
     if (JSON.stringify(agents) === JSON.stringify(this.options.agents())) return

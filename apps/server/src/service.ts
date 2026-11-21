@@ -97,7 +97,7 @@ export interface ManorServiceOptions {
   store: Store
   /**
    * The household as it stands right now. A function rather than a list because
-   * personas are edited while the server runs: the orchestrator and all three drivers
+   * personas are edited while the server runs: the orchestrator and the drivers
    * read this same cell, so a saved persona is live on the next turn.
    */
   agents: () => readonly AgentConfig[]
@@ -907,7 +907,7 @@ export class ManorService {
     return this.remindersModule.syncOpenLoops()
   }
 
-  /** Baseline needed to identify rows that vanished before a Realtime reconnect. */
+  /** Baseline the change watch's refreshes compare against to find rows deleted outside Manor. */
   async primeHouseholdState(): Promise<void> {
     await Promise.all([
       this.routineModule.prime(),
@@ -917,7 +917,7 @@ export class ManorService {
 
   /**
    * Reconciles a row changed outside Manor's own request path. Internal writes have
-   * already refreshed these documents, so equality also absorbs their Realtime echo.
+   * already refreshed these documents, so an unchanged snapshot is a no-op.
    */
   async refreshHousehold(change: HouseholdChange): Promise<void> {
     if (change.resource === 'agents') {

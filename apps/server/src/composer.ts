@@ -922,7 +922,7 @@ export const REVIEW_SKILL_PATHS = {
 }
 
 /**
- * The review loop on top of the stop rule, adapted from tstack's sol-loop (2026-11-13):
+ * The review loop on top of the stop rule (2026-11-13):
  * a round cap, delta rounds against a ledger, push back, and deadlock to the user.
  */
 export const SINGLE_REVIEW_LOOP_RULES = [

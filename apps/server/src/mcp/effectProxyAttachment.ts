@@ -84,11 +84,6 @@ export function forwardsOverHttp(attached: AttachedMcpServer): boolean {
   return upstream.url !== undefined && upstream.allowTools === undefined && upstream.name !== 'executor'
 }
 
-/**
- * Manor's own stdio servers, whose code answers each call on its own and keeps no
- * per-connection state. These derived rows are re-pointed at Manor's runtime at every
- * start, so the name names this code.
- */
 /** What the gate needs to reach the real server; secret values stay on the capability. */
 export function effectProxyUpstream(attached: AttachedMcpServer): EffectProxyUpstream {
   const { server } = attached

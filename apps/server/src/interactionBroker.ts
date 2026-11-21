@@ -36,14 +36,14 @@ export interface AnsweredQuestion extends GivenAnswer {
   questions: UserInputQuestion[]
 }
 
-/**
- * What the asking agent reads when Manor answered from a preference, the same words
- * whether its driver held the call or reads the answer on its next attempt.
- */
 /** Closes every account of an answer Manor gave from a preference, live or replayed. */
 export const PREFERENCE_ANSWER_GUARD =
   'The user did not pick this; Manor applied their standing preference. Never report it as their choice or as a new preference. If they want another answer, their own message will say so.'
 
+/**
+ * What the asking agent reads when Manor answered from a preference, the same words
+ * whether its driver held the call or reads the answer on its next attempt.
+ */
 export const preferenceAnswerText = (
   questions: readonly UserInputQuestion[],
   answers: UserInputAnswers,

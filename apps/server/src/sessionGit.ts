@@ -34,8 +34,10 @@ export function gitEnv(): NodeJS.ProcessEnv {
   ], { GIT_TERMINAL_PROMPT: '0', GIT_EDITOR: 'true' })
 }
 
-/** A failure that carries what Git said, for the sentence the user reads. */
-/** Git refused; `output` keeps its full words for a reader that gets more room than one line. */
+/**
+ * The message is the one sentence the user reads; `output` keeps Git's full words for a
+ * reader that gets more room than one line.
+ */
 export class SessionGitError extends Error {
   constructor(message: string, readonly output?: string) { super(message) }
 }
