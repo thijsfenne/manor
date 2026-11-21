@@ -77,7 +77,7 @@ export interface Pose {
    *
    * **What that reads as depends on the eye's orientation, and the sign flips
    * when it changes.** On a *portrait* capsule — the natural shape here, median
-   * aspect 2.55:1 — a positive tilt leans both tops outward and brings the inner
+   * aspect about 1.7:1 — a positive tilt leans both tops outward and brings the inner
    * edges down, which is the angry direction. Flatten the capsule past square
    * with `esy` and the same rotation raises the inner ends instead: on a
    * *landscape* bar, **negative** tilt is the angry `\ /` and positive is the
@@ -121,12 +121,12 @@ export interface Pose {
    * and the eyes sit at exactly the angle the pose names.
    *
    * It exists because `tilt` is a *brow*, and a brow is an absolute direction.
-   * `styles/blob.ts` leans each eye by up to 12° in a single seeded direction —
+   * `styles/compose.ts` leans each eye by up to 6° in a single seeded direction —
    * identity, and good identity, on an idle face. Added to a pose it is not
-   * identity, it is noise on the one channel that carries the meaning: `mad`'s
-   * `\ /` at −33° meets a +12° seed and comes out `\ \`, a pair of parallel bars
-   * that read as bored rather than angry, while the seed 12° the other way gets
-   * an unusually furious `mad`. The reference renders are unambiguous about which
+   * identity, it is noise on the one channel that carries the meaning: when the
+   * lean still reached 12°, `mad`'s `\ /` at −33° met a +12° seed and came out
+   * `\ \`, a pair of parallel bars that read as bored rather than angry, while
+   * the seed 12° the other way got an unusually furious `mad`. The reference renders are unambiguous about which
    * of those is wanted.
    *
    * So the loud poses take their tilt absolute and the seeded lean returns intact
@@ -371,10 +371,11 @@ export function bakePose<L extends Posable>(
  * a face needs to read as anything at a glance.
  *
  * The numbers below come off measurement rather than taste alone. Across 4000
- * seeds the capsule's natural aspect is 2.03 / 2.55 / 3.12 (p10 / median / p90,
- * `ry:rx`) — a *portrait* capsule — so a landscape bar needs `esx/esy` near 10,
- * not near 2. Containment was never the binding guard (worst corner reach is
- * ~0.95 of the 1.12 the test allows); fusion is, and a widened pair buys its
+ * seeds the slit eyes of that pass had an aspect of 2.03 / 2.55 / 3.12 (p10 /
+ * median / p90, `ry:rx`). The ovals since have a base ratio of 1.55–1.85, still
+ * portrait, so a landscape bar still needs `esx/esy` well above 2. Containment
+ * was never the binding guard (worst corner reach is ~0.95 of the 1.12 the test
+ * allows); fusion is, and a widened pair buys its
  * clearance back through `edx` at about 1:2. Tilt is cheap once the capsule is
  * flat, because a flat capsule sweeps sideways far less per degree — which is
  * what finally makes tilt a real brow rather than the dead channel it was.
@@ -485,7 +486,7 @@ export const mad: Expression = {
  * pose can imitate.
  *
  * Signs, since §2.2 is the trap that ate a whole tuning pass: the capsule's
- * natural aspect is 2.55:1 portrait, so a pose that leaves `esy` near or above 1
+ * natural aspect is about 1.7:1 portrait, so a pose that leaves `esy` near or above 1
  * is still portrait and reads the *opposite* way from a pose that flattens it
  * past square. On a portrait capsule positive `tilt` is the angry direction; on
  * a landscape bar it is the worried one. `surprised` and `scared` are portrait
@@ -572,7 +573,7 @@ export const wink: Expression = {
  *
  * `tilt: 0` under `lock: 1` is not a no-op: it cancels the seeded lean, which is
  * the whole point — a level pair of bars is what reads as lidded, and a seed's
- * 12° lean on that pose reads as suspicion instead.
+ * lean on that pose reads as suspicion instead.
  */
 export const sleepy: Expression = {
   p: {
@@ -855,7 +856,7 @@ export const sick: Expression = {
  * it has exactly two, at eye height, on a face.
  *
  * `tilt: 0` under `lock: 1` for `sleepy`'s reason: a level pair reads as
- * attention held elsewhere, and a seed's 12° lean turns that into suspicion.
+ * attention held elsewhere, and a seed's lean turns that into suspicion.
  *
  * The nearest neighbour is `unsure`, not `sleepy` — the two asymmetric faces —
  * and the §2 rule clears on four channels: `edy2` (−2.6 against 0), `rock` (0.7

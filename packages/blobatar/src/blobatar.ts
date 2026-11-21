@@ -14,7 +14,8 @@ export type { BlobatarOptions, Animate, Expression };
  *
  * The same name always produces the same output within a major version. The
  * numeric ranges in `styles/compose.ts`, the bands in `styles/blob.ts`, and the
- * tone set are all part of that contract. Changing them requires a new major.
+ * tone set are all part of that contract. In Manor's copy, changing them changes
+ * every persona's face at once (see the README).
  */
 export const blobatar = makeBlobatar(style);
 

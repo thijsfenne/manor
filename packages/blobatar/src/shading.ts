@@ -41,13 +41,11 @@ export interface Glow {
 
 export const CLAY = {
   /**
-   * The optical sizes. At `small` and under, the finish is the light alone and the
+   * The optical size. At `small` and under, the finish is the light alone and the
    * eyes are drawn larger, because a highlight and a blurred band are haze at
-   * twenty pixels and the eyes are a pixel wide. From `glint` up, a crisp glint
-   * sits on the soft highlight.
+   * twenty pixels and the eyes are a pixel wide.
    */
   small: 28,
-  glint: 40,
   /**
    * The light across the head: its warm relit colour at the top left fading out
    * by 0.46 of the radius, then its cool one toward the far edge. Two stops share
@@ -62,13 +60,8 @@ export const CLAY = {
     cx: 35, cy: 27, rx: 15, ry: 8.5, rot: -18,
     stops: [[0, 0.46, "white"], [0.55, 0.24, "white"], [1, 0, "white"]],
   } satisfies Glow,
-  /** The glint on the highlight. A gradient with a short falloff, not a blur. */
-  spark: {
-    cx: 34.5, cy: 27.5, rx: 7.5, ry: 3.3, rot: -24,
-    stops: [[0, 0.64, "white"], [0.7, 0.6, "white"], [1, 0, "white"]],
-  } satisfies Glow,
-  /** What a dark head keeps of its white layers, and what the highlight keeps under a glint. */
-  dim: { dark: 0.64, under: 0.7 },
+  /** What a dark head keeps of its white layers. */
+  dim: { dark: 0.64 },
   /**
    * The inner shadow: the silhouette, blurred by `blur` and moved by `dx`/`dy`
    * toward the light, cut out of itself. What is left is a soft band along the
@@ -79,9 +72,18 @@ export const CLAY = {
   bounce: { blur: 1.1, dx: -1.1, dy: -1.5, opacity: 0.38, dark: 0.5, tone: "hi" },
   /** The lit lip under each eye, which is what presses it into the surface. */
   lip: { dy: 0.9, opacity: 0.55, tone: "hi" },
+  /**
+   * The soft sheen inside each dark eye: a white dome high in the eye, fading
+   * toward its edge, where the eye's own outline clips what is left. In the eye's own bounding box, so it follows the eye's
+   * shape and pose; centred, so it never points a gaze the way a catchlight would.
+   */
+  sheen: { cx: 0.46, cy: 0.3, r: 0.5, opacity: 0.3 },
   /** The eyes at `small`: grown about their own centres, spread about the pair's. */
   eyes: { grow: 1.34, spread: 1.16 },
 } as const
+
+/** Whether eyes in this ink wear the sheen: dark ink only, since white on light ink is nothing. */
+export const sheenInk = (eye: string) => fromHex(eye).l < 0.5
 
 /** The head's colour and the three it is relit into. */
 export type Tones = Record<Tone, string> & {
@@ -175,7 +177,6 @@ export function clay(finish: Finish, shapes: string) {
   const { id, tones } = finish
   const dark = finish.dark ?? tones?.dark ?? false
   const small = finish.size !== undefined && finish.size <= CLAY.small
-  const spark = finish.size !== undefined && finish.size >= CLAY.glint
   const url = (key: string) => `url(#${id}${key})`
   const whites = dark ? CLAY.dim.dark : 1
   // Filtered as a group, so `SourceAlpha` is the clipped silhouette, not the rect.
@@ -188,21 +189,28 @@ export function clay(finish: Finish, shapes: string) {
     `<feComposite in2="s" operator="in"/>` +
     `</filter>`
   const cut = (inside: string) => `<g clip-path="${url("k")}">${inside}</g>`
+  const { sheen: s } = CLAY
+  const sheen =
+    `<radialGradient id="${id}e" cx="${s.cx}" cy="${s.cy}" r="${s.r}">` +
+    `<stop offset="0" stop-color="white" stop-opacity="${s.opacity}"/><stop offset="1" stop-color="white" stop-opacity="0"/>` +
+    `</radialGradient>`
   return {
     defs:
       `<defs><clipPath id="${id}k">${shapes}</clipPath>` +
       glow(`${id}l`, CLAY.light, tones) +
       (small
         ? ""
-        : glow(`${id}h`, CLAY.highlight, tones, whites * (spark ? CLAY.dim.under : 1)) +
-          (spark ? glow(`${id}g`, CLAY.spark, tones, whites) : "") +
+        : glow(`${id}h`, CLAY.highlight, tones, whites) +
           band("i", CLAY.inner, CLAY.inner.opacity) +
-          band("b", CLAY.bounce, dark ? CLAY.bounce.dark : CLAY.bounce.opacity)) +
+          band("b", CLAY.bounce, dark ? CLAY.bounce.dark : CLAY.bounce.opacity) +
+          sheen) +
       `</defs>`,
     overlays: small
       ? cut(box(url("l")))
       : cut(box(url("l"))) +
         `<g filter="${url("i")}">${cut(box())}</g><g filter="${url("b")}">${cut(box())}</g>` +
-        cut(box(url("h")) + (spark ? box(url("g")) : "")),
+        cut(box(url("h"))),
+    /** The fill of each eye's sheen, empty on a small face. Draw it only on eyes `sheenInk` passes. */
+    sheen: small ? "" : url("e"),
   }
 }

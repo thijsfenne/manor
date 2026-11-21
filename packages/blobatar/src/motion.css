@@ -704,8 +704,7 @@
    * capsule reaches the DOM already tilted and this element's local axes are the
    * viewport's, not the capsule's. A bare `scaleY` therefore squashes along
    * screen-Y and shears the capsule rather than closing it across its own width.
-   * The seeded lean is a median 5.9° and reaches 12°, so this is most blobatars,
-   * not a corner:
+   * The seeded lean reaches 6°, so this is most blobatars, not a corner:
    *
    *   rotate(lean) · scale · rotate(-lean)
    *
@@ -836,7 +835,7 @@
  * capsule reaches the DOM already tilted and this element's local axes are the
  * viewport's, not the capsule's. A bare `scaleY` therefore closes the eye along
  * screen-Y and shears it, rather than closing it across its own width. The seeded
- * lean is a median 5.9° and reaches 12°, so this is most blobatars, not a corner:
+ * lean reaches 6°, so this is most blobatars, not a corner:
  *
  *   rotate(lean) · scale · rotate(-lean)
  *
@@ -986,7 +985,7 @@
  *    verticals, where a real face shows no tilt either.
  *
  * Peaks across the whole seed space are 7.0% on X, 4.6% on Y, and 2.4°, against
- * a static per-blobatar lean capped at 12°. That ceiling is the constraint, not a
+ * a static per-blobatar lean capped at 6°. That ceiling is the constraint, not a
  * coincidence: lean carries identity, and an animated tilt approaching it stops
  * decorating the blobatar and starts overwriting who it is.
  *

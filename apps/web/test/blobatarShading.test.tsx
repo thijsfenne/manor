@@ -10,11 +10,12 @@ const referenced = (markup: string) => [...markup.matchAll(/(?:url\(#|href="#)([
 const hexes = (markup: string) => new Set(markup.match(/#[0-9a-f]{6}\b/gi))
 
 describe('the clay finish', () => {
-  it('leaves the default output exactly as it was', () => {
-    // FNV-1a over fifty default faces, taken from the output before `shading` existed.
+  it('keeps the flat default output fixed', () => {
+    // FNV-1a over fifty default faces, retaken when the eyes became ovals and some were lifted. A change
+    // to the layout ranges moves it; a change to the finish must not.
     let hash = 2166136261
     for (let i = 0; i < 50; i++) for (const c of blobatar(`p${i}`, { size: 24 })) hash = Math.imul(hash ^ c.charCodeAt(0), 16777619) >>> 0
-    expect(hash.toString(16)).toBe('a5947cf1')
+    expect(hash.toString(16)).toBe('1ad2fc2e')
     expect(blobatar('Wren', { shading: undefined, idPrefix: 'x' })).toBe(blobatar('Wren'))
   })
 
@@ -75,14 +76,16 @@ describe('the clay finish', () => {
     expect(_parts('Wren', { animate: 'always' }).vars?.['--mo-hi']).toBeUndefined()
   })
 
-  it('draws by optical size: the light alone when small, a glint when large', () => {
+  it('draws by optical size: the light alone when small, the full finish above', () => {
     const small = blobatar('Wren', { shading: 'clay', size: CLAY.small })
     const middle = blobatar('Wren', { shading: 'clay', size: CLAY.small + 4 })
-    const large = blobatar('Wren', { shading: 'clay', size: CLAY.glint })
+    const large = blobatar('Wren', { shading: 'clay', size: 96 })
     // A filter per list row is the costly part of the finish, and haze at that size.
     expect(small).not.toContain('<filter')
     expect(middle.match(/<filter/g)).toHaveLength(2)
-    expect(defined(large)).toHaveLength(defined(middle).length + 1)
+    expect(defined(large)).toHaveLength(defined(middle).length)
+    // The light, the soft highlight and the eye sheen; no glint at any size.
+    expect(large.match(/<radialGradient/g)).toHaveLength(3)
   })
 
   it('grows the eyes of a small face and leaves a larger one its own', () => {
@@ -95,9 +98,24 @@ describe('the clay finish', () => {
     const small = eyes(blobatar('Wren', { shading: 'clay', size: 20 }))
     expect(small).toHaveLength(2)
     expect(width(small[0]!)).toBeGreaterThan(width(flat[0]!) * 1.05)
-    // Past the small size each eye is its own again, with the lit lip under it.
+    // Past the small size each eye is its own again: the lit lip, the eye, its sheen.
     const large = eyes(blobatar('Wren', { shading: 'clay', size: 64 }))
-    expect(large).toHaveLength(4)
+    expect(large).toHaveLength(6)
     expect(large[1]).toBe(flat[0])
+    expect(large[2]).toBe(flat[0])
+    // Light eyes on a dark head get none: white on white is nothing.
+    const ink = blobatar('Wren', { shading: 'clay', size: 64, tone: 0.97 })
+    expect(clayTones(_layout('Wren', { tone: 0.97 }).palette.head!).dark).toBe(true)
+    expect(eyes(ink)).toHaveLength(4)
+  })
+
+  it('lifts the eyes of some faces into the headroom, never shrinking them', () => {
+    const at = (lift: number, gaze = 0) => _layout('Wren', { traits: { 'eye.lift': lift, 'gaze.y': gaze } }).eyes[0]!
+    for (const gaze of [0, 0.999]) {
+      expect(at(0.999, gaze).cy).toBeLessThan(at(0, gaze).cy)
+      expect(at(0.999, gaze).rx).toBe(at(0, gaze).rx)
+    }
+    // The lower half of the trait is no lift at all.
+    expect(at(0.4).cy).toBe(at(0).cy)
   })
 })

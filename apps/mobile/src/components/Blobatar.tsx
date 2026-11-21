@@ -3,12 +3,12 @@ import { BLOB_FACE_TRAITS, DEFAULT_BLOB_TONE, SIDEBAR_WORKING_GAZE, WORKING_GAZE
 import { BUSY_LOOK, DOT, order, timeline, type Key, type Pair } from '@manor/client-runtime/busy-face'
 import { EYE_MOVE_MS, FACE_LOOK, scanStops, seesawStops, towardStops, type FaceLook, type FaceState } from '@manor/client-runtime/face-activity'
 import { frameOf, outlinePoints, plan } from '@manor/client-runtime/face-gesture'
-import { CLAY, clayTones, palette, traits as seedTraits, type Glow, type Tones } from '@manor/blobatar'
+import { CLAY, clayTones, palette, sheenInk, traits as seedTraits, type Glow, type Tones } from '@manor/blobatar'
 import { happy, sad, sleepy, thinking, unsure } from '@manor/blobatar/expression'
 import { _parts } from '@manor/blobatar/internal'
 import MaskedView from '@react-native-masked-view/masked-view'
 import { Image } from 'expo-image'
-import { useEffect, useId, useMemo, useState } from 'react'
+import { Fragment, useEffect, useId, useMemo, useState } from 'react'
 import { StyleSheet, View, type ColorValue, type ViewStyle } from 'react-native'
 import Animated, { cubicBezier, useReducedMotion, type CSSAnimationKeyframes, type CSSAnimationTimingFunction, type CSSStyle, FadeIn, FadeOut, LayoutAnimationConfig, ReduceMotion } from 'react-native-reanimated'
 import Svg, { Circle, ClipPath, Defs, G, Path, RadialGradient, Rect, Stop } from 'react-native-svg'
@@ -210,6 +210,8 @@ interface Face {
   /** The library's ink for this face; absent leaves the path to its own default. */
   eyeFill: string | undefined
   eyes: Eye[]
+  /** Whether the eyes wear the clay sheen: dark ink on a shaded face past `CLAY.small`. */
+  sheen: boolean
   pose: Pose
   /** Seeded timings, in milliseconds and box units, straight from the library. */
   breathePhase: number
@@ -269,14 +271,17 @@ function takeApart(parts: ReturnType<typeof _parts>, size: number): Face | null 
     const raw = vars[key]
     return raw === undefined ? fallback : Number.parseFloat(raw)
   }
+  const head = vars['--mo-head'] ?? bodyFill
   return {
     size,
     // The custom properties carry a tinting pose's colours; the markup keeps the resting pair.
-    bodyFill: vars['--mo-head'] ?? bodyFill,
+    bodyFill: head,
     body,
     silhouette: silhouette(body),
     eyeFill: vars['--mo-eye'] ?? eyeFill,
     eyes,
+    // The resting ink, as the web's animated markup decides it, so a tinting pose does not toggle it.
+    sheen: size > CLAY.small && head !== undefined && eyeFill !== undefined && sheenInk(eyeFill),
     pose: {
       esx: num('--mo-esx', IDLE.esx),
       esy: num('--mo-esy', IDLE.esy),
@@ -423,7 +428,7 @@ function LiveFace({ face, size, blinkOnly = false }: { face: Face; size: number;
           </Svg>
           <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, gaze]}>
             {face.eyes.map((eye) => (
-              <EyeLayer eye={eye} fill={face.eyeFill} key={eye.wrap} pose={face.pose} size={size} still={still} timing={face} />
+              <EyeLayer eye={eye} fill={face.eyeFill} key={eye.wrap} pose={face.pose} sheen={face.sheen} size={size} still={still} timing={face} />
             ))}
           </Animated.View>
         </Animated.View>
@@ -531,8 +536,30 @@ function StillFace({ face, size }: { face: Face; size: number }) {
 function Eyes({ face }: { face: Face }) {
   return (
     <G {...(face.eyeFill === undefined ? {} : { fill: face.eyeFill })}>
-      {face.eyes.map((eye) => <Path d={eye.d} key={eye.wrap} />)}
+      {face.eyes.map((eye) => (
+        <Fragment key={eye.wrap}>
+          <Path d={eye.d} />
+          {face.sheen ? <Sheen d={eye.d} /> : null}
+        </Fragment>
+      ))}
     </G>
+  )
+}
+
+/** The soft sheen inside a dark eye: the web's `CLAY.sheen`, in the eye's own box. */
+function Sheen({ d }: { d: string }) {
+  const id = useId().replace(/[^\w-]/g, '')
+  const { sheen } = CLAY
+  return (
+    <>
+      <Defs>
+        <RadialGradient cx={sheen.cx} cy={sheen.cy} id={id} r={sheen.r}>
+          <Stop offset={0} stopColor="white" stopOpacity={sheen.opacity} />
+          <Stop offset={1} stopColor="white" stopOpacity={0} />
+        </RadialGradient>
+      </Defs>
+      <Path d={d} fill={`url(#${id})`} />
+    </>
   )
 }
 
@@ -605,9 +632,8 @@ function ClayGlow({ id, glow, tones, keep = 1 }: { id: string; glow: Glow; tones
  * moved toward the light: once halfway at half strength, once all the way. What is
  * left is full shadow at the edge, half across the band, none past it.
  *
- * The optical sizes follow the web: a small face wears the light alone, and a large
- * one gains the glint. Three things the web draws are left out here. The bounce
- * light is a second band, the lip under each eye would have to ride every eye layer,
+ * The optical size follows the web: a small face wears the light alone. Three
+ * things the web draws are left out here. The bounce light is a second band, the lip under each eye would have to ride every eye layer,
  * and the larger eyes of a small face would have to be redrawn from the layout;
  * none is worth its cost on a scrolling list.
  */
@@ -618,7 +644,6 @@ function Body({ face }: { face: Face }) {
   const { inner } = CLAY
   const clip = `url(#${id}k)`
   const small = face.size <= CLAY.small
-  const spark = face.size >= CLAY.glint
   const whites = tones?.dark ? CLAY.dim.dark : 1
   const light = <Rect fill={`url(#${id}l)`} height={BOX} width={BOX} />
   // The lit head through the clip moved by this share of the shadow's offset. The
@@ -640,8 +665,7 @@ function Body({ face }: { face: Face }) {
           {face.silhouette.map((d, index) => <Path d={d} key={index} />)}
         </ClipPath>
         {tones ? <ClayGlow glow={CLAY.light} id={`${id}l`} tones={tones} /> : null}
-        {tones && !small ? <ClayGlow glow={CLAY.highlight} id={`${id}h`} keep={whites * (spark ? CLAY.dim.under : 1)} tones={tones} /> : null}
-        {tones && spark ? <ClayGlow glow={CLAY.spark} id={`${id}g`} keep={whites} tones={tones} /> : null}
+        {tones && !small ? <ClayGlow glow={CLAY.highlight} id={`${id}h`} keep={whites} tones={tones} /> : null}
       </Defs>
       <G fill={fill}>
         <Parts body={face.body} />
@@ -657,7 +681,6 @@ function Body({ face }: { face: Face }) {
               <Rect fill={`url(#${id}h)`} height={BOX} width={BOX} />
             </>
           )}
-          {spark ? <Rect fill={`url(#${id}g)`} height={BOX} width={BOX} /> : null}
         </G>
       ) : null}
     </>
@@ -672,6 +695,7 @@ function EyeLayer({
   eye,
   fill,
   pose,
+  sheen,
   size,
   still,
   timing,
@@ -679,6 +703,7 @@ function EyeLayer({
   eye: Eye
   fill: string | undefined
   pose: Pose
+  sheen: boolean
   size: number
   still: boolean
   timing: Pick<Face, 'blink' | 'blinkPhase'>
@@ -728,6 +753,7 @@ function EyeLayer({
       <Animated.View style={[StyleSheet.absoluteFill, { transformOrigin: origin }, blink]}>
         <Svg height={size} viewBox={`0 0 ${BOX} ${BOX}`} width={size}>
           <Path d={eye.d} {...(fill === undefined ? {} : { fill })} />
+          {sheen ? <Sheen d={eye.d} /> : null}
         </Svg>
       </Animated.View>
     </Animated.View>
@@ -849,7 +875,7 @@ function BusyFace({ face, size, held = false }: { face: Face; size: number; held
   const [mx, my] = rig.middle
   const eyes = face.eyes.map((eye) => (
     <Animated.View key={eye.wrap} style={[StyleSheet.absoluteFill, { transformOrigin: [`${eye.cx}%`, `${eye.cy}%`, 0] as (string | number)[] }, rig.eyes.get(eye.wrap)]}>
-      <EyeLayer eye={eye} fill={face.eyeFill} pose={face.pose} size={size} still={false} timing={face} />
+      <EyeLayer eye={eye} fill={face.eyeFill} pose={face.pose} sheen={face.sheen} size={size} still={false} timing={face} />
     </Animated.View>
   ))
   const drop = DOT.r * unit
@@ -975,7 +1001,7 @@ function StateFace({ face, size, look }: { face: Face; size: number; look: FaceL
                 return (
                   <Animated.View key={eye.wrap} pointerEvents="none" style={[StyleSheet.absoluteFill, added.rest]}>
                     <Animated.View style={[StyleSheet.absoluteFill, added.loop]}>
-                      <EyeLayer eye={eye} fill={face.eyeFill} pose={face.pose} size={size} still={false} timing={face} />
+                      <EyeLayer eye={eye} fill={face.eyeFill} pose={face.pose} sheen={face.sheen} size={size} still={false} timing={face} />
                     </Animated.View>
                   </Animated.View>
                 )

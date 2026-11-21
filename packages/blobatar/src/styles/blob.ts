@@ -8,7 +8,7 @@ import {
  *
  * Weighted rather than uniform: round and organic are the everyday shapes,
  * while the louder silhouettes stay finds. These bands, the layout ranges in
- * `compose.ts`, and the tone set together form gen2's frozen seed→look mapping.
+ * `compose.ts`, and the tone set together form gen2's seed→look mapping.
  */
 const BANDS: Band[] = [
   [round, 0.22], [organic, 0.48], [boxy, 0.6], [capsule, 0.7], [nub, 0.79],

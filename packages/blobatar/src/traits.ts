@@ -63,7 +63,7 @@ export interface Traits {
  * map keeps meaning what it meant. The numeric *ranges* those keys are read
  * into are what a stated position is relative to, which makes them part of the
  * same frozen-per-major contract as a `pick` array's contents — retuning
- * `t.num("eye.gap", 0.1, 0.24)` moves every blobatar, seeded or configured.
+ * `t.num("eye.gap", 0.08, 0.16)` moves every blobatar, seeded or configured.
  */
 export type TraitOverrides = Record<string, number | number[]>;
 
