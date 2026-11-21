@@ -89,11 +89,16 @@ function optical(eyes: Eye[], face: Ellipse): Eye[] {
 /** `[shape, upper edge of its band in [0, 1)]`, in order. */
 export type Band = readonly [Shape, number];
 
-export function compose(bands: Band[], fit: Fit) {
+/**
+ * `chosen` are silhouettes outside the bands. `layout` draws one, or a banded one,
+ * when `named` names it, and otherwise reads the `shape` trait as before.
+ */
+export function compose(bands: Band[], fit: Fit, chosen: Shape[] = []) {
   const pick = (v: number) => (bands.find(([, upTo]) => v < upTo) ?? bands[bands.length - 1]!)[0];
+  const byName = new Map([...bands.map(([shape]) => shape), ...chosen].map(shape => [shape.name, shape]));
 
-  function layout(t: Traits) {
-    const shape = pick(t("shape"));
+  function layout(t: Traits, named?: string) {
+    const shape = (named !== undefined ? byName.get(named) : undefined) ?? pick(t("shape"));
     const r = t.num("body.r", 31, 38) * shape.core;
     const body: Body = {
       cx: 50 + t.jitter("body.x", 1.5),

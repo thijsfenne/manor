@@ -63,6 +63,7 @@ export function Blobatar({
   animate,
   expression,
   traits,
+  shape,
   shading,
   idPrefix,
   ...rest
@@ -77,7 +78,7 @@ export function Blobatar({
   // `rest` goes straight onto the DOM element — a `traits` object spread onto
   // an `<img>` is a React warning per blobatar.
   const opts = {
-    size, background, palette, hue, tone, normalize, contrast, title, expression, traits,
+    size, background, palette, hue, tone, normalize, contrast, title, expression, traits, shape,
     ...(shading ? { shading, idPrefix: scope } : {}),
   };
 

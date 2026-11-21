@@ -6,7 +6,7 @@ import '@manor/blobatar/motion.css'
 import { useReducedMotion } from 'motion/react'
 import { memo, useEffect, useRef, useState, type CSSProperties } from 'react'
 import { accentHue, accentStyle } from '../accent'
-import { BLOB_FACE_TRAITS, DEFAULT_BLOB_TONE, SIDEBAR_WORKING_GAZE, WORKING_GAZE, blobShapeOf, blobShapeTraits } from '../blobShapes'
+import { BLOB_FACE_TRAITS, DEFAULT_BLOB_TONE, SIDEBAR_WORKING_GAZE, WORKING_GAZE, blobShapeOf } from '../blobShapes'
 import { BUSY_LOOK, useBusyFace } from './busyFace'
 import { useFaceEyes, useFaceGesture } from './faceMotion'
 
@@ -136,13 +136,12 @@ export const Avatar = memo(function Avatar({ name, color, src, shape, tone = DEF
   // whoever else starts with the same one. It sits on nothing, because a plate in
   // the accent puts the blobatar's own colour behind the blobatar.
   const worn = blobShapeOf(name, shape)
-  const chosen = blobShapeTraits(shape)
   // Keep the face family consistent while leaving her silhouette individually
   // seeded or explicitly chosen.
   // The busy face wears her resting traits, so a turn starting moves the eyes she has
   // rather than drawing a new face; only the still working face pins its own gaze.
   const still = working && !lively
-  const traits = { ...BLOB_FACE_TRAITS, ...chosen, ...(sidebarWorking ? SIDEBAR_WORKING_GAZE : still ? WORKING_GAZE : {}) }
+  const traits = { ...BLOB_FACE_TRAITS, ...(sidebarWorking ? SIDEBAR_WORKING_GAZE : still ? WORKING_GAZE : {}) }
   // Nine of the ten silhouettes need none of this. The tenth draws its ink high in
   // its own viewBox, so centring the box leaves the face hovering above the name
   // beside it; the lift is stated in viewBox units and scales with what is drawn.
@@ -173,6 +172,7 @@ export const Avatar = memo(function Avatar({ name, color, src, shape, tone = DEF
         {...(moving ? { animate: 'always' as const } : {})}
         {...(hue === undefined ? {} : { hue })}
         traits={traits}
+        {...(shape === undefined ? {} : { shape })}
         {...(look?.pose !== undefined ? { expression: POSES[look.pose] } : still || sidebarWorking ? { expression: unsure } : {})}
       />
       {still && moving ? <ThoughtDots color={workingDot(name, hue, tone)} size={size} /> : null}

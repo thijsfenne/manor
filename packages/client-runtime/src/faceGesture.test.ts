@@ -1,11 +1,11 @@
 import { blobatar } from '@manor/blobatar'
 import { describe, expect, it } from 'vitest'
-import { BLOB_FACE_TRAITS, BLOB_SHAPES, blobShapeTraits } from './blobShapes'
+import { BLOB_FACE_TRAITS, BLOB_SHAPES } from './blobShapes'
 import { GESTURES, fit, frameOf, margin, outlinePoints, plan, type Gesture, type GestureId } from './faceGesture'
 
 /** The head's parts out of the library's own markup, the way a client finds them. */
 function frame(name: string, shape: string) {
-  const markup = blobatar(name, { traits: { ...BLOB_FACE_TRAITS, ...blobShapeTraits(shape) } })
+  const markup = blobatar(name, { traits: BLOB_FACE_TRAITS, shape })
   const head = markup.slice(markup.indexOf('<g fill='), markup.lastIndexOf('<g fill='))
   const paths = [...head.matchAll(/<path d="([^"]+)"/g)].map((match) => match[1]!)
   const circles = [...head.matchAll(/<circle cx="([\d.-]+)" cy="([\d.-]+)" r="([\d.-]+)"/g)].map((match) => ({ cx: Number(match[1]), cy: Number(match[2]), r: Number(match[3]) }))

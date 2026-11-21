@@ -1,12 +1,12 @@
-import { _layout } from '@manor/blobatar'
+import { _layout, blobatar } from '@manor/blobatar'
+import { outlinePoints } from '@manor/client-runtime/face-gesture'
 import { describe, expect, it } from 'vitest'
-import { BLOB_FACE_TRAITS, BLOB_SHAPES, blobShapeOf, blobShapeTraits } from './blobShapes'
+import { BLOB_FACE_TRAITS, BLOB_SHAPES, blobShapeOf } from './blobShapes'
 
 /** What the library actually built at this trait position. */
 const shapeAt = (trait: number) => _layout('any name', { traits: { shape: trait } }).shape
 
-/** The position this table hands back to pin a silhouette. */
-const traitOf = (id: string) => blobShapeTraits(id)?.shape ?? -1
+const banded = BLOB_SHAPES.filter((shape) => shape.from !== undefined)
 
 describe('blobatar shapes', () => {
   it('pins the shared body and eye proportions', () => {
@@ -35,26 +35,25 @@ describe('blobatar shapes', () => {
     }
   })
 
-  it('names every silhouette the library can build, and no more', () => {
+  it('names every silhouette a name can come out as, and no more', () => {
     const built = new Set(Array.from({ length: 1001 }, (_, step) => shapeAt(step / 1000)))
 
-    expect(new Set(BLOB_SHAPES.map((shape) => shape.id))).toEqual(built)
+    expect(new Set(banded.map((shape) => shape.id))).toEqual(built)
+  })
+
+  it('draws every silhouette by name, the chosen-only ones included', () => {
+    for (const shape of BLOB_SHAPES) expect(_layout('any name', { shape: shape.id }).shape).toBe(shape.id)
+    // A name this build does not know draws the seeded shape.
+    expect(_layout('Smith', { shape: 'rhombus' }).shape).toBe(_layout('Smith', {}).shape)
   })
 
   // The bands are the whole contract with the library: a retuned one moves a persona
   // to a neighbouring silhouette without anything failing to compile.
   it('starts every band where the library starts it', () => {
-    for (const [index, shape] of BLOB_SHAPES.entries()) {
-      expect(shapeAt(shape.from)).toBe(shape.id)
-      if (index > 0) expect(shapeAt(shape.from - 0.001)).not.toBe(shape.id)
-    }
-  })
-
-  it('pins a chosen silhouette clear of its band edges', () => {
-    for (const shape of BLOB_SHAPES) {
-      expect(shapeAt(traitOf(shape.id))).toBe(shape.id)
-      expect(shapeAt(traitOf(shape.id) - 0.004)).toBe(shape.id)
-      expect(shapeAt(traitOf(shape.id) + 0.004)).toBe(shape.id)
+    for (const [index, shape] of banded.entries()) {
+      const from = shape.from ?? 0
+      expect(shapeAt(from)).toBe(shape.id)
+      if (index > 0) expect(shapeAt(from - 0.001)).not.toBe(shape.id)
     }
   })
 
@@ -64,6 +63,31 @@ describe('blobatar shapes', () => {
     for (let seed = 0; seed < 200; seed += 1) {
       const name = `Agent ${seed}`
       expect(blobShapeOf(name)?.id).toBe(_layout(name, {}).shape)
+    }
+  })
+
+  // A working face clips its moving eyes to the core path alone, so eyes outside it
+  // would be cut off mid-loop while the head around them still shows.
+  it('keeps the eyes inside the core path of every silhouette', () => {
+    const inside = (pts: ReadonlyArray<readonly [number, number]>, [x, y]: readonly [number, number]) => {
+      let hit = false
+      for (let i = 0, j = pts.length - 1; i < pts.length; j = i, i += 1) {
+        const [xi, yi] = pts[i]!
+        const [xj, yj] = pts[j]!
+        if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) hit = !hit
+      }
+      return hit
+    }
+    for (const shape of BLOB_SHAPES) {
+      for (const name of ['Jeeves', 'Smith', 'Wren']) {
+        const markup = blobatar(name, { traits: BLOB_FACE_TRAITS, shape: shape.id })
+        const [head = '', eyes = ''] = [...markup.matchAll(/<g fill="[^"]+">(.*?)<\/g>/g)].map((group) => group[1] ?? '')
+        const paths = (group: string) => [...group.matchAll(/<path d="([^"]+)"/g)].map((path) => path[1] ?? '')
+        const outline = outlinePoints(paths(head).slice(-1), [])
+        const eyePoints = outlinePoints(paths(eyes), [])
+        expect(eyePoints.length).toBeGreaterThan(0)
+        for (const point of eyePoints) expect(inside(outline, point), `${shape.id} on ${name}`).toBe(true)
+      }
     }
   })
 
@@ -78,10 +102,5 @@ describe('blobatar shapes', () => {
     expect(BLOB_SHAPES.filter((shape) => shape.lift !== undefined).map((shape) => shape.id)).toEqual([
       'triangle',
     ])
-  })
-
-  it('overrides nothing for a persona who has chosen nothing', () => {
-    expect(blobShapeTraits(undefined)).toBeUndefined()
-    expect(blobShapeTraits('rhombus')).toBeUndefined()
   })
 })

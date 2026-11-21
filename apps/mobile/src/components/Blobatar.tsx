@@ -1,5 +1,5 @@
 import { accentHue } from '@manor/client-runtime/accent-hue'
-import { BLOB_FACE_TRAITS, DEFAULT_BLOB_TONE, SIDEBAR_WORKING_GAZE, WORKING_GAZE, blobShapeOf, blobShapeTraits } from '@manor/client-runtime/blob-shapes'
+import { BLOB_FACE_TRAITS, DEFAULT_BLOB_TONE, SIDEBAR_WORKING_GAZE, WORKING_GAZE, blobShapeOf } from '@manor/client-runtime/blob-shapes'
 import { BUSY_LOOK, DOT, order, timeline, type Key, type Pair } from '@manor/client-runtime/busy-face'
 import { EYE_MOVE_MS, FACE_LOOK, scanStops, seesawStops, towardStops, type FaceLook, type FaceState } from '@manor/client-runtime/face-activity'
 import { frameOf, outlinePoints, plan, type GestureId } from '@manor/client-runtime/face-gesture'
@@ -104,8 +104,7 @@ export function Blobatar({ name, color, src, shape, tone = DEFAULT_BLOB_TONE, si
   const worn = blobShapeOf(name, shape)
   const face = useMemo(() => {
     if (portrait) return null
-    const chosen = blobShapeTraits(shape)
-    const traits = { ...BLOB_FACE_TRAITS, ...chosen, ...(sidebarWorking ? SIDEBAR_WORKING_GAZE : working ? WORKING_GAZE : {}) }
+    const traits = { ...BLOB_FACE_TRAITS, ...(sidebarWorking ? SIDEBAR_WORKING_GAZE : working ? WORKING_GAZE : {}) }
     return takeApart(
       _parts(name, {
         size,
@@ -113,6 +112,7 @@ export function Blobatar({ name, color, src, shape, tone = DEFAULT_BLOB_TONE, si
         animate: 'always',
         ...(hue === undefined ? {} : { hue }),
         traits,
+        ...(shape === undefined ? {} : { shape }),
         ...(pose !== undefined ? { expression: POSES[pose] } : working || sidebarWorking ? { expression: unsure } : {}),
       }),
       size,

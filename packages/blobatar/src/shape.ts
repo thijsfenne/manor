@@ -186,18 +186,21 @@ export function polygon({ cx, cy, rx, ry, sides, round = 0.3, rot = 0 }: Polygon
 }
 
 /**
- * The straight run of a capsule, as a plain box.
- *
- * Drawn with the two cap circles the capsule already decorates with, the union
- * is an exact stadium: the box reaches full height everywhere, so each cap
- * meets it along its own diameter and there is no crease. A superellipse cannot
- * stand in — its corners round by a fraction of the whole radius, so it pinches
- * away from the caps and the join shows.
+ * A stadium: a box `rx` wide each way with round ends of radius `ry`, in one path.
+ * One path rather than a box and two cap circles, because a working face clips its
+ * moving eyes to a silhouette's core path, and eyes that reach into an end must
+ * stay inside it. Each end is two quarter cubics, which meet the straight sides
+ * without a crease.
  */
-export function box(cx: number, cy: number, rx: number, ry: number): string {
-  const l = r2(cx - rx);
-  const r = r2(cx + rx);
-  return `M${l} ${r2(cy - ry)}H${r}V${r2(cy + ry)}H${l}Z`;
+export function stadium(cx: number, cy: number, rx: number, ry: number): string {
+  const [l, r, k] = [cx - rx + ry, cx + rx - ry, 0.5523 * ry];
+  const [top, bottom] = [cy - ry, cy + ry];
+  const p = (x: number, y: number) => `${r2(x)} ${r2(y)}`;
+  return `M${p(l, top)}H${r2(r)}` +
+    `C${p(r + k, top)} ${p(r + ry, cy - k)} ${p(r + ry, cy)}` +
+    `C${p(r + ry, cy + k)} ${p(r + k, bottom)} ${p(r, bottom)}H${r2(l)}` +
+    `C${p(l - k, bottom)} ${p(l - ry, cy + k)} ${p(l - ry, cy)}` +
+    `C${p(l - ry, cy - k)} ${p(l - k, top)} ${p(l, top)}Z`;
 }
 
 /**

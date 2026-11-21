@@ -91,7 +91,7 @@ export function _layout(name: string, opts: BlobatarOptions = {}) {
   // The cast is private and deliberately narrow: the package style has the
   // body/eyes shape the geometry tests inspect, while `Style` itself remains
   // generic for the renderer.
-  const l = style.layout(t) as Layout;
+  const l = style.layout(t, opts.shape) as Layout;
   // Posed here rather than by the caller, so the geometry tests assert against
   // the same numbers the static renderer draws. Only the baked half comes back:
   // the body-level `transform` is the renderer's business, and the test that

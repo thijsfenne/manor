@@ -36,7 +36,9 @@ export interface Traits {
  * There is nothing a seed can express that an override cannot, and nothing an
  * override can express that a seed could not have.
  *
- * The corollary is that this is the *only* configuration seam. The layout
+ * The corollary is that this is the only seam into the layout's numbers. The one
+ * other option that reaches the layout is `shape`, which names a silhouette, the
+ * chosen-only ones included, and leaves every number to the traits. The layout
  * function itself stays private: its return shape, its containment arithmetic
  * and its per-shape decoration would all become public API, and a caller who
  * replaced it would be one arithmetic slip away from eyes outside the body.

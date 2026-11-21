@@ -4,6 +4,7 @@ What changed for someone who uses Manor, newest first. A version is a tag on `ma
 
 ## Unreleased
 
+- A persona's face has five new shapes to choose from: clover, flower, star, heart and ghost. Only a face you give one of them wears it, so no existing face changes shape. The cloud is redrawn as a flat-bottomed cloud with three puffs instead of a lumpy blob. The capsule no longer cuts off its eyes while it works. On the Mac, the web and the phone; the phone needs a new build.
 - The desktop app has dictation. A microphone button beside send in the composer records your voice, shows the sound as it comes in, and ✓ puts the text at the cursor for you to edit; nothing is sent until you press send. ✕ or Esc throws the recording away. Speech is turned into text on your Mac by a model you download once, with no account or key. Settings → Voice lists the models (Whisper Turbo, the default and the most accurate for Dutch, and Parakeet TDT 0.6B v3, which is near instant), the language you speak and the microphone to record from. The first press on the microphone offers the download.
 - In a direct message, your bubbles are always a vivid colour in the hue of the face you talk to, whatever tone the face wears. Yellow and olive faces get a warm orange or a green bubble instead of a muddy brown one. On the Mac, the web and the phone.
 - The light at the top left of a persona's face is fainter and spreads wider over the head, so it reads as light falling on the face instead of a spot on it. On the Mac, the web and the phone.

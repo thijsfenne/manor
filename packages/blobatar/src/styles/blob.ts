@@ -1,6 +1,6 @@
 import { compose, faceFit, type Band } from "./compose";
 import {
-  boxy, capsule, cloud, droplet, hexagon, nub, organic, round, sun, triangle,
+  boxy, capsule, cloud, clover, droplet, flower, ghost, heart, hexagon, nub, organic, round, star, sun, triangle,
 } from "./shapes";
 
 /**
@@ -15,4 +15,10 @@ const BANDS: Band[] = [
   [cloud, 0.86], [droplet, 0.915], [hexagon, 0.95], [sun, 0.98], [triangle, 1],
 ];
 
-export const style = compose(BANDS, faceFit);
+/**
+ * Manor's own silhouettes, outside the bands: no name comes out as one, so adding
+ * them moved no face. They are drawn only when the `shape` option names them.
+ */
+const CHOSEN = [flower, clover, star, heart, ghost];
+
+export const style = compose(BANDS, faceFit, CHOSEN);

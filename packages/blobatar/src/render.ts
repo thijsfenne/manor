@@ -41,6 +41,12 @@ export interface BlobatarOptions {
    * units. Those win: `hue` is degrees, `traits.hue` is a 0–1 position.
    */
   traits?: TraitOverrides;
+  /**
+   * Draws this silhouette by name, ahead of the `shape` trait. The only way to
+   * reach a silhouette that sits outside the band table; an unknown name falls
+   * back to the trait.
+   */
+  shape?: string;
   /** Applies NFC + trim + lowercase to the name. Default true. */
   normalize?: boolean;
   /** Enforces the minimum contrast ratios. Default true. */
@@ -105,7 +111,8 @@ export interface BlobatarOptions {
 }
 
 export interface Style<L> {
-  layout(t: Traits): L;
+  /** `shape` is the `shape` option, a silhouette asked for by name. */
+  layout(t: Traits, shape?: string): L;
   /**
    * `mo` is set when animating, absent otherwise. It is a flag rather than the
    * root class it used to be: the root `<g>` is the caller's now, because a
@@ -257,7 +264,7 @@ export function makeBlobatar<L>(style: Style<L>) {
     const { t, palette } = resolve(name, opts);
     const p = tinted(palette, opts.expression);
     const dim = opts.size ? ` width="${opts.size}" height="${opts.size}"` : "";
-    const pose = posed(style.layout(t), opts);
+    const pose = posed(style.layout(t, opts.shape), opts);
     // The pose wraps the figure but not the backdrop, for the same reason the
     // motion groups sit inside `style.render` — a plate that scales and leans
     // with the creature stops being a plate. The finish's defs stay out for the same reason.
@@ -302,7 +309,7 @@ export function makeParts<L>(style: Style<L>) {
   ) => {
     const { t, palette: p } = resolve(name, opts);
     const mo = motion?.(t, p);
-    const pose = posed(style.layout(t), opts, mo);
+    const pose = posed(style.layout(t, opts.shape), opts, mo);
     const figure = style.render(pose.l, p, !!mo, shade(opts));
 
     return {

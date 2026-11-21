@@ -41,30 +41,29 @@ export const BLOB_FACE_TRAITS = {
 } as const
 
 /**
- * The ten silhouettes a blobatar can be built on.
+ * The silhouettes a blobatar can be built on.
  *
- * The library picks one from a `shape` trait: a position in [0, 1) read through a
- * table of bands, not an index, and the bands are not equal widths — `round` covers
- * the first fifth and `triangle` the last fiftieth. `from` is where each band
- * starts, probed off the library rather than typed from its source, which is what
- * lets this file answer both questions the UI has: which silhouette a name comes
- * out as, and which position to hand back to pin one. `blobShapes.test` re-probes
- * the whole table and fails if a band moves.
+ * The first ten are the library's banded ones: a name with no chosen shape comes out
+ * as one of them, read from its `shape` trait, a position in [0, 1) through a table
+ * of bands that are not equal widths. `from` is where each band starts, probed off
+ * the library rather than typed from its source, so this file can say which
+ * silhouette a name comes out as. `blobShapes.test` re-probes the table and fails
+ * if a band moves. The last five have no band, so no name ever comes out as one and
+ * adding them moved no face; they are drawn only when chosen.
  *
- * Their names are the library's, kept as they are: what a persona wears should be
- * findable in the library's own docs when someone goes looking.
+ * A chosen shape reaches the library by name, through its `shape` option.
  */
 export interface BlobShape {
   id: string
   label: string
-  /** Where this silhouette's band starts in the `shape` trait. */
-  from: number
+  /** Where this silhouette's band starts in the `shape` trait; absent for a chosen-only one. */
+  from?: number
   /**
    * How far down the face has to move to sit level with a name beside it, in
    * viewBox units.
    *
-   * Nine of the ten silhouettes draw their ink centred in the viewBox and need
-   * nothing. `triangle` does not: its ink sits from y≈14 to y≈72, seven units high
+   * Most silhouettes draw their ink centred in the viewBox and need nothing.
+   * `triangle` does not: its ink sits from y≈14 to y≈72, seven units high
    * of centre, so in a row it floats above the text it is labelling. Measured with
    * `getBBox()` on every group but the eyes, over eight seeds per shape; redo it
    * that way if a major of the library ever moves a body.
@@ -83,13 +82,12 @@ export const BLOB_SHAPES: readonly BlobShape[] = [
   { id: 'hexagon', label: 'Hexagon', from: 0.915 },
   { id: 'sun', label: 'Sun', from: 0.95 },
   { id: 'triangle', label: 'Triangle', from: 0.98, lift: 7 },
+  { id: 'clover', label: 'Clover' },
+  { id: 'flower', label: 'Flower' },
+  { id: 'star', label: 'Star' },
+  { id: 'heart', label: 'Heart' },
+  { id: 'ghost', label: 'Ghost' },
 ]
-
-/** The middle of a silhouette's band, which is the position that pins it. */
-const middleOf = (index: number) => {
-  const start = BLOB_SHAPES[index]?.from ?? 0
-  return (start + (BLOB_SHAPES[index + 1]?.from ?? 1)) / 2
-}
 
 const found = (shape: string | undefined) => BLOB_SHAPES.find((option) => option.id === shape)
 
@@ -106,15 +104,5 @@ export function blobShapeOf(name: string, chosen?: string): BlobShape | undefine
   const pick = found(chosen)
   if (pick !== undefined) return pick
   const position = traits(name)('shape')
-  return [...BLOB_SHAPES].reverse().find((option) => position >= option.from)
-}
-
-/**
- * The trait override for a chosen silhouette, or nothing at all for a persona who
- * has not chosen one: an absent override is what leaves the name picking her shape,
- * which is the whole of the fallback.
- */
-export function blobShapeTraits(shape: string | undefined) {
-  const index = BLOB_SHAPES.findIndex((option) => option.id === shape)
-  return index === -1 ? undefined : { shape: middleOf(index) }
+  return [...BLOB_SHAPES].reverse().find((option) => option.from !== undefined && position >= option.from)
 }

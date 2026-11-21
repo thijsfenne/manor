@@ -11,11 +11,11 @@ const hexes = (markup: string) => new Set(markup.match(/#[0-9a-f]{6}\b/gi))
 
 describe('the clay finish', () => {
   it('keeps the flat default output fixed', () => {
-    // FNV-1a over fifty default faces, retaken when the eyes became ovals and some were lifted. A change
+    // FNV-1a over fifty default faces, retaken when cloud and capsule became one stadium core. A change
     // to the layout ranges moves it; a change to the finish must not.
     let hash = 2166136261
     for (let i = 0; i < 50; i++) for (const c of blobatar(`p${i}`, { size: 24 })) hash = Math.imul(hash ^ c.charCodeAt(0), 16777619) >>> 0
-    expect(hash.toString(16)).toBe('1ad2fc2e')
+    expect(hash.toString(16)).toBe('d27a9245')
     expect(blobatar('Wren', { shading: undefined, idPrefix: 'x' })).toBe(blobatar('Wren'))
   })
 

@@ -6,7 +6,7 @@ import { FACE_LOOK, type FaceState } from '@manor/client-runtime/face-activity'
 import { GESTURES, type GestureId } from '@manor/client-runtime/face-gesture'
 import { useEffect, useId, useRef, useState } from 'react'
 import { accentHue } from '../accent'
-import { BLOB_FACE_TRAITS, BLOB_SHAPES, BLOB_TONES, DEFAULT_BLOB_TONE, SIDEBAR_WORKING_GAZE, WORKING_GAZE, blobShapeTraits } from '../blobShapes'
+import { BLOB_FACE_TRAITS, BLOB_SHAPES, BLOB_TONES, DEFAULT_BLOB_TONE, SIDEBAR_WORKING_GAZE, WORKING_GAZE } from '../blobShapes'
 import { ThoughtDots } from '../components/Avatar'
 import { Icon } from '../components/Icon'
 import { Button } from '../components/ui/Button'
@@ -291,7 +291,7 @@ function Face({ settings }: { settings: Settings }) {
   const look = settings.moment === '' || !animate ? undefined : FACE_LOOK[settings.moment as FaceState]
   const working = look === undefined && mode === 'working'
   const sidebarWorking = look === undefined && mode === 'sidebar'
-  const traits = { ...settings.traits, ...blobShapeTraits(shape), ...(sidebarWorking ? SIDEBAR_WORKING_GAZE : working ? WORKING_GAZE : {}) }
+  const traits = { ...settings.traits, ...(sidebarWorking ? SIDEBAR_WORKING_GAZE : working ? WORKING_GAZE : {}) }
   const expression =
     look !== undefined
       ? look.pose === undefined ? undefined : poses[look.pose]
@@ -305,7 +305,7 @@ function Face({ settings }: { settings: Settings }) {
   const dot = palette(hue ?? seedTraits(name)('hue') * 360, true, tone).head ?? 'var(--accent-fg)'
   const slot = useRef<HTMLSpanElement>(null)
   const busy = animate && (look === undefined ? mode === 'busy' : look.eyes === 'loop' || look.eyes === 'dots')
-  const drawn = JSON.stringify([name, color, tone, traits, size])
+  const drawn = JSON.stringify([name, color, tone, traits, shape, size])
   const run = useBusyFace(slot, busy, look?.eyes === 'dots' ? { ...settings.busy, variation: 'dots', dots: true } : settings.busy, drawn)
   const gesture = look === undefined ? settings.gesture : (look.gesture ?? '')
   useFaceGesture(slot, animate && gesture !== '' ? (gesture as GestureId) : undefined, drawn, look?.passes)
@@ -339,6 +339,7 @@ function Face({ settings }: { settings: Settings }) {
           tone={tone}
           shading="clay"
           traits={traits}
+          {...(shape === '' ? {} : { shape })}
           {...(animate ? { animate: 'always' as const } : {})}
           {...(hue === undefined ? {} : { hue })}
           {...(expression === undefined ? {} : { expression })}
