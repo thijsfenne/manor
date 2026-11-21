@@ -834,9 +834,11 @@ function projectScriptFor(input: TurnInput, request: typeof fetch): MockWorkStep
           }),
           signal,
         })
-        const body = await response.json().catch(() => undefined) as { error?: string } | undefined
+        const body = await response.json().catch(() => undefined) as { error?: string; result?: { workChatId?: string | null } } | undefined
         if (!response.ok) throw new Error(body?.error ?? `HTTP ${response.status}`)
-        return 'Started the session for that brief.'
+        return typeof body?.result?.workChatId === 'string'
+          ? `Session “${brief[2]!.trim()}” has started.`
+          : `Session “${brief[2]!.trim()}” could not start; its card waits for your Accept.`
       },
     }
   }

@@ -97,6 +97,8 @@ interface ProjectModuleOptions {
   welcomeProject?: (projectId: string) => void
   removeProjectThread: (projectId: string) => Promise<void>
   onChatsDeleted?: (chatIds: readonly string[]) => void
+  /** A card Manor is accepting on its own stays out of the directory until it has started. */
+  isStartingHandoff?: (handoffId: string) => boolean
 }
 
 interface ProjectReplyContext {
@@ -874,11 +876,16 @@ export class ProjectModule {
   private async loadDirectory(remember: 'none' | 'merge' | 'replace'): Promise<ServerMessage> {
     // Taken before the read: a child whose end saves meanwhile leaves the set but not these rows.
     const stopping = new Set(this.options.orchestrator.subagents.stoppingIds())
-    const [projects, chats, workHandoffs] = await Promise.all([
+    const [projects, allChats, allHandoffs] = await Promise.all([
       this.options.store.listProjects(),
       this.options.store.listChats(),
       this.options.store.listWorkHandoffs(),
     ])
+    // A card held while it starts stays out with its new Session. Judged as read, since it
+    // may be released before this directory goes out.
+    const held = allHandoffs.filter((handoff) => this.options.isStartingHandoff?.(handoff.id) === true)
+    const workHandoffs = allHandoffs.filter((handoff) => !held.includes(handoff))
+    const chats = allChats.filter((chat) => !held.some((handoff) => handoff.workChatId === chat.id))
     if (remember === 'replace') {
       this.knownChats = chats
     } else if (remember === 'merge') {

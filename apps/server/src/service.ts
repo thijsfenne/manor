@@ -524,6 +524,7 @@ export class ManorService {
       orchestrator: this.orchestrator,
       ...(options.worktreesRoot === undefined ? {} : { worktreesRoot: options.worktreesRoot }),
       broadcast: options.broadcast,
+      isStartingHandoff: (handoffId) => this.workModule.isStarting(handoffId),
       // Creating a project in the sidebar is what gives it a thread and its setup.
       setupProject: async (projectId, threadRuntime) => {
         await this.projectThreads.create(projectId, { seed: false, broadcast: false, ...(threadRuntime === undefined ? {} : { runtime: threadRuntime }) })

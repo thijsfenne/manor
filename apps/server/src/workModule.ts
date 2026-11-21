@@ -259,6 +259,8 @@ export class WorkModule {
   private readonly creationTails = new Map<string, Promise<void>>()
   /** Manual lifecycle writes stay ordered while their outcome writer is running. */
   private readonly lifecycleTails = new Map<string, Promise<void>>()
+  /** Thread cards for a forwarded brief that Manor is accepting on its own; clients never see them pending. */
+  private readonly starting = new Set<string>()
   private readonly lifecycleVersions = new Map<string, number>()
   /**
    * The newest Settle or Unsettle the user asked for per Chat, held from the click until
@@ -314,7 +316,9 @@ export class WorkModule {
       : this.options.agents().find((agent) => agent.id === context.agentId)
     if (author === undefined) throw new Error('The handoff author no longer exists.')
     // The runtime choice is the project thread's own; persona cards keep the house default.
-    const runtimeProposal = proposedRuntime(input, this.options.offModels?.())
+    // A thread's card for a forwarded brief starts at once with the runtime the user chose in the DM.
+    const briefCard = threadAuthor && input.assignmentKey.startsWith('brief-')
+    const runtimeProposal = briefCard ? undefined : proposedRuntime(input, this.options.offModels?.())
     if (runtimeProposal !== undefined && !threadAuthor) {
       throw new Error('Only a project thread proposes a runtime. Leave provider, model, effort and runtimeReason out.')
     }
@@ -361,7 +365,8 @@ export class WorkModule {
     const replaces = await this.pendingRevisions(source.id, input.assignmentKey, context.turnId)
     // Holding each replaced proposal's lifecycle keeps a racing Accept or Reject on it
     // from starting the old version: whichever runs first, the other sees its outcome.
-    return this.orderLifecycles(replaces.map((row) => row.id), async () => {
+    let reservedId: string | undefined
+    const created = await this.orderLifecycles(replaces.map((row) => row.id), async () => {
       const pending = await this.pendingRevisions(source.id, input.assignmentKey, context.turnId)
       const revision = Math.max(0, ...pending.map((row) => row.revision ?? 1)) + 1
       const reservation = await store.reserveWorkHandoff({
@@ -384,9 +389,11 @@ export class WorkModule {
         ...(runtimeProposal === undefined ? {} : { proposedRuntime: runtimeProposal }),
         ...(attachments.length === 0 ? {} : { attachments }),
       })
-      if (reservation.handoff.state === 'deleted') return this.toolResult(reservation.handoff, true)
+      if (reservation.handoff.state === 'deleted') return { saved: reservation.handoff, reused: true, unpublished: false, replaced: false }
       let saved = reservation.handoff
       const unpublished = saved.version === 0
+      // Out of every directory read until it has started or failed: see below.
+      if (unpublished && briefCard) { reservedId = saved.id; this.starting.add(saved.id) }
       if (unpublished) {
         const team = supporting.length === 0 ? '' : ` Starting team: ${supporting.map((agent) => agent.name).join(', ')}.`
         const label = (saved.revision ?? 1) > 1 ? ` (v${saved.revision})` : ''
@@ -399,29 +406,46 @@ export class WorkModule {
           workHandoffId: saved.id,
           workHandoffPhase: 'created',
         })
-        await this.broadcastReceipt(saved).catch(() => undefined)
+        if (!briefCard) await this.broadcastReceipt(saved).catch(() => undefined)
       }
       // A retry finishes a replacement an earlier attempt left half done, never a closed one.
       const replacing = awaitingAccept(saved) ? pending : []
       for (const row of replacing) await this.supersede(row, saved)
-      if (unpublished || replacing.length > 0) await this.options.broadcastDirectory().catch(() => undefined)
       if (unpublished && threadAuthor && this.options.projectThreads !== undefined) {
         const published = saved
         // Before the call returns, so the thread sees its Session's row in the same turn.
         await this.options.projectThreads.noteProposal(published)
           .catch((error: unknown) => console.warn(`[manor] Notes row for “${published.title}” could not be written`, error))
-        // After this call's lifecycle hold: accepting takes the new proposal's own.
-        void Promise.resolve().then(() => this.options.projectThreads?.proposed(published)).catch(async (error: unknown) => {
-          const event = await store.appendEvent(published.sourceChatId, {
-            type: 'system_note', kind: 'error',
-            text: `Could not start “${published.title}” for the brief: ${error instanceof Error ? error.message : String(error)}`,
-          })
-          this.options.broadcast({ type: 'event', chatId: published.sourceChatId, event })
-        }).catch(() => undefined)
       }
-      const replaced = (await store.listWorkHandoffs()).filter((row) => row.supersededById === saved.id)
-      return this.toolResult(saved, !reservation.created, replaced.at(-1)?.id)
+      return { saved, reused: !reservation.created, unpublished, replaced: replacing.length > 0 }
+    }).catch((error: unknown) => {
+      if (reservedId !== undefined) this.starting.delete(reservedId)
+      throw error
     })
+    let { saved } = created
+    // A card for a forwarded brief is accepted before anyone sees it, so it never shows as
+    // pending. After this call's lifecycle hold: accepting takes the new proposal's own.
+    // A card that cannot start goes out pending, with the error after it.
+    let failure: string | undefined
+    if (briefCard && created.unpublished) {
+      try {
+        failure = await this.options.projectThreads?.proposed(saved).then(() => undefined,
+          (error: unknown) => error instanceof Error ? error.message : String(error))
+        saved = await this.handoffFor(saved.id)
+      } finally {
+        this.starting.delete(saved.id)
+      }
+      await this.broadcastReceipt(saved).catch(() => undefined)
+    }
+    if (created.unpublished || created.replaced) await this.options.broadcastDirectory().catch(() => undefined)
+    if (failure !== undefined) {
+      const event = await store.appendEvent(saved.sourceChatId, {
+        type: 'system_note', kind: 'error', text: `Could not start “${saved.title}” for the brief: ${failure}`,
+      }).catch(() => undefined)
+      if (event !== undefined) this.options.broadcast({ type: 'event', chatId: saved.sourceChatId, event })
+    }
+    const replaced = (await store.listWorkHandoffs()).filter((row) => row.supersededById === saved.id)
+    return this.toolResult(saved, created.reused, replaced.at(-1)?.id)
   }
 
   /** The attachments of the forwarded brief a `brief-<id>` card is made for, in the same project. */
@@ -457,6 +481,11 @@ export class WorkModule {
     const handoff = (await this.options.store.listWorkHandoffs()).find((row) => row.id === reference || row.workChatId === reference)
     if (handoff === undefined) throw new Error(`unknown work handoff for ${reference}`)
     return handoff
+  }
+
+  /** Whether this card is held out of the directory while it starts. */
+  isStarting(handoffId: string): boolean {
+    return this.starting.has(handoffId)
   }
 
   async accept(reference: string, options: WorkAcceptanceOptions = {}): Promise<string> {
@@ -577,7 +606,8 @@ export class WorkModule {
         }
         throw error
       }
-      await this.options.broadcastDirectory().catch(() => undefined)
+      // A held brief card goes out once, with its Session, when start_work releases it.
+      if (!this.starting.has(handoff.id)) await this.options.broadcastDirectory().catch(() => undefined)
       return chatId
     })
   }

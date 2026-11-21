@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, readFile, stat, writeFile } from 'node:fs/promises'
 import { execFileSync } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
-import { modelTextOf, type AgentConfig, type PreferenceSource, type ServerMessage, type UserInputAnswers } from '@manor/contracts'
+import { modelTextOf, type AgentConfig, type PreferenceSource, type ServerMessage, type UserInputAnswers, type WorkHandoff } from '@manor/contracts'
 import { describe, expect, it, vi } from 'vitest'
 import { applyThreadLineOp, archiveCompletedNotes, ensureProjectThreadFiles, newCard, PREFERENCES_BUDGET, preferencesBlock, projectThreadPaths } from '../src/projectFiles.js'
 import * as projectFiles from '../src/projectFiles.js'
@@ -36,6 +36,8 @@ async function harness(roster: readonly AgentConfig[] = agents) {
   const started: { chatId: string; origin: WorkOrigin }[] = []
   const endedTurns = new Set<string>()
   const queued: { chatId: string; message: ForwardedMessage }[] = []
+  /** What the work module sent clients, in order: directory snapshots and transcript events. */
+  const timeline: ({ directory: WorkHandoff[] } | { message: ServerMessage })[] = []
   let threads!: ProjectThreads
   const work = new WorkModule({
     store,
@@ -50,8 +52,9 @@ async function harness(roster: readonly AgentConfig[] = agents) {
       runStoredUserMessage: async () => undefined,
       runExclusive: <T>(_chatId: string, fn: () => Promise<T>) => fn(),
     },
-    broadcast: (message) => sent.push(message),
-    broadcastDirectory: async () => undefined,
+    broadcast: (message) => { sent.push(message); timeline.push({ message }) },
+    // Like the real directory, which leaves out a card held while it starts.
+    broadcastDirectory: async () => { timeline.push({ directory: (await store.listWorkHandoffs()).filter((row) => !work.isStarting(row.id)) }) },
     projectThreads: {
       forwardBrief: (handoff, options, task) => threads.forwardBrief(handoff, options, task),
       proposed: (handoff) => threads.proposed(handoff),
@@ -106,7 +109,7 @@ async function harness(roster: readonly AgentConfig[] = agents) {
     })
     return (await store.listWorkHandoffs()).find((row) => row.sourceChatId === threadChatId && row.assignmentKey === assignmentKey)!
   }
-  return { root, store, projectId, looseChatId, threads, work, wakes, answered, awaiting, sent, started, queued, threadChatId, paths, endedTurns, acceptBrief, propose, threadOptions }
+  return { root, store, projectId, looseChatId, threads, work, wakes, answered, awaiting, sent, started, queued, timeline, threadChatId, paths, endedTurns, acceptBrief, propose, threadOptions }
 }
 
 /** A session the thread proposed and the user accepted. */
@@ -1418,6 +1421,67 @@ describe('DM briefs and reports', () => {
     // A retry of the DM Accept answers with the thread and starts nothing new.
     expect(await h.work.accept(brief.id, { mode: 'house' })).toBe(h.threadChatId)
     expect(h.started).toHaveLength(1)
+  })
+
+  it('never sends the brief card as pending, and starts it on the DM runtime whatever the thread passes', async () => {
+    const h = await harness()
+    const opus = { driver: 'claude', model: 'claude-opus-5-5', effort: 'xhigh' } as const
+    const brief = await h.acceptBrief('export', { mode: 'single', runtime: opus })
+    expect(await wakeText(h.wakes.at(-1))).toContain('Pass no provider, model, effort or runtimeReason')
+    const from = h.timeline.length
+    const result = await h.work.useTool({ chatId: h.threadChatId, agentId: '__single__', turnId: 'thread_brief' }, {
+      assignmentKey: `brief-${brief.id}`, project: h.projectId, title: 'Export button', task: 'Add an export button.',
+      provider: 'claude', model: 'claude-sonnet-5-5', effort: 'high', runtimeReason: 'small UI change',
+    }) as { workChatId: string | null; proposedRuntime?: unknown }
+    // The thread reads a started Session, not a proposal of its own runtime.
+    expect(result.workChatId).not.toBeNull()
+    expect(result.proposedRuntime).toBeUndefined()
+    const card = (await h.store.listWorkHandoffs()).find((row) => row.assignmentKey === `brief-${brief.id}`)!
+    const sent = h.timeline.slice(from)
+    const rows = sent.flatMap((entry) => 'directory' in entry ? entry.directory.filter((row) => row.id === card.id && row.version > 0) : [])
+    expect(rows.length).toBeGreaterThan(0)
+    expect(rows.every((row) => row.acceptedAt !== null)).toBe(true)
+    // Its receipt draws no card until the row arrives, and the row arrives started.
+    expect(sent.some((entry) => 'message' in entry && entry.message.type === 'event' &&
+      entry.message.event.type === 'system_note' && entry.message.event.workHandoffId === card.id)).toBe(true)
+    const chat = await h.store.getChat(card.workChatId!)
+    expect({ mode: chat?.mode, model: chat?.singleOverride?.model, effort: chat?.singleOverride?.effort }).toEqual({ mode: 'single', model: 'claude-opus-5-5', effort: 'xhigh' })
+    // With no runtime picked in the DM, the house default wins over the thread's proposal.
+    const k = await harness()
+    const plain = await k.acceptBrief('plain', { mode: 'single' })
+    const started = await k.work.useTool({ chatId: k.threadChatId, agentId: '__single__', turnId: 'thread_plain' }, {
+      assignmentKey: `brief-${plain.id}`, project: k.projectId, title: 'Export button', task: 'Add an export button.',
+      provider: 'claude', model: 'claude-sonnet-5-5', effort: 'high', runtimeReason: 'small UI change',
+    }) as { workChatId: string }
+    const house = await k.store.getChat(started.workChatId)
+    expect({ model: house?.singleOverride?.model, effort: house?.singleOverride?.effort }).toEqual({ model: 'claude-opus-5-5', effort: 'high' })
+  })
+
+  it('sends a brief card that cannot start as pending, with the error after it', async () => {
+    const h = await harness()
+    const brief = await h.acceptBrief('export')
+    // The thread's card cannot start.
+    let heldWhileStarting = false
+    const accept = vi.spyOn(h.work, 'accept').mockImplementationOnce(async (id) => {
+      heldWhileStarting = h.work.isStarting(id)
+      throw new Error('Wren is busy.')
+    })
+    const from = h.timeline.length
+    await h.propose(`brief-${brief.id}`)
+    accept.mockRestore()
+    const card = (await h.store.listWorkHandoffs()).find((row) => row.assignmentKey === `brief-${brief.id}`)!
+    expect(card.acceptedAt).toBeNull()
+    // Held out of the directory while it tried to start, then sent to clients pending.
+    expect(heldWhileStarting).toBe(true)
+    expect(h.work.isStarting(card.id)).toBe(false)
+    const sent = h.timeline.slice(from)
+    expect(sent.some((entry) => 'directory' in entry && entry.directory.some((row) => row.id === card.id && row.acceptedAt === null))).toBe(true)
+    const receipt = sent.findIndex((entry) => 'message' in entry && entry.message.type === 'event' &&
+      entry.message.event.type === 'system_note' && entry.message.event.workHandoffId === card.id)
+    const error = sent.findIndex((entry) => 'message' in entry && entry.message.type === 'event' &&
+      entry.message.event.type === 'system_note' && entry.message.event.kind === 'error' && entry.message.event.text.includes('Wren is busy.'))
+    expect(receipt).toBeGreaterThanOrEqual(0)
+    expect(error).toBeGreaterThan(receipt)
   })
 
   it('accepts only the card made for the brief, and runs the prompt the user edited', async () => {
