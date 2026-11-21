@@ -7,6 +7,7 @@ export * from './slackRichText.js'
 export * from './searchText.js'
 export * from './connectCard.js'
 export * from './remoteImages.js'
+export * from './vaultImages.js'
 export * from './webLinks.js'
 export * from './imageRefs.js'
 export * from './quoteRefs.js'
@@ -28,6 +29,7 @@ import {
 } from './composioApps.js'
 export * from './directoryPatch.js'
 import { SlackRichTextSchema, type SlackRichText } from './slackRichText.js'
+import { MAX_VAULT_IMAGE_BYTES, MAX_VAULT_IMAGE_NAME } from './vaultImages.js'
 
 // ---------------------------------------------------------------------------
 // Agents
@@ -4401,6 +4403,16 @@ const ClientMessageWireSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('create_vault_folder'), path: z.string().min(1).max(1_000) }),
   z.object({ type: z.literal('rename_vault_file'), requestId: z.string().min(1).max(120), path: z.string().min(1).max(1_000), newPath: z.string().min(1).max(1_000), baseRevision: z.string() }),
   z.object({ type: z.literal('read_vault_file'), path: z.string().min(1).max(1_000) }),
+  // A picture pasted or dropped into a note. The server writes it into Obsidian's
+  // attachment folder for `notePath` under a name no other vault picture has, and
+  // answers with that name, which the editor inserts as `![[name]]`.
+  z.object({
+    type: z.literal('save_vault_image'),
+    requestId: z.string().min(1).max(120),
+    notePath: z.string().min(1).max(1_000),
+    name: z.string().min(1).max(MAX_VAULT_IMAGE_NAME),
+    dataUrl: z.string().max(Math.ceil(MAX_VAULT_IMAGE_BYTES / 3) * 4 + 40).regex(/^data:image\/(png|jpeg|gif|webp|avif);base64,[A-Za-z0-9+/=]+$/),
+  }),
   // Moves one note or folder to Manor's trash, never a hard delete. The server decides
   // whether the path is a note or a folder, and refuses the root and anything hidden.
   z.object({ type: z.literal('delete_vault_entry'), requestId: z.string().min(1).max(120), path: z.string().min(1).max(1_000) }),
@@ -5273,7 +5285,27 @@ export const ServerMessageSchema = z.discriminatedUnion('type', [
   // already builds a tree from a path list, and because wikilink resolution needs
   // the whole list in memory anyway — server-side resolution would make every link
   // in a note a round trip.
-  z.object({ type: z.literal('vault_files'), files: z.array(z.string()), folders: z.array(z.string()).optional(), previews: z.record(z.string()).optional(), truncated: z.boolean() }),
+  // `images` maps every picture's vault path to its signed link, and `attachmentFolder`
+  // is Obsidian's `attachmentFolderPath` as written, so a client resolves `![[name.png]]`
+  // the way Obsidian does without asking. See vaultImages.ts.
+  z.object({
+    type: z.literal('vault_files'),
+    files: z.array(z.string()),
+    folders: z.array(z.string()).optional(),
+    previews: z.record(z.string()).optional(),
+    images: z.record(z.string()).optional(),
+    attachmentFolder: z.string().optional(),
+    truncated: z.boolean(),
+  }),
+  // The answer to one `save_vault_image`, to the asker only; the listing follows by broadcast.
+  z.object({
+    type: z.literal('vault_image_saved'),
+    requestId: z.string(),
+    result: z.union([
+      z.object({ status: z.literal('saved'), path: z.string(), name: z.string() }),
+      z.object({ status: z.literal('rejected'), message: z.string() }),
+    ]),
+  }),
   z.object({ type: z.literal('vault_folder_created'), path: z.string(), result: z.union([z.object({ status: z.literal('created') }), z.object({ status: z.literal('rejected'), message: z.string() })]) }),
   z.object({ type: z.literal('vault_file'), path: z.string(), result: RepoFileResultSchema }),
   z.object({ type: z.literal('vault_renamed'), requestId: z.string(), path: z.string(), newPath: z.string(), result: z.union([z.object({ status: z.literal('renamed'), revision: z.string() }), z.object({ status: z.literal('rejected'), message: z.string() })]) }),

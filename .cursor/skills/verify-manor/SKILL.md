@@ -140,7 +140,7 @@ Drive commands print one JSON line (`{"ok":true,…}`), `launch`, `doctor` and `
 | `scheme --value light\|dark` | The colour scheme the page sees; it stays until the next `scheme` or `launch` |
 | `clock --days-ago <n>` | Set the server's clock back `n` days, so what is sent next is stamped then; `0` puts it back. `launch --fresh` resets it |
 | `wheel <locator> [--dy -600]` | Real mouse wheel over that element; negative scrolls up |
-| `drag <locator> --dx <px> [--steps 20]` | Press, move by `dx` in steps, release: a panel's resize grip or a Browser tab |
+| `drag <locator> --dx <px> [--dy <px>] [--steps 20]` | Press, move by `dx` (and `dy`) in steps, release: a panel's resize grip, a Browser tab, a note picture |
 | `resize --width <px> [--height 800]` | Viewport size, for narrow-window layouts |
 | `wait-settle` | Quiet network + 400ms |
 | `cleanup` | Stop this Session's spike now |
@@ -152,6 +152,8 @@ Environment, set on `launch` (a changed value restarts the server or browser on 
 | `MANOR_VERIFY_PORT=<port>` | Pin the port (43180 to 43199, never 43182) instead of the first free one; then set it on every command |
 | `MANOR_VERIFY_VAULT_DIR=/tmp/<fixture>` | Fixture vault for Knowledge and search; must live under `/tmp` |
 | `MANOR_VERIFY_INIT_SCRIPT=<abs path>` | Script injected before page load, e.g. `stubs/desktop-browser.js` |
+
+Headless Chromium has no real clipboard. For a picture pasted or dropped into a Knowledge note, launch with `MANOR_VERIFY_INIT_SCRIPT=$PWD/.cursor/skills/verify-manor/stubs/paste-image.js`: with the caret in a note, `press --key Control+Alt+Shift+V` pastes a generated PNG; after `hover` on a spot in the note, `press --key Control+Alt+Shift+D` drops one there. Both go through the editor's own paste and drop handlers.
 
 Headless Chromium has no Electron preload, so the Browser shows no tabs. For the tab strip, launch with `MANOR_VERIFY_INIT_SCRIPT=$PWD/.cursor/skills/verify-manor/stubs/desktop-browser.js`; see `features/browser-tabs.md`.
 

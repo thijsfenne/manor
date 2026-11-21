@@ -4,7 +4,7 @@ import File01Icon from '@hugeicons/core-free-icons/File01Icon'
 import Globe02Icon from '@hugeicons/core-free-icons/Globe02Icon'
 import SquareIcon from '@hugeicons/core-free-icons/SquareIcon'
 import { HugeiconsIcon } from '@hugeicons/react-native'
-import { faviconSource, imageRefSpans, markdownImageSource, mentionSpans, quoteExcerpt, quoteRefSpans, webLinkOrigin, type AgentConfig, type InlineQuote, type SkillConfig } from '@manor/contracts'
+import { faviconSource, imageRefSpans, markdownImageSource, mentionSpans, quoteExcerpt, quoteRefSpans, VAULT_IMAGE_PATH, webLinkOrigin, type AgentConfig, type InlineQuote, type SkillConfig } from '@manor/contracts'
 import { personaOf } from '@manor/client-runtime/state'
 import { readWikilink } from '@manor/client-runtime/vault-notes'
 import MaskedView from '@react-native-masked-view/masked-view'
@@ -20,6 +20,7 @@ import { imageParts } from '@/components/markdownImageParts'
 import { sourceItemHref } from '@/components/sourceLinks'
 import { Text } from '@/components/Text'
 import { serverMediaUri } from '@/lib/connection'
+import { noteImageWidth } from '@/lib/noteImages'
 import { colors, fonts, radius, scrims, spacing, squircle } from '@/theme'
 
 /** A vault's `[[wikilinks]]`: which note a name means, and how to open the one it found. */
@@ -60,6 +61,7 @@ export const Markdown = memo(function Markdown({
   small = false,
   sources = sent === undefined,
   bleed = false,
+  vaultImages = false,
 }: {
   text: string
   agents: readonly AgentConfig[]
@@ -78,14 +80,22 @@ export const Markdown = memo(function Markdown({
    * scrolls to the screen's own edges instead of stopping at the column's padding.
    */
   bleed?: boolean
+  /**
+   * For a Knowledge note whose picture embeds were rewritten to the vault's signed
+   * links (`withVaultPictures`): a picture at `/media/vault/` then loads from the Mac
+   * itself. Off for a message, which keeps refusing every relative path.
+   */
+  vaultImages?: boolean
 }) {
   const blocks = parseBlocks(text)
   return (
     <SentContext.Provider value={sent}>
       <CitesSources.Provider value={sources}>
-        <View style={styles.body}>
-          {blocks.map((block, index) => <Block agents={agents} bleed={bleed} block={block} key={index} links={links} small={small} />)}
-        </View>
+        <VaultImages.Provider value={vaultImages}>
+          <View style={styles.body}>
+            {blocks.map((block, index) => <Block agents={agents} bleed={bleed} block={block} key={index} links={links} small={small} />)}
+          </View>
+        </VaultImages.Provider>
       </CitesSources.Provider>
     </SentContext.Provider>
   )
@@ -328,7 +338,7 @@ function Block({
         <View style={styles.imageParagraph}>
           {parts.map((part, index) => part.kind === 'text'
             ? <Text {...press} key={index} selectable style={[styles.paragraph, size, ink]}><Inline agents={agents} links={links} text={part.text} /></Text>
-            : <MarkdownImage alt={part.alt} href={part.href} key={index} src={part.src} />)}
+            : <MarkdownImage alt={part.alt} href={part.href} key={`${index}:${part.src}`} src={part.src} />)}
         </View>
       )
     }
@@ -554,6 +564,11 @@ const IMAGE_CAP = 280
 const IMAGE_LOADING_WIDTH = 360
 /** The page's side padding plus a sent bubble's own, both sides. */
 const IMAGE_INSET = 2 * spacing.lg + 2 * (spacing.md + 2)
+/** A note's picture while it loads and its own size is unknown: the height it holds. */
+const VAULT_LOADING_HEIGHT = 200
+
+/** True inside a Knowledge note, where `/media/vault/` links are the Mac's own pictures. */
+const VaultImages = createContext(false)
 
 /**
  * A picture written into a message. A remote one comes through the Mac, which fetches it
@@ -569,7 +584,12 @@ function MarkdownImage({ alt, src, href: link }: { alt: string; src: string; hre
   const screen = useWindowDimensions()
   const linkStyle = useLinkStyle()
   const { ink } = useLineProps()
-  const source = markdownImageSource(src)
+  const inNote = useContext(VaultImages)
+  const [column, setColumn] = useState<number>()
+  // A note's picture is read off its signed link: shown straight from the Mac, at the
+  // width its embed stored, and never wider than the column.
+  const vault = inNote && src.startsWith(VAULT_IMAGE_PATH) ? noteImageWidth(src) : undefined
+  const source = vault === undefined ? markdownImageSource(src) : vault.src
   const uri = source === undefined ? undefined : source.startsWith('data:') ? source : serverMediaUri(source)
   if (uri === undefined || failed) {
     const target = href ?? (/^https?:\/\//i.test(src) ? src : undefined)
@@ -583,14 +603,16 @@ function MarkdownImage({ alt, src, href: link }: { alt: string; src: string; hre
   // only as wide as its content, so its width says nothing until the picture claims one.
   // The window budget is what fits inside the narrowest bubble, a sent one.
   const widest = screen.width * 0.86 - IMAGE_INSET
-  const frame = natural === undefined
+  const frame = vault !== undefined
+    ? noteFrame(natural, vault.width, column ?? screen.width - 2 * spacing.lg)
+    : natural === undefined
     ? { width: Math.min(IMAGE_LOADING_WIDTH, widest), height: IMAGE_CAP }
     : (() => {
         const scale = Math.min(1, IMAGE_CAP / natural.height, widest / natural.width)
         return { width: natural.width * scale, height: natural.height * scale }
       })()
   return (
-    <View style={styles.imageRoom}>
+    <View onLayout={vault === undefined ? undefined : (event: LayoutChangeEvent) => setColumn(event.nativeEvent.layout.width)} style={styles.imageRoom}>
       <Pressable
         accessibilityHint={href === undefined ? 'Opens the image' : 'Opens the link'}
         accessibilityLabel={alt === '' ? 'Image' : alt}
@@ -612,6 +634,16 @@ function MarkdownImage({ alt, src, href: link }: { alt: string; src: string; hre
       {open ? <ImageViewer images={[{ name: alt === '' ? 'Image' : alt, src: uri }]} initialIndex={0} onClose={() => setOpen(false)} /> : null}
     </View>
   )
+}
+
+/**
+ * A note picture's box: the stored width, else its own width, held to the column, with the
+ * picture's ratio. Before it loads the box is as wide as it will be and holds a fixed height.
+ */
+function noteFrame(natural: { width: number; height: number } | undefined, stored: number | undefined, column: number) {
+  if (natural === undefined) return { width: Math.min(stored ?? column, column), height: VAULT_LOADING_HEIGHT }
+  const width = Math.min(stored ?? natural.width, column)
+  return { width, height: (width * natural.height) / natural.width }
 }
 
 /** False for text that cites nothing: a note, or a message the user wrote. Its links stay links. */

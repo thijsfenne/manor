@@ -1763,6 +1763,12 @@ const http = createServer((request, response) => {
     response.end(traced)
     return
   }
+  const vaultPicture = vaultImageBytes.get(icon.pathname)
+  if (vaultPicture !== undefined) {
+    response.writeHead(200, { 'content-type': 'image/png', 'content-length': String(vaultPicture.byteLength) })
+    response.end(vaultPicture)
+    return
+  }
   const listed = dmFileBytes.get(icon.pathname)
   if (listed !== undefined) {
     response.writeHead(200, { 'content-type': listed.type, 'content-length': String(listed.bytes.byteLength) })
@@ -1779,9 +1785,12 @@ const http = createServer((request, response) => {
 })
 /** The fixture vault: what Knowledge lists and what a note search finds. */
 const VAULT_NOTES = {
-  'Projects/Manor.md': '# Manor\n\nThe phone gets a native tab bar: Agents, Sessions, Knowledge and Search.\n\nOpen question: does the inbox need its own tab?',
+  'Projects/Manor.md': '# Manor\n\nThe phone gets a native tab bar: Agents, Sessions, Knowledge and Search.\n\n![[icon.png|240]]\n\nOpen question: does the inbox need its own tab?',
   'Daily/2026-11-16.md': '# 2026-11-16\n\n- Tab bar spike on the simulator\n- Inbox cleanup after lunch',
 }
+/** Pictures in the fixture vault, by vault path, as the Mac lists them with a signed link. */
+const VAULT_IMAGES = { 'Attachments/icon.png': '/media/vault/fixture/Attachments/icon.png' }
+const vaultImageBytes = new Map([['/media/vault/fixture/Attachments/icon.png', appImage('icon')]])
 /** Per-chat runtime pins set from the phone during this run. */
 const overrides = new Map()
 const server = new WebSocketServer({ server: http, path: '/ws' })
@@ -1818,7 +1827,7 @@ server.on('connection', (socket) => {
       return
     }
     if (message.type === 'list_vault') {
-      send(socket, { type: 'vault_files', files: Object.keys(VAULT_NOTES), truncated: false })
+      send(socket, { type: 'vault_files', files: Object.keys(VAULT_NOTES), truncated: false, images: VAULT_IMAGES, attachmentFolder: 'Attachments' })
       return
     }
     if (message.type === 'read_vault_file') {

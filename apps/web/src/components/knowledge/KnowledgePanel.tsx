@@ -40,6 +40,9 @@ import { NoteDocument, type Conflict, type EditorState } from './NoteDocument'
 import type { QuoteAction } from './NoteFormatting'
 import { ENTRY_DRAG, filterNotes, NoteRail } from './NoteRail'
 import { useNoteAi } from './useNoteAi'
+import type { NotePictures } from './NoteEditor'
+
+const NO_IMAGES: Readonly<Record<string, string>> = {}
 
 const INBOX = 'inbox'
 /** Where the vault home keeps its note tabs across a restart. */
@@ -118,6 +121,9 @@ interface KnowledgePanelProps {
   /** Starts an AI edit of the open note; the answer lands in `vault.noteEdits`. See `Manor.editVaultNote`. */
   onEditNote: (requestId: string, note: string, selection: { from: number; to: number } | null, instruction: string) => boolean
   onForgetNoteEdit: (requestId: string, cancel: boolean) => void
+  /** Saves a pasted or dropped picture into the vault; the answer lands in `vault.imageSaves`. */
+  onSaveImage?: (requestId: string, notePath: string, name: string, dataUrl: string) => boolean
+  onForgetImageSave?: (requestId: string) => void
   /** The model Settings names for note edits. */
   noteAiModel: string
   onClose: () => void
@@ -178,6 +184,8 @@ export function KnowledgePanel({
   onClearWrite,
   onEditNote,
   onForgetNoteEdit,
+  onSaveImage,
+  onForgetImageSave,
   noteAiModel,
   onClose,
   memoryKey,
@@ -805,6 +813,14 @@ export function KnowledgePanel({
     }]),
   ]
 
+  const pictures = useMemo<NotePictures | undefined>(() => onForgetImageSave === undefined ? undefined : {
+    images: vault.images ?? NO_IMAGES,
+    attachmentFolder: vault.attachmentFolder ?? null,
+    saves: vault.imageSaves,
+    // A note not yet on disk has no folder for the attachment rule to read.
+    onSave: fresh === null && status === 'live' ? onSaveImage ?? null : null,
+    onForget: onForgetImageSave,
+  }, [vault.images, vault.attachmentFolder, vault.imageSaves, fresh, status, onSaveImage, onForgetImageSave])
   const documentProps = {
     path: path ?? '',
     result,
@@ -821,6 +837,7 @@ export function KnowledgePanel({
     components,
     quote: quoteActions,
     ai,
+    pictures,
     onChange: (text: string) => {
       if (writeResult !== null) onClearWrite()
       setEditor((current) => (current === null ? null : { ...current, text }))

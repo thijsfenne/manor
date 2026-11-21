@@ -5,7 +5,7 @@ import type { Effort } from '@manor/contracts'
 import path from 'node:path'
 import type { EditNote } from './noteEdit.js'
 import { dataPaths } from './paths.js'
-import { createVaultFolder, deleteVaultEntry, moveVaultEntry, renameVaultFile, notePreview, listVaultFiles, readVaultFile, writeVaultFile, type Vault, type VaultDeleteResult } from './vault.js'
+import { createVaultFolder, deleteVaultEntry, moveVaultEntry, renameVaultFile, notePreview, listVaultFiles, readAttachmentSetting, readVaultFile, saveVaultImage, writeVaultFile, type Vault, type VaultDeleteResult } from './vault.js'
 
 type HostMessage = Extract<
   ClientMessage,
@@ -20,6 +20,7 @@ type HostMessage = Extract<
       | 'delete_vault_entry'
       | 'move_vault_entry'
       | 'write_vault_file'
+      | 'save_vault_image'
       | 'edit_vault_note'
       | 'cancel_vault_note_edit'
   }
@@ -35,6 +36,8 @@ interface HostModuleOptions {
   vault?: Vault
   /** Where Knowledge deletes go. Defaults to `trash/knowledge` in Manor's data folder. */
   vaultTrash?: string
+  /** The signed link of one vault picture. Absent means the listing carries no picture links. */
+  imageSrc?: (path: string) => string
   /** Runs one AI edit of a note's text. Absent means the note AI is unavailable here. */
   editNote?: EditNote
   /** The model and effort Settings names for it, read when a job starts. */
@@ -79,9 +82,22 @@ export class HostModule {
     this.trash = options.vaultTrash ?? path.join(dataPaths().trash, 'knowledge')
   }
 
+  /** The listing as clients receive it: the tree, plus every picture's link and the vault's attachment setting. */
+  private async vaultListing(vault: Vault): Promise<ServerMessage> {
+    const { images, ...listing } = await listVaultFiles(vault)
+    const { imageSrc } = this.options
+    const attachmentFolder = await readAttachmentSetting(vault)
+    return {
+      type: 'vault_files',
+      ...listing,
+      ...(imageSrc === undefined ? {} : { images: Object.fromEntries(images.map((image) => [image, imageSrc(image)])) }),
+      ...(attachmentFolder === undefined ? {} : { attachmentFolder }),
+    }
+  }
+
   private async announceListing(vault: Vault): Promise<void> {
     if (this.options.broadcast === undefined) return
-    this.options.broadcast({ type: 'vault_files', ...await listVaultFiles(vault) })
+    this.options.broadcast(await this.vaultListing(vault))
   }
 
   capabilities(): ServerMessage {
@@ -136,8 +152,7 @@ export class HostModule {
           reply({ type: 'vault_files', files: [], truncated: false })
           return
         }
-        const listing = await listVaultFiles(vault)
-        reply({ type: 'vault_files', ...listing })
+        reply(await this.vaultListing(vault))
         return
       }
       case 'create_vault_folder': {
@@ -183,6 +198,19 @@ export class HostModule {
         if (vault !== undefined && message.baseRevision === null && result.status === 'saved') await this.announceListing(vault)
         return
       }
+      case 'save_vault_image': {
+        const vault = this.options.vault
+        const bytes = decodeImageDataUrl(message.dataUrl)
+        let result: Extract<ServerMessage, { type: 'vault_image_saved' }>['result']
+        if (vault === undefined) result = { status: 'rejected', message: NO_VAULT.message }
+        else if (bytes === undefined) result = { status: 'rejected', message: 'That is not a picture Manor can keep (PNG, JPEG, GIF, WebP or AVIF).' }
+        else {
+          result = await saveVaultImage(vault, { notePath: message.notePath, name: message.name, bytes, existingImages: (await listVaultFiles(vault)).images })
+        }
+        reply({ type: 'vault_image_saved', requestId: message.requestId, result })
+        if (vault !== undefined && result.status === 'saved') await this.announceListing(vault)
+        return
+      }
       case 'edit_vault_note': {
         const { editNote, noteAi } = this.options
         if (editNote === undefined || noteAi === undefined) {
@@ -225,4 +253,12 @@ export class HostModule {
       }
     }
   }
+}
+
+const IMAGE_DATA_URL = /^data:image\/(?:png|jpeg|gif|webp|avif);base64,([A-Za-z0-9+/=]+)$/
+
+/** The bytes of a pasted picture's data URL, or undefined when it is not one of the five raster types. */
+function decodeImageDataUrl(dataUrl: string): Buffer | undefined {
+  const match = IMAGE_DATA_URL.exec(dataUrl)
+  return match === null ? undefined : Buffer.from(match[1]!, 'base64')
 }

@@ -1,7 +1,7 @@
 import { constants } from 'node:fs'
-import { cp, lstat, mkdir, open, readdir, realpath, rename, rm, rmdir, stat } from 'node:fs/promises'
+import { cp, lstat, mkdir, open, readdir, realpath, rename, rm, rmdir, stat, unlink } from 'node:fs/promises'
 import path from 'node:path'
-import { MAX_REPO_FILE_BYTES, type FileWriteResult, type RepoFileResult } from '@manor/contracts'
+import { MAX_REPO_FILE_BYTES, MAX_VAULT_IMAGE_BYTES, attachmentFolderFor, isVaultImagePath, type FileWriteResult, type RepoFileResult } from '@manor/contracts'
 import { hashBytes, moveTextFile, readTextFile, realMoveFs, renameTextFile, replaceTextFile, serializedPerFolder, type MoveFs } from './fileIo.js'
 
 /**
@@ -46,6 +46,8 @@ export async function openVault(dir: string): Promise<OpenVaultResult> {
 export interface VaultListing {
   files: string[]
   folders: string[]
+  /** Every picture, as a vault path, sorted. Not in the tree; embeds resolve against it. */
+  images: string[]
   previews: Record<string, string>
   /** The cap cut the list. The tree says so rather than implying it saw everything. */
   truncated: boolean
@@ -61,6 +63,7 @@ export interface VaultListing {
 export async function listVaultFiles(vault: Vault): Promise<VaultListing> {
   const files: string[] = []
   const folders: string[] = []
+  const images: string[] = []
   const queue = ['']
   let truncated = false
 
@@ -77,6 +80,7 @@ export async function listVaultFiles(vault: Vault): Promise<VaultListing> {
     for (const child of children) {
       // Checked per entry rather than per folder, so the cap is the number it says
       // it is instead of "the cap, plus whatever one more directory happened to hold".
+      // Pictures have their own cap and never cut the walk short, so notes are not lost to them.
       if (files.length >= MAX_VAULT_FILES || folders.length >= MAX_VAULT_FILES) {
         truncated = true
         break
@@ -85,11 +89,13 @@ export async function listVaultFiles(vault: Vault): Promise<VaultListing> {
       const childPath = relative === '' ? child.name : `${relative}/${child.name}`
       if (child.isDirectory()) { folders.push(childPath); queue.push(childPath) }
       else if (child.isFile() && isNote(child.name)) files.push(childPath)
+      else if (child.isFile() && images.length < MAX_VAULT_FILES && isVaultImagePath(child.name)) images.push(childPath)
     }
   }
 
   files.sort((left, right) => left.localeCompare(right, 'en'))
   folders.sort((left, right) => left.localeCompare(right, 'en'))
+  images.sort((left, right) => left.localeCompare(right, 'en'))
   const previews: Record<string, string> = {}
   let next = 0
   // Bound disk concurrency and bytes. Listing a vault must never read whole notes.
@@ -106,7 +112,7 @@ export async function listVaultFiles(vault: Vault): Promise<VaultListing> {
       finally { await handle?.close() }
     }
   }))
-  return { files, folders, previews, truncated }
+  return { files, folders, images, previews, truncated }
 }
 
 /**
@@ -239,6 +245,160 @@ async function resolveInVault(vault: Vault, requestedPath: string, createInbox =
   return path.join(resolvedParent, name)
 }
 
+/** The most `.obsidian/app.json` is read for; a real one is a few hundred bytes. */
+const MAX_APP_SETTINGS_BYTES = 256 * 1024
+
+/**
+ * Obsidian's `attachmentFolderPath` from `.obsidian/app.json`, as written, or undefined
+ * when the file, the key or a string value is missing. Never throws: a vault without
+ * Obsidian settings simply keeps pictures at its root.
+ */
+export async function readAttachmentSetting(vault: Vault): Promise<string | undefined> {
+  let handle
+  try {
+    handle = await open(path.join(vault.root, '.obsidian', 'app.json'), constants.O_RDONLY | constants.O_NOFOLLOW)
+    const info = await handle.stat()
+    if (!info.isFile() || info.size > MAX_APP_SETTINGS_BYTES) return undefined
+    const parsed: unknown = JSON.parse(await handle.readFile('utf8'))
+    if (typeof parsed !== 'object' || parsed === null) return undefined
+    const value = (parsed as { attachmentFolderPath?: unknown }).attachmentFolderPath
+    return typeof value === 'string' ? value : undefined
+  } catch {
+    return undefined
+  } finally {
+    await handle?.close().catch(() => undefined)
+  }
+}
+
+export interface SniffedImage {
+  mime: string
+  /** The extension a saved file carries: png, jpg, gif, webp or avif. */
+  extension: string
+}
+
+/**
+ * What a picture's own bytes say it is: PNG, JPEG, GIF, WebP or AVIF, else undefined. The
+ * file name is never trusted, so a text file called `a.png` is not served or saved.
+ */
+export function sniffVaultImage(bytes: Uint8Array): SniffedImage | undefined {
+  const at = (offset: number, ...expected: number[]) => expected.every((value, index) => bytes[offset + index] === value)
+  const ascii = (offset: number, text: string) => at(offset, ...Array.from(text, (char) => char.charCodeAt(0)))
+  if (at(0, 0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a)) return { mime: 'image/png', extension: 'png' }
+  if (at(0, 0xff, 0xd8, 0xff)) return { mime: 'image/jpeg', extension: 'jpg' }
+  if (ascii(0, 'GIF87a') || ascii(0, 'GIF89a')) return { mime: 'image/gif', extension: 'gif' }
+  if (ascii(0, 'RIFF') && ascii(8, 'WEBP')) return { mime: 'image/webp', extension: 'webp' }
+  if (ascii(4, 'ftypavif') || ascii(4, 'ftypavis')) return { mime: 'image/avif', extension: 'avif' }
+  return undefined
+}
+
+export type VaultImageSaveResult =
+  | { status: 'saved'; path: string; name: string }
+  | { status: 'rejected'; message: string }
+
+const rejectedImage = (message: string) => ({ status: 'rejected', message }) as const
+
+const isInside = (root: string, target: string) => target === root || target.startsWith(root + path.sep)
+
+/** Obsidian's own name for a pasted picture: `Pasted image 20260101123045`, local time. */
+function pastedImageStem(now: Date): string {
+  const two = (value: number) => String(value).padStart(2, '0')
+  return `Pasted image ${now.getFullYear()}${two(now.getMonth() + 1)}${two(now.getDate())}${two(now.getHours())}${two(now.getMinutes())}${two(now.getSeconds())}`
+}
+
+/** The file name without its folder, extension or the characters an Obsidian link cannot carry. */
+function cleanImageStem(name: string): string {
+  const base = name.split(/[\\/]/).at(-1) ?? ''
+  const stem = base.replace(/\.(?:png|jpe?g|gif|webp|avif)$/i, '')
+  return stem.replace(/[[\]#^|\\/:\u0000-\u001f\u007f]/g, '').trim().replace(/^\.+/, '').trim().slice(0, 120).trim()
+}
+
+/**
+ * Saves a pasted or dropped picture next to the note it belongs in, the way Obsidian
+ * does. The folder comes from the vault's attachment setting; the name is cleaned, given
+ * the extension the bytes call for and made unique across every vault picture, because
+ * `![[name.png]]` resolves by name alone. The file is created exclusively, so two saves
+ * of one name cannot both win.
+ */
+export async function saveVaultImage(
+  vault: Vault,
+  input: { notePath: string; name: string; bytes: Uint8Array; existingImages: readonly string[]; now?: Date },
+): Promise<VaultImageSaveResult> {
+  const note = await resolveInVault(vault, input.notePath)
+  if (note === null || !(await lstat(note).then((info) => info.isFile(), () => false))) {
+    return rejectedImage('That note is not available, so the picture was not saved.')
+  }
+  const sniffed = sniffVaultImage(input.bytes)
+  if (sniffed === undefined) return rejectedImage('That is not a picture Manor can keep (PNG, JPEG, GIF, WebP or AVIF).')
+  if (input.bytes.byteLength > MAX_VAULT_IMAGE_BYTES) {
+    return rejectedImage(`A picture is capped at ${Math.round(MAX_VAULT_IMAGE_BYTES / (1024 * 1024))} MB.`)
+  }
+
+  const folder = attachmentFolderFor(await readAttachmentSetting(vault), input.notePath)
+  const segments = folder === '' ? [] : folder.split('/')
+  if (folder.includes('\0') || segments.some((segment) => segment === '' || segment.startsWith('.'))) {
+    return rejectedImage('The vault\'s attachment folder is not a folder Manor may write to.')
+  }
+  const target = await ensureFolderInVault(vault, segments)
+  if (target === null) return rejectedImage('The vault\'s attachment folder is not inside the vault.')
+
+  const stem = cleanImageStem(input.name) || pastedImageStem(input.now ?? new Date())
+  const taken = new Set(input.existingImages.map((image) => image.slice(image.lastIndexOf('/') + 1).toLowerCase()))
+  for (let attempt = 0; attempt < 1_000; attempt += 1) {
+    const name = `${attempt === 0 ? stem : `${stem} ${attempt}`}.${sniffed.extension}`
+    if (taken.has(name.toLowerCase())) continue
+    const file = path.join(target, name)
+    let handle
+    try {
+      handle = await open(file, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o600)
+      await handle.writeFile(input.bytes)
+      await handle.sync()
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'EEXIST') continue
+      // The file was created by this save, so a half-written one goes again.
+      if (handle !== undefined) {
+        await handle.close().catch(() => undefined)
+        handle = undefined
+        await unlink(file).catch(() => undefined)
+      }
+      return rejectedImage('That picture could not be saved.')
+    } finally {
+      await handle?.close().catch(() => undefined)
+    }
+    return { status: 'saved', path: folder === '' ? name : `${folder}/${name}`, name }
+  }
+  return rejectedImage('That picture could not be given a free name.')
+}
+
+/**
+ * The absolute folder for vault `segments`, created when missing. The deepest folder that
+ * already exists must resolve inside the vault before anything is made, and the created
+ * folder is resolved again after, so a symlinked ancestor cannot carry the write out.
+ */
+async function ensureFolderInVault(vault: Vault, segments: readonly string[]): Promise<string | null> {
+  const wanted = path.join(vault.root, ...segments)
+  let ancestor = wanted
+  let resolved: string | null = null
+  while (resolved === null) {
+    resolved = await realpath(ancestor).catch(() => null)
+    if (resolved === null) {
+      const parent = path.dirname(ancestor)
+      if (parent === ancestor) return null
+      ancestor = parent
+    }
+  }
+  if (!isInside(vault.root, resolved)) return null
+  if (ancestor !== wanted) {
+    try {
+      await mkdir(wanted, { recursive: true, mode: 0o700 })
+    } catch {
+      return null
+    }
+  }
+  const final = await realpath(wanted).catch(() => null)
+  const info = final === null ? null : await stat(final).catch(() => null)
+  return final !== null && info?.isDirectory() === true && isInside(vault.root, final) ? final : null
+}
+
 const isNote = (name: string) => name.length > 3 && name.toLowerCase().endsWith('.md')
 
 const unavailable = (): RepoFileResult => ({
@@ -249,13 +409,13 @@ const unavailable = (): RepoFileResult => ({
 /** A short body excerpt, without frontmatter, headings or Markdown punctuation. */
 export function notePreview(content: string): string {
   const body = content.replace(/^\uFEFF/, '').replace(/^---\r?\n[\s\S]*?\r?\n---(?:\r?\n|$)/, '')
-  // Headings, fences, dividers and table rows are structure, not a sentence to preview.
-  const line = body.split(/\r?\n/).find((line) => line.trim() !== '' && !/^\s*(?:#{1,6}(?:\s|$)|```|~~~|(?:[-*_]\s*){3,}$|\|)/.test(line)) ?? ''
+  // Headings, fences, dividers, table rows and lone pictures are structure, not a sentence to preview.
+  const line = body.split(/\r?\n/).find((line) => line.trim() !== '' && !/^\s*(?:#{1,6}(?:\s|$)|```|~~~|(?:[-*_]\s*){3,}$|\||!\[\[[^\]]*\]\]\s*$|!\[[^\]]*\]\([^)]*\)\s*$)/.test(line)) ?? ''
   return line
     // Block marks first: quote bars, then a list marker, then a task box or callout token.
     .replace(/^\s*(?:>\s?)+/, '').replace(/^\s*(?:[-*+]|\d+[.)])\s+/, '')
     .replace(/^\[[ xX]\]\s*/, '').replace(/^\[![A-Za-z]+\][-+]?\s*/, '')
-    .replace(/\[\[([^\]|]+)\|([^\]]+)\]\]/g, '$2').replace(/\[\[([^\]]+)\]\]/g, '$1')
+    .replace(/!\[\[[^\]]*\]\]/g, '').replace(/\[\[([^\]|]+)\|([^\]]+)\]\]/g, '$2').replace(/\[\[([^\]]+)\]\]/g, '$1')
     .replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1').replace(/<((?:https?|mailto):[^>\s]+)>/g, '$1')
     .replace(/~~|==|[*_`]/g, '').trim().slice(0, 180)
 }

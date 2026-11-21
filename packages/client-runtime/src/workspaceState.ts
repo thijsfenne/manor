@@ -499,6 +499,10 @@ export interface VaultState {
 
   folders?: string[]
   previews?: Record<string, string>
+  /** Every picture in the vault, by vault path, to its signed link. See vaultImages.ts in contracts. */
+  images?: Record<string, string>
+  /** Obsidian's `attachmentFolderPath` as written, or null when the vault sets none. */
+  attachmentFolder?: string | null
   folderWrite?: { path: string; result: { status: 'created' } | { status: 'rejected'; message: string } | null }
   /** This client's own delete, until the server answers it. */
   deletion?: { requestId: string; path: string; result: VaultDeleteResult | null }
@@ -537,7 +541,11 @@ export interface VaultState {
    * two docked notes can each have one out; the editor that asked drops its own.
    */
   noteEdits?: Record<string, VaultNoteEditResult>
+  /** Answers to this client's picture saves, by request id, until the editor that asked takes them. */
+  imageSaves?: Record<string, VaultImageSaveResult>
 }
+
+export type VaultImageSaveResult = Extract<ServerMessage, { type: 'vault_image_saved' }>['result']
 
 export type VaultNoteEditResult = Extract<ServerMessage, { type: 'vault_note_edit' }>['result']
 
@@ -1347,8 +1355,13 @@ export function reduce(
     // with a new array identity must not repaint three hundred rows for nothing.
     case 'vault_files': {
       const current = state.vault.files
+      // Kept by identity when unchanged, so an open note does not redraw its pictures.
+      const images = sameRecord(state.vault.images ?? {}, msg.images ?? {}) ? state.vault.images ?? {} : msg.images ?? {}
+      const attachmentFolder = msg.attachmentFolder ?? null
       if (
         current !== null &&
+        images === state.vault.images &&
+        attachmentFolder === (state.vault.attachmentFolder ?? null) &&
         state.vault.truncated === msg.truncated &&
         JSON.stringify(state.vault.folders ?? []) === JSON.stringify(msg.folders ?? []) &&
         Object.keys(state.vault.previews ?? {}).length === Object.keys(msg.previews ?? {}).length &&
@@ -1358,7 +1371,7 @@ export function reduce(
       ) {
         return state
       }
-      return { ...state, vault: { ...state.vault, files: msg.files, folders: msg.folders ?? [], previews: msg.previews ?? {}, truncated: msg.truncated } }
+      return { ...state, vault: { ...state.vault, files: msg.files, folders: msg.folders ?? [], previews: msg.previews ?? {}, images, attachmentFolder, truncated: msg.truncated } }
     }
 
     // Reply-only. A slower answer for the note that was open before must not land on
@@ -1436,6 +1449,8 @@ export function reduce(
       if (state.vault.folderWrite?.path !== msg.path) return state
       return { ...state, vault: { ...state.vault, folderWrite: { path: msg.path, result: msg.result } } }
     }
+    case 'vault_image_saved':
+      return { ...state, vault: { ...state.vault, imageSaves: { ...state.vault.imageSaves, [msg.requestId]: msg.result } } }
     case 'vault_note_edit':
       return { ...state, vault: { ...state.vault, noteEdits: { ...state.vault.noteEdits, [msg.requestId]: msg.result } } }
 
@@ -1595,4 +1610,9 @@ function mergeMyMindObjects(current: readonly MyMindArtifact[], incoming: readon
   const byId = new Map(current.map((artifact) => [artifact.id, artifact]))
   for (const artifact of incoming) byId.set(artifact.id, artifact)
   return [...byId.values()]
+}
+
+function sameRecord(left: Readonly<Record<string, string>>, right: Readonly<Record<string, string>>): boolean {
+  const keys = Object.keys(left)
+  return keys.length === Object.keys(right).length && keys.every((key) => left[key] === right[key])
 }

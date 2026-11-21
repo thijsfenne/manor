@@ -209,6 +209,7 @@ import { claimDatabaseOwner } from './stores/sqliteDatabase.js'
 import { sweepUnterminatedTurns } from './turnSweep.js'
 import { SubagentRefusal } from './subagents.js'
 import { openVault, type Vault } from './vault.js'
+import { createVaultMedia } from './vaultMedia.js'
 import { createSystemInfo } from './systemInfo.js'
 import { createKeepAwake } from './keepAwake.js'
 import { RemindersSource, remindersBinaries } from './reminders.js'
@@ -744,6 +745,7 @@ async function main(): Promise<void> {
       })
     : undefined, effectMode === 'full-access')
 
+  const vaultMedia = vault === undefined ? undefined : createVaultMedia({ vault })
   const chatMedia = createChatMedia({
     loadEvents: (chatId) => store.loadEvents(chatId),
     loadDocument: (chatId, documentId) => store.loadDocument(chatId, documentId),
@@ -1104,7 +1106,7 @@ async function main(): Promise<void> {
     ...(externalLinks === undefined
       ? {}
       : { externalBrowser: externalLinks.browser, openExternalUrl: externalLinks.open }),
-    ...(vault === undefined ? {} : { vault, vaultTrash: path.join(paths.trash, 'knowledge') }),
+    ...(vault === undefined || vaultMedia === undefined ? {} : { vault, vaultTrash: path.join(paths.trash, 'knowledge'), imageSrc: vaultMedia.src }),
     ...(externalFiles === undefined ? {} : { externalFiles }),
     connectCards,
     composioMarketplace,
@@ -1467,6 +1469,7 @@ async function main(): Promise<void> {
       return
     }
     if (remoteImages.handle(request, response)) return
+    if (vaultMedia?.handle(request, response) === true) return
     if (chatMedia.handle(request, response)) return
     if (request.url?.startsWith(MYMIND_THUMBNAIL_PREFIX) === true) {
       void handleMyMindThumbnailRequest(request, response, mymind)

@@ -486,6 +486,8 @@ export function ChatPanelRegion({
         onClearWrite={manor.clearVaultWrite}
         onEditNote={manor.editVaultNote}
         onForgetNoteEdit={manor.forgetVaultNoteEdit}
+        onSaveImage={manor.saveVaultImage}
+        onForgetImageSave={manor.forgetVaultImageSave}
         noteAiModel={workspace.houseSettings?.noteAiModel ?? NOTE_AI_DEFAULTS.model}
         onClose={manor.closeVaultNote}
         onQuote={onQuoteNote}

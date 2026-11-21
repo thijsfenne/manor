@@ -288,6 +288,8 @@ export interface ManorServiceOptions {
   vault?: Vault
   /** Where Knowledge deletes go, `trash/knowledge` in the data folder. */
   vaultTrash?: string
+  /** The signed link of one vault picture, so the Knowledge listing can carry them. */
+  imageSrc?: (path: string) => string
   /** The one-shot helper job behind a note's AI comments and composer. */
   editNote?: EditNote
   /** Read-only mymind library. Absent means no Artifacts row on this host. */
@@ -564,6 +566,7 @@ export class ManorService {
       ...(options.openExternalUrl === undefined ? {} : { openExternalUrl: options.openExternalUrl }),
       ...(options.vault === undefined ? {} : { vault: options.vault }),
       ...(options.vaultTrash === undefined ? {} : { vaultTrash: options.vaultTrash }),
+      ...(options.imageSrc === undefined ? {} : { imageSrc: options.imageSrc }),
       ...(options.editNote === undefined ? {} : { editNote: options.editNote }),
       noteAi: () => ({ model: this.settings.noteAiModel, effort: this.settings.noteAiEffort }),
       broadcast: options.broadcast,
@@ -1169,6 +1172,7 @@ export class ManorService {
       case 'list_vault':
       case 'read_vault_file':
       case 'write_vault_file':
+      case 'save_vault_image':
       case 'edit_vault_note':
       case 'cancel_vault_note_edit':
       case 'delete_vault_entry':

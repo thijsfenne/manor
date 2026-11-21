@@ -14,6 +14,7 @@ import Animated, { FadeIn, FadeOut, SlideInLeft, SlideInRight, useReducedMotion 
 import { CodeView } from '@/components/CodeView'
 import { Markdown, type MarkdownLinks } from '@/components/Markdown'
 import { Text } from '@/components/Text'
+import { withVaultPictures, type VaultPictures } from '@/lib/noteImages'
 import { colors, fonts, radius, spacing, squircle, tracking } from '@/theme'
 
 /** Past this many files a listing gets a search field above the folders. */
@@ -65,6 +66,8 @@ interface FileBrowserProps {
    * a name that matches a source file is not a link to it.
    */
   resolveWikilink?: (target: string) => string | null
+  /** The vault's pictures, so a note's embeds show. Only the Knowledge screen hands them in. */
+  pictures?: VaultPictures
 }
 
 /**
@@ -73,7 +76,7 @@ interface FileBrowserProps {
  * vault and a repo are both a list of paths and the phone should walk them the
  * same way. Read-only: editing from a bus is a persona's job, not a thumb's.
  */
-export function FileBrowser({ place, onPlace, files, truncated, preview, live, agents, onRead, emptyText, resolveWikilink }: FileBrowserProps) {
+export function FileBrowser({ place, onPlace, files, truncated, preview, live, agents, onRead, emptyText, resolveWikilink, pictures }: FileBrowserProps) {
   const [query, setQuery] = useState('')
   const [direction, setDirection] = useState<'forward' | 'back'>('forward')
   const still = useReducedMotion()
@@ -124,7 +127,7 @@ export function FileBrowser({ place, onPlace, files, truncated, preview, live, a
     }
     return (
       <Animated.View entering={still ? undefined : SlideInRight.duration(220)} exiting={still ? undefined : FadeOut.duration(80)} key={place.file} style={styles.fill}>
-        <Preview agents={agents} links={links} path={place.file} preview={preview} />
+        <Preview agents={agents} links={links} path={place.file} pictures={pictures} preview={preview} />
       </Animated.View>
     )
   }
@@ -191,8 +194,10 @@ function Preview({
   preview,
   agents,
   links,
+  pictures,
 }: {
   path: string
+  pictures?: VaultPictures
   preview: { path: string; result: RepoFileResult | null } | null
   agents: AgentConfig[]
   links: MarkdownLinks
@@ -206,7 +211,13 @@ function Preview({
   if (/\.(md|markdown)$/i.test(path)) {
     return (
       <ScrollView contentContainerStyle={styles.doc}>
-        <Markdown agents={agents} links={links} sources={false} text={result.content} />
+        <Markdown
+          agents={agents}
+          links={links}
+          sources={false}
+          text={pictures === undefined ? result.content : withVaultPictures(result.content, path, pictures)}
+          vaultImages={pictures !== undefined}
+        />
       </ScrollView>
     )
   }

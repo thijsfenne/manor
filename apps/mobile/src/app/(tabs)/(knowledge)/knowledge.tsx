@@ -43,6 +43,11 @@ function Vault() {
   // the project files sheet hands the same browser none, so brackets stay brackets.
   const notes = useMemo(() => buildNoteIndex(vault.files ?? []), [vault.files])
 
+  const pictures = useMemo(
+    () => ({ images: vault.images ?? {}, attachmentFolder: vault.attachmentFolder ?? null }),
+    [vault.images, vault.attachmentFolder],
+  )
+
   const content = vault.status === 'none' ? (
       <View style={styles.empty}>
         <Text style={styles.emptyTitle}>No Knowledge folder on this Mac</Text>
@@ -56,6 +61,7 @@ function Vault() {
       live={live}
       onPlace={setPlace}
       onRead={readVaultFile}
+      pictures={pictures}
       place={place}
       preview={vault.note}
       resolveWikilink={(target) => resolveNote(notes, target)}

@@ -266,6 +266,7 @@ describe('vault folders and note previews', () => {
     note('preview.md', '---\ntags: [private]\n---\n# A heading\n\nRead **this** and [[Plan|the plan]].\nMore text.')
     expect((await listVaultFiles(vault)).previews['preview.md']).toBe('Read this and the plan.')
     expect(notePreview('# Heading only')).toBe('')
+    expect(notePreview('# Trip\n![[hero.png|420]]\n![alt|300](a b.png)\nPack light ![[icon.png]] today')).toBe('Pack light  today')
     expect(notePreview('x'.repeat(400))).toHaveLength(180)
   })
 

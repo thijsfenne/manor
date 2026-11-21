@@ -122,6 +122,13 @@ export function forgetVaultNoteEdit(state: WorkspaceState, requestId: string): W
   return { ...state, vault: { ...state.vault, noteEdits } }
 }
 
+/** Drops a picture save's answer once its editor has it, or has stopped waiting for it. */
+export function forgetVaultImageSave(state: WorkspaceState, requestId: string): WorkspaceState {
+  if (state.vault.imageSaves?.[requestId] === undefined) return state
+  const { [requestId]: _taken, ...imageSaves } = state.vault.imageSaves
+  return { ...state, vault: { ...state.vault, imageSaves } }
+}
+
 export function askMyMindObjects(state: WorkspaceState, query: string, requestId: string): WorkspaceState {
   return {
     ...state,

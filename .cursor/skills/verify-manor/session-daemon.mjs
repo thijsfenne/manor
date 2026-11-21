@@ -187,11 +187,12 @@ async function handle(body) {
     await page.waitForTimeout(400)
     return { dy: Number(flags.dy ?? -600) }
   }
-  // Press, move by `dx` in small steps (as a hand would), release: a panel's resize grip or a tab.
+  // Press, move by `dx`/`dy` in small steps (as a hand would), release: a resize grip, a tab, a note picture.
   if (cmd === 'drag') {
     // Checked before pressing: Playwright cannot release at a bad coordinate either.
-    const dx = Number(flags.dx ?? 0), steps = Number(flags.steps ?? 20)
+    const dx = Number(flags.dx ?? 0), dy = Number(flags.dy ?? 0), steps = Number(flags.steps ?? 20)
     if (!Number.isFinite(dx)) throw new Error('drag --dx takes a number of pixels')
+    if (!Number.isFinite(dy)) throw new Error('drag --dy takes a number of pixels')
     if (!Number.isInteger(steps) || steps < 1) throw new Error('drag --steps takes a whole number above 0')
     const box = await locatorFor(flags).boundingBox()
     if (box === null) throw new Error('Nothing visible to drag')
@@ -199,9 +200,9 @@ async function handle(body) {
     await page.mouse.move(x, y)
     await page.mouse.down()
     // Always let go, so a failed move cannot leave the button held for the next check.
-    try { await page.mouse.move(x + dx, y, { steps }) } finally { await page.mouse.up() }
+    try { await page.mouse.move(x + dx, y + dy, { steps }) } finally { await page.mouse.up() }
     await page.waitForTimeout(300)
-    return { dx, steps }
+    return { dx, dy, steps }
   }
   if (cmd === 'wait-settle') {
     await page.waitForLoadState('networkidle').catch(() => {})

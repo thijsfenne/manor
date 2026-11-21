@@ -65,6 +65,7 @@ import {
   clearRunningTurns,
   clearVaultWrite,
   forgetVaultNoteEdit,
+  forgetVaultImageSave,
   closeVaultNote,
   createWorkspaceStore,
   emptyWorkspace,
@@ -507,6 +508,13 @@ export interface Manor {
   editVaultNote: (requestId: string, note: string, selection: { from: number; to: number } | null, instruction: string) => boolean
   /** Ends the wait for that edit: the job stops, and an answer already here is dropped. */
   forgetVaultNoteEdit: (requestId: string, cancel: boolean) => void
+  /**
+   * Saves a pasted or dropped picture into the vault's attachment folder for `notePath`.
+   * The answer lands in `vault.imageSaves` under `requestId`. False when nothing went out.
+   */
+  saveVaultImage: (requestId: string, notePath: string, name: string, dataUrl: string) => boolean
+  /** Drops a picture save's answer once the editor has it. */
+  forgetVaultImageSave: (requestId: string) => void
   /** Closes the open note. */
   closeVaultNote: () => void
   /**
@@ -1349,6 +1357,15 @@ export function useWorkspace(url: string, auth?: WorkspaceAuth): Manor {
     setWorkspace((current) => forgetVaultNoteEdit(current, requestId))
   }, [send])
 
+  const saveVaultImage = useCallback(
+    (requestId: string, notePath: string, name: string, dataUrl: string) =>
+      send({ type: 'save_vault_image', requestId, notePath, name, dataUrl }),
+    [send],
+  )
+  const dropVaultImageSave = useCallback((requestId: string) => {
+    setWorkspace((current) => forgetVaultImageSave(current, requestId))
+  }, [])
+
   const search = useCallback(
     (query: string, requestId: string) => send({ type: 'search', query, requestId }),
     [send],
@@ -1801,6 +1818,8 @@ export function useWorkspace(url: string, auth?: WorkspaceAuth): Manor {
     clearVaultWrite: forgetVaultWrite,
     editVaultNote,
     forgetVaultNoteEdit: dropVaultNoteEdit,
+    saveVaultImage,
+    forgetVaultImageSave: dropVaultImageSave,
     closeVaultNote: closeNote,
     loadReminders,
     loadCompletedReminders,

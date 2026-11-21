@@ -11,7 +11,7 @@ import type { RepoFileResult } from '@manor/contracts'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { NoteName } from './NoteName'
 import { NoteAiComposer } from './NoteAiUi'
-import { NoteEditor } from './NoteEditor'
+import { NoteEditor, type NotePictures } from './NoteEditor'
 import type { QuoteAction } from './NoteFormatting'
 import type { NoteAi } from './useNoteAi'
 import type { Components } from 'react-markdown'
@@ -94,6 +94,8 @@ interface NoteDocumentProps {
   quote?: readonly QuoteAction[]
   /** AI edits of the open note. Absent where the surface does not offer them. */
   ai?: NoteAi
+  /** Pictures in the note: the vault's listing and how a paste or drop saves one. */
+  pictures?: NotePictures | undefined
   onChange: (text: string) => void
   onFollowNote: (target: string) => void
   linkError: string | null
@@ -130,6 +132,7 @@ export function NoteDocument({
   components,
   quote,
   ai,
+  pictures,
   onChange,
   onFollowNote,
   linkError,
@@ -289,7 +292,7 @@ export function NoteDocument({
         {linkError === null ? null : <p role="alert" className={`mx-auto mb-4 w-full ${COLUMN} text-[13px] text-danger`}>{linkError}</p>}
         {editing ? (
           <div className="min-w-0 w-full text-[16px] leading-[1.7] text-text">
-            <NoteEditor path={editor.path} {...(editor.document === undefined ? {} : { document: editor.document })} text={editor.text} onChange={onChange} onFollowNote={onFollowNote} {...(quote === undefined ? {} : { quote })} {...(ai === undefined ? {} : { ai })} />
+            <NoteEditor path={editor.path} {...(editor.document === undefined ? {} : { document: editor.document })} text={editor.text} onChange={onChange} onFollowNote={onFollowNote} {...(quote === undefined ? {} : { quote })} {...(ai === undefined ? {} : { ai })} {...(pictures === undefined ? {} : { pictures })} />
           </div>
         ) : (
           <NoteReader path={path} result={result} body={parsed.body} plugins={plugins} components={components} />

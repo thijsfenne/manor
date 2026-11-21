@@ -7,7 +7,9 @@ import { NoteFormatting, type NoteFormattingHandle, type QuoteAction } from './N
 import { noteAiApply, noteAiExtensions } from './noteAi'
 import { NoteAiLayer } from './NoteAiUi'
 import { noteUi } from './noteEditing'
+import { landImage, noteImageConfig, noteImageExtensions, type NoteImageConfig } from './noteImages'
 import type { NoteAi } from './useNoteAi'
+import type { VaultImageSaveResult } from '../../state'
 import { Compartment, type Extension } from '@codemirror/state'
 import { EditorView, ViewPlugin, placeholder, type ViewUpdate } from '@codemirror/view'
 import { useEffect, useRef, useState } from 'react'
@@ -24,9 +26,22 @@ interface NoteEditorProps {
   quote?: readonly QuoteAction[]
   /** AI edits of this note: the comment field under a selection and the proposal on the text. */
   ai?: NoteAi
+  /** Pictures: the vault's listing and the way a paste or drop saves one. Absent shows embeds as text. */
+  pictures?: NotePictures
+}
+
+export interface NotePictures {
+  images: Readonly<Record<string, string>>
+  attachmentFolder: string | null
+  /** Answers to picture saves, by request id. */
+  saves: Readonly<Record<string, VaultImageSaveResult>> | undefined
+  /** Sends one picture for `notePath`; false when nothing went out. */
+  onSave: ((requestId: string, notePath: string, name: string, dataUrl: string) => boolean) | null
+  onForget: (requestId: string) => void
 }
 
 const NO_QUOTE: readonly QuoteAction[] = []
+const NO_IMAGES: Readonly<Record<string, string>> = {}
 
 const editLabel = (path: string) =>
   EditorView.contentAttributes.of({ 'aria-label': `Edit note ${path.split('/').pop()?.replace(/\.md$/i, '') ?? path}` })
@@ -37,7 +52,7 @@ const editLabel = (path: string) =>
  * is still plain markdown; only the rendering of it and the ways to write it changed.
  * The caret opens past the frontmatter, because nobody starts a note by editing its YAML.
  */
-export function NoteEditor({ path, document, text, onChange, onFollowNote, quote = NO_QUOTE, ai }: NoteEditorProps) {
+export function NoteEditor({ path, document, text, onChange, onFollowNote, quote = NO_QUOTE, ai, pictures }: NoteEditorProps) {
   const followNote = useRef(onFollowNote)
   followNote.current = onFollowNote
   const openWebsite = useOpenWebsite()
@@ -51,6 +66,42 @@ export function NoteEditor({ path, document, text, onChange, onFollowNote, quote
   useEffect(() => {
     view?.dispatch({ effects: label.current.reconfigure(editLabel(path)) })
   }, [view, path])
+
+  // The listing and the note's path feed the picture extension; a new listing redraws only what changed.
+  const imageCompartment = useRef(new Compartment())
+  const saveImage = useRef(pictures?.onSave ?? null)
+  saveImage.current = pictures?.onSave ?? null
+  // Ids this editor sent, so it drops only its own answers; another docked note may be waiting on others.
+  const sentImages = useRef(new Set<string>())
+  const imageConfig = (notePath: string, images: Readonly<Record<string, string>>, attachmentFolder: string | null): NoteImageConfig => ({
+    notePath,
+    images,
+    attachmentFolder,
+    save: (id, name, dataUrl) => {
+      const sent = saveImage.current?.(id, notePath, name, dataUrl) ?? false
+      if (sent) sentImages.current.add(id)
+      return sent
+    },
+  })
+  const images = pictures?.images ?? NO_IMAGES
+  const attachmentFolder = pictures?.attachmentFolder ?? null
+  const initialImages = useRef(imageConfig(path, images, attachmentFolder))
+  useEffect(() => {
+    view?.dispatch({ effects: imageCompartment.current.reconfigure(noteImageConfig.of(imageConfig(path, images, attachmentFolder))) })
+  }, [view, path, images, attachmentFolder])
+
+  // A save's answer lands its embed where the paste or drop asked; one whose chip was dismissed is dropped.
+  const saves = pictures?.saves
+  const forgetSave = pictures?.onForget
+  useEffect(() => {
+    if (view === null || saves === undefined || forgetSave === undefined) return
+    for (const [id, result] of Object.entries(saves)) {
+      if (!sentImages.current.has(id)) continue
+      landImage(view, id, result)
+      sentImages.current.delete(id)
+      forgetSave(id)
+    }
+  }, [view, saves, forgetSave])
 
   // Built once: the editor reads its extensions when a document opens, and these
   // reach React through refs and setters that never change identity.
@@ -128,6 +179,8 @@ export function NoteEditor({ path, document, text, onChange, onFollowNote, quote
         text={text}
         extensions={[
           ...livePreviewExtensions(),
+          ...noteImageExtensions(),
+          imageCompartment.current.of(noteImageConfig.of(initialImages.current)),
           ...bridge.current,
           ...noteAiExtensions(),
           placeholder("Start writing, or press '/' for blocks. Changes save automatically."),
