@@ -509,7 +509,22 @@ const snapshots = {
           outcome: error === undefined ? 'success' : 'error', ...(error === undefined ? {} : { error }) },
       ]),
       { id: 'mt-m2', ts: t + 60_000, type: 'agent_message', ...a, messageId: 'mt-m2', text: 'De probe stond nog niet op disk; de tests zijn groen.' },
-      { id: 'mt-r', ts: t + 60_001, type: 'turn_result', ...a },
+      // A table wider than the screen (three capped columns), then one that fits.
+      { id: 'mt-m3', ts: t + 60_002, type: 'agent_message', ...a, messageId: 'mt-m3', text: [
+        '| Project | Wat het doet | Waarom relevant voor Manor |',
+        '| --- | --- | --- |',
+        '| Aster | Visuele editor voor Next.js en Tailwind in de browser | Koppelt elk element in de preview aan de code die het tekent |',
+        '| Brandwerk | Klein project voor losse HTML bestanden | Injecteert een script om elementen te kiezen zonder build |',
+        '| Cobalt | Agent in de browser voor Next.js, Astro en Vite | Je klikt een element en de agent past de bron aan |',
+        '',
+        'Daarna een korte tabel:',
+        '',
+        '| Naam | Status |',
+        '| --- | --- |',
+        '| Aster | Open |',
+        '| Cobalt | Klaar |',
+      ].join('\n') },
+      { id: 'mt-r', ts: t + 60_003, type: 'turn_result', ...a },
     ]
   })(),
   'chat-dm-smith': [
@@ -538,6 +553,15 @@ const snapshots = {
     // Inline pills on the tinted bubble (quote, destination, code, a file path by its name) take its wash.
     { id: 'wq1', ts: now - 8_000, type: 'user_message', mentions: [], text: 'Maakt voor nu niet uit [Quote #1], open @browser en draai `pnpm test` op `apps/mobile/src/components/Markdown.tsx`.',
       quotes: [{ kind: 'message', eventId: 'ws2', agentId: 'agent-smith', text: 'controle is onvolledig' }] },
+    // A table wider than the screen inside a bubble: it scrolls sideways and fades where columns hide; the rest of the bubble still swipes to reply.
+    { id: 'wt1', ts: now - 6_000, type: 'agent_message', agentId: 'agent-smith', turnId: 'turn-wt', messageId: 'wt-m1', text: [
+      'Drie tools in een tabel:',
+      '',
+      '| Project | Wat het doet | Waarom relevant voor Manor |',
+      '| --- | --- | --- |',
+      '| Aster | Visuele editor voor Next.js en Tailwind in de browser | Koppelt elk element in de preview aan de code die het tekent |',
+      '| Brandwerk | Klein project voor losse HTML bestanden | Injecteert een script om elementen te kiezen zonder build |',
+    ].join('\n') },
   ],
   // The project thread holds the session's question as a system note.
   'chat-thread-manor': [

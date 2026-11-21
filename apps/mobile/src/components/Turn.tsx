@@ -60,7 +60,7 @@ import { Blobatar } from '@/components/Blobatar'
 import { useFaceState } from '@/lib/useFaceState'
 import { rubberBand } from '@/lib/rubberBand'
 import { LandedMessageContext, LandingWash } from '@/components/LandingWash'
-import { Markdown, type MarkdownLinks } from '@/components/Markdown'
+import { Markdown, ReplySwipe, type MarkdownLinks } from '@/components/Markdown'
 import { MemoryChangesSheet, hasMemoryChanges, memoryChangesLabel } from '@/components/MemoryChangesSheet'
 import { MemoryTraceSheet } from '@/components/MemoryTraceSheet'
 import type { DraftActions } from '@/components/OutboundDraftBubble'
@@ -1185,28 +1185,30 @@ function Reply({
           <HugeiconsIcon color={colors.dim} icon={ReplyIcon} size={21} strokeWidth={1.8} />
         </Animated.View>
       )}
-      <GestureDetector gesture={pan}>
-        <Animated.View style={[swipeStyle, styles.reply]}>
-          {/* In a DM only the words sit in the bubble; the pictures stand on the chat itself. */}
-          {said ? (
-            <View style={[styles.reply, bubble && styles.replyBubble]}>
-              {quoteSources !== undefined && quoteSources.length > 0 ? quoteSources.map((source) => (
-                <Pressable
-                  accessibilityHint={onLongPressSource === undefined ? undefined : 'Press and hold for actions'}
-                  delayLongPress={360}
-                  disabled={onLongPressSource === undefined}
-                  key={source.eventId}
-                  onLongPress={onLongPressSource === undefined ? undefined : () => onLongPressSource({ ...source, ...(quoteAgentId === undefined ? {} : { agentId: quoteAgentId }) })}
-                >
-                  <LandingWash eventId={source.eventId} style={styles.replyWash} />
-                  <Markdown agents={agents} links={links} text={source.text} />
-                </Pressable>
-              )) : text === '' ? null : <Markdown agents={agents} links={links} text={text} />}
-            </View>
-          ) : null}
-          <Attachments images={images} onOpenImage={setViewing} />
-        </Animated.View>
-      </GestureDetector>
+      <ReplySwipe.Provider value={onSwipeReply === undefined ? undefined : pan}>
+        <GestureDetector gesture={pan}>
+          <Animated.View style={[swipeStyle, styles.reply]}>
+            {/* In a DM only the words sit in the bubble; the pictures stand on the chat itself. */}
+            {said ? (
+              <View style={[styles.reply, bubble && styles.replyBubble]}>
+                {quoteSources !== undefined && quoteSources.length > 0 ? quoteSources.map((source) => (
+                  <Pressable
+                    accessibilityHint={onLongPressSource === undefined ? undefined : 'Press and hold for actions'}
+                    delayLongPress={360}
+                    disabled={onLongPressSource === undefined}
+                    key={source.eventId}
+                    onLongPress={onLongPressSource === undefined ? undefined : () => onLongPressSource({ ...source, ...(quoteAgentId === undefined ? {} : { agentId: quoteAgentId }) })}
+                  >
+                    <LandingWash eventId={source.eventId} style={styles.replyWash} />
+                    <Markdown agents={agents} bleed={!bubble} links={links} text={source.text} />
+                  </Pressable>
+                )) : text === '' ? null : <Markdown agents={agents} bleed={!bubble} links={links} text={text} />}
+              </View>
+            ) : null}
+            <Attachments images={images} onOpenImage={setViewing} />
+          </Animated.View>
+        </GestureDetector>
+      </ReplySwipe.Provider>
       {viewing === null || pictures[viewing] === undefined ? null : (
         <FileViewer agents={agents} files={pictures} initialId={pictures[viewing].id} onClose={() => setViewing(null)} />
       )}

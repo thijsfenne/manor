@@ -19,7 +19,7 @@ export function RelayedAgentMessage({ event, agents }: {
         <Blobatar color={persona.color} name={persona.name} shape={persona.avatarShape} tone={persona.avatarTone} size={32} src={persona.avatar} />
         <Text numberOfLines={1} style={[styles.name, { color: persona.color }]}>{persona.name}</Text>
       </View>
-      <Markdown agents={agents} text={event.text} />
+      <Markdown agents={agents} bleed text={event.text} />
     </View>
   )
 }

@@ -7,9 +7,12 @@ import { HugeiconsIcon } from '@hugeicons/react-native'
 import { faviconSource, imageRefSpans, markdownImageSource, mentionSpans, quoteExcerpt, quoteRefSpans, webLinkOrigin, type AgentConfig, type InlineQuote, type SkillConfig } from '@manor/contracts'
 import { personaOf } from '@manor/client-runtime/state'
 import { readWikilink } from '@manor/client-runtime/vault-notes'
+import MaskedView from '@react-native-masked-view/masked-view'
 import { Image } from 'expo-image'
-import { createContext, Fragment, memo, useContext, useState, type ReactNode } from 'react'
-import { Linking, Pressable, ScrollView, StyleSheet, View, useWindowDimensions, type TextStyle, type ViewStyle } from 'react-native'
+import { LinearGradient } from 'expo-linear-gradient'
+import { createContext, Fragment, memo, useContext, useRef, useState, type ReactNode } from 'react'
+import { Gesture, GestureDetector, type GestureType } from 'react-native-gesture-handler'
+import { Linking, Pressable, ScrollView, StyleSheet, View, useWindowDimensions, type LayoutChangeEvent, type NativeScrollEvent, type NativeSyntheticEvent, type TextStyle, type ViewStyle } from 'react-native'
 
 import { ImageViewer } from '@/components/Attachments'
 import { useBubbleTint } from '@/components/bubbleTint'
@@ -17,7 +20,7 @@ import { imageParts } from '@/components/markdownImageParts'
 import { sourceItemHref } from '@/components/sourceLinks'
 import { Text } from '@/components/Text'
 import { serverMediaUri } from '@/lib/connection'
-import { colors, fonts, radius, spacing, squircle } from '@/theme'
+import { colors, fonts, radius, scrims, spacing, squircle } from '@/theme'
 
 /** A vault's `[[wikilinks]]`: which note a name means, and how to open the one it found. */
 export interface NoteLinks {
@@ -56,6 +59,7 @@ export const Markdown = memo(function Markdown({
   sent,
   small = false,
   sources = sent === undefined,
+  bleed = false,
 }: {
   text: string
   agents: readonly AgentConfig[]
@@ -69,13 +73,18 @@ export const Markdown = memo(function Markdown({
    * the Mac. On for a reply, off for a note and for what the user wrote themselves.
    */
   sources?: boolean
+  /**
+   * For text that sits straight on the chat page: a table wider than the column then
+   * scrolls to the screen's own edges instead of stopping at the column's padding.
+   */
+  bleed?: boolean
 }) {
   const blocks = parseBlocks(text)
   return (
     <SentContext.Provider value={sent}>
       <CitesSources.Provider value={sources}>
         <View style={styles.body}>
-          {blocks.map((block, index) => <Block agents={agents} block={block} key={index} links={links} small={small} />)}
+          {blocks.map((block, index) => <Block agents={agents} bleed={bleed} block={block} key={index} links={links} small={small} />)}
         </View>
       </CitesSources.Provider>
     </SentContext.Provider>
@@ -297,11 +306,13 @@ function parseBlocks(source: string): MdBlock[] {
 function Block({
   block,
   agents,
+  bleed,
   links,
   small,
 }: {
   block: MdBlock
   agents: readonly AgentConfig[]
+  bleed: boolean
   links?: MarkdownLinks
   small: boolean
 }) {
@@ -376,32 +387,143 @@ function Block({
           })}
         </View>
       )
-    // Columns rather than rows, so each one is as wide as its own widest cell without a
-    // measuring pass, and every cell keeps to a single line so the rows stay level
-    // across them. Narrower than the chat column it fills it, wider than it it scrolls
-    // sideways, the way the Mac's `min-w-full` table does; the percentage only resolves
-    // against the viewport from the content container, never from a child of it.
     case 'table':
-      return (
-        <ScrollView contentContainerStyle={styles.table} horizontal showsHorizontalScrollIndicator={false} style={styles.tableScroll}>
+      return <Table agents={agents} bleed={bleed} block={block} links={links} />
+  }
+}
+
+/** How far in from a table's edge its hidden columns fade out. */
+const TABLE_FADE = 36
+
+/**
+ * The swipe-to-reply gesture of the message a block sits in. A table wider than its
+ * column scrolls sideways, so it holds this gesture back: a sideways swipe on the table
+ * moves the table, and one anywhere else on the message still replies. Without it the
+ * message's pan wins every horizontal touch over a native scroll view.
+ */
+export const ReplySwipe = createContext<GestureType | undefined>(undefined)
+
+/**
+ * Columns rather than rows, so each one is as wide as its own widest cell without a
+ * measuring pass, up to the cap, past which a cell wraps onto more lines rather than
+ * being cut off; the rows stay level across the columns through `measure`. Narrower than the chat column it fills it, wider than it it scrolls sideways,
+ * the way the Mac's `min-w-full` table does; the percentage only resolves against the
+ * viewport from the content container, never from a child of it.
+ *
+ * With `bleed` the scroll area grows to the screen's edges and its content is padded
+ * back to the text column, so a column slides out under the screen's side rather than
+ * under an invisible line at the padding. A side with columns still hidden fades them
+ * out, a mask over the scroll area rather than a colour laid on it, so the fade is the
+ * page (or the bubble) whatever sits behind the table. A table that fits has no fade.
+ */
+function Table({
+  block,
+  agents,
+  bleed,
+  links,
+}: {
+  block: Extract<MdBlock, { kind: 'table' }>
+  agents: readonly AgentConfig[]
+  bleed: boolean
+  links?: MarkdownLinks
+}) {
+  const { ink, press } = useLineProps()
+  const replyPan = useContext(ReplySwipe)
+  const screen = useWindowDimensions()
+  const host = useRef<View>(null)
+  const [inset, setInset] = useState({ left: 0, right: 0 })
+  const [hidden, setHidden] = useState({ start: false, end: false })
+  const metrics = useRef({ offset: 0, content: 0, view: 0 })
+  const [rowHeights, setRowHeights] = useState<number[]>([])
+  const natural = useRef<number[][]>([])
+  const overflowing = hidden.start || hidden.end
+  const scroll = Gesture.Native()
+  if (overflowing && replyPan !== undefined) scroll.blocksExternalGesture(replyPan)
+
+  // A cell wraps, so the cells of a row sit in different columns at different heights.
+  // Each reports the height its own words need, and the tallest sets the row for all of them.
+  const measure = (row: number, column: number, height: number) => {
+    ;(natural.current[row] ??= [])[column] = height
+    const next = Array.from({ length: block.rows.length + 1 }, (_, index) => (natural.current[index] ?? []).reduce((most, each) => Math.max(most, each), 0))
+    setRowHeights((now) => (now.length === next.length && next.every((each, index) => Math.abs(each - (now[index] ?? 0)) < 0.5) ? now : next))
+  }
+
+  const settle = () => {
+    const { offset, content, view } = metrics.current
+    // The bounce past either end is not a column, and neither is the gutter that
+    // aligns the first and last one with the text, so only a column cut off by the
+    // screen's side counts as hidden.
+    const reach = Math.max(content - view, 0)
+    const at = Math.min(Math.max(offset, 0), reach)
+    const start = at > inset.left + 1
+    const end = reach - at > inset.right + 1
+    setHidden((now) => (now.start === start && now.end === end ? now : { start, end }))
+  }
+  // How far the text column sits in from each side of the screen, measured where it is
+  // drawn rather than assumed, so the table follows whatever padding the screen has.
+  const onHostLayout = () => {
+    if (!bleed) return
+    host.current?.measureInWindow((x, _y, width) => {
+      const left = Math.max(0, Math.round(x))
+      const right = Math.max(0, Math.round(screen.width - x - width))
+      setInset((now) => (now.left === left && now.right === right ? now : { left, right }))
+    })
+  }
+
+  return (
+    <View onLayout={onHostLayout} ref={host}>
+      <MaskedView
+        maskElement={
+          <View style={styles.tableMask}>
+            <LinearGradient
+              colors={[hidden.start ? scrims.dark.maskClear : scrims.dark.mask, scrims.dark.mask]}
+              end={{ x: 1, y: 0 }}
+              start={{ x: 0, y: 0 }}
+              style={styles.tableFade}
+            />
+            <View style={styles.tableMaskBody} />
+            <LinearGradient
+              colors={[scrims.dark.mask, hidden.end ? scrims.dark.maskClear : scrims.dark.mask]}
+              end={{ x: 1, y: 0 }}
+              start={{ x: 0, y: 0 }}
+              style={styles.tableFade}
+            />
+          </View>
+        }
+        style={[styles.tableScroll, { marginLeft: -inset.left, marginRight: -inset.right }]}
+      >
+        <GestureDetector gesture={scroll}>
+        <ScrollView
+          alwaysBounceHorizontal={false}
+          contentContainerStyle={[styles.table, { paddingLeft: inset.left, paddingRight: inset.right }]}
+          horizontal
+          onContentSizeChange={(width) => { metrics.current.content = width; settle() }}
+          onLayout={(event: LayoutChangeEvent) => { metrics.current.view = event.nativeEvent.layout.width; settle() }}
+          onScroll={(event: NativeSyntheticEvent<NativeScrollEvent>) => { metrics.current.offset = event.nativeEvent.contentOffset.x; settle() }}
+          scrollEventThrottle={16}
+          showsHorizontalScrollIndicator={false}
+        >
           {block.header.map((title, column) => {
             const side = { textAlign: block.align[column] ?? 'left' } as const
+            const cell = (row: number, text: string) => (
+              <View key={row} style={[row === 0 ? styles.headBox : styles.cellBox, { minHeight: rowHeights[row] === undefined ? undefined : rowHeights[row] + (row === 0 ? 1 : StyleSheet.hairlineWidth) }]}>
+                <Text {...press} onLayout={(event: LayoutChangeEvent) => measure(row, column, event.nativeEvent.layout.height)} selectable style={[styles.cell, row === 0 && styles.headCell, side, ink]}>
+                  <Inline agents={agents} links={links} text={text} />
+                </Text>
+              </View>
+            )
             return (
               <View key={column} style={styles.column}>
-                <Text {...press} numberOfLines={1} selectable style={[styles.cell, styles.headCell, side, ink]}>
-                  <Inline agents={agents} links={links} text={title} />
-                </Text>
-                {block.rows.map((row, index) => (
-                  <Text {...press} key={index} numberOfLines={1} selectable style={[styles.cell, side, ink]}>
-                    <Inline agents={agents} links={links} text={row[column] ?? ''} />
-                  </Text>
-                ))}
+                {cell(0, title)}
+                {block.rows.map((row, index) => cell(index + 1, row[column] ?? ''))}
               </View>
             )
           })}
         </ScrollView>
-      )
-  }
+        </GestureDetector>
+      </MaskedView>
+    </View>
+  )
 }
 
 /**
@@ -861,6 +983,9 @@ const styles = StyleSheet.create({
   // left the item out of that size, so the bubble ended before its list did.
   itemText: { flexShrink: 1 },
   tableScroll: { flexGrow: 0 },
+  tableMask: { flex: 1, flexDirection: 'row' },
+  tableMaskBody: { flex: 1, backgroundColor: scrims.dark.mask },
+  tableFade: { width: TABLE_FADE },
   table: { minWidth: '100%', flexDirection: 'row' },
   // Spare width is shared out rather than left over, so the rules run to the edge like a
   // table and not like a stack of labels. The cap sits on the column so a cell's own
@@ -873,10 +998,10 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     paddingVertical: 6,
     paddingRight: spacing.lg,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.line,
   },
+  cellBox: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.line },
   // The header carries the only full-weight rule in the table, which is what separates a
   // table from a stack of rows; between the rows a hairline is enough.
-  headCell: { color: colors.muted, fontWeight: '500', borderBottomWidth: 1, borderBottomColor: colors.line },
+  headBox: { borderBottomWidth: 1, borderBottomColor: colors.line },
+  headCell: { color: colors.muted, fontWeight: '500' },
 })
