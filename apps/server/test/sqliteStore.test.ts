@@ -124,6 +124,19 @@ describe('house settings record', () => {
     opened.push(reopened)
     expect(await reopened.getHouseSettings()).toEqual({ ...DEFAULT_HOUSE_SETTINGS, backupRetentionDays: null })
   })
+
+  it('keeps the dictation model, language and microphone across a restart, and reads their defaults when absent', async () => {
+    const { store, filename } = fixture()
+    new SqliteRecords(store.db, 'settings').set('house', { autoSettleDays: 2, keepAwake: 'off', browserSearchEngine: 'google' })
+    expect(await store.getHouseSettings()).toMatchObject({ dictationModel: 'whisper-turbo', dictationLanguage: 'auto', dictationMicrophone: '' })
+
+    const dictation = { dictationModel: 'parakeet-tdt-v3', dictationLanguage: 'nl', dictationMicrophone: 'usb-mic-1' } as const
+    await store.saveHouseSettings({ ...DEFAULT_HOUSE_SETTINGS, ...dictation })
+    store.close()
+    const reopened = createSqliteStore({ filename })
+    opened.push(reopened)
+    expect(await reopened.getHouseSettings()).toEqual({ ...DEFAULT_HOUSE_SETTINGS, ...dictation })
+  })
 })
 
 describe('persistent SQLite store', () => {

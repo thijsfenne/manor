@@ -11,6 +11,7 @@ import {
   InformationCircleIcon,
   KeyboardIcon,
   MagicWand01Icon,
+  Mic01Icon,
   PaintBoardIcon,
   PuzzleIcon,
   SecurityCheckIcon,
@@ -28,6 +29,7 @@ export type SettingsSection =
   | 'general'
   | 'appearance'
   | 'keybindings'
+  | 'voice'
   | 'usage'
   | 'agents'
   | 'context'
@@ -65,6 +67,7 @@ export const SETTINGS_GROUPS: readonly { label: string; sections: readonly Secti
       { id: 'general', label: 'General', icon: Settings02Icon, keywords: ['forget this mac', 'default agent', 'photo', 'name', 'profile', 'routing', 'keep awake', 'sleep', 'power', 'search engine', 'browser'] },
       { id: 'appearance', label: 'Appearance', icon: PaintBoardIcon, keywords: ['theme', 'dark', 'light', 'system', 'font', 'code font', 'typeface'] },
       { id: 'keybindings', label: 'Keybindings', icon: KeyboardIcon, keywords: ['shortcuts', 'keys', 'workspace'] },
+      { id: 'voice', label: 'Voice', icon: Mic01Icon, keywords: ['dictation', 'microphone', 'speech', 'transcribe', 'whisper', 'parakeet', 'language'] },
       { id: 'usage', label: 'Usage & limits', icon: DashboardSpeed02Icon, keywords: ['tokens', 'cost', 'api-rate equivalent', 'limits', 'period', 'breakdown', 'cost quality'] },
     ],
   },

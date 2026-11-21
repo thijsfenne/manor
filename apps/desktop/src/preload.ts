@@ -6,12 +6,14 @@ import type {
   BrowserShortcut,
   DesktopBrowserBridge,
   DesktopComputerBridge,
+  DesktopDictationBridge,
   DesktopDoneNotice,
   DesktopFilesBridge,
   DesktopHostBridge,
   DesktopNotifyBridge,
   DesktopPermissionsBridge,
   DesktopPresenceBridge,
+  DictationModelStatus,
 } from '@manor/contracts'
 
 /**
@@ -21,7 +23,7 @@ import type {
  * `exposeInMainWorld` runs, `window.manorDesktop` is simply absent, and Manor
  * concludes there is no desktop host and hides the browser entirely. Type imports
  * are erased and therefore fine; a runtime one is not. `browserChannels.ts`,
- * `notifyChannels.ts`, `folderDialog.ts`, `localAccess.ts` and `systemPermissions.ts` hold the same strings for the main process, and
+ * `notifyChannels.ts`, `folderDialog.ts`, `localAccess.ts`, `systemPermissions.ts` and `dictationChannels.ts` hold the same strings for the main process, and
  * `smoke:preload` fails if they disagree.
  */
 const BROWSER_STATE_CHANNEL = 'manor:browser:state'
@@ -36,6 +38,14 @@ const CHOOSE_FOLDER_CHANNEL = 'manor:choose-folder'
 const LOCAL_ACCESS_CHANNEL = 'manor:local-access'
 const PERMISSIONS_STATUS_CHANNEL = 'manor:permissions:status'
 const PERMISSIONS_OPEN_CHANNEL = 'manor:permissions:open'
+const DICTATION_MODELS_CHANNEL = 'manor:dictation:models'
+const DICTATION_DOWNLOAD_CHANNEL = 'manor:dictation:download'
+const DICTATION_CANCEL_CHANNEL = 'manor:dictation:cancel'
+const DICTATION_REMOVE_CHANNEL = 'manor:dictation:remove'
+const DICTATION_WARM_CHANNEL = 'manor:dictation:warm'
+const DICTATION_TRANSCRIBE_CHANNEL = 'manor:dictation:transcribe'
+const DICTATION_MICROPHONE_CHANNEL = 'manor:dictation:microphone'
+const DICTATION_MICROPHONE_SETTINGS_CHANNEL = 'manor:dictation:microphone-settings'
 
 // A Manor shortcut typed while a web page had focus never reached this window; main
 // sends it here and it is replayed where Manor's own key listeners wait.
@@ -155,6 +165,30 @@ const permissions: DesktopPermissionsBridge = {
   open: (id) => ipcRenderer.invoke(PERMISSIONS_OPEN_CHANNEL, id),
 }
 
+// `onModels` pulls the current list as it subscribes, so a page opened mid-download
+// shows the progress at once instead of at the next whole percent.
+const dictation: DesktopDictationBridge = {
+  onModels: (listener) => {
+    const handler = (_event: IpcRendererEvent, models: DictationModelStatus[]) => listener(models)
+    let subscribed = true
+    ipcRenderer.on(DICTATION_MODELS_CHANNEL, handler)
+    void ipcRenderer.invoke(DICTATION_MODELS_CHANNEL).then((models: DictationModelStatus[]) => {
+      if (subscribed) listener(models)
+    }, () => undefined)
+    return () => {
+      subscribed = false
+      ipcRenderer.off(DICTATION_MODELS_CHANNEL, handler)
+    }
+  },
+  download: (id) => ipcRenderer.invoke(DICTATION_DOWNLOAD_CHANNEL, id),
+  cancelDownload: (id) => ipcRenderer.invoke(DICTATION_CANCEL_CHANNEL, id),
+  remove: (id) => ipcRenderer.invoke(DICTATION_REMOVE_CHANNEL, id),
+  warm: (model, language) => ipcRenderer.invoke(DICTATION_WARM_CHANNEL, model, language),
+  transcribe: (request) => ipcRenderer.invoke(DICTATION_TRANSCRIBE_CHANNEL, request),
+  microphoneAccess: () => ipcRenderer.invoke(DICTATION_MICROPHONE_CHANNEL),
+  openMicrophoneSettings: () => ipcRenderer.invoke(DICTATION_MICROPHONE_SETTINGS_CHANNEL),
+}
+
 const files: DesktopFilesBridge = {
   open: (src, name) => ipcRenderer.invoke('manor:files:open', src, name),
   save: (src, name) => ipcRenderer.invoke('manor:files:save', src, name),
@@ -186,6 +220,7 @@ const host: DesktopHostBridge = {
   computer,
   permissions,
   files,
+  dictation,
   chooseFolder: () => ipcRenderer.invoke(CHOOSE_FOLDER_CHANNEL),
   localAccess: () => ipcRenderer.invoke(LOCAL_ACCESS_CHANNEL),
   platform: process.platform,

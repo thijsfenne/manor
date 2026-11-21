@@ -7,6 +7,7 @@
     allow-jit                        V8 compiles JavaScript at run time.
     personal-information.calendars   EventKit, which covers Reminders, for the remindctl fallback.
     automation.apple-events          Scripts that agents run through osascript.
+    device.audio-input               The microphone, while the user dictates a message.
 -->
 <plist version="1.0">
 <dict>
@@ -15,6 +16,8 @@
   <key>com.apple.security.personal-information.calendars</key>
   <true/>
   <key>com.apple.security.automation.apple-events</key>
+  <true/>
+  <key>com.apple.security.device.audio-input</key>
   <true/>
 </dict>
 </plist>

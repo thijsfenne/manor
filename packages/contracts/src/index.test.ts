@@ -362,3 +362,18 @@ test('a house settings record saved before the search engine existed reads googl
   assert.equal(HouseSettingsSchema.parse({ ...saved, browserSearchEngine: 'kagi' }).browserSearchEngine, 'kagi')
   assert.equal(HouseSettingsSchema.safeParse({ ...saved, browserSearchEngine: 'unknown-engine' }).success, false)
 })
+
+test('a house settings record saved before dictation existed reads its defaults, and an unknown model or language is refused', async () => {
+  const { HouseSettingsSchema } = await import('./index.js')
+  const saved = { autoSettleDays: 2, archiveRetentionDays: 10, attachmentRetentionDays: 7, backupRetentionDays: 14, memoryDir: null, knowledgeDir: null, disabledModels: [], keepAwake: 'off', browserSearchEngine: 'google' }
+  const old = HouseSettingsSchema.parse(saved)
+  assert.equal(old.dictationModel, 'whisper-turbo')
+  assert.equal(old.dictationLanguage, 'auto')
+  assert.equal(old.dictationMicrophone, '')
+  const chosen = HouseSettingsSchema.parse({ ...saved, dictationModel: 'parakeet-tdt-v3', dictationLanguage: 'nl', dictationMicrophone: 'usb-mic-1' })
+  assert.equal(chosen.dictationModel, 'parakeet-tdt-v3')
+  assert.equal(chosen.dictationLanguage, 'nl')
+  assert.equal(chosen.dictationMicrophone, 'usb-mic-1')
+  assert.equal(HouseSettingsSchema.safeParse({ ...saved, dictationModel: 'nope' }).success, false)
+  assert.equal(HouseSettingsSchema.safeParse({ ...saved, dictationLanguage: 'fr' }).success, false)
+})

@@ -18,10 +18,13 @@ Manor is MIT licensed, see `LICENSE`. This file lists code and assets from other
 | Ghostery adblocker (`@ghostery/adblocker`, `@ghostery/adblocker-electron`) | MPL 2.0, unchanged, source at github.com/ghostery/adblocker |
 | `@pierre/trees` and `@pierre/theming` file tree and file icons | Apache 2.0 |
 | Electron and Chromium | MIT and the Chromium licences, in the app's `LICENSES.chromium.html` |
+| sherpa-onnx speech recognition (`sherpa-onnx-node`) with ONNX Runtime, for dictation in the desktop app | Apache 2.0 and MIT |
 | Expo and React Native, in the phone companion | MIT |
 | React, Motion, zod and the other npm packages | Mostly MIT, ISC, BSD and Apache 2.0. Run `pnpm licenses list --prod` for the full list |
 
 Model prices on the Usage page are read at run time from LiteLLM's public price list (MIT). The list is not part of this repository.
+
+The dictation models are downloaded at run time, when you ask for one, and are not part of this repository or the app: Whisper large v3 turbo (MIT) and Parakeet TDT 0.6B v3 (CC BY 4.0), both in their sherpa-onnx conversions.
 
 ## Names and logos
 

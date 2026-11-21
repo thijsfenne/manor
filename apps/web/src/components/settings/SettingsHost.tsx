@@ -16,6 +16,7 @@ import { PhonePage } from './PhonePage'
 import { PermissionsPage } from './PermissionsPage'
 import { StoragePage } from './StoragePage'
 import { SubagentsPage } from './SubagentsPage'
+import { VoicePage } from './VoicePage'
 import { AboutPage, MemoryPage, ProvidersPage } from './SystemPages'
 import { desktopPermissions } from '../../desktopBrowser'
 
@@ -75,6 +76,8 @@ export function SettingsHost({
         return <AppearancePage choice={theme.choice} onChange={theme.set} />
       case 'keybindings':
         return <KeybindingsPage />
+      case 'voice':
+        return <VoicePage settings={workspace.houseSettings} onSave={manor.saveHouseSettings} />
       case 'usage':
         return (
           <UsageView

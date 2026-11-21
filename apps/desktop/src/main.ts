@@ -6,10 +6,13 @@ import {
   dialog,
   ipcMain,
   Menu,
+  net,
   powerMonitor,
   safeStorage,
   session,
   shell,
+  systemPreferences,
+  utilityProcess,
   webContents,
   type IpcMainInvokeEvent,
   type Session,
@@ -26,6 +29,10 @@ import { BROWSER_PROFILE_PARTITION, BrowserManager } from './browserManager'
 import { guardWebviewAttachments } from './browserWebviews'
 import { chromeUserAgent, externalOpenUrl } from './browserValues'
 import { createFileDmTabMemory, type DmTabMemory } from './dmTabMemory'
+import { DICTATION_CATALOG } from './dictationCatalog'
+import { pushDictationModels, registerDictationIpc } from './dictationIpc'
+import { DictationModelStore } from './dictationModels'
+import { DictationService } from './dictationService'
 import { BrowserProfileSnapshot, IMPORT_BROWSER_IDS, type PreparedBrowserProfile } from './browserProfileSnapshot'
 import { registerComputerStopIpc } from './computerStop'
 import { registerNotifyIpc } from './notify'
@@ -89,11 +96,31 @@ app.whenReady().then(async () => {
   // First, because everything below reads where the server is.
   if (!(await ensureServer())) return
   // Denies the renderer's own `Notification` too, which is why done notices go out
-  // through the host bridge below rather than from the page. Clipboard writes are the
-  // one grant; see `permissions.ts` for why.
-  session.defaultSession.setPermissionRequestHandler((_contents, permission, callback) =>
-    callback(allowsRendererPermission(permission)),
-  )
+  // through the host bridge below rather than from the page. Clipboard writes and the
+  // dictation microphone are the grants; see `permissions.ts` for why.
+  session.defaultSession.setPermissionRequestHandler((contents, permission, callback, details) => {
+    const owner = mainWindow
+    const fromManorWindow =
+      owner !== null &&
+      !owner.isDestroyed() &&
+      owner.webContents.id === contents.id &&
+      URL.canParse(details.requestingUrl) &&
+      isAllowedRendererNavigation(details.requestingUrl, resolveRendererUrl(process.env.MANOR_DESKTOP_URL))
+    const allowed = allowsRendererPermission(permission, { ...details, fromManorWindow })
+    if (!allowed || permission !== 'media' || process.platform !== 'darwin') {
+      callback(allowed)
+      return
+    }
+    // macOS is asked only while it has no answer yet, which is when it prompts. With an
+    // answer on file the status decides: asking again says no in a checkout's unsigned
+    // shell even though access is granted.
+    const status = systemPreferences.getMediaAccessStatus('microphone')
+    if (status === 'not-determined') {
+      void systemPreferences.askForMediaAccess('microphone').then(callback, () => callback(false))
+      return
+    }
+    callback(status !== 'denied' && status !== 'restricted')
+  })
   installAppMenu()
   registerBrowserIpc()
   registerNotifyIpc(() => mainWindow)
@@ -117,6 +144,7 @@ app.whenReady().then(async () => {
     onGranted: () => { void embeddedDriver?.restart() },
   })
   registerChromeIpc()
+  registerDictation()
   browserHistory = new BrowserHistoryStore(path.join(app.getPath('userData'), 'browser-history.sqlite'))
   browserBookmarks = new BrowserBookmarksStore(path.join(app.getPath('userData'), 'browser-bookmarks.sqlite'))
   browserPasswords = new BrowserPasswordStore(path.join(app.getPath('userData'), 'browser-passwords.sqlite'), {
@@ -145,6 +173,37 @@ app.whenReady().then(async () => {
     if (BrowserWindow.getAllWindows().length === 0) void createWindow()
   })
 })
+
+/**
+ * Local dictation: the speech models under userData, downloaded through Electron's
+ * network stack so the system proxy applies, and transcription in its own utility
+ * process. Both stop at quit, which aborts a download and frees a loaded model.
+ */
+function registerDictation(): void {
+  const store = new DictationModelStore({
+    root: path.join(app.getPath('userData'), 'dictation-models'),
+    fetch: (url, init) => net.fetch(url, init),
+    catalog: DICTATION_CATALOG,
+    onChange: (models) => pushDictationModels(mainWindow, models),
+  })
+  const service = new DictationService({
+    store,
+    spawnHost: () => {
+      const child = utilityProcess.fork(path.join(__dirname, 'dictationHost.js'), [], { serviceName: 'Manor dictation' })
+      return {
+        post: (message) => child.postMessage(message),
+        onMessage: (listener) => { child.on('message', listener) },
+        onExit: (listener) => { child.once('exit', listener) },
+        kill: () => { child.kill() },
+      }
+    },
+  })
+  registerDictationIpc({ owner: () => mainWindow, store, service })
+  app.on('will-quit', () => {
+    store.stop()
+    service.stop()
+  })
+}
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit()

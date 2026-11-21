@@ -3,6 +3,7 @@ import type { SettingsLocation } from '../settings/sections'
 import { isSettingsShortcut } from '../settings/sections'
 import { ViewBoundary, retryableLazy } from '../RecoveryBoundary'
 import type { SettingsController } from '../../useSettings'
+import { subscribeSettingsRequests } from '../../settingsIntent'
 import type { useTheme } from '../../useTheme'
 import type { Manor } from '../../useWorkspace'
 
@@ -10,7 +11,8 @@ const SettingsHost = retryableLazy(() => import('../settings/SettingsHost').then
 
 /**
  * Settings, from the account popover, ⌘, or one of the doors into a page: the Auto
- * mode gear, and Agent settings for an agent without a DM. Each page reads what it shows on the
+ * mode gear, Agent settings for an agent without a DM, and any page `openSettingsAt` names
+ * (Voice, from the composer's dictation popover). Each page reads what it shows on the
  * way in, so a stale copy is never what a form saves back. New agent is not a page:
  * it leaves Settings (asking about an unsaved edit) and opens the short form over the
  * workspace. Also owns ⌘, itself, which opens Settings as on any Mac app and inside
@@ -27,6 +29,10 @@ export function useSettingsDoors(settings: SettingsController, dismissNotice: ()
     settings.open('auto')
   }, [dismissNotice, settings.open])
   const editAgent = useCallback((agentId: string) => settings.open('agents', agentId), [settings.open])
+  useEffect(() => subscribeSettingsRequests((section) => {
+    dismissNotice()
+    settings.open(section)
+  }), [dismissNotice, settings.open])
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {

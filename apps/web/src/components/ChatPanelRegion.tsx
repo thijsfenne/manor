@@ -526,6 +526,7 @@ export function ChatPanelRegion({
     if (id === 'side') return (
       <SideChatPanel
         agents={namedRoster}
+        dictation={workspace.houseSettings}
         runtime={sideRuntime}
         onRuntimeChange={setSideRuntime}
         parentChatId={open.id}

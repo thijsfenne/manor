@@ -2958,6 +2958,12 @@ export type KeepAwakeMode = z.infer<typeof KeepAwakeModeSchema>
 /** The engines the Browser's address bar can search with. A closed list: no URL template. */
 export const BrowserSearchEngineSchema = z.enum(['google', 'duckduckgo', 'bing', 'brave', 'ecosia', 'kagi'])
 export type BrowserSearchEngine = z.infer<typeof BrowserSearchEngineSchema>
+/** The local speech models dictation can run. */
+export const DictationModelIdSchema = z.enum(['whisper-turbo', 'parakeet-tdt-v3'])
+export type DictationModelId = z.infer<typeof DictationModelIdSchema>
+/** `auto` lets the model find the language itself. */
+export const DictationLanguageSchema = z.enum(['auto', 'nl', 'en'])
+export type DictationLanguage = z.infer<typeof DictationLanguageSchema>
 
 export const HouseSettingsSchema = z.object({
   /** A project chat quiet this long is settled. Null leaves every chat where it is. */
@@ -2992,6 +2998,12 @@ export const HouseSettingsSchema = z.object({
   keepAwake: KeepAwakeModeSchema.default('off'),
   /** Where words typed into the Browser's address bar are searched. */
   browserSearchEngine: BrowserSearchEngineSchema.default('google'),
+  /** The model the composer's dictation transcribes with, once it is downloaded. */
+  dictationModel: DictationModelIdSchema.default('whisper-turbo'),
+  /** The language dictation asks the model for; a model that finds it itself ignores it. */
+  dictationLanguage: DictationLanguageSchema.default('auto'),
+  /** The `deviceId` of the input dictation records from; empty is the system default. */
+  dictationMicrophone: z.string().max(512).default(''),
 })
 export type HouseSettings = z.infer<typeof HouseSettingsSchema>
 
@@ -6211,11 +6223,54 @@ export interface DesktopPermissionsBridge {
   open(id: DesktopPermissionId): Promise<void>
 }
 
+export type DictationModelState = 'missing' | 'downloading' | 'ready' | 'failed'
+export interface DictationModelStatus {
+  id: DictationModelId
+  /** Size on disk once downloaded. */
+  bytes: number
+  state: DictationModelState
+  /** 0 to 1 while `downloading`, otherwise 0. */
+  progress: number
+  /** A sentence for the user, when `failed`. */
+  error?: string
+}
+/** `message` is a sentence for the user. */
+export type DictationResult =
+  | { ok: true; text: string }
+  | { ok: false; reason: 'model-missing' | 'failed'; message: string }
+export type MicrophoneAccess = 'granted' | 'denied' | 'unknown'
+export interface DictationRequest {
+  model: DictationModelId
+  language: DictationLanguage
+  /** Mono, 16 kHz, -1 to 1. */
+  samples: Float32Array
+}
+
+/**
+ * Local dictation on the Mac: the speech models on disk, transcription of a finished
+ * recording, and what macOS says about the microphone.
+ */
+export interface DesktopDictationBridge {
+  /** Fires now with every model's status, then on each change. Returns its own undo. */
+  onModels(listener: (models: DictationModelStatus[]) => void): () => void
+  download(id: DictationModelId): Promise<void>
+  cancelDownload(id: DictationModelId): Promise<void>
+  remove(id: DictationModelId): Promise<void>
+  /** Loads the model ahead of the first `transcribe`, so a recording does not wait for it. */
+  warm(model: DictationModelId, language: DictationLanguage): Promise<void>
+  transcribe(request: DictationRequest): Promise<DictationResult>
+  /** What macOS says about Manor and the microphone; never prompts. */
+  microphoneAccess(): Promise<MicrophoneAccess>
+  openMicrophoneSettings(): Promise<void>
+}
+
 export interface DesktopHostBridge {
   browser: DesktopBrowserBridge
   computer?: DesktopComputerBridge
   permissions?: DesktopPermissionsBridge
   files?: DesktopFilesBridge
+  /** Local dictation for the composer; absent on shells without the speech engine. */
+  dictation?: DesktopDictationBridge
   /** The Finder folder dialog on the Mac: the absolute path chosen, or null on cancel. */
   chooseFolder?: () => Promise<string | null>
   /** The key of the Manor server on this Mac, so its own desktop shell needs no sign-in; null when there is none. */

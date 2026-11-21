@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ClipboardEvent, type KeyboardEvent as ReactKeyboardEvent, type MutableRefObject, type ReactNode } from 'react'
 import { ArrowUp01Icon, Attachment01Icon, BotIcon, BoxIcon, ComputerIcon, File01Icon, Globe02Icon, Image01Icon, MessageMultiple01Icon, PlusSignIcon } from '@hugeicons/core-free-icons'
-import { MAX_MESSAGE_ATTACHMENTS, MAX_MESSAGE_QUOTES, MAX_PAGE_CONTEXT_ATTACHMENTS, addsAgentMention, compactQuoteRefs, formatImageRef, imageRefSpans, quoteRefSpans, renumberImageRefs, snapRefDeletion } from '@manor/contracts'
+import { DEFAULT_HOUSE_SETTINGS, MAX_MESSAGE_ATTACHMENTS, MAX_MESSAGE_QUOTES, MAX_PAGE_CONTEXT_ATTACHMENTS, addsAgentMention, compactQuoteRefs, formatImageRef, imageRefSpans, quoteRefSpans, renumberImageRefs, snapRefDeletion } from '@manor/contracts'
 import { insertQuote } from '@manor/client-runtime/message-quotes'
 import type { AgentConfig, ChatCommandContext, ChatOverride, InlineQuote, MessageReply, PageContextAttachment, SkillConfig } from '@manor/contracts'
 import { AnimatePresence, animate, motion, useMotionValue, useReducedMotion } from 'motion/react'
@@ -25,7 +25,9 @@ import {
   parseMentions,
   replyFallbackTargets,
 } from '../mentions'
-import { desktopComputer } from '../desktopBrowser'
+import { desktopComputer, desktopDictation } from '../desktopBrowser'
+import { insertDictation } from '../dictation/insert'
+import type { DictationSettings } from '../dictation/useDictation'
 import { composerEscapeStep, useReplyOnType } from '../focusMode'
 import { CHAT_ATTACH_ACCEPT, isAttachable, readAttachments } from '../chatFiles'
 import { base64Bytes, describeBytes, utf8Size, type ComposerAttachments } from '@manor/client-runtime/attachments'
@@ -39,6 +41,7 @@ import { FileMark } from './fileMark'
 import { ContextRing } from './ContextRing'
 import type { ContextMeter } from '@manor/client-runtime/context-meter'
 import { chatCommandRows, commandDraft, draftCommandRefusal, type ChatCommandRow } from '@manor/client-runtime/chat-commands'
+import { ComposerDictation } from './ComposerDictation'
 import { ComposerEditor, IMAGE_REF_DRAG_TYPE, type ComposerEditorHandle } from './ComposerEditor'
 import { ImageNumberBadge } from './MentionText'
 import { COMPOSER_CARD_HEIGHTS, useComposerCardHeight, useComposerRow, type ComposerCardHeights } from './useComposerCardHeight'
@@ -289,6 +292,11 @@ interface ComposerProps {
   focusMode?: boolean
   /** New-Session stage only: Escape with nothing open drops the project. Absent, there is nothing to drop. */
   onEscapeIdle?: () => void
+  /**
+   * The house's dictation model, language and microphone, for the microphone beside send.
+   * Callers hand `workspace.houseSettings` as it is; null before it loads uses the defaults.
+   */
+  dictation?: DictationSettings | null
 }
 
 /**
@@ -307,13 +315,15 @@ interface ComposerProps {
 const CARD_REACH = '[&:not(:has([data-composer-above]:not(:empty)))]:[--composer-reach:12px]'
 const CARD_REACH_DENSE = '[&:not(:has([data-composer-above]:not(:empty)))]:[--composer-reach:8px]'
 
-export function Composer({ agents, commandContext, household, overrides = NO_OVERRIDES, files = NO_FILES, filesTruncated = false, skills = NO_SKILLS, fallbackTargets, allowAgentMentions = true, onAgentMention, allowWorkDestination = true, allowBrowserMentions = true, allowComputerMentions, allowAttachments = true, allowSkills = true, allSkillsAvailable = false, showRecipients = false, memberIds, recipientsUnknown = false, steeredAgent, placeholder, draftKey, onSend, pageContexts = NO_PAGE_CONTEXTS, onRemovePageContext, replyTo, onRemoveReply, canSend, blockedNote, autoFocus = false, controls, contextMeter, checkout, onStop, running = false, touchMode = false, compact = false, heights, oneRow = false, boxRef, travelFrom = null, focusMode = false, onEscapeIdle }: ComposerProps) {
+export function Composer({ agents, commandContext, household, overrides = NO_OVERRIDES, files = NO_FILES, filesTruncated = false, skills = NO_SKILLS, fallbackTargets, allowAgentMentions = true, onAgentMention, allowWorkDestination = true, allowBrowserMentions = true, allowComputerMentions, allowAttachments = true, allowSkills = true, allSkillsAvailable = false, showRecipients = false, memberIds, recipientsUnknown = false, steeredAgent, placeholder, draftKey, onSend, pageContexts = NO_PAGE_CONTEXTS, onRemovePageContext, replyTo, onRemoveReply, canSend, blockedNote, autoFocus = false, controls, contextMeter, checkout, onStop, running = false, touchMode = false, compact = false, heights, oneRow = false, boxRef, travelFrom = null, focusMode = false, onEscapeIdle, dictation }: ComposerProps) {
   const hostAuto = useHostAuto()
   const canMentionComputer = (allowComputerMentions ?? desktopComputer() !== undefined) && !touchMode
   const reduceMotion = useReducedMotion()
   /** One size for every round control in the row, so they never disagree about the line. */
   const controlSize = touchMode ? 'h-11 w-11' : compact ? 'h-7 w-7' : 'h-8 w-8'
   const dense = compact && !touchMode
+  // Dictation is a Mac desktop capability, and never on a phone's touch composer.
+  const dictationBridge = touchMode ? undefined : desktopDictation()
   const rootRef = useRef<HTMLDivElement | null>(null)
   const travelY = useMotionValue(0)
   const travelled = useRef(false)
@@ -825,6 +835,19 @@ export function Composer({ agents, commandContext, household, overrides = NO_OVE
     setCaret(next.selectionEnd)
   }
 
+  /**
+   * A finished dictation lands at the caret the draft last had (its end until the editor
+   * held one) and focus follows it there. It goes into the draft as it is now, typed
+   * words included, since the transcript arrives seconds after ✓ was pressed.
+   */
+  const insertDictated = (text: string) => {
+    const next = insertDictation(liveDraft.current.text, liveCaret.current, text)
+    pendingSelection.current = { start: next.caret, end: next.caret }
+    setValue(next.text)
+    setCaret(next.caret)
+    setDismissedAt(null)
+  }
+
   /** Says why the draft cannot go, or what the last attachment did. Empty is the normal case. */
   const note = commandNote ?? attachError ?? (reading > 0 ? 'Adding your attachment…' : canSend ? '' : blockedNote)
 
@@ -1081,6 +1104,16 @@ export function Composer({ agents, commandContext, household, overrides = NO_OVE
   const actions = (
     <div className="flex flex-none items-center gap-2">
       {contextMeter === undefined ? null : <ContextRing controlSize={controlSize} {...contextMeter} />}
+      {dictationBridge === undefined ? null : (
+        <ComposerDictation
+          key={draftKey}
+          bridge={dictationBridge}
+          settings={dictation ?? DEFAULT_HOUSE_SETTINGS}
+          controlSize={controlSize}
+          dense={dense}
+          onInsert={insertDictated}
+        />
+      )}
       {/* One button rather than two, which is what lets the mark change in place: two
           of them would remount on the switch and there would be nothing to cross-fade
           between. Which act it carries is still the same rule, an empty draft while a

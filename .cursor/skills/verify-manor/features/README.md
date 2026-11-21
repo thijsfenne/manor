@@ -58,3 +58,4 @@ Each feature file starts with an H1 title and one paragraph describing the user-
 - [DM files](./dm-files.md) covers the Files row of a DM's Agent settings: the library, its filter, the hover card and menu, the viewer and the empty state.
 - [Project threads](./project-threads.md) covers the Projects section, the thread's file writes, its sessions in the split, question routing, Confirm in the thread, DM briefs, the Context panel and removal.
 - [Settings permissions](./settings-permissions.md) covers Settings → Permissions: Accessibility and Screen Recording states, Open System Settings, the live grant and the browser-tab sentence, through the desktop-permissions stub.
+- [Dictation](./dictation.md) covers the composer microphone (first-use download, recording, transcribing, cancel, errors) and Settings → Voice, through the desktop-dictation stub, plus how to run real speech through the Electron shell.

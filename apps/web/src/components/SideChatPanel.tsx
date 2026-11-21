@@ -5,6 +5,7 @@ import { SIDE_CHAT_DEFAULTS, type AgentConfig, type Effort, type ImageAttachment
 import { useLiveThread } from '../liveThread'
 import { rowsOf, type TurnRow } from '../state'
 import { AskDock } from './AskCard'
+import type { DictationSettings } from '../dictation/useDictation'
 import { Composer } from './Composer'
 import { ConfirmStrip } from './Confirm'
 import { SideRuntimeMenu } from './SideRuntimeMenu'
@@ -24,6 +25,8 @@ interface SideChatPanelProps {
    * transcript; only its turn status is shown above an answer.
    */
   agents: AgentConfig[]
+  /** The house's dictation settings, for the composer's microphone; null before they load. */
+  dictation?: DictationSettings | null
   /**
    * What this panel runs on, already resolved by the server. Undefined only while the
    * thread is still being opened, where the defaults stand in and the menu is dead:
@@ -103,6 +106,7 @@ const noChatCommands = () => NO_CHAT_COMMANDS
 
 export function SideChatPanel({
   agents,
+  dictation = null,
   runtime,
   onRuntimeChange,
   parentChatId,
@@ -244,6 +248,7 @@ export function SideChatPanel({
           // A panel beside a chat: a shorter resting box and a smaller send mark, since
           // nothing here attaches a file or addresses a persona anyway.
           compact
+          dictation={dictation}
           placeholder="Ask about this chat."
           draftKey={`side:${parentChatId}`}
           controls={

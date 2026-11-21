@@ -1,8 +1,8 @@
 /**
  * What the renderer itself is allowed to ask Chromium for. The shell denies by
- * default: camera, microphone, geolocation and the page's own `Notification` all go
- * through here, and done notices ship through the host bridge instead precisely
- * because this says no.
+ * default: camera, geolocation and the page's own `Notification` all go through
+ * here, and done notices ship through the host bridge instead precisely because
+ * this says no.
  *
  * Writing to the clipboard is the one exception. Chromium routes every
  * `navigator.clipboard.writeText` through this handler, so a blanket deny turns each
@@ -17,7 +17,26 @@
  */
 const ALLOWED = new Set(['clipboard-sanitized-write', 'fullscreen'])
 
-export function allowsRendererPermission(permission: string): boolean {
+/**
+ * The microphone is the one media grant: the composer's dictation records audio from
+ * Manor's own page. A request that also wants the camera or the screen, that comes
+ * from a frame inside the page, or that comes from any contents other than the Manor
+ * window stays denied. `details` is Electron's request details plus `fromManorWindow`,
+ * which the caller sets when the request comes from the Manor window while it shows
+ * Manor's own page.
+ */
+export function allowsRendererPermission(
+  permission: string,
+  details?: { isMainFrame?: boolean; mediaTypes?: readonly string[]; fromManorWindow?: boolean },
+): boolean {
+  if (permission === 'media') {
+    return (
+      details?.fromManorWindow === true &&
+      details.isMainFrame === true &&
+      details.mediaTypes?.length === 1 &&
+      details.mediaTypes[0] === 'audio'
+    )
+  }
   return ALLOWED.has(permission)
 }
 

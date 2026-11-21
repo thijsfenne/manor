@@ -29,7 +29,8 @@
     "@ghostery/adblocker": "2.20.1",
     "@ghostery/adblocker-electron": "2.20.1",
     "@ghostery/adblocker-electron-preload": "2.20.1",
-    "@manor/contracts": "workspace:*"
+    "@manor/contracts": "workspace:*",
+    "sherpa-onnx-node": "2.0.2"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
@@ -41,6 +42,9 @@
   "build": {
     "appId": "com.thijsfenne.manor",
     "asar": true,
+    "asarUnpack": [
+      "**/node_modules/sherpa-onnx-*/**"
+    ],
     "directories": {
       "output": "release"
     },
@@ -79,7 +83,8 @@
         "NSAppleEventsUsageDescription": "An agent in Manor wants to control another app for a task you gave it.",
         "NSDocumentsFolderUsageDescription": "Manor reads the folders you link to a project, and agents work in them.",
         "NSDesktopFolderUsageDescription": "Manor reads the folders you link to a project, and agents work in them.",
-        "NSDownloadsFolderUsageDescription": "Manor reads the folders you link to a project, and agents work in them."
+        "NSDownloadsFolderUsageDescription": "Manor reads the folders you link to a project, and agents work in them.",
+        "NSMicrophoneUsageDescription": "Manor listens while you dictate a message and turns your speech into text on this Mac."
       }
     },
     "dmg": {

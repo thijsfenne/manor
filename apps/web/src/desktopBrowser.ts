@@ -1,4 +1,4 @@
-import type { DesktopBrowserBridge, DesktopComputerBridge, DesktopFilesBridge, DesktopHostBridge, DesktopNotifyBridge, DesktopPermissionsBridge, DesktopPresenceBridge } from '@manor/contracts'
+import type { DesktopBrowserBridge, DesktopComputerBridge, DesktopDictationBridge, DesktopFilesBridge, DesktopHostBridge, DesktopNotifyBridge, DesktopPermissionsBridge, DesktopPresenceBridge } from '@manor/contracts'
 
 declare global {
   interface Window {
@@ -137,4 +137,9 @@ export async function reuseBrowserTab(browser: DesktopBrowserBridge, chatId: str
 /** Manor's macOS permissions, or nothing in a browser tab or a shell that predates the bridge. */
 export function desktopPermissions(): DesktopPermissionsBridge | undefined {
   return typeof window === 'undefined' ? undefined : window.manorDesktop?.permissions
+}
+
+/** Local dictation on the Mac, or nothing in a browser tab or a shell that predates the bridge. */
+export function desktopDictation(): DesktopDictationBridge | undefined {
+  return typeof window === 'undefined' ? undefined : window.manorDesktop?.dictation
 }

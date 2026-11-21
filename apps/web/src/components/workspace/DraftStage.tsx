@@ -241,6 +241,7 @@ export function DraftStage({
       files={composerFiles?.files}
       filesTruncated={composerFiles?.truncated}
       skills={workspace.skills}
+      dictation={workspace.houseSettings}
       {...(draftAgent !== undefined ? { fallbackTargets: [draftAgent] } : {})}
       draftKey={draftKey}
       onSend={send}

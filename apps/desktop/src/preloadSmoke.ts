@@ -2,6 +2,10 @@ import path from 'node:path'
 import { app, BrowserWindow, ipcMain } from 'electron'
 import { BROWSER_PREVIEW_CHANNEL, BROWSER_SHORTCUT_CHANNEL, BROWSER_STATE_CHANNEL } from './browserChannels'
 import { BROWSER_WEBVIEWS_CHANNEL } from './browserWebviews'
+import {
+  DICTATION_CANCEL_CHANNEL, DICTATION_DOWNLOAD_CHANNEL, DICTATION_MICROPHONE_CHANNEL, DICTATION_MICROPHONE_SETTINGS_CHANNEL,
+  DICTATION_MODELS_CHANNEL, DICTATION_REMOVE_CHANNEL, DICTATION_TRANSCRIBE_CHANNEL, DICTATION_WARM_CHANNEL,
+} from './dictationChannels'
 import { CHOOSE_FOLDER_CHANNEL } from './folderDialog'
 import { LOCAL_ACCESS_CHANNEL } from './localAccess'
 import { NOTIFY_ACTIVATE_CHANNEL } from './notifyChannels'
@@ -24,6 +28,16 @@ const EXPECTED = [
 ]
 const EXPECTED_NOTIFY = ['show', 'badge', 'onActivate']
 const EXPECTED_FILES = ['open', 'save']
+/** Every dictation call in bridge order, each answered by a stub that returns its own channel name. */
+const DICTATION_CALLS = [
+  ['download', DICTATION_DOWNLOAD_CHANNEL],
+  ['cancelDownload', DICTATION_CANCEL_CHANNEL],
+  ['remove', DICTATION_REMOVE_CHANNEL],
+  ['warm', DICTATION_WARM_CHANNEL],
+  ['transcribe', DICTATION_TRANSCRIBE_CHANNEL],
+  ['microphoneAccess', DICTATION_MICROPHONE_CHANNEL],
+  ['openMicrophoneSettings', DICTATION_MICROPHONE_SETTINGS_CHANNEL],
+] as const
 
 app.whenReady().then(async () => {
   const failures: string[] = []
@@ -110,6 +124,52 @@ app.whenReady().then(async () => {
       throw new Error('Permissions open channel mismatch.')
     }
 
+    // Dictation's channels are literals in the preload too. Drift is a microphone button
+    // whose download, transcription or model list never answers.
+    // The transcribe stub also checks the samples arrive typed, since main refuses anything else.
+    for (const [, channel] of DICTATION_CALLS) {
+      ipcMain.handle(channel, (_event, request: unknown) => channel !== DICTATION_TRANSCRIBE_CHANNEL ||
+        (request as { samples?: unknown } | undefined)?.samples instanceof Float32Array ? channel : 'untyped samples')
+    }
+    const dictationAnswers = await window.webContents.executeJavaScript(`(async () => {
+      const dictation = manorDesktop.dictation
+      return [
+        await dictation.download('whisper-turbo'),
+        await dictation.cancelDownload('whisper-turbo'),
+        await dictation.remove('whisper-turbo'),
+        await dictation.warm('whisper-turbo', 'auto'),
+        await dictation.transcribe({ model: 'whisper-turbo', language: 'auto', samples: new Float32Array(4) }),
+        await dictation.microphoneAccess(),
+        await dictation.openMicrophoneSettings(),
+      ]
+    })()`) as string[]
+    const driftedDictation = DICTATION_CALLS.filter(([, channel], index) => dictationAnswers[index] !== channel)
+    if (driftedDictation.length > 0) throw new Error(`Dictation channel mismatch for ${driftedDictation.map(([method]) => method).join(', ')}.`)
+    // `onModels` pulls the current list on subscribe, then hears each push on the same channel.
+    ipcMain.handle(DICTATION_MODELS_CHANNEL, () => [{ id: 'pulled' }])
+    await window.webContents.executeJavaScript(`(() => {
+      globalThis.__modelsHeard = []
+      let resolvePulled, resolvePushed
+      globalThis.__modelsPulled = new Promise((resolve, reject) => {
+        resolvePulled = resolve
+        setTimeout(() => reject(new Error('no model list was pulled')), 5000)
+      })
+      globalThis.__modelsPushed = new Promise((resolve, reject) => {
+        resolvePushed = resolve
+        setTimeout(() => reject(new Error('no model list was pushed')), 10000)
+      })
+      manorDesktop.dictation.onModels((models) => {
+        globalThis.__modelsHeard.push(models[0].id)
+        if (models[0].id === 'pulled') resolvePulled(true)
+        if (models[0].id === 'pushed') resolvePushed(globalThis.__modelsHeard)
+      })
+      return true
+    })()`)
+    await window.webContents.executeJavaScript('globalThis.__modelsPulled')
+    window.webContents.send(DICTATION_MODELS_CHANNEL, [{ id: 'pushed' }])
+    const modelsHeard = await window.webContents.executeJavaScript('globalThis.__modelsPushed') as string[]
+    if (modelsHeard.join(',') !== 'pulled,pushed') throw new Error(`The models channel delivered ${JSON.stringify(modelsHeard)}.`)
+
     // The push channel is the one string main and preload must agree on, and the
     // preload cannot import it. A disagreement is a tab strip that never updates.
     // Parked on a global first: `send` from this process would otherwise race the
@@ -190,6 +250,8 @@ app.whenReady().then(async () => {
       activateChannel: NOTIFY_ACTIVATE_CHANNEL,
       zoomChannel: ZOOM_CHANNEL,
       fullscreenChannel: FULLSCREEN_CHANNEL,
+      dictationAnswers,
+      modelsHeard,
       received: state,
       activated,
       zoom,

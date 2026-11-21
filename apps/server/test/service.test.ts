@@ -670,6 +670,12 @@ describe('ManorService', () => {
     expect(await store.getHouseSettings()).toEqual(DEFAULT_HOUSE_SETTINGS)
     await manor.handle({ type: 'save_house_settings', settings: { ...DEFAULT_HOUSE_SETTINGS, browserSearchEngine: 'kagi' } }, reply)
     expect((await store.getHouseSettings()).browserSearchEngine).toBe('kagi')
+    await manor.handle({ type: 'save_house_settings', settings: { ...DEFAULT_HOUSE_SETTINGS, dictationModel: 'nope' } }, reply)
+    expect(replies.at(-1)).toMatchObject({ type: 'notice', kind: 'error' })
+    expect((await store.getHouseSettings()).dictationModel).toBe('whisper-turbo')
+    const dictation = { dictationModel: 'parakeet-tdt-v3', dictationLanguage: 'nl', dictationMicrophone: 'usb-mic-1' } as const
+    await manor.handle({ type: 'save_house_settings', settings: { ...DEFAULT_HOUSE_SETTINGS, browserSearchEngine: 'kagi', ...dictation } }, reply)
+    expect(await store.getHouseSettings()).toEqual({ ...DEFAULT_HOUSE_SETTINGS, browserSearchEngine: 'kagi', ...dictation })
 
     const threeDays = 3 * 24 * 60 * 60 * 1000
     expect(await manor.purgeExpiredArchivedChats(archivedAt + threeDays)).toEqual([])

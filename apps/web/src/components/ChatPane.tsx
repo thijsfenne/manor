@@ -532,6 +532,7 @@ export function ChatPane({
       files={composerFiles?.files}
       filesTruncated={composerFiles?.truncated}
       skills={workspace.skills}
+      dictation={workspace.houseSettings}
       {...(!singleChat && composerFallback !== undefined ? { fallbackTargets: composerFallback } : {})}
       draftKey={chat.id}
       onSend={send}
