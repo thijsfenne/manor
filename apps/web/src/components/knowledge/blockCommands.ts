@@ -298,6 +298,10 @@ export type InsertKind = Exclude<BlockKind, 'code'> | 'code' | 'divider' | 'call
 
 const TABLE = '| Column 1 | Column 2 |\n| --- | --- |\n|  |  |'
 
+export function canInsertBlock(state: EditorState): boolean {
+  return !state.readOnly && editableLine(state, state.doc.lineAt(state.selection.main.head))
+}
+
 /**
  * The block `kind` at the caret's line. An empty line becomes the block; a line
  * with text keeps it and gets the block on a new line below, which is what Notion
@@ -305,9 +309,8 @@ const TABLE = '| Column 1 | Column 2 |\n| --- | --- |\n|  |  |'
  */
 export function insertBlock(kind: InsertKind): NoteTransform {
   return (state) => {
-    const pos = state.selection.main.head
-    const line = state.doc.lineAt(pos)
-    if (!editableLine(state, line)) return null
+    if (!canInsertBlock(state)) return null
+    const line = state.doc.lineAt(state.selection.main.head)
     const prefix = linePrefix(line.text)
     const empty = line.text.slice(prefix.end).trim() === ''
 

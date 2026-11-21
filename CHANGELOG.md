@@ -4,6 +4,8 @@ What changed for someone who uses Manor, newest first. A version is a tag on `ma
 
 ## Unreleased
 
+- On desktop and web, Knowledge notes show the filename as a large title, with the folder path and editing tools above it. Note properties appear in rows with tag chips and a status pill. Click a value to edit its YAML.
+
 - A picture dragged from the desktop onto a Knowledge note is saved in the vault's attachment folder and added to the note, wherever you let go on the note page, also beside or below the text of a short note. Before, a drop outside the lines of text did nothing. A dropped picture lands on the line after the one under the pointer, after a whole table or code block, and never inside the note's properties.
 - A persona's face now moves with more of what her turn does, on the Mac, the web and the phone. On top of the moving eyes she rocks twice while she searches, leans in while she edits, squashes once when she runs a command, shivers once when a call fails and rolls once while the conversation is compacted. Plain tool calls keep the eyes alone. In a direct message her face stays under a reply that lands whole for a moment, smiles and nods, then goes; a stopped or failed turn still leaves at once. The phone needs a new build.
 - On the phone, a table in a chat that is wider than the screen scrolls sideways again and reaches the screen's edges, with a soft fade on each side that still has columns out of sight. Long cell text wraps onto more lines, up to a column width, instead of being cut off with an ellipsis. Before, the table looked cut off at the edge and a swipe on it did nothing. A table that fits has no fade, and swiping to reply on the rest of a message works as before.

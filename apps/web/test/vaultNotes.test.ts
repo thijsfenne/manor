@@ -128,17 +128,17 @@ describe('frontmatter as properties', () => {
 
   it('keeps every key in file order, not just the four the chips use', () => {
     expect(readProperties(block)).toEqual([
-      { key: 'type', values: ['meeting'] },
-      { key: 'tags', values: ['client/acme', 'topic/ai'] },
-      { key: 'granola', values: ['https://notes.granola.ai/d/abc'] },
-      { key: 'status', values: [] },
+      { key: 'type', line: 0, values: ['meeting'] },
+      { key: 'tags', line: 1, values: ['client/acme', 'topic/ai'] },
+      { key: 'granola', line: 4, values: ['https://notes.granola.ai/d/abc'] },
+      { key: 'status', line: 5, values: [] },
     ])
   })
 
   it('does not mistake a bracketed scalar for a list, or a URL for one', () => {
     expect(readProperties(['title: [draft] the offer', 'tags: [a, b]'])).toEqual([
-      { key: 'title', values: ['draft] the offer'] },
-      { key: 'tags', values: ['a', 'b'] },
+      { key: 'title', line: 0, values: ['draft] the offer'] },
+      { key: 'tags', line: 1, values: ['a', 'b'] },
     ])
   })
 

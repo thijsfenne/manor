@@ -699,16 +699,13 @@ export function KnowledgePanel({
     setRenameRequest({ requestId: crypto.randomUUID(), path, newPath, phase: 'waiting' })
   }
 
-  const renameProps = {
-    path: path ?? '',
-    editing: renamePath === path && path !== null && editor !== null,
+  const renameProps = path !== null && renamePath === path && editor !== null ? {
+    path,
     busy: renameRequest !== null,
-    disabled: !live || editor === null || pendingAction !== null || isGone,
     error: renameError,
-    onStart: () => { if (path !== null) beginRename(path) },
     onCancel: () => { setRenamePath(null); setRenameError(null) },
     onSubmit: submitRename,
-  }
+  } : null
 
   const toggleFolder = useCallback((folder: string) => {
     setExpanded((current) => {
@@ -1068,7 +1065,7 @@ export function KnowledgePanel({
             </div>
           </div>
           {/* The tabs name the note; a rename asked for from the tree is typed here. */}
-          {renameProps.editing ? <div className="px-3 pb-2 text-label text-text"><NoteName key={path} {...renameProps} /></div> : null}
+          {renameProps !== null ? <div className="px-3 pb-2 text-label text-text"><NoteName key={path} {...renameProps} /></div> : null}
         </div>
 
         <div className={`grid min-h-0 ${splitColumns ? SPLIT_COLUMNS : 'grid-cols-1'}`}>

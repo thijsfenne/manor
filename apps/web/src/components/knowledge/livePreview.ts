@@ -3,9 +3,12 @@ import { HighlightStyle, syntaxHighlighting, syntaxTree } from '@codemirror/lang
 import { StateField, type EditorState, type Extension, type Range } from '@codemirror/state'
 import { Decoration, EditorView, ViewPlugin, WidgetType, type DecorationSet, type ViewUpdate } from '@codemirror/view'
 import { tags } from '@lezer/highlight'
+import { createElement } from 'react'
+import { createRoot, type Root } from 'react-dom/client'
 import { calloutTitle, calloutTone, readProperties } from '../../vaultNotes'
 import { noteEditingExtensions } from './noteEditing'
-import { blockGap, inFrontmatter } from './noteSyntax'
+import { blockGap, frontmatterRange, inFrontmatter } from './noteSyntax'
+import { NoteProperties } from './NoteProperties'
 import { tablePreviewField, tablePreviewTheme } from './tablePreview'
 
 /**
@@ -67,6 +70,8 @@ const frontmatter = Decoration.line({ class: 'cm-manor-frontmatter' })
  * makes the panel vanish and the source appear — the same bargain every other marker
  * in this editor strikes, and the reason no field here needs to be separately editable.
  */
+const propertyRoots = new WeakMap<HTMLElement, Root>()
+
 class PropertiesWidget extends WidgetType {
   constructor(private readonly source: string) {
     super()
@@ -77,58 +82,31 @@ class PropertiesWidget extends WidgetType {
   }
 
   toDOM(view: EditorView) {
-    const wrap = window.document.createElement('div')
+    const wrap = view.dom.ownerDocument.createElement('div')
     wrap.className = 'cm-manor-properties-gap'
-    const panel = window.document.createElement('div')
-    panel.className = 'cm-manor-properties'
-    panel.setAttribute('role', 'button')
-    panel.setAttribute('tabindex', '-1')
-    panel.title = 'Click to edit these properties as YAML'
-
-    for (const property of readProperties(this.source.split('\n').slice(1, -1))) {
-      const row = window.document.createElement('div')
-      row.className = 'cm-manor-property'
-      const key = window.document.createElement('span')
-      key.className = 'cm-manor-property-key'
-      key.textContent = property.key
-      const values = window.document.createElement('span')
-      values.className = 'cm-manor-property-values'
-      // A key with nothing under it still earns its row: an empty `status:` is a
-      // question somebody left open, and hiding it hides the question.
-      if (property.values.length === 0) {
-        const empty = window.document.createElement('span')
-        empty.className = 'cm-manor-property-empty'
-        empty.textContent = 'empty'
-        values.append(empty)
-      }
-      for (const value of property.values) {
-        const chip = window.document.createElement('span')
-        chip.className = 'cm-manor-property-value'
-        chip.textContent = value
-        values.append(chip)
-      }
-      row.append(key, values)
-      panel.append(row)
-    }
-
-    wrap.append(panel)
-
-    // Straight into the YAML, at the first property rather than at the `---` fence,
-    // because that is the line somebody clicking this panel means to change.
-    wrap.addEventListener('mousedown', (event) => {
-      event.preventDefault()
-      const pos = view.posAtDOM(wrap)
-      const line = view.state.doc.lineAt(pos)
-      const target = Math.min(line.number + 1, view.state.doc.lines)
-      view.dispatch({ selection: { anchor: view.state.doc.line(target).to } })
-      view.focus()
-    })
-
+    const root = createRoot(wrap)
+    propertyRoots.set(wrap, root)
+    root.render(createElement(NoteProperties, {
+      properties: readProperties(this.source.split('\n').slice(1, -1)),
+      onEdit: (line) => {
+        const fence = view.state.doc.lineAt(view.posAtDOM(wrap))
+        const target = view.state.doc.line(fence.number + 1 + line)
+        view.dispatch({ selection: { anchor: target.to }, scrollIntoView: true })
+        view.focus()
+      },
+    }))
     return wrap
   }
 
-  ignoreEvent() {
-    return false
+  destroy(dom: HTMLElement) {
+    const root = propertyRoots.get(dom)
+    propertyRoots.delete(dom)
+    // A document can close during a React commit.
+    queueMicrotask(() => root?.unmount())
+  }
+
+  ignoreEvent(event: Event) {
+    return event.type !== 'dragover' && event.type !== 'drop'
   }
 }
 const heading = HEADING_SCALE.map(({ size, above, below }) =>
@@ -632,17 +610,6 @@ function lineRange(state: EditorState, range: { from: number; to: number }): num
 }
 
 /** The leading `---` block, when the note opens with one. */
-function frontmatterRange(state: EditorState): { from: number; to: number } | null {
-  const doc = state.doc
-  if (doc.lines < 2 || doc.line(1).text.trimEnd() !== '---') return null
-  for (let n = 2; n <= doc.lines; n += 1) {
-    const line = doc.line(n)
-    const text = line.text.trimEnd()
-    if (text === '---' || text === '...') return { from: doc.line(1).from, to: line.to }
-  }
-  return null
-}
-
 /** Every line any cursor or selection touches. Those keep their markers. */
 function activeLines(view: EditorView): Set<number> {
   const lines = new Set<number>()
@@ -791,7 +758,7 @@ const theme = EditorView.theme({
   },
   // Prose keeps its reading measure; block tables may use the whole note pane.
   '.cm-line': { padding: '0', maxWidth: '46rem', marginLeft: 'auto', marginRight: 'auto' },
-  '.cm-manor-properties-gap': { maxWidth: '46rem', marginLeft: 'auto', marginRight: 'auto', paddingBottom: '1.2em' },
+  '.cm-manor-properties-gap': { paddingBottom: '0.75em', whiteSpace: 'normal' },
   // Padding, never margin. CodeMirror's height map is built from each line's
   // offsetHeight, which counts padding and ignores margin; a margined line therefore
   // measures short, the map drifts, and every click below it lands further down the
@@ -943,29 +910,6 @@ const theme = EditorView.theme({
   '.cm-manor-callout-good': { color: 'var(--color-ok)' },
   '.cm-manor-callout-warn': { color: 'var(--color-warn)' },
   '.cm-manor-callout-bad': { color: 'var(--color-danger)' },
-  '.cm-manor-properties': {
-    display: 'grid',
-    gap: '2px',
-    margin: '0',
-    padding: '10px 12px',
-    borderRadius: 'var(--radius-panel)',
-    border: '1px solid var(--color-line)',
-    background: 'var(--color-surface)',
-    cursor: 'text',
-  },
-  '.cm-manor-property': { display: 'grid', gridTemplateColumns: '112px minmax(0,1fr)', gap: '10px' },
-  '.cm-manor-property-key': { fontSize: '12px', lineHeight: '20px', color: 'var(--color-muted)' },
-  '.cm-manor-property-values': { display: 'flex', flexWrap: 'wrap', gap: '4px', minWidth: '0' },
-  '.cm-manor-property-value': {
-    fontSize: '12px',
-    lineHeight: '20px',
-    padding: '0 6px',
-    borderRadius: 'var(--radius-md)',
-    background: 'var(--color-surface-2)',
-    color: 'var(--color-muted)',
-    overflowWrap: 'anywhere',
-  },
-  '.cm-manor-property-empty': { fontSize: '12px', lineHeight: '20px', color: 'var(--color-muted)', fontStyle: 'italic' },
   '.cm-manor-wikilink': { color: 'var(--accent-fg)', textDecoration: 'underline', cursor: 'pointer', textUnderlineOffset: '2px' },
   '.cm-manor-wikilink:focus-visible': { outline: '2px solid var(--color-text)', outlineOffset: '2px', borderRadius: '2px' },
   '.cm-cursor, .cm-dropCursor': { borderLeftColor: 'var(--color-text)' },

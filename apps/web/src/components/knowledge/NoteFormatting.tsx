@@ -14,7 +14,7 @@ import {
   QuoteDownIcon,
   SolidLine01Icon,
   SourceCodeIcon,
-  Table01Icon,
+  TableIcon,
   TextBoldIcon,
   TextIcon,
   TextItalicIcon,
@@ -69,7 +69,7 @@ const MARK_BUTTONS: { mark: InlineMark; label: string; icon: IconData; shortcut:
 /** Inline marks that fold into More when the bar does not fit. Bold and italic always stay. */
 const FOLDING: ReadonlySet<InlineMark> = new Set(['strike', 'code'])
 
-const SLASH_ICONS: Record<SlashItem['id'], IconData> = {
+export const SLASH_ICONS: Record<SlashItem['id'], IconData> = {
   text: TextIcon,
   h1: Heading01Icon,
   h2: Heading02Icon,
@@ -81,7 +81,7 @@ const SLASH_ICONS: Record<SlashItem['id'], IconData> = {
   divider: SolidLine01Icon,
   code: CodeSquareIcon,
   callout: InformationCircleIcon,
-  table: Table01Icon,
+  table: TableIcon,
 }
 
 // ---------------------------------------------------------------------------

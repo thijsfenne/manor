@@ -17,7 +17,7 @@ import type { QuoteAction } from './NoteFormatting'
 import type { NoteAi } from './useNoteAi'
 import type { Components } from 'react-markdown'
 import { copyText } from '../../clipboard'
-import { noteFolder, parseNote, type NoteFrontmatter } from '../../vaultNotes'
+import { fileTitle, noteFolder, parseNote, type NoteFrontmatter } from '../../vaultNotes'
 import { Icon } from '../Icon'
 import { Markdown } from '../Markdown'
 import { Button } from '../ui/Button'
@@ -100,7 +100,7 @@ interface NoteDocumentProps {
   onChange: (text: string) => void
   onFollowNote: (target: string) => void
   linkError: string | null
-  rename: React.ComponentProps<typeof NoteName>
+  rename: React.ComponentProps<typeof NoteName> | null
 
   onOverwrite: () => void
   onTakeTheirs: () => void
@@ -147,6 +147,7 @@ export function NoteDocument({
   clearsSidebarToggle = false,
 }: NoteDocumentProps) {
   const scroller = useRef<HTMLDivElement>(null)
+  const [toolsSlot, setToolsSlot] = useState<HTMLDivElement | null>(null)
   // Where the reader was, as a fraction of the column, put back after a mode switch.
   // Rough on a long note (an edited line does not sit at the same fraction as its
   // rendered self) but it beats being thrown back to the top on every ⌘E.
@@ -177,52 +178,46 @@ export function NoteDocument({
 
   const source = editor?.text ?? (result?.status === 'ready' ? result.content : '')
   const parsed = parseNote(path, source)
+  const folders = noteFolder(path).split('/').filter(Boolean)
 
   return (
     <section role={chrome === 'page' ? 'main' : 'region'} aria-label="Note document" className={`relative grid min-h-0 min-w-0 grid-cols-[minmax(0,1fr)] ${chrome === 'page' ? 'grid-rows-[auto_minmax(0,1fr)] bg-bg' : 'grid-rows-[auto_minmax(0,1fr)]'}`}>
       {chrome === 'page' ? (
-      <header className={`border-b border-line px-10 pt-4 pb-3 max-[760px]:px-6 ${clearsSidebarToggle ? 'pl-[calc(1rem+var(--titlebar-inset)+44px)] max-[760px]:pl-[calc(1rem+var(--titlebar-inset)+44px)]' : ''}`}>
-        <div className={`mx-auto flex w-full ${COLUMN} items-start gap-3 max-[760px]:flex-wrap`}>
+      <header className={`px-3 pt-[var(--titlebar-row-pad)] pb-2 ${clearsSidebarToggle ? 'pl-[calc(1rem+var(--titlebar-inset)+44px)]' : ''}`}>
+        <div className="flex min-w-0 flex-wrap items-center gap-1.5">
           {onBack === undefined ? null : (
             <IconButton
               icon={ArrowLeft01Icon}
               label="Back to notes"
-              className="-ml-1.5 hidden max-[760px]:grid"
+              className="hidden max-[760px]:grid"
               onClick={onBack}
             />
           )}
-          <div className="min-w-0 flex-1">
-            <nav aria-label="Note location" className="mb-1.5 flex min-w-0 items-center gap-1.5 text-[12px] leading-5 text-muted" title={noteFolder(path) || 'Vault root'}>
-              <Icon icon={Folder01Icon} size={13} className="flex-none" />
-              <ol className="m-0 flex min-w-0 list-none items-center gap-1 p-0">
-                {(noteFolder(path).split('/').filter(Boolean).length === 0 ? ['Vault root'] : noteFolder(path).split('/')).map((folder, index) => (
-                  <li key={index} className="flex min-w-0 items-center gap-1">
-                    {index === 0 ? null : <Icon icon={ArrowRight01Icon} size={10} className="flex-none text-dim" />}
-                    <span className="truncate">{folder}</span>
-                  </li>
-                ))}
-              </ol>
-            </nav>
-            <div className="mt-0.5 font-display text-[19px] leading-snug font-semibold tracking-[-0.01em] text-text">
-              {rename.editing ? <NoteName key={path} {...rename} /> : <h1 className="m-0 text-inherit"><NoteName key={path} {...rename} /></h1>}
+          <nav aria-label="Note location" className="flex h-8 min-w-0 items-center gap-1.5 rounded-full bg-surface-2 px-2.5 text-label text-muted" title={noteFolder(path) || 'Vault root'}>
+            <Icon icon={Folder01Icon} size={14} className="flex-none" />
+            <ol className="m-0 flex min-w-0 list-none items-center gap-1 p-0">
+              {(folders.length === 0 ? ['Vault root'] : folders).map((folder, index) => (
+                <li key={index} className="flex min-w-0 items-center gap-1">
+                  {index === 0 ? null : <Icon icon={ArrowRight01Icon} size={10} className="flex-none text-dim" />}
+                  <span className="truncate">{folder}</span>
+                </li>
+              ))}
+            </ol>
+          </nav>
+          {editing || (vaultRoot !== null && !fresh) ? (
+            <div role="group" aria-label="Note tools" className="flex h-8 flex-none items-center rounded-full bg-surface-2 px-1">
+              {editing ? <div ref={setToolsSlot} className="flex items-center" /> : null}
+              {vaultRoot === null || fresh ? null : <CopyPath absolute={`${vaultRoot}/${path}`} />}
             </div>
-          </div>
-
-          <div className="flex flex-none items-center gap-2 max-[760px]:w-full">
-            {vaultRoot === null || fresh ? null : <CopyPath absolute={`${vaultRoot}/${path}`} />}
-            <span role="status" className="min-w-[7rem] text-right text-meta text-muted max-[760px]:flex-1 max-[760px]:text-left" title="Changes save automatically. ⌘S saves immediately.">
-              {conflict !== null || rejected !== null ? 'Not saved' : editBlocked !== '' ? 'Editing paused' : saving ? 'Saving…' : dirty ? 'Unsaved changes' : fresh ? 'New note' : !editing ? 'Opening…' : 'All changes saved'}
-            </span>
-          </div>
+          ) : null}
+          <span role="status" className="ml-auto flex-none pr-2 text-right text-meta text-muted" title="Changes save automatically. ⌘S saves immediately.">
+            {conflict !== null || rejected !== null ? 'Not saved' : editBlocked !== '' ? 'Editing paused' : saving ? 'Saving…' : dirty ? 'Unsaved changes' : fresh ? 'New note' : !editing ? 'Opening…' : 'Saved'}
+          </span>
         </div>
 
-        {/* Reading only: while editing, the note's own properties panel says this
-            and saying it twice would be the duplication the title rule already avoids. */}
-        {parsed.frontmatter === null || editing ? null : (
-          <div className={`mx-auto mt-2.5 w-full ${COLUMN}`}>
-            <Chips front={parsed.frontmatter} />
-          </div>
-        )}
+        {rename !== null ? (
+          <div className={`mx-auto mt-3 w-full ${COLUMN} text-label text-text`}><NoteName key={path} {...rename} /></div>
+        ) : null}
 
         {editBlocked === '' ? null : (
           <p className={`mx-auto mt-2 w-full ${COLUMN} text-meta text-muted`}>{editBlocked}</p>
@@ -291,10 +286,18 @@ export function NoteDocument({
       )}
 
       <div ref={scroller} onScroll={rememberScroll} onDragOver={editing ? fileDrag : undefined} onDrop={editing ? fileDrag : undefined} className={`min-h-0 min-w-0 overflow-y-auto ${chrome === 'page' ? 'px-10 py-7 max-[760px]:px-6' : 'px-8 py-4'} ${editing && ai !== undefined ? 'pb-24' : ''}`}>
+        {chrome === 'page' ? (
+          <div className={`mx-auto mb-4 w-full ${COLUMN}`}>
+            <h1 className="m-0 font-display text-[clamp(26px,4vw,34px)] leading-[1.15] font-medium tracking-[-0.02em] wrap-anywhere text-text">
+              {fileTitle(path)}
+            </h1>
+            {parsed.frontmatter === null || editing ? null : <div className="mt-3"><Chips front={parsed.frontmatter} /></div>}
+          </div>
+        ) : null}
         {linkError === null ? null : <p role="alert" className={`mx-auto mb-4 w-full ${COLUMN} text-[13px] text-danger`}>{linkError}</p>}
         {editing ? (
           <div className="min-w-0 w-full text-[16px] leading-[1.7] text-text">
-            <NoteEditor path={editor.path} {...(editor.document === undefined ? {} : { document: editor.document })} text={editor.text} onChange={onChange} onFollowNote={onFollowNote} {...(quote === undefined ? {} : { quote })} {...(ai === undefined ? {} : { ai })} {...(pictures === undefined ? {} : { pictures })} />
+            <NoteEditor toolsSlot={toolsSlot} path={editor.path} {...(editor.document === undefined ? {} : { document: editor.document })} text={editor.text} onChange={onChange} onFollowNote={onFollowNote} {...(quote === undefined ? {} : { quote })} {...(ai === undefined ? {} : { ai })} {...(pictures === undefined ? {} : { pictures })} />
           </div>
         ) : (
           <NoteReader path={path} result={result} body={parsed.body} plugins={plugins} components={components} />
@@ -325,12 +328,13 @@ function CopyPath({ absolute }: { absolute: string }) {
     <IconButton
       icon={icon}
       iconSize={14}
+      size={28}
+      className={state === 'failed' ? 'rounded-full text-danger hover:text-danger' : 'rounded-full'}
       swapKey={state}
       label="Copy the note's full path"
       // A refusal from the clipboard says so on the button. Silence here is how a
       // dead copy control went unnoticed for weeks.
       title={state === 'failed' ? 'Could not reach the clipboard' : absolute}
-      className={state === 'failed' ? 'text-danger hover:text-danger' : ''}
       onClick={() => {
         void copyText(absolute).then((ok) => setState(ok ? 'copied' : 'failed'))
       }}

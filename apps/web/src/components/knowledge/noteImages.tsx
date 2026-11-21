@@ -5,7 +5,7 @@ import { MAX_VAULT_IMAGE_BYTES, MAX_VAULT_IMAGE_NAME, embedWithWidth, imageEmbed
 import { useState, type PointerEvent as ReactPointerEvent } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { ImageLightbox } from '../ui/ZoomableImage'
-import { enclosing, frontmatterRange, inFrontmatter, ownStep } from './noteSyntax'
+import { enclosing, frontmatterRange, inFrontmatter, noteTree, ownStep } from './noteSyntax'
 
 /**
  * Pictures in a note, the way a block editor handles them, while the file stays plain
@@ -34,6 +34,7 @@ const MIN_WIDTH = 48
 /** How far the pointer travels before a press on a picture becomes a drag. */
 const DRAG_SLOP = 4
 const SAVE_TYPES = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp', 'image/avif'])
+export const noteImageAccept = [...SAVE_TYPES].join(',')
 /** How long a sent picture waits for the Mac's answer before it reads as failed. */
 const ANSWER_TIMEOUT_MS = 60_000
 const CODE_NODES = new Set(['FencedCode', 'CodeBlock', 'HTMLBlock', 'CommentBlock'])
@@ -419,6 +420,7 @@ interface PendingImage {
   /** The range the picture replaces: a pasted-over selection, or empty at the caret or drop point. */
   from: number
   to: number
+  ownBlock?: boolean
   error?: string
 }
 
@@ -506,8 +508,10 @@ export function landing(state: EditorState, id: string, result: { status: 'saved
   const above = item.from > line.from ? line : line.number > 1 ? state.doc.line(line.number - 1) : null
   const table = above === null ? null : enclosing(state, above.to, TABLES)
   const underTable = above !== null && table !== null && table.to <= above.to
-  const before = `${item.from > line.from ? '\n' : ''}${underTable ? '\n' : ''}`
-  const insert = `${before}![[${result.name}]]\n`
+  const separateBefore = underTable || (item.ownBlock && above !== null && above.text.trim() !== '')
+  const separateAfter = item.ownBlock && item.from === line.from && line.text.trim() !== ''
+  const before = `${item.from > line.from ? '\n' : ''}${separateBefore ? '\n' : ''}`
+  const insert = `${before}![[${result.name}]]\n${separateAfter ? '\n' : ''}`
   return {
     changes: { from: item.from, to: item.to, insert },
     selection: { anchor: item.from + insert.length },
@@ -538,14 +542,41 @@ function pictures(files: FileList | undefined | null): File[] {
   return [...(files ?? [])].filter((file) => SAVE_TYPES.has(file.type))
 }
 
-function sendPictures(view: EditorView, files: File[], from: number, to: number, pasted: boolean) {
+const RAW_BLOCKS = new Set(['HTMLBlock', 'CommentBlock', 'ProcessingInstructionBlock'])
+
+/** A picked image stands outside the top-level Markdown block at the caret. */
+export function picturePickerSpot(state: EditorState): number | null {
+  const { from, head } = state.selection.main
+  if (state.readOnly || inFrontmatter(state, from)) return null
+  const line = state.doc.lineAt(head)
+  const tree = noteTree(state, line.to + 2_000)
+  const partial = tree.length < state.doc.length
+  if (partial && line.to >= tree.length) return null
+
+  let end = line.to
+  for (let node = tree.resolve(line.to, -1); node.parent !== null; node = node.parent) {
+    if (RAW_BLOCKS.has(node.name)) return null
+    if (node.name === 'FencedCode' && (node.lastChild?.name !== 'CodeMark' || node.lastChild.from === node.from)) return null
+    // The last block in a partial parse can still extend past the parsed text.
+    if (partial && node.parent.parent === null && node.nextSibling === null) return null
+    end = node.to
+  }
+  return Math.min(state.doc.lineAt(end).to + 1, state.doc.length)
+}
+
+export function insertPictures(view: EditorView, files: FileList | null) {
+  const at = picturePickerSpot(view.state)
+  if (at !== null) sendPictures(view, pictures(files), at, at, false, true)
+}
+
+function sendPictures(view: EditorView, files: File[], from: number, to: number, pasted: boolean, ownBlock = false) {
   const config = view.state.facet(noteImageConfig)
   if (config === null || config.save === null) return
   // Several pictures replace a selection once: the first takes it, the rest follow it.
   let range = { from, to }
   for (const file of files) {
     const id = `image-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
-    view.dispatch({ effects: addPending.of({ id, ...range }) })
+    view.dispatch({ effects: addPending.of({ id, ...range, ownBlock }) })
     range = { from: to, to }
     if (file.size > MAX_VAULT_IMAGE_BYTES) {
       view.dispatch({ effects: settlePending.of({ id, error: `Pictures up to ${MAX_VAULT_IMAGE_BYTES / 1024 / 1024} MB can be added.` }) })

@@ -1,36 +1,24 @@
 import { Cancel01Icon, Tick02Icon } from '@hugeicons/core-free-icons'
 import { useEffect, useRef, useState } from 'react'
+import { fileTitle } from '../../vaultNotes'
 import { IconButton } from '../ui/IconButton'
 
 interface NoteNameProps {
   path: string
-  editing: boolean
   busy: boolean
-  disabled: boolean
   error: string | null
-  onStart: () => void
   onCancel: () => void
   onSubmit: (name: string) => void
 }
 
 /** The filename is separate from the note's Markdown heading and frontmatter. */
-export function NoteName({ path, editing, busy, disabled, error, onStart, onCancel, onSubmit }: NoteNameProps) {
-  const title = path.split('/').at(-1)?.replace(/\.md$/i, '') ?? path
-  const [name, setName] = useState(title)
+export function NoteName({ path, busy, error, onCancel, onSubmit }: NoteNameProps) {
+  const [name, setName] = useState(() => fileTitle(path))
   const input = useRef<HTMLInputElement>(null)
   useEffect(() => {
-    if (!editing) return
-    setName(title)
     input.current?.focus()
     input.current?.select()
-  }, [editing, title])
-
-  if (!editing) return (
-    <button type="button" disabled={disabled} onClick={onStart} aria-label={`Rename ${title}`} title="Click to rename"
-      className="-ml-1 block max-w-full cursor-text truncate rounded-md border-0 bg-transparent px-1 py-0 text-left text-inherit hover:bg-tree-hover disabled:cursor-default">
-      {title}
-    </button>
-  )
+  }, [])
 
   return (
     <div className="min-w-0">

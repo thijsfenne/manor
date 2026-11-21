@@ -1,20 +1,28 @@
+import { AddSquareIcon, Image01Icon, TableIcon, TextIcon } from '@hugeicons/core-free-icons'
 import { bodyOffset } from '../../vaultNotes'
 import { useOpenWebsite } from '../ExternalLink'
+import { IconButton } from '../ui/IconButton'
+import { Menu, MenuItem, useMenu } from '../ui/Menu'
 import { TextEditor } from '../ui/TextEditor'
+import { canInsertBlock, insertBlock, type InsertKind } from './blockCommands'
 import { linkDestination } from './formatCommands'
 import { livePreviewExtensions } from './livePreview'
-import { NoteFormatting, type NoteFormattingHandle, type QuoteAction } from './NoteFormatting'
+import { NoteFormatting, SLASH_ICONS, type NoteFormattingHandle, type QuoteAction } from './NoteFormatting'
 import { noteAiApply, noteAiExtensions } from './noteAi'
 import { NoteAiLayer } from './NoteAiUi'
 import { noteUi } from './noteEditing'
-import { landImage, noteImageConfig, noteImageExtensions, type NoteImageConfig } from './noteImages'
+import { insertPictures, landImage, noteImageAccept, noteImageConfig, noteImageExtensions, picturePickerSpot, type NoteImageConfig } from './noteImages'
+import { frontmatterRange } from './noteSyntax'
+import { SLASH_ITEMS } from './slashMenu'
 import type { NoteAi } from './useNoteAi'
 import type { VaultImageSaveResult } from '../../state'
 import { Compartment, type Extension } from '@codemirror/state'
 import { EditorView, ViewPlugin, placeholder, type ViewUpdate } from '@codemirror/view'
 import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 
 interface NoteEditorProps {
+  toolsSlot: HTMLElement | null
   /** The note's own path. A different note is a different document, not new text. */
   path: string
   /** Stays the same across a rename or a move, so the editor is not rebuilt for one. */
@@ -52,7 +60,7 @@ const editLabel = (path: string) =>
  * is still plain markdown; only the rendering of it and the ways to write it changed.
  * The caret opens past the frontmatter, because nobody starts a note by editing its YAML.
  */
-export function NoteEditor({ path, document, text, onChange, onFollowNote, quote = NO_QUOTE, ai, pictures }: NoteEditorProps) {
+export function NoteEditor({ toolsSlot, path, document, text, onChange, onFollowNote, quote = NO_QUOTE, ai, pictures }: NoteEditorProps) {
   const followNote = useRef(onFollowNote)
   followNote.current = onFollowNote
   const openWebsite = useOpenWebsite()
@@ -190,9 +198,50 @@ export function NoteEditor({ path, document, text, onChange, onFollowNote, quote
         className="cm-manor"
         onChange={onChange}
       />
+      {toolsSlot === null || view === null ? null : createPortal(
+        <NoteTools view={view} canSaveImage={pictures?.onSave != null} />,
+        toolsSlot,
+      )}
       <NoteFormatting view={view} version={version} quote={quote} handle={handle} />
       {ai === undefined ? null : <NoteAiLayer view={view} version={version} ai={ai} />}
     </div>
+  )
+}
+
+function NoteTools({ view, canSaveImage }: { view: EditorView; canSaveImage: boolean }) {
+  const input = useRef<HTMLInputElement>(null)
+  const meta = frontmatterRange(view.state)
+  const protectedSelection = meta !== null && view.state.selection.main.from <= meta.to
+  const disabled = protectedSelection || !canInsertBlock(view.state)
+  const [menu, trigger] = useMenu({ maxHeight: 400, minHeight: 100, minWidth: 180, disabled })
+
+  const insert = (kind: InsertKind) => {
+    const spec = insertBlock(kind)(view.state)
+    if (spec !== null) view.dispatch(spec)
+    view.focus()
+  }
+
+  return (
+    <>
+      <IconButton icon={TextIcon} size={28} label="Insert text block" disabled={disabled} onClick={() => insert('text')} />
+      <IconButton icon={Image01Icon} size={28} label="Insert image" disabled={!canSaveImage || picturePickerSpot(view.state) === null} onClick={() => input.current?.click()} />
+      <input ref={input} type="file" hidden accept={noteImageAccept} multiple onChange={(event) => {
+        insertPictures(view, event.currentTarget.files)
+        event.currentTarget.value = ''
+        view.focus()
+      }} />
+      <IconButton icon={TableIcon} size={28} label="Insert table" disabled={disabled} onClick={() => insert('table')} />
+      <IconButton ref={trigger} icon={AddSquareIcon} size={28} label="Insert block" disabled={disabled}
+        aria-haspopup="menu" aria-expanded={menu.open} onClick={menu.toggle} />
+      <Menu menu={menu} label="Insert block">
+        {SLASH_ITEMS.map((item) => (
+          <MenuItem key={item.id} icon={SLASH_ICONS[item.id]} onClick={() => {
+            menu.close(false)
+            insert(item.id)
+          }}>{item.name}</MenuItem>
+        ))}
+      </Menu>
+    </>
   )
 }
 

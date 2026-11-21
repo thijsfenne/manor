@@ -2,7 +2,7 @@ import { ensureSyntaxTree, syntaxTree } from '@codemirror/language'
 import { EditorState } from '@codemirror/state'
 import { describe, expect, it } from 'vitest'
 import { livePreviewExtensions } from './livePreview'
-import { addPending, dropSpot, imageLines, landing, moveLine, noteImageConfig, noteImageExtensions } from './noteImages'
+import { addPending, dropSpot, imageLines, landing, moveLine, noteImageConfig, noteImageExtensions, picturePickerSpot } from './noteImages'
 
 const images = { '+/shot.png': '/media/vault/sig/%2B/shot.png', 'inbox/local.png': '/media/vault/sig/inbox/local.png' }
 
@@ -50,6 +50,34 @@ describe('note pictures', () => {
     expect(before.update(landing(before, 'a', saved)!).state.doc.toString()).toBe('Keep this line!\n![[shot.png]]\n\n')
     expect(landing(typed, 'missing', saved)).toBeNull()
   })
+  it('picks an image as a separate block while keeping the selected text and neighbouring Markdown', () => {
+    const picked = (doc: string, caret: string, selectionStart = doc.indexOf(caret)) => {
+      const state = note(doc).update({ selection: { anchor: selectionStart, head: doc.indexOf(caret) } }).state
+      const at = picturePickerSpot(state)
+      if (at === null) return null
+      const held = state.update({ effects: addPending.of({ id: 'a', from: at, to: at, ownBlock: true }) }).state
+      return held.update(landing(held, 'a', { status: 'saved', name: 'shot.png' })!).state.doc.toString()
+    }
+
+    expect(picked('Keep this text\nMore', 'text', 0)).toBe('Keep this text\nMore\n\n![[shot.png]]\n')
+    expect(picked('1. First\n1. Second\n\nAfter', 'First'))
+      .toBe('1. First\n1. Second\n\n![[shot.png]]\n\nAfter')
+    expect(picked('> 1. First\n> 1. Second', 'First'))
+      .toBe('> 1. First\n> 1. Second\n\n![[shot.png]]\n')
+    expect(picked('Intro\n    continuation', 'Intro'))
+      .toBe('Intro\n    continuation\n\n![[shot.png]]\n')
+    expect(picked('Intro\n\n    code one\n    code two', '\n    code'))
+      .toBe('Intro\n\n![[shot.png]]\n\n    code one\n    code two')
+    expect(picked('| a | b |\n| - | - |\n| 1 | 2 |\n\nNext', '| 1'))
+      .toBe('| a | b |\n| - | - |\n| 1 | 2 |\n\n![[shot.png]]\n\nNext')
+    expect(picked('```js\ncode one\n```\nNext', 'code one')).toBe('```js\ncode one\n```\n\n![[shot.png]]\n\nNext')
+    expect(picked('```js\ncode one', 'code one')).toBeNull()
+    expect(picked('```', '```')).toBeNull()
+    expect(picked('<div>\ncontent\n</div>\n\nNext', 'content')).toBeNull()
+    expect(picked('<?custom\nkeep this\n?>', 'keep')).toBeNull()
+    expect(picked('<!--\ncomment\n-->\n\nNext', 'comment')).toBeNull()
+  })
+
   it('lands a dropped picture between lines, never inside a line, table, code block or the properties', () => {
     const dropped = (doc: string, over: string) => {
       const state = note(doc)

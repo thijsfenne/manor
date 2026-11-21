@@ -71,6 +71,8 @@ function splitFrontmatter(text: string): { fields: string[] | null; body: string
 /** One frontmatter key with everything under it, however it was written. */
 export interface NoteProperty {
   key: string
+  /** Index of the key within the frontmatter lines, excluding the opening fence. */
+  line: number
   values: string[]
 }
 
@@ -88,7 +90,7 @@ export function readProperties(lines: string[]): NoteProperty[] {
     // block list on the lines below.
     const values =
       value === '' ? blockList(lines, index) : value.startsWith('[') ? inlineList(value) : [value]
-    properties.push({ key: field[1] as string, values })
+    properties.push({ key: field[1] as string, line: index, values })
   }
   return properties
 }
