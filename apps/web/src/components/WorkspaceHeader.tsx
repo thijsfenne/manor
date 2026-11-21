@@ -9,7 +9,7 @@ import {
   PuzzleIcon,
   SidebarLeftIcon,
 } from '@hugeicons/core-free-icons'
-import { Fragment, type ReactNode } from 'react'
+import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import type { AgentConfig, Project } from '@manor/contracts'
 import type { ConnectionStatus } from '../useWorkspace'
@@ -42,6 +42,11 @@ interface WorkspaceHeaderProps {
   accessoryGrow?: boolean
   /** A feature-owned control on the far edge of the header. */
   trailing?: ReactNode
+  /**
+   * The desktop top bar only: a one-agent DM's model control, just before the trailing
+   * icons. It gives way first in a narrow pane, so name, role and icons keep their room.
+   */
+  runtime?: ReactNode
   /**
    * The section a detail surface sits inside, rendered as the crumb before the title.
    * Only for a place one level down from a section; the header states the address, the
@@ -93,15 +98,56 @@ export function WorkspaceHeader(props: WorkspaceHeaderProps) {
   const slot = useTopBarSlot()
   if (slot === null) return <PaneHeader {...props} />
   if (slot.element === null) return null
-  const { trailing } = props
+  const { trailing, runtime } = props
   return createPortal(
     <>
-      <div data-top-bar-crumb="" className="order-1 flex min-w-0 flex-1 items-center gap-2">
+      {/* With a runtime beside it the crumb starts from its own width, so the far
+          stronger shrink on the runtime spends that one first. */}
+      <div data-top-bar-crumb="" className={`order-1 flex min-w-0 items-center gap-2 ${runtime === undefined ? 'flex-1' : 'flex-[1_1_auto]'}`}>
         <Crumb {...props} compact muted={!slot.focused} />
       </div>
+      {runtime === undefined ? null : (
+        <TopBarRuntime divider={trailing !== undefined}>{runtime}</TopBarRuntime>
+      )}
       {trailing === undefined ? null : <div className="order-3 flex flex-none items-center">{trailing}</div>}
     </>,
     slot.element,
+  )
+}
+
+/**
+ * A control at the top bar's far end that gives way before the crumb does. Shown whole
+ * or not at all: once it no longer fits it wraps onto a second line the fixed height
+ * clips, since a cut-down model name beside a divider says nothing. The empty first
+ * item keeps that first line open. Wrapped away it is inert too, so it leaves the tab
+ * order. Only the outer box is positioned, so a card the control opens hangs off it
+ * and escapes the clip.
+ */
+function TopBarRuntime({ divider, children }: { divider: boolean; children: ReactNode }) {
+  const clipRef = useRef<HTMLDivElement>(null)
+  const itemRef = useRef<HTMLSpanElement>(null)
+  const [shown, setShown] = useState(true)
+  useEffect(() => {
+    const clip = clipRef.current
+    const item = itemRef.current
+    if (clip === null || item === null) return
+    // By ratio: wrapped onto the clipped line the item still touches the box's edge,
+    // which counts as intersecting.
+    const observer = new IntersectionObserver(([entry]) => setShown((entry?.intersectionRatio ?? 0) > 0.5), { root: clip, threshold: [0, 1] })
+    observer.observe(item)
+    return () => observer.disconnect()
+  }, [])
+  return (
+    <div data-top-bar-runtime="" className={`relative order-3 flex min-w-0 shrink-[1000] items-center ${divider ? '-mr-1' : ''}`}>
+      <div ref={clipRef} className="flex h-7 min-w-0 flex-wrap items-start overflow-hidden">
+        <span aria-hidden="true" className="h-7 w-0" />
+        {/* Invisible as well as inert, so a card it had open hides with it. */}
+        <span ref={itemRef} className={`flex h-7 flex-none items-center gap-2 ${shown ? '' : 'invisible'}`} {...(shown ? {} : { inert: '' })}>
+          {children}
+          {divider ? <span aria-hidden="true" className="h-4 w-px bg-line" /> : null}
+        </span>
+      </div>
+    </div>
   )
 }
 
@@ -354,8 +400,8 @@ function Crumb({
 
 /**
  * Who the DM is with: her name with the same quiet role badge as the inbox beside it.
- * No model line under it: the composer is the one place a DM's runtime is shown and
- * changed, and a second read-out here was a third value to keep in step. Name and role
+ * No model line under it: on the desktop the model sits at the bar's far end instead
+ * (`runtime`), where it can give way without cutting the name. Name and role
  * share the room as two grid tracks that grow evenly up to their own width: a short one
  * is never cut, and two long ones get half each, so a long role neither hides the name
  * nor runs under the panel doors. A percentage cap would not do here, because the label

@@ -6,6 +6,7 @@ import {
   isSoloRoom,
   runtimeOn,
   type AgentConfig,
+  type AgentDraft,
   type Chat,
   type ChatOverride,
   type CheckoutRequest,
@@ -50,6 +51,7 @@ import {
 } from '../state'
 import type { ConnectionStatus } from '../useWorkspace'
 import { isAutoOn, singleChatOverride, withAuto } from '../runtimeChoices'
+import { DmRuntimePicker, namesDmRuntime } from './DmRuntimePicker'
 import { AskDock } from './AskCard'
 import { Composer } from './Composer'
 import { SubagentView } from './SubagentView'
@@ -153,6 +155,8 @@ interface ChatPaneProps {
   answerSecretRequest: (chatId: string, requestId: string, value?: string) => boolean
   changeSessionAnswer?: (threadChatId: string, requestId: string, answers: UserInputAnswers) => boolean
   setChatOverride: (agentId: string, override: ChatOverride, chatId?: string) => boolean
+  /** Saves an agent's own settings: a DM's top-bar model picks land on its agent. */
+  saveAgent: (draft: AgentDraft, requestId: string) => boolean
   setChatCheckout: (chatId: string, checkout: CheckoutRequest) => boolean
   askCheckoutStatus: (chatId: string) => boolean
   listRepoFiles: (projectId: string, chatId?: string) => void
@@ -242,6 +246,7 @@ export function ChatPane({
   answerSecretRequest,
   changeSessionAnswer,
   setChatOverride,
+  saveAgent,
   askCheckoutStatus,
   listRepoFiles,
   setChatSettled,
@@ -572,6 +577,18 @@ export function ChatPane({
         <WorkspaceHeader
           title={level === undefined ? sessionTitle : subagentTask(level.subagent.step)}
           persona={covered ? undefined : dmAgent}
+          {...(covered || !namesDmRuntime(dmAgent) ? {} : {
+            runtime: (
+              <DmRuntimePicker
+                key={dmAgent.id}
+                agent={dmAgent}
+                {...(thread.overrides[dmAgent.id] === undefined ? {} : { pin: thread.overrides[dmAgent.id] })}
+                disabled={status !== 'live'}
+                onSaveAgent={saveAgent}
+                onClearPin={() => setChatOverride(dmAgent.id, {}, chat.id)}
+              />
+            ),
+          })}
           {...(pairAgents.length === 0 || covered ? {} : { pairPersonas: pairAgents })}
           project={covered || inRoom || (singleChat && chat.routineId != null) ? undefined : project}
           {...(covered && subagentStage !== undefined

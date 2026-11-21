@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { DmRuntimePicker, namesDmRuntime } from '../DmRuntimePicker'
 import { BotIcon, Cancel01Icon } from '@hugeicons/core-free-icons'
 import { isFolder, isOpenRoom, type Chat, type DesktopBrowserBridge, type MessageQuote, type MessageReply, type NoteQuote, type PageContextAttachment } from '@manor/contracts'
 import { ProjectSessionsOverview, SessionsOverviewDoor, SettleButton } from '../inbox/ProjectSessionsOverview'
@@ -161,6 +162,10 @@ export function ChatStage({
     : []
   const pairTitle = pairAgents.map((agent) => agent.name).join(' and ')
   const headerAgent = draftAgent ?? dmAgent
+  // A DM not written to yet has no chat, so no pin to replace.
+  const draftRuntime = newChatDraft?.target.kind === 'dm' && namesDmRuntime(draftAgent) ? (
+    <DmRuntimePicker key={draftAgent.id} agent={draftAgent} disabled={status !== 'live'} onSaveAgent={manor.saveAgent} />
+  ) : undefined
 
   const paneSlot = (side: 'left' | 'right'): TopBarSlot | null =>
     phone ? null : { element: barSlots[side], focused: visibleSplit === null || roomUp || visibleSplit.focus === side }
@@ -215,6 +220,7 @@ export function ChatStage({
           title={newChatDraft?.target.kind === 'dm' ? 'New chat' : ''}
           persona={headerAgent}
           project={newChatDraft?.target.kind === 'dm' ? draftNamedProject : undefined}
+          {...(draftRuntime === undefined ? {} : { runtime: draftRuntime })}
           status={status}
           overlay
           sidebarCollapsed={side === 'left' ? sidebarCollapsed : false}
@@ -331,6 +337,7 @@ export function ChatStage({
         title={newChatDraft === null ? (open?.kind === 'pair' ? pairTitle : (open === null ? 'No chat open' : withSessionTitle(open).title)) : newChatDraft.target.kind === 'dm' ? 'New chat' : ''}
         persona={headerAgent}
         {...(pairAgents.length === 0 ? {} : { pairPersonas: pairAgents })}
+        {...(draftRuntime === undefined ? {} : { runtime: draftRuntime })}
         project={newChatDraft === null ? (singleChat && open?.routineId != null ? undefined : headerProject) : newChatDraft.target.kind === 'dm' ? headerProject : undefined}
         {...(newChatDraft === null && singleChat && open?.routineId != null
           ? { section: 'routines' as const, parent: { label: 'Scheduled tasks', onClick: nav.openRoutines } }
@@ -538,6 +545,7 @@ export function StageChatPane({
     answerSecretRequest={manor.answerSecretRequest}
     changeSessionAnswer={manor.changeSessionAnswer}
     setChatOverride={manor.setChatOverride}
+    saveAgent={manor.saveAgent}
     setChatCheckout={manor.setChatCheckout}
     askCheckoutStatus={manor.askCheckoutStatus}
     listRepoFiles={manor.listRepoFiles}

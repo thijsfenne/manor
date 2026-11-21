@@ -107,6 +107,23 @@ export function NewAgentFields({ draft, providers, disabled = false, onChange }:
 }
 
 /**
+ * The agent draft a runtime pick makes: the picker speaks in chat overrides, and here
+ * each one becomes the agent's own provider, model, effort and speed.
+ */
+export function withRuntimePick(draft: AgentDraft, next: ChatOverride): AgentDraft {
+  const voice: AgentConfig = { ...draft, id: draft.id ?? '', allowedTools: [] }
+  const { model: _model, speed: _speed, ...rest } = draft
+  const model = activeModel(voice, next)
+  return {
+    ...rest,
+    driver: effectiveDriver(voice, next),
+    ...(model === undefined ? {} : { model }),
+    effort: activeEffort(voice, next),
+    ...(activeSpeed(voice, next) === 'fast' ? { speed: 'fast' as const } : {}),
+  }
+}
+
+/**
  * Provider, model, effort and Fast mode as one field: a row naming the pick, opening the
  * composer's own picker. There the picker pins a chat; here the pick is the agent's own
  * setting, so nothing in it is marked Default. The card opens above the row at a
@@ -131,18 +148,7 @@ export function ModelField({ draft, providers, disabled, opens = 'up', pin = NO_
   const voice: AgentConfig = { ...draft, id: draft.id ?? '', allowedTools: [] }
   const parts = runtimeParts(voice, pin, false)
 
-  const pick = (next: ChatOverride) => {
-    const { model: _model, speed: _speed, ...rest } = draft
-    const driver = effectiveDriver(voice, next)
-    const model = activeModel(voice, next)
-    onChange({
-      ...rest,
-      driver,
-      ...(model === undefined ? {} : { model }),
-      effort: activeEffort(voice, next),
-      ...(activeSpeed(voice, next) === 'fast' ? { speed: 'fast' as const } : {}),
-    })
-  }
+  const pick = (next: ChatOverride) => onChange(withRuntimePick(draft, next))
 
   return (
     <div

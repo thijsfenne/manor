@@ -195,7 +195,7 @@ export function TopBar({ leadWidth, railWidth, animate, split, status, covered, 
       >
         <div
           data-top-bar-slot="left"
-          className={`relative flex min-w-0 items-center gap-3 pr-2 ${firstMotion}`}
+          className={`@container/top-bar relative flex min-w-0 items-center gap-3 pr-2 ${firstMotion}`}
           style={{ flex: split === null ? '1 1 0%' : `0 1 ${split.ratio * 100}%`, paddingLeft: firstInset }}
         >
           <div ref={leftSlot} className="peer contents" />
@@ -213,7 +213,7 @@ export function TopBar({ leadWidth, railWidth, animate, split, status, covered, 
           <div
             data-top-bar-slot="right"
             // The line stands exactly over the pane border: both start at this edge.
-            className={`relative flex min-w-0 items-center gap-3 pr-2 pl-4 before:absolute before:top-1/2 before:left-0 before:h-5 before:w-px before:-translate-y-1/2 before:bg-line before:content-[''] ${secondMotion}`}
+            className={`@container/top-bar relative flex min-w-0 items-center gap-3 pr-2 pl-4 before:absolute before:top-1/2 before:left-0 before:h-5 before:w-px before:-translate-y-1/2 before:bg-line before:content-[''] ${secondMotion}`}
             style={{ flex: `0 1 ${(1 - split.ratio) * 100}%` }}
           >
             <div ref={rightSlot} className="contents" />
