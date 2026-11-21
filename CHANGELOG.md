@@ -4,6 +4,7 @@ What changed for someone who uses Manor, newest first. A version is a tag on `ma
 
 ## Unreleased
 
+- The light at the top left of a persona's face is fainter and spreads wider over the head, so it reads as light falling on the face instead of a spot on it. On the Mac, the web and the phone.
 - On desktop and web, Knowledge notes show the filename as a large title, with the folder path and editing tools above it. Note properties appear in rows with tag chips and a status pill. Click a value to edit its YAML.
 
 - A picture dragged from the desktop onto a Knowledge note is saved in the vault's attachment folder and added to the note, wherever you let go on the note page, also beside or below the text of a short note. Before, a drop outside the lines of text did nothing. A dropped picture lands on the line after the one under the pointer, after a whole table or code block, and never inside the note's properties.

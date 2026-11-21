@@ -55,10 +55,13 @@ export const CLAY = {
     cx: 37, cy: 30, rx: 68, ry: 68,
     stops: [[0, 1, "hi"], [0.46, 0, "hi"], [0.46, 0, "lo"], [1, 1, "lo"]],
   } satisfies Glow,
-  /** The matte highlight, a soft white ellipse that the head's outline clips. */
+  /**
+   * The matte highlight, a faint white ellipse that the head's outline clips. Wide and
+   * low so it reads as light across the face, not a spot on it.
+   */
   highlight: {
-    cx: 35, cy: 27, rx: 15, ry: 8.5, rot: -18,
-    stops: [[0, 0.46, "white"], [0.55, 0.24, "white"], [1, 0, "white"]],
+    cx: 36, cy: 29, rx: 26, ry: 18, rot: -18,
+    stops: [[0, 0.2, "white"], [0.6, 0.08, "white"], [1, 0, "white"]],
   } satisfies Glow,
   /** What a dark head keeps of its white layers. */
   dim: { dark: 0.64 },
