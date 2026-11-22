@@ -628,6 +628,10 @@ function ClayGlow({ id, glow, tones, keep = 1 }: { id: string; glow: Glow; tones
   )
 }
 
+/** From this size up the shade is drawn in `CLAY_STEPS` steps instead of two. */
+const CLAY_LARGE = 64
+const CLAY_STEPS = 6
+
 /**
  * The head in the library's clay finish, drawn with the same numbers the web draws.
  * Every overlay is a full-box rect inside one clip of all the head's parts, so a pill
@@ -635,9 +639,11 @@ function ClayGlow({ id, glow, tones, keep = 1 }: { id: string; glow: Glow; tones
  *
  * The web blurs the inner shadow. A blur here is a Core Image pass per face on every
  * mount, which a scrolling list cannot afford. So the shade is laid over the whole
- * lit head and the lit head is drawn again on top, twice, through the same clip
- * moved toward the light: once halfway at half strength, once all the way. What is
- * left is full shadow at the edge, half across the band, none past it.
+ * lit head and the lit head is drawn again on top in steps, each through the same
+ * clip moved a step further toward the light. Step `k` of `n` covers `1 / (n - k + 1)`
+ * of what is left, so the shade falls off evenly from the edge to none past the band.
+ * A list face takes two steps; a large face takes `CLAY_STEPS`, because two hard steps
+ * read as a solid rim once the band is several pixels wide.
  *
  * The optical size follows the web: a small face wears the light alone. Three
  * things the web draws are left out here. The bounce light is a second band, the lip under each eye would have to ride every eye layer,
@@ -655,8 +661,9 @@ function Body({ face }: { face: Face }) {
   const light = <Rect fill={`url(#${id}l)`} height={BOX} width={BOX} />
   // The lit head through the clip moved by this share of the shadow's offset. The
   // rects are moved back, so the light stays where it is and only the cut travels.
-  const lit = (share: number) => (
-    <G opacity={share} transform={`translate(${inner.dx * share} ${inner.dy * share})`}>
+  const steps = face.size >= CLAY_LARGE ? CLAY_STEPS : 2
+  const lit = (share: number, cover: number) => (
+    <G key={share} opacity={cover} transform={`translate(${inner.dx * share} ${inner.dy * share})`}>
       <G clipPath={clip} clipRule="nonzero">
         <G transform={`translate(${-inner.dx * share} ${-inner.dy * share})`}>
           <Rect fill={fill} height={BOX} width={BOX} />
@@ -683,8 +690,7 @@ function Body({ face }: { face: Face }) {
           {small ? null : (
             <>
               <Rect fill={tones[inner.tone]} height={BOX} opacity={inner.opacity} width={BOX} />
-              {lit(0.5)}
-              {lit(1)}
+              {Array.from({ length: steps }, (_, k) => lit((k + 1) / steps, 1 / (steps - k)))}
               <Rect fill={`url(#${id}h)`} height={BOX} width={BOX} />
             </>
           )}
