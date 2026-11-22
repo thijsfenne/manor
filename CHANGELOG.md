@@ -4,6 +4,7 @@ What changed for someone who uses Manor, newest first. A version is a tag on `ma
 
 ## Unreleased
 
+- On the phone, project settings open on the project itself: a large icon tile in the project colour with a pencil to change icon and colour, and the name under it, which you tap to rename. Folders sit in one card with Add a folder as its last row, Files has its own card, and Delete project thread stands apart at the bottom. Knowledge work memory is now set on the Mac only; saving from the phone leaves it as it was.
 - On the phone, a large face's shadow fades out softly toward its bottom edge instead of ending in a hard rim. Faces in lists look as before.
 - On the phone, every tab (Agents, Sessions, Knowledge, Search) shows a pill at the top right with a ring per signed-in provider that reports a limit, each filled to what is left of that plan's fullest limit: Claude first, then Codex, and +N for the others. Tapping it opens Usage as a sheet: per provider each limit with a bar, the share left, the reset time and a small tick where the bar would be if you spent evenly. Usage is no longer a row in the menu. A reset day reads in English whatever the device's language, on the Mac, the web and the phone.
 - On the phone, a swipe to the left in a project thread brings in the project's Sessions as the next page, the way the Mac shows them beside the thread. A swipe to the right, or Back, returns to the thread where you left it. The Sessions button in the header opens the same page. A code block wider than the screen scrolls sideways under the finger instead.

@@ -5,6 +5,7 @@ import Cancel01Icon from '@hugeicons/core-free-icons/Cancel01Icon'
 import Delete02Icon from '@hugeicons/core-free-icons/Delete02Icon'
 import Folder01Icon from '@hugeicons/core-free-icons/Folder01Icon'
 import FolderOpenIcon from '@hugeicons/core-free-icons/FolderOpenIcon'
+import PencilEdit02Icon from '@hugeicons/core-free-icons/PencilEdit02Icon'
 import Tick02Icon from '@hugeicons/core-free-icons/Tick02Icon'
 import { PROJECT_ICON_OPTIONS, projectColorChoices, projectIcon } from '@manor/client-runtime/project-icons'
 import { HugeiconsIcon } from '@hugeicons/react-native'
@@ -13,32 +14,31 @@ import { useEffect, useRef, useState } from 'react'
 import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, View } from 'react-native'
 import { TextInput } from '@/components/TextInput'
 
-import { Checkbox } from '@/components/Checkbox'
+import { CardButton } from '@/components/CardButton'
+import { GlassIconButton } from '@/components/GlassIconButton'
 import { GlassPressable } from '@/components/GlassPressable'
 import { Sheet } from '@/components/Sheet'
 import { Text } from '@/components/Text'
 import { useWorkspace, type ProjectEdit } from '@/providers/WorkspaceProvider'
-import { colors, fonts, radius, spacing, squircle, tracking } from '@/theme'
+import { colors, fonts, radius, spacing, squircle } from '@/theme'
 
 const draftOf = (project: Project): ProjectEdit => ({
   name: project.name,
   icon: project.icon,
   color: project.color,
   repoPaths: [...project.repoPaths],
-  memoryScope: project.memoryScope,
 })
 
 const sameDraft = (one: ProjectEdit, other: ProjectEdit) =>
   one.name.trim() === other.name.trim() &&
   one.icon === other.icon &&
   one.color.toLowerCase() === other.color.toLowerCase() &&
-  one.memoryScope === other.memoryScope &&
   one.repoPaths.join('\n') === other.repoPaths.join('\n')
 
 /**
  * The Mac's Edit project on the phone (2026-10-12), opened from the thread's pill: name,
- * icon and colour, folders, memory scope and Delete, the same form saved as a whole with
- * the tick. Files has no header button on a thread any more, so it lives here, next to
+ * icon and colour, folders and Delete, the same form saved as a whole with the tick.
+ * Memory scope is the Mac's alone; the phone's save leaves it as stored. Files has no header button on a thread any more, so it lives here, next to
  * the folders it lists. Hide project thread stays on the Mac: the phone cannot re-add a hidden
  * project, so the room would drop out of its list with no way back.
  */
@@ -175,160 +175,169 @@ export function ProjectSettingsSheet({ project, open, onClose, onFiles, onDelete
       onClose={close}
       {...(onDismiss === undefined ? {} : { onDismiss })}
       open={open}
-      subtitle={project.name}
-      title="Settings"
     >
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-        <View style={styles.group}>
-          <Text style={styles.label}>Name</Text>
-          <View style={styles.nameRow}>
-            <Pressable
-              accessibilityLabel="Icon and color"
-              accessibilityRole="button"
-              accessibilityState={{ expanded: picking }}
-              onPress={() => setPicking(!picking)}
-              style={({ pressed }) => [styles.mark, picking && styles.markOpen, pressed && styles.pressed]}
-            >
-              <HugeiconsIcon color={draft.color} icon={projectIcon(draft.icon)} size={22} strokeWidth={1.8} />
-            </Pressable>
-            <TextInput
-              autoCapitalize="words"
-              onChangeText={(name) => setDraft({ ...draft, name })}
-              onSubmitEditing={save}
-              placeholder="Client work"
-              placeholderTextColor={colors.dim}
-              returnKeyType="done"
-              selectionColor={colors.text}
-              style={styles.nameInput}
-              value={draft.name}
-            />
-          </View>
-          {!picking ? null : (
-            <View style={styles.picker}>
-              <View style={styles.swatches}>
-                {projectColorChoices(draft.color).map((option) => {
-                  const chosen = option.value.toLowerCase() === draft.color.toLowerCase()
-                  return (
-                    <Pressable
-                      accessibilityLabel={option.label}
-                      accessibilityRole="radio"
-                      accessibilityState={{ selected: chosen }}
-                      key={option.value}
-                      onPress={() => setDraft({ ...draft, color: option.value })}
-                      style={[styles.swatchRing, chosen && { borderColor: option.value }]}
-                    >
-                      <View style={[styles.swatch, { backgroundColor: option.value }]} />
-                    </Pressable>
-                  )
-                })}
-              </View>
-              <View style={styles.icons}>
-                {PROJECT_ICON_OPTIONS.map((option) => {
-                  const chosen = option.value === draft.icon
-                  return (
-                    <Pressable
-                      accessibilityLabel={option.label}
-                      accessibilityRole="radio"
-                      accessibilityState={{ selected: chosen }}
-                      key={option.value}
-                      onPress={() => setDraft({ ...draft, icon: option.value })}
-                      style={({ pressed }) => [styles.iconCell, chosen && styles.iconChosen, pressed && styles.pressed]}
-                    >
-                      <HugeiconsIcon color={chosen ? draft.color : colors.muted} icon={option.icon} size={20} strokeWidth={1.8} />
-                    </Pressable>
-                  )
-                })}
-              </View>
+        <View style={styles.hero}>
+          <View style={styles.markSlot}>
+            <View style={[styles.mark, { backgroundColor: `${draft.color}29` }]}>
+              <HugeiconsIcon color={draft.color} icon={projectIcon(draft.icon)} size={44} strokeWidth={1.5} />
             </View>
+            <View style={styles.markBadge}>
+              <GlassIconButton
+                accessibilityLabel={picking ? 'Close icon and color' : 'Change icon and color'}
+                accessibilityState={{ expanded: picking }}
+                icon={PencilEdit02Icon}
+                iconSize={16}
+                onPress={() => setPicking(!picking)}
+                size={36}
+              />
+            </View>
+          </View>
+          <TextInput
+            accessibilityLabel="Project name"
+            autoCapitalize="words"
+            onChangeText={(name) => setDraft({ ...draft, name })}
+            onSubmitEditing={save}
+            placeholder="Project name"
+            placeholderTextColor={colors.dim}
+            returnKeyType="done"
+            selectionColor={colors.text}
+            style={styles.name}
+            value={draft.name}
+          />
+        </View>
+
+        {!picking ? null : (
+          <View style={styles.picker}>
+            <View style={styles.swatches}>
+              {projectColorChoices(draft.color).map((option) => {
+                const chosen = option.value.toLowerCase() === draft.color.toLowerCase()
+                return (
+                  <Pressable
+                    accessibilityLabel={option.label}
+                    accessibilityRole="radio"
+                    accessibilityState={{ selected: chosen }}
+                    key={option.value}
+                    onPress={() => setDraft({ ...draft, color: option.value })}
+                    style={[styles.swatchRing, chosen && { borderColor: option.value }]}
+                  >
+                    <View style={[styles.swatch, { backgroundColor: option.value }]} />
+                  </Pressable>
+                )
+              })}
+            </View>
+            <View style={styles.icons}>
+              {PROJECT_ICON_OPTIONS.map((option) => {
+                const chosen = option.value === draft.icon
+                return (
+                  <Pressable
+                    accessibilityLabel={option.label}
+                    accessibilityRole="radio"
+                    accessibilityState={{ selected: chosen }}
+                    key={option.value}
+                    onPress={() => setDraft({ ...draft, icon: option.value })}
+                    style={({ pressed }) => [styles.iconCell, chosen && styles.iconChosen, pressed && styles.pressed]}
+                  >
+                    <HugeiconsIcon color={chosen ? draft.color : colors.muted} icon={option.icon} size={20} strokeWidth={1.8} />
+                  </Pressable>
+                )
+              })}
+            </View>
+          </View>
+        )}
+
+        <View style={styles.section}>
+          <Text style={styles.label}>Folders</Text>
+          <View style={styles.card}>
+            {draft.repoPaths.map((path) => (
+              <View key={path} style={styles.row}>
+                <HugeiconsIcon color={colors.muted} icon={Folder01Icon} size={20} strokeWidth={1.7} />
+                <FolderPath path={path} />
+                <Pressable
+                  accessibilityLabel={`Remove ${path}`}
+                  accessibilityRole="button"
+                  hitSlop={8}
+                  onPress={() => setDraft({ ...draft, repoPaths: draft.repoPaths.filter((candidate) => candidate !== path) })}
+                  style={({ pressed }) => [styles.removeFolder, pressed && styles.pressed]}
+                >
+                  <HugeiconsIcon color={colors.dim} icon={Cancel01Icon} size={16} strokeWidth={1.8} />
+                </Pressable>
+                <View style={styles.line} />
+              </View>
+            ))}
+            {browsing ? (
+              <FolderWalk
+                asking={workspace.dirs.asking && live}
+                error={folderError}
+                live={live}
+                listing={listing}
+                onAdd={addFolder}
+                onBrowse={browse}
+                onDone={stopBrowsing}
+              />
+            ) : (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityState={{ disabled: full || !live }}
+                disabled={full || !live}
+                onPress={() => browse()}
+                style={({ pressed }) => [styles.row, (full || !live) && styles.disabled, pressed && styles.rowPressed]}
+              >
+                <HugeiconsIcon color={colors.text} icon={Add01Icon} size={20} strokeWidth={1.8} />
+                <Text style={styles.rowLabel}>Add a folder…</Text>
+              </Pressable>
+            )}
+          </View>
+          {!full || browsing ? null : (
+            <Text style={styles.hint}>That is the most a project can link ({MAX_PROJECT_FOLDERS}).</Text>
           )}
         </View>
 
-        <View style={styles.group}>
-          <Text style={styles.label}>Folders</Text>
-          {draft.repoPaths.map((path) => (
-            <View key={path} style={styles.folder}>
-              <HugeiconsIcon color={colors.dim} icon={Folder01Icon} size={16} strokeWidth={1.7} />
-              <Text style={styles.path}>{path}</Text>
-              <Pressable
-                accessibilityLabel={`Remove ${path}`}
-                accessibilityRole="button"
-                hitSlop={8}
-                onPress={() => setDraft({ ...draft, repoPaths: draft.repoPaths.filter((candidate) => candidate !== path) })}
-                style={({ pressed }) => [styles.removeFolder, pressed && styles.pressed]}
-              >
-                <HugeiconsIcon color={colors.muted} icon={Cancel01Icon} size={14} strokeWidth={1.8} />
-              </Pressable>
-            </View>
-          ))}
-          {browsing ? (
-            <FolderWalk
-              asking={workspace.dirs.asking && live}
-              error={folderError}
-              live={live}
-              listing={listing}
-              onAdd={addFolder}
-              onBrowse={browse}
-              onDone={stopBrowsing}
-            />
-          ) : (
-            <View style={styles.folderHint}>
-              <Text style={styles.hint}>
-                {draft.repoPaths.length === 0
-                  ? 'No folders.'
-                  : full
-                    ? `That is the most a project can link (${MAX_PROJECT_FOLDERS}).`
-                    : 'Every folder is real, and every persona here can write to it.'}
-              </Text>
-              <Pressable
-                accessibilityRole="button"
-                disabled={full || !live}
-                onPress={() => browse()}
-                style={({ pressed }) => [styles.quiet, (full || !live) && styles.disabled, pressed && styles.pressed]}
-              >
-                <HugeiconsIcon color={colors.text} icon={Add01Icon} size={16} strokeWidth={1.8} />
-                <Text style={styles.quietText}>Add a folder…</Text>
-              </Pressable>
-            </View>
-          )}
-          {onFiles === undefined ? null : (
+        {onFiles === undefined ? null : (
+          <View style={styles.card}>
             <Pressable
               accessibilityRole="button"
               onPress={openFiles}
-              style={({ pressed }) => [styles.linkRow, pressed && styles.pressed]}
+              style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
             >
-              <HugeiconsIcon color={colors.muted} icon={FolderOpenIcon} size={18} strokeWidth={1.7} />
-              <Text style={styles.linkText}>Files</Text>
-              <HugeiconsIcon color={colors.dim} icon={ArrowRight01Icon} size={17} strokeWidth={1.7} />
+              <HugeiconsIcon color={colors.text} icon={FolderOpenIcon} size={20} strokeWidth={1.7} />
+              <Text style={styles.rowLabel}>Files</Text>
+              <HugeiconsIcon color={colors.dim} icon={ArrowRight01Icon} size={16} strokeWidth={1.7} />
             </Pressable>
-          )}
-        </View>
-
-        <View style={styles.group}>
-          <Checkbox
-            checked={draft.memoryScope === 'knowledge'}
-            label="Knowledge work memory"
-            onChange={(checked) => setDraft({ ...draft, memoryScope: checked ? 'knowledge' : 'project' })}
-          />
-          <Text style={styles.hint}>Search every memory index, not only this project’s own.</Text>
-        </View>
+          </View>
+        )}
 
         {error === null ? null : <Text accessibilityRole="alert" style={styles.error}>{error}</Text>}
 
-        <Pressable
-          accessibilityRole="button"
-          disabled={!live}
-          onPress={askDelete}
-          style={({ pressed }) => [styles.delete, !live && styles.disabled, pressed && styles.pressed]}
-        >
-          <HugeiconsIcon color={colors.danger} icon={Delete02Icon} size={18} strokeWidth={1.8} />
-          <Text style={styles.deleteText}>Delete project thread</Text>
-        </Pressable>
+        <View style={[styles.card, styles.deleteCard]}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityState={{ disabled: !live }}
+            disabled={!live}
+            onPress={askDelete}
+            style={({ pressed }) => [styles.row, styles.deleteRow, !live && styles.disabled, pressed && styles.rowPressed]}
+          >
+            <HugeiconsIcon color={colors.danger} icon={Delete02Icon} size={20} strokeWidth={1.8} />
+            <Text style={styles.deleteText}>Delete project thread</Text>
+          </Pressable>
+        </View>
       </ScrollView>
     </Sheet>
   )
 }
 
-/** Walks the Mac's folders inside the sheet, the way New project does on the phone. */
+/** A linked folder as its parent path, quiet and cut from the front, then its own name. */
+function FolderPath({ path }: { path: string }) {
+  const cut = path.replace(/\/+$/, '').lastIndexOf('/') + 1
+  return (
+    <Text accessibilityLabel={path} ellipsizeMode="head" numberOfLines={1} style={styles.path}>
+      <Text style={styles.pathParent}>{path.slice(0, cut)}</Text>
+      {path.slice(cut)}
+    </Text>
+  )
+}
+
+/** Walks the Mac's folders as the last part of the Folders card, the way New project does on the phone. */
 function FolderWalk({ listing, asking, error, live, onBrowse, onAdd, onDone }: {
   listing: ReturnType<typeof useWorkspace>['workspace']['dirs']['listing']
   asking: boolean
@@ -351,14 +360,7 @@ function FolderWalk({ listing, asking, error, live, onBrowse, onAdd, onDone }: {
           // Nothing is on its way: a refusal or a lost connection. The user asks again.
           <View style={styles.loading}>
             {error !== null ? null : <Text style={styles.hint}>{live ? 'Nothing came back.' : 'Connect to your Mac first.'}</Text>}
-            <Pressable
-              accessibilityRole="button"
-              disabled={!live}
-              onPress={() => onBrowse()}
-              style={({ pressed }) => [styles.quiet, styles.retry, !live && styles.disabled, pressed && styles.pressed]}
-            >
-              <Text style={styles.quietText}>Ask again</Text>
-            </Pressable>
+            <CardButton disabled={!live} label="Ask again" onPress={() => onBrowse()} />
           </View>
         )
       ) : (
@@ -391,108 +393,67 @@ function FolderWalk({ listing, asking, error, live, onBrowse, onAdd, onDone }: {
         </>
       )}
       <View style={styles.walkActions}>
-        <Pressable accessibilityRole="button" onPress={onDone} style={({ pressed }) => [styles.quiet, pressed && styles.pressed]}>
-          <Text style={styles.quietText}>Cancel</Text>
-        </Pressable>
-        <Pressable
-          accessibilityRole="button"
+        <CardButton label="Cancel" onPress={onDone} variant="quiet" />
+        <CardButton
           disabled={listing === null}
+          label="Add this folder"
           onPress={() => listing === null ? undefined : onAdd(listing.path)}
-          style={({ pressed }) => [styles.use, listing === null && styles.disabled, pressed && styles.pressed]}
-        >
-          <Text style={styles.useText}>Add this folder</Text>
-        </Pressable>
+          variant="primary"
+        />
       </View>
     </View>
   )
 }
 
 const styles = StyleSheet.create({
-  content: { gap: spacing.xl, paddingHorizontal: spacing.lg, paddingTop: spacing.sm, paddingBottom: spacing.xl },
+  content: { gap: spacing.xxl, paddingHorizontal: spacing.lg, paddingTop: spacing.xs, paddingBottom: spacing.xl },
   confirm: { width: 44, height: 44 },
   confirmInner: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   disabled: { opacity: 0.4 },
   pressed: { opacity: 0.7 },
-  group: { gap: spacing.sm },
-  label: { color: colors.muted, fontFamily: fonts.sans, fontSize: 13, fontWeight: '500' },
-  nameRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  mark: {
-    width: 52,
-    height: 52,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: radius.md,
-    ...squircle,
-    backgroundColor: colors.sheetSurface,
-  },
-  markOpen: { backgroundColor: colors.sheetPressed },
-  nameInput: {
-    flex: 1,
-    minHeight: 52,
-    borderRadius: radius.md,
-    ...squircle,
-    backgroundColor: colors.sheetSurface,
+  // Centred like the agent overview: the tile, then the name as the page's title.
+  hero: { alignItems: 'center', gap: spacing.lg },
+  markSlot: { width: 88, height: 88 },
+  mark: { flex: 1, alignItems: 'center', justifyContent: 'center', borderRadius: 44 },
+  // Centred on the circle's edge at its lower right.
+  markBadge: { position: 'absolute', right: -5, bottom: -5 },
+  name: {
+    alignSelf: 'stretch',
     color: colors.text,
-    fontFamily: fonts.sans,
-    fontSize: 16,
-    letterSpacing: tracking.body,
-    paddingHorizontal: spacing.md,
+    fontFamily: fonts.sansMedium,
+    fontSize: 24,
+    letterSpacing: -0.4,
+    textAlign: 'center',
+    paddingVertical: spacing.xs,
   },
-  picker: { gap: spacing.md, borderRadius: radius.md, ...squircle, backgroundColor: colors.sheetSurface, padding: spacing.md },
+  picker: { gap: spacing.md, borderRadius: radius.panel, ...squircle, backgroundColor: colors.sheetSurface, padding: spacing.md },
   swatches: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },
   swatchRing: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center', borderRadius: 18, borderWidth: 2, borderColor: 'transparent' },
   swatch: { width: 24, height: 24, borderRadius: 12 },
   icons: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },
   iconCell: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center', borderRadius: radius.sm, ...squircle },
   iconChosen: { backgroundColor: colors.sheetPressed },
-  folder: {
-    minHeight: 44,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    borderRadius: radius.md,
-    ...squircle,
-    backgroundColor: colors.sheetSurface,
-    paddingLeft: spacing.md,
-    paddingRight: spacing.xs,
-  },
-  path: { flex: 1, color: colors.text, fontFamily: fonts.mono, fontSize: 12, lineHeight: 17, paddingVertical: spacing.sm },
-  removeFolder: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
-  folderHint: { gap: spacing.sm },
-  hint: { color: colors.dim, fontFamily: fonts.sans, fontSize: 13, lineHeight: 18 },
-  quiet: {
-    minHeight: 40,
-    alignSelf: 'flex-start',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    borderRadius: radius.round,
-    backgroundColor: colors.chip,
-    paddingHorizontal: spacing.md,
-  },
-  quietText: { color: colors.text, fontFamily: fonts.sans, fontSize: 14 },
-  linkRow: {
-    minHeight: 48,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    borderRadius: radius.md,
-    ...squircle,
-    backgroundColor: colors.sheetSurface,
-    paddingHorizontal: spacing.md,
-  },
-  linkText: { flex: 1, color: colors.text, fontFamily: fonts.sans, fontSize: 15 },
-  walk: { gap: 2, borderRadius: radius.md, ...squircle, backgroundColor: colors.sheetSurface, padding: spacing.sm },
+  section: { gap: spacing.sm },
+  label: { color: colors.muted, fontFamily: fonts.sans, fontSize: 13, paddingHorizontal: spacing.lg },
+  // The grouped list of the agent overview: one surface, rows split by an inset hairline.
+  card: { overflow: 'hidden', borderRadius: radius.panel, ...squircle, backgroundColor: colors.sheetSurface },
+  row: { minHeight: 52, flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingHorizontal: spacing.lg },
+  rowPressed: { backgroundColor: colors.sheetPressed },
+  rowLabel: { flex: 1, color: colors.text, fontFamily: fonts.sans, fontSize: 16 },
+  line: { position: 'absolute', right: 0, bottom: 0, left: spacing.lg + 20 + spacing.md, height: StyleSheet.hairlineWidth, backgroundColor: colors.line },
+  path: { flex: 1, color: colors.text, fontFamily: fonts.sans, fontSize: 15, fontWeight: '500' },
+  pathParent: { color: colors.dim, fontWeight: '400' },
+  removeFolder: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center', marginRight: -spacing.sm },
+  hint: { color: colors.dim, fontFamily: fonts.sans, fontSize: 13, lineHeight: 18, paddingHorizontal: spacing.lg },
+  walk: { gap: 2, padding: spacing.sm },
   loading: { minHeight: 80, alignItems: 'center', justifyContent: 'center', gap: spacing.sm },
   where: { color: colors.muted, fontFamily: fonts.mono, fontSize: 12, lineHeight: 17, padding: spacing.sm },
   walkRow: { minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingHorizontal: spacing.sm },
   walkName: { flex: 1, color: colors.text, fontFamily: fonts.sans, fontSize: 15 },
-  walkActions: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: spacing.sm, paddingTop: spacing.sm },
-  use: { minHeight: 40, justifyContent: 'center', borderRadius: radius.round, backgroundColor: colors.text, paddingHorizontal: spacing.md },
-  useText: { color: colors.onPrimary, fontFamily: fonts.sans, fontSize: 14, fontWeight: '500' },
+  walkActions: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: spacing.sm, paddingTop: spacing.sm },
   error: { color: colors.danger, fontFamily: fonts.sans, fontSize: 13, lineHeight: 18 },
   walkError: { padding: spacing.sm },
-  retry: { alignSelf: 'center' },
-  delete: { minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  deleteText: { color: colors.danger, fontFamily: fonts.sans, fontSize: 15 },
+  deleteCard: { marginTop: spacing.lg },
+  deleteRow: { justifyContent: 'center', gap: spacing.sm },
+  deleteText: { color: colors.danger, fontFamily: fonts.sans, fontSize: 16 },
 })

@@ -189,7 +189,8 @@ export interface WorkspaceActions {
 export type AgentEdit = Pick<AgentConfig, 'name' | 'role'>
 
 /** What the project settings sheet writes: the Mac's Edit project form, field for field. */
-export type ProjectEdit = Pick<Project, 'name' | 'icon' | 'color' | 'repoPaths' | 'memoryScope'>
+// Memory scope is set on the Mac only; leaving it out makes the server keep the stored value.
+export type ProjectEdit = Pick<Project, 'name' | 'icon' | 'color' | 'repoPaths'>
 
 type WorkspaceContextValue = WorkspaceData & WorkspaceActions & { status: ConnectionStatus }
 

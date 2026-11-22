@@ -10,7 +10,8 @@ import { useWindowInsets } from '@/lib/windowInsets'
 
 interface SheetProps {
   open: boolean
-  title: string
+  /** Left out where the body carries the identity, as a hero does; the header then holds only its buttons. */
+  title?: string
   /** A line under the title. A composed line may add a compact status mark. */
   subtitle?: ReactNode
   onClose: () => void
@@ -48,7 +49,7 @@ export function Sheet({ open, title, subtitle, onClose, onBack, onDismiss, actio
             size={44}
           />
           <View style={styles.titles}>
-            <Text numberOfLines={1} style={styles.title}>{title}</Text>
+            {title === undefined ? null : <Text numberOfLines={1} style={styles.title}>{title}</Text>}
             {typeof subtitle === 'string' ? (
               <Text numberOfLines={1} style={styles.subtitle}>{subtitle}</Text>
             ) : subtitle}

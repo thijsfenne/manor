@@ -43,6 +43,8 @@ const projects = [
     icon: 'home',
     color: '#B7C9B1',
     repoPaths: ['/tmp/manor-mobile-verify/Manor'],
+    // Set on the Mac; the phone never sends it, so a phone save must leave it standing.
+    memoryScope: 'knowledge',
     // The project's curated thread: the phone pins it above the sessions.
     threadChatId: 'chat-thread-manor',
   },
@@ -1875,10 +1877,18 @@ server.on('connection', (socket) => {
       return
     }
     // The phone's project settings save the form whole, as the server does: rewrite, broadcast, ack.
+    // A field the message leaves out keeps its stored value, as on the server.
     if (message.type === 'update_project') {
       const project = projects.find((candidate) => candidate.id === message.projectId)
       if (project !== undefined) {
-        Object.assign(project, { name: message.name, icon: message.icon, color: message.color, repoPaths: message.repoPaths, memoryScope: message.memoryScope })
+        Object.assign(project, {
+          name: message.name,
+          icon: message.icon ?? project.icon,
+          color: message.color ?? project.color,
+          repoPaths: message.repoPaths,
+          memoryScope: message.memoryScope ?? project.memoryScope,
+        })
+        console.log(`update_project ${project.id} name=${project.name} icon=${project.icon} folders=${project.repoPaths.length} memoryScope=${project.memoryScope ?? 'project'} sentMemoryScope=${message.memoryScope ?? 'none'}`)
         send(socket, directory)
       }
       send(socket, project === undefined
