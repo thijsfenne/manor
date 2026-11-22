@@ -19,6 +19,7 @@ import { useBubbleTint } from '@/components/bubbleTint'
 import { imageParts } from '@/components/markdownImageParts'
 import { sourceItemHref } from '@/components/sourceLinks'
 import { Text } from '@/components/Text'
+import { PagerSwipe } from '@/components/ThreadPager'
 import { serverMediaUri } from '@/lib/connection'
 import { noteImageWidth } from '@/lib/noteImages'
 import { colors, fonts, radius, scrims, spacing, squircle } from '@/theme'
@@ -326,7 +327,7 @@ function Block({
   links?: MarkdownLinks
   small: boolean
 }) {
-  const { ink, press, wash } = useLineProps()
+  const { ink, press } = useLineProps()
   const cites = useContext(CitesSources)
   const size = small ? SMALL.body : undefined
   switch (block.kind) {
@@ -357,11 +358,7 @@ function Block({
         </View>
       )
     case 'code':
-      return (
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={[styles.codeBlock, wash]} contentContainerStyle={styles.codeInner}>
-          <Text {...press} selectable style={[styles.code, ink]}>{block.text}</Text>
-        </ScrollView>
-      )
+      return <CodeBlock text={block.text} />
     case 'list':
       return (
         <View style={styles.list}>
@@ -414,6 +411,44 @@ const TABLE_FADE = 36
 export const ReplySwipe = createContext<GestureType | undefined>(undefined)
 
 /**
+ * The native gesture of a sideways scroller in a message. While it overflows it holds the
+ * thread's page swipe back, and with `reply` the message's swipe to reply too, so a
+ * sideways swipe on it scrolls it and one anywhere else still acts.
+ */
+function useSidewaysScroll(overflowing: boolean, reply: boolean) {
+  const replyPan = useContext(ReplySwipe)
+  const pagerPan = useContext(PagerSwipe)
+  const scroll = Gesture.Native()
+  const held = [reply ? replyPan : undefined, pagerPan].filter((pan) => pan !== undefined)
+  if (overflowing && held.length > 0) scroll.blocksExternalGesture(...held)
+  return scroll
+}
+
+/** A fenced block, which scrolls sideways when a line is wider than the column; a swipe to reply still wins on it. */
+function CodeBlock({ text }: { text: string }) {
+  const { ink, press, wash } = useLineProps()
+  const widths = useRef({ content: 0, view: 0 })
+  const [overflowing, setOverflowing] = useState(false)
+  const measure = () => setOverflowing(widths.current.content > widths.current.view + 1)
+  const scroll = useSidewaysScroll(overflowing, false)
+  return (
+    <GestureDetector gesture={scroll}>
+      <ScrollView
+        alwaysBounceHorizontal={false}
+        contentContainerStyle={styles.codeInner}
+        horizontal
+        onContentSizeChange={(width) => { widths.current.content = width; measure() }}
+        onLayout={(event: LayoutChangeEvent) => { widths.current.view = event.nativeEvent.layout.width; measure() }}
+        showsHorizontalScrollIndicator={false}
+        style={[styles.codeBlock, wash]}
+      >
+        <Text {...press} selectable style={[styles.code, ink]}>{text}</Text>
+      </ScrollView>
+    </GestureDetector>
+  )
+}
+
+/**
  * Columns rather than rows, so each one is as wide as its own widest cell without a
  * measuring pass, up to the cap, past which a cell wraps onto more lines rather than
  * being cut off; the rows stay level across the columns through `measure`. Narrower than the chat column it fills it, wider than it it scrolls sideways,
@@ -438,7 +473,6 @@ function Table({
   links?: MarkdownLinks
 }) {
   const { ink, press } = useLineProps()
-  const replyPan = useContext(ReplySwipe)
   const screen = useWindowDimensions()
   const host = useRef<View>(null)
   const [inset, setInset] = useState({ left: 0, right: 0 })
@@ -446,9 +480,7 @@ function Table({
   const metrics = useRef({ offset: 0, content: 0, view: 0 })
   const [rowHeights, setRowHeights] = useState<number[]>([])
   const natural = useRef<number[][]>([])
-  const overflowing = hidden.start || hidden.end
-  const scroll = Gesture.Native()
-  if (overflowing && replyPan !== undefined) scroll.blocksExternalGesture(replyPan)
+  const scroll = useSidewaysScroll(hidden.start || hidden.end, true)
 
   // A cell wraps, so the cells of a row sit in different columns at different heights.
   // Each reports the height its own words need, and the tallest sets the row for all of them.

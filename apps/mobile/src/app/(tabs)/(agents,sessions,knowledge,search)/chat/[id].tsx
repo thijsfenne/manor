@@ -55,6 +55,8 @@ import { EdgeScrim } from '@/components/EdgeScrim'
 import { EditsPill } from '@/components/EditsPill'
 import { FilesSheet } from '@/components/FilesSheet'
 import { ProjectSettingsSheet } from '@/components/ProjectSettingsSheet'
+import { ProjectSessionsPage } from '@/components/ProjectSessionsPage'
+import { ThreadPager, ThreadSwipeArea } from '@/components/ThreadPager'
 import { GlassIconButton } from '@/components/GlassIconButton'
 import { GlassSurface } from '@/components/GlassSurface'
 import { BubbleTintContext } from '@/components/bubbleTint'
@@ -73,7 +75,7 @@ import { RelayedAgentMessage } from '@/components/RelayedAgentMessage'
 import { ProjectFileWriteCard } from '@/components/ProjectFileWriteCard'
 import { ThreadBundle } from '@/components/ThreadBundle'
 import { AnswerChange, OTHER_ANSWER } from '@/components/bundleTile'
-import { takeEventReveal, takeThreadReveal } from '@/lib/threadReveal'
+import { takeEventReveal } from '@/lib/threadReveal'
 import { EMPTY_DRAFT, readDraft, writeDraft } from '@/lib/drafts'
 import { glassRise, glassSink } from '@/lib/glassMotion'
 import { useScreenCovered } from '@/lib/useScreenCovered'
@@ -195,6 +197,10 @@ function ChatContent({ chatId }: { chatId: string | undefined }) {
   const [fieldFlight, setFieldFlight] = useState<FieldFlight | null>(null)
   const insets = useSafeAreaInsets()
   const covered = useScreenCovered()
+  // The overview as the page right of the thread: a swipe to the left or the Sessions button.
+  // While it shows, the thread is out of sight as under a pushed screen.
+  const [overviewOpen, setOverviewOpen] = useState(false)
+  const transcriptCovered = covered || overviewOpen
   // The footer is an overlay that sticks to the keyboard, and its measured height is
   // the list's bottom inset, so the newest message always rests just above the
   // composer: with the keyboard down, up, or mid-flight. The keyboard controller
@@ -217,11 +223,12 @@ function ChatContent({ chatId }: { chatId: string | undefined }) {
   // open chat again, so a run finishing in the chat he left is not settled as read.
   // Losing focus gives the selection up, unless the screen above already took it: from
   // the inbox no chat is open, so this one can show unread and a reconnect leaves it be.
+  // The project's overview over the thread gives the selection up the same way.
   useFocusEffect(useCallback(() => {
-    if (chatId === undefined) return
+    if (chatId === undefined || overviewOpen) return
     openChat(chatId)
     return () => leaveChat(chatId)
-  }, [chatId, leaveChat, openChat]))
+  }, [chatId, overviewOpen, leaveChat, openChat]))
 
   // The reply and the quote are set from the transcript, so they live here. What is
   // typed and staged lives in `ChatComposer`, and all of it shares one stored draft.
@@ -356,6 +363,8 @@ function ChatContent({ chatId }: { chatId: string | undefined }) {
   )
   // The Sessions button's one dot: the user is needed, a Session finished unseen, or one runs.
   const sessionsMark = useMemo(() => sessionOverview === null ? null : sessionsDot(sessionOverview), [sessionOverview])
+  // A thread that stops being a project thread (its project deleted elsewhere) has no overview to show.
+  if (overviewOpen && sessionOverview === null) setOverviewOpen(false)
   const threadQuestion = useMemo(
     () => projectThread ? threadQuestionIn(thread.events, { activity: workspace.activity }) : null,
     [projectThread, thread.events, workspace.activity],
@@ -590,12 +599,6 @@ function ChatContent({ chatId }: { chatId: string | undefined }) {
     revealRowRef.current = revealRow
   }, [revealRow])
   const revealRowStable = useCallback((rowKey: string) => revealRowRef.current(rowKey), [])
-  // A proposal picked on the project's Sessions screen lands on its card here.
-  useFocusEffect(useCallback(() => {
-    if (!projectThread || chatId === undefined) return
-    const rowKey = takeThreadReveal(chatId)
-    if (rowKey !== null) requestAnimationFrame(() => revealRowRef.current(rowKey))
-  }, [projectThread, chatId]))
 
   // Show in chat from a DM's Files, or a message picked in Search, lands on the row
   // holding that event at once, like following a link. A chat that just opened waits
@@ -838,9 +841,32 @@ function ChatContent({ chatId }: { chatId: string | undefined }) {
     <SubagentDirectory.Provider value={directory}>
     <SubagentLaunchesContext.Provider value={launches}>
     <AnswerChange.Provider value={answerChange}>
-    <TranscriptCovered.Provider value={covered}>
+    <TranscriptCovered.Provider value={transcriptCovered}>
+    <ThreadPager
+      enabled={sessionOverview !== null}
+      onOpenChange={setOverviewOpen}
+      open={overviewOpen}
+      page={sessionOverview === null || chatId === undefined ? null : (
+        <ProjectSessionsPage
+          agents={workspace.agents}
+          onBack={() => setOverviewOpen(false)}
+          onOpen={(id) => {
+            openChat(id)
+            router.push({ pathname: '/chat/[id]', params: { id } })
+          }}
+          onRevealProposal={(rowKey) => {
+            // A proposal has no chat of its own: its card, with Accept, sits in the thread.
+            setOverviewOpen(false)
+            revealRow(rowKey)
+          }}
+          overview={sessionOverview}
+          threadId={chatId}
+        />
+      )}
+    >
     <View ref={screenRef} style={styles.screen}>
       <LandedMessageContext.Provider value={landedMessage}>
+      <ThreadSwipeArea>
       <LiveTranscript
         chatId={chatId}
         listRef={listRef}
@@ -851,7 +877,7 @@ function ChatContent({ chatId }: { chatId: string | undefined }) {
         openBundles={openBundles}
         onBundleOpen={setBundleOpen}
         connected={connected}
-        covered={covered}
+        covered={transcriptCovered}
         links={replyLinks}
         draftActions={draftActions}
         repoFiles={repoFiles}
@@ -870,6 +896,7 @@ function ChatContent({ chatId }: { chatId: string | undefined }) {
         onQuoteSource={quoteSource}
         {...(chat?.kind === 'dm' ? { arrival: { motion: arrivalMotion, still, followEnd: !showJump, flightId: fieldFlight?.id ?? 0 } } : {})}
       />
+      </ThreadSwipeArea>
       </LandedMessageContext.Provider>
 
       <ChatHeader
@@ -888,7 +915,7 @@ function ChatContent({ chatId }: { chatId: string | undefined }) {
         subtitle={subtitle}
         {...(chat?.kind === 'project' && project !== undefined && startedBy === undefined ? { project } : {})}
         projectThread={projectThread}
-        {...(sessionOverview === null || chatId === undefined ? {} : { onSessions: () => router.push({ pathname: '/sessions/[threadId]', params: { threadId: chatId } }), sessionsDot: sessionsMark })}
+        {...(sessionOverview === null || chatId === undefined ? {} : { onSessions: () => setOverviewOpen(true), sessionsDot: sessionsMark })}
         {...(projectThread && project !== undefined ? { onProject: () => setSheet('settings') } : {})}
         {...(chat?.kind === 'project' && !projectThread && chat.archivedAt === null && !sitsSettled(workspace, chat) ? { onSettle: () => setChatSettled(chat.id, true) } : {})}
         title={dmAgent?.name ?? pairTitle ?? (chat == null ? 'Chat' : withSessionTitle(chat).title)}
@@ -1227,6 +1254,7 @@ function ChatContent({ chatId }: { chatId: string | undefined }) {
         onQuote={chooseQuote}
       />
     </View>
+    </ThreadPager>
     </TranscriptCovered.Provider>
     </AnswerChange.Provider>
     </SubagentLaunchesContext.Provider>

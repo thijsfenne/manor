@@ -1,60 +1,39 @@
 /*
- * THESIS: A project's Sessions read as the Mac's overview beside the thread, one step behind the thread, never as a second home list.
+ * THESIS: A project's Sessions read as the Mac's overview beside the thread, one page right of the thread, never as a second home list.
  * FIRST VIEWPORT: Back to the thread, then Needs you, Working and Settled with their counts.
  */
 import ArrowLeft01Icon from '@hugeicons/core-free-icons/ArrowLeft01Icon'
-import { projectSessionOverview } from '@manor/client-runtime/state'
-import { router, useLocalSearchParams } from 'expo-router'
-import { useMemo } from 'react'
+import type { AgentConfig } from '@manor/contracts'
+import type { SessionOverview } from '@manor/client-runtime/state'
 import { StyleSheet, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { CHAT_HEADER_HEIGHT } from '@/components/ChatHeader'
-import { ConnectGate } from '@/components/ConnectGate'
 import { EdgeScrim } from '@/components/EdgeScrim'
 import { GlassIconButton } from '@/components/GlassIconButton'
 import { SessionOverviewList } from '@/components/SessionOverviewList'
 import { Text } from '@/components/Text'
-import { leaveThreadReveal } from '@/lib/threadReveal'
-import { useWorkspace } from '@/providers/WorkspaceProvider'
 import { colors, fonts, spacing } from '@/theme'
 
-export default function ProjectSessionsScreen() {
-  return (
-    <ConnectGate>
-      <ProjectSessions />
-    </ConnectGate>
-  )
-}
-
-function ProjectSessions() {
-  const { threadId } = useLocalSearchParams<{ threadId: string }>()
-  const { workspace, openChat } = useWorkspace()
+/** A project thread's Sessions, the page `ThreadPager` slides in to the right of the thread. */
+export function ProjectSessionsPage({ threadId, overview, agents, onBack, onOpen, onRevealProposal }: {
+  threadId: string
+  overview: SessionOverview
+  agents: AgentConfig[]
+  onBack: () => void
+  onOpen: (chatId: string) => void
+  onRevealProposal: (rowKey: string) => void
+}) {
   // Inside a tab stack the bottom inset is the tab bar plus the home indicator.
   const insets = useSafeAreaInsets()
-  const overview = useMemo(
-    // The slices the overview reads, not `workspace`, so the React Compiler keeps this screen.
-    () => projectSessionOverview({
-      projects: workspace.projects, chats: workspace.chats, workHandoffs: workspace.workHandoffs, activity: workspace.activity,
-      subagents: workspace.subagents, backgroundWork: workspace.backgroundWork, houseSettings: workspace.houseSettings,
-    }, threadId),
-    [workspace.projects, workspace.chats, workspace.workHandoffs, workspace.activity, workspace.subagents, workspace.backgroundWork, workspace.houseSettings, threadId],
-  )
-  const back = () => (router.canGoBack() ? router.back() : router.replace({ pathname: '/chat/[id]', params: { id: threadId } }))
 
   return (
     <View style={styles.screen}>
       <SessionOverviewList
-        agents={workspace.agents}
+        agents={agents}
         inset={{ top: insets.top + CHAT_HEADER_HEIGHT + spacing.sm, bottom: insets.bottom + spacing.sm }}
-        onOpen={(chatId) => {
-          openChat(chatId)
-          router.push({ pathname: '/chat/[id]', params: { id: chatId } })
-        }}
-        onRevealProposal={(rowKey) => {
-          leaveThreadReveal(threadId, rowKey)
-          back()
-        }}
+        onOpen={onOpen}
+        onRevealProposal={onRevealProposal}
         overview={overview}
         threadId={threadId}
       />
@@ -62,7 +41,7 @@ function ProjectSessions() {
       <View pointerEvents="box-none" style={styles.header}>
         <EdgeScrim edge="top" height={insets.top + CHAT_HEADER_HEIGHT + 28} />
         <View pointerEvents="box-none" style={[styles.row, { paddingTop: insets.top + 6 }]}>
-          <GlassIconButton accessibilityLabel="Back to the thread" icon={ArrowLeft01Icon} onPress={back} />
+          <GlassIconButton accessibilityLabel="Back to the thread" icon={ArrowLeft01Icon} onPress={onBack} />
           <View style={styles.heading}>
             <Text maxFontSizeMultiplier={1.35} numberOfLines={1} style={styles.title}>Sessions</Text>
           </View>

@@ -44,8 +44,6 @@ export default function TabStack({ segment }: { segment: string }) {
         <Stack.Screen name="new-chat" options={{ gestureEnabled: true }} />
         <Stack.Screen name="chat/[id]" options={{ gestureEnabled: true }} />
         <Stack.Screen name="subagent/[callId]" options={{ gestureEnabled: true }} />
-        {/* A project's Sessions, one step behind its thread; back lands on the thread. */}
-        <Stack.Screen name="sessions/[threadId]" options={{ gestureEnabled: true }} />
         {/* A DM's Files, one step behind the chat; back lands on the chat. */}
         <Stack.Screen name="files/[chatId]" options={{ gestureEnabled: true }} />
         {/* A DM's agent overview and its read-only lists, behind the chat. */}

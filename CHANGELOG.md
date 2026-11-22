@@ -4,6 +4,8 @@ What changed for someone who uses Manor, newest first. A version is a tag on `ma
 
 ## Unreleased
 
+- On the phone, a swipe to the left in a project thread brings in the project's Sessions as the next page, the way the Mac shows them beside the thread. A swipe to the right, or Back, returns to the thread where you left it. The Sessions button in the header opens the same page. A code block wider than the screen scrolls sideways under the finger instead.
+
 ## 0.3.0, 2026-11-22
 
 - A persona's face has five new shapes to choose from: clover, flower, star, heart and ghost. Only a face you give one of them wears it, so no existing face changes shape. The cloud is redrawn as a flat-bottomed cloud with three puffs instead of a lumpy blob. The capsule no longer cuts off its eyes while it works. On the Mac, the web and the phone; the phone needs a new build.
