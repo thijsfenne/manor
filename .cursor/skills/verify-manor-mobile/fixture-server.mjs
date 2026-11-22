@@ -1243,8 +1243,9 @@ const activeTurns = {
 const runningTurns = () => Object.fromEntries(Object.entries(activeTurns).map(([chatId, { activeTurn }]) => [chatId, [activeTurn.turnId]]))
 Object.defineProperty(directory, 'runningTurns', { enumerable: true, get: runningTurns })
 
-// The same limits the desktop spike's mock driver reports (`mockProviderUsage`), plus an
-// unavailable provider, so a phone and a desktop screenshot compare bar for bar.
+// The same limits the desktop spike's mock driver reports (`mockProviderUsage`), plus a
+// third reporting provider for the header's "+N" and an unavailable one, so a phone and a
+// desktop screenshot compare bar for bar.
 const usageWindow = (label, minutes, usedPercent, resetsIn) => ({
   label, minutes, usedPercent, resetsAt: now + resetsIn, startsAt: now + resetsIn - minutes * 60_000,
 })
@@ -1258,6 +1259,9 @@ const providerUsage = {
     { provider: 'codex', status: 'ok', plan: 'plus', fetchedAt: now, windows: [
       usageWindow('5-hour limit', 300, 8, 4 * 3_600_000 + 20 * 60_000),
       usageWindow('Weekly', 10_080, 71, 2 * 86_400_000 + 6 * 3_600_000),
+    ] },
+    { provider: 'cursor', status: 'ok', plan: 'pro', fetchedAt: now, windows: [
+      usageWindow('Weekly', 10_080, 9, 4 * 86_400_000 + 2 * 3_600_000),
     ] },
     { provider: 'grok', status: 'unavailable', fetchedAt: now, windows: [] },
   ],

@@ -2,7 +2,6 @@ import Clock01Icon from '@hugeicons/core-free-icons/Clock01Icon'
 import Archive02Icon from '@hugeicons/core-free-icons/Archive02Icon'
 import BookOpen01Icon from '@hugeicons/core-free-icons/BookOpen01Icon'
 import CellsIcon from '@hugeicons/core-free-icons/CellsIcon'
-import DashboardSpeed02Icon from '@hugeicons/core-free-icons/DashboardSpeed02Icon'
 import Unlink01Icon from '@hugeicons/core-free-icons/Unlink01Icon'
 import PuzzleIcon from '@hugeicons/core-free-icons/PuzzleIcon'
 import Search01Icon from '@hugeicons/core-free-icons/Search01Icon'
@@ -11,12 +10,10 @@ import {
   Archive02Icon as Archive02SolidIcon,
   BookOpen01Icon as BookOpen01SolidIcon,
   CellsIcon as CellsSolidIcon,
-  DashboardSpeed02Icon as DashboardSpeed02SolidIcon,
   PuzzleIcon as PuzzleSolidIcon,
   Search01Icon as Search01SolidIcon,
 } from '@manor/client-runtime/solid-icons'
 import { HugeiconsIcon, type IconSvgElement } from '@hugeicons/react-native'
-import { CRITICAL_AT, WARN_AT, displayPercent, peakUsed } from '@manor/client-runtime/usage'
 import { router, useNavigationContainerRef, type Href } from 'expo-router'
 import { Alert, Pressable, StyleSheet, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -29,7 +26,7 @@ import { AiBotHeadLookingIcon, AiBotHeadLookingSolidIcon } from '@/components/cu
 import { Text } from '@/components/Text'
 import { colors, fonts, radius, spacing, squircle } from '@/theme'
 
-export type HouseSection = 'inbox' | 'direct' | 'knowledge' | 'search' | 'routines' | 'plugins' | 'artifacts' | 'usage'
+export type HouseSection = 'inbox' | 'direct' | 'knowledge' | 'search' | 'routines' | 'plugins' | 'artifacts'
 
 /** `tab` names the tab bar route a tab item switches to; a room opens by `href`. */
 type Item = { key: HouseSection; label: string; icon: IconSvgElement; activeIcon: IconSvgElement; href: Href; tab?: string }
@@ -109,8 +106,6 @@ export function HouseMenu({ active, onClose }: { active: HouseSection; onClose: 
 
       <View style={styles.spacer} />
 
-      <UsageItem current={active} onClose={onClose} />
-
       {connection.devServer === null ? (
         <Pressable
           accessibilityRole="button"
@@ -131,7 +126,7 @@ export function HouseMenu({ active, onClose }: { active: HouseSection; onClose: 
 }
 
 /** Rooms without a tab, which open inside the current tab's stack. */
-const ROOMS = new Set<HouseSection>(['artifacts', 'routines', 'plugins', 'usage'])
+const ROOMS = new Set<HouseSection>(['artifacts', 'routines', 'plugins'])
 
 /**
  * A room opens on top of the current tab, so the tab bar stays under it; picked from
@@ -141,40 +136,6 @@ const ROOMS = new Set<HouseSection>(['artifacts', 'routines', 'plugins', 'usage'
 function openRoom(href: Href, current: HouseSection) {
   if (ROOMS.has(current)) router.replace(href)
   else router.push(href)
-}
-
-/**
- * Not a room in the list but the house's subscription headroom, sitting with the
- * account acts at the bottom — the same footer position the row has on the Mac,
- * above the profile there and above sign-out here. It carries the fullest window
- * that is not yet full as its one ambient number, and no number before the first
- * reading. House 100% only when every returned window is full.
- */
-function UsageItem({ current, onClose }: { current: HouseSection; onClose: () => void }) {
-  const active = current === 'usage'
-  const { workspace } = useWorkspaceData()
-  const peak = peakUsed(workspace.providerUsage)
-  const heat = peak === undefined ? 'normal' : peak >= CRITICAL_AT ? 'critical' : peak >= WARN_AT ? 'warn' : 'normal'
-
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityState={{ selected: active }}
-      onPress={() => {
-        onClose()
-        if (!active) openRoom('/usage', current)
-      }}
-      style={({ pressed }) => [styles.item, active && styles.itemActive, pressed && styles.pressed]}
-    >
-      <HugeiconsIcon color={active ? colors.text : colors.muted} icon={active ? DashboardSpeed02SolidIcon : DashboardSpeed02Icon} size={21} strokeWidth={active ? undefined : 1.7} />
-      <Text style={[styles.label, active && styles.labelActive]}>Usage</Text>
-      {peak === undefined ? null : (
-        <Text style={[styles.peak, { color: heat === 'critical' ? colors.danger : heat === 'warn' ? colors.warning : colors.muted }]}>
-          {Math.max(0, 100 - displayPercent(peak))}% left
-        </Text>
-      )}
-    </Pressable>
-  )
 }
 
 const styles = StyleSheet.create({
@@ -193,6 +154,5 @@ const styles = StyleSheet.create({
   label: { color: colors.muted, fontFamily: fonts.sans, fontSize: 17, fontWeight: '500' },
   labelActive: { color: colors.text },
   spacer: { flex: 1 },
-  peak: { marginLeft: 'auto', fontFamily: fonts.sans, fontSize: 15, fontWeight: '500', fontVariant: ['tabular-nums'] },
   pressed: { opacity: 0.6 },
 })

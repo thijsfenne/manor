@@ -6,6 +6,7 @@ import { StyleSheet, View } from 'react-native'
 import { ConnectGate } from '@/components/ConnectGate'
 import { FileBrowser, ROOT_PLACE, placeBehind, placeTitles, type BrowserPlace } from '@/components/FileBrowser'
 import { SectionScaffold } from '@/components/SectionScaffold'
+import { UsageButton } from '@/components/UsageButton'
 import { useTabReset } from '@/lib/tabNavigation'
 import { useWorkspace } from '@/providers/WorkspaceProvider'
 import { Text } from '@/components/Text'
@@ -73,6 +74,8 @@ function Vault() {
     <SectionScaffold
       onBack={behind === null ? undefined : () => setPlace(behind)}
       title={title}
+      // Only the vault's root is the tab root; a folder or a note inside it is a detail.
+      trailing={behind === null ? <UsageButton /> : undefined}
     >
       {content}
     </SectionScaffold>

@@ -35,6 +35,7 @@ import { DisclosureChevron } from '@/components/DisclosureChevron'
 import { GlassPressable } from '@/components/GlassPressable'
 import { KeyboardFooter } from '@/components/KeyboardFooter'
 import { SectionScaffold } from '@/components/SectionScaffold'
+import { UsageButton } from '@/components/UsageButton'
 import { SessionMark } from '@/components/SessionMark'
 import { Text } from '@/components/Text'
 import { relativeTime } from '@/lib/time'
@@ -125,7 +126,7 @@ function ProjectInbox() {
         : { title: 'Loading Sessions' }
 
   return (
-    <SectionScaffold compactTitle edgeToEdge title="Sessions">
+    <SectionScaffold compactTitle edgeToEdge title="Sessions" trailing={<UsageButton />}>
       <FlatList
         contentContainerStyle={[
           styles.list,

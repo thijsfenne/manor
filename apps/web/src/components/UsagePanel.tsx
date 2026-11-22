@@ -6,17 +6,18 @@ import {
   WINDOW_DETAILS,
   byCardOrder,
   clockOf,
+  connectedUsage,
   heatOf,
-  providerPeak,
+  paceMarkPercent,
   remainingPercent,
   resetLabel,
+  usageRing,
   type Heat,
 } from '@manor/client-runtime/usage'
 import { Icon } from './Icon'
 import { Modal } from './Modal'
 import { ProviderMark } from './ProviderMark'
-import { usableProviders } from './onboarding/firstAgent'
-import { PaceMark, paceMarkPercent } from './usage/PaceMark'
+import { PaceMark } from './usage/PaceMark'
 import { useMinuteClock } from '../useMinuteClock'
 
 /**
@@ -66,10 +67,7 @@ const heatStroke = (heat: Heat) => (heat === 'critical' ? 'stroke-danger' : heat
 export function UsagePanel({ perProvider, connections, onOpenDetails, active = false, now = Date.now }: UsagePanelProps) {
   const [open, setOpen] = useState(false)
 
-  const rings = [...perProvider].sort(byCardOrder).flatMap((usage) => {
-    const limit = providerPeak(usage)
-    return limit === undefined ? [] : [{ provider: usage.provider, left: remainingPercent(limit), heat: heatOf(limit) }]
-  })
+  const rings = [...perProvider].sort(byCardOrder).flatMap((usage) => usageRing(usage) ?? [])
   const reading = rings
     .map((ring) => `${ring.provider.charAt(0).toUpperCase()}${ring.provider.slice(1)} ${String(ring.left)}% left`)
     .join(', ')
@@ -145,22 +143,6 @@ function UsageRing({ provider, left, heat }: { provider: ProviderUsage['provider
 function LiveUsageDialog({ now, ...props }: Omit<Parameters<typeof UsageDialogContent>[0], 'now'> & { now: () => number }) {
   useMinuteClock()
   return <UsageDialogContent {...props} now={now()} />
-}
-
-/**
- * The readings worth a card: a provider whose sign-in row says it is missing or
- * signed out has nothing to show. One with no row yet, or one that did not say
- * whether it is signed in, keeps its card, the same benefit of the doubt the
- * first-run screen gives it.
- */
-function connectedUsage(
-  perProvider: readonly ProviderUsage[],
-  connections: readonly ProviderConnection[],
-): ProviderUsage[] {
-  const usable = new Set(usableProviders(connections))
-  return perProvider.filter(
-    (usage) => usable.has(usage.provider) || !connections.some((row) => row.provider === usage.provider),
-  )
 }
 
 /**

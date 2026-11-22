@@ -9,6 +9,7 @@ import { ConnectGate } from '@/components/ConnectGate'
 import { Blobatar } from '@/components/Blobatar'
 import { RoleBadge } from '@/components/RoleBadge'
 import { SectionScaffold } from '@/components/SectionScaffold'
+import { UsageButton } from '@/components/UsageButton'
 import { Text } from '@/components/Text'
 import { relativeTime } from '@/lib/time'
 import { useWorkspace } from '@/providers/WorkspaceProvider'
@@ -23,7 +24,7 @@ const CHIEF_FACE_SIZE = 96
 const PINNED_FACE_SIZE = 72
 
 export default function DirectScreen() {
-  return <ConnectGate><SectionScaffold title="Agents"><DirectList /></SectionScaffold></ConnectGate>
+  return <ConnectGate><SectionScaffold title="Agents" trailing={<UsageButton />}><DirectList /></SectionScaffold></ConnectGate>
 }
 
 /**

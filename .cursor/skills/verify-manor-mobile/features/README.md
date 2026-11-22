@@ -41,6 +41,7 @@ Each feature file starts with an H1 title and one paragraph describing the user-
 - [Project inbox](./project-inbox.md) covers Work, search, and opening a fixture thread.
 - [New project chat](./new-project-chat.md) covers Compose through the project picker.
 - [House menu](./house-menu.md) covers the drawer rooms.
+- [Usage pill](./usage.md) covers the tab roots' usage rings and the usage sheet with its pace marks.
 - [Direct chats](./direct-chats.md) covers the Agents room (direct chats) and opening Marlow.
 - [Agent overview](./agent-overview.md) covers a DM's header pill, the overview with Name, Title and Model, and its read-only lists.
 - [DM files](./dm-files.md) covers a DM's Files button and overview row: the library, its filter, the long-press menu, the viewer and the empty state.

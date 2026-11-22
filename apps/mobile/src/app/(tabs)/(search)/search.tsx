@@ -18,6 +18,7 @@ import { FileBrowser } from '@/components/FileBrowser'
 import { GlassSurface } from '@/components/GlassSurface'
 import { KeyboardFooter } from '@/components/KeyboardFooter'
 import { SectionScaffold } from '@/components/SectionScaffold'
+import { UsageButton } from '@/components/UsageButton'
 import { Text } from '@/components/Text'
 import { useTabReset } from '@/lib/tabNavigation'
 import { leaveEventReveal } from '@/lib/threadReveal'
@@ -161,7 +162,7 @@ export default function SearchScreen() {
           : { title: 'Nothing found', copy: 'Try fewer words, or a word from the title.' }
 
   return (
-    <SectionScaffold edgeToEdge title="Search">
+    <SectionScaffold edgeToEdge title="Search" trailing={<UsageButton />}>
       <FlatList
         contentContainerStyle={[styles.list, { paddingBottom: 84 + insets.bottom }, results.length === 0 && styles.emptyList]}
         data={results}

@@ -1,4 +1,4 @@
-import type { ProviderUsage, UsageWindow } from '@manor/contracts'
+import type { ProviderConnection, ProviderUsage, UsageWindow } from '@manor/contracts'
 
 /**
  * How much of each subscription is left, for the whole house: the pure reading
@@ -35,20 +35,6 @@ export function heatOf(limit: UsageWindow): Heat {
 }
 
 /**
- * The one number the collapsed row carries: the fullest window that is not yet
- * full. A window at 100% is skipped so one spent plan does not read as the house
- * being empty. House 100% only when every returned window is full. Undefined
- * when nothing has been read yet, which the row shows as no number rather than
- * as a confident zero.
- */
-export function peakUsed(perProvider: readonly ProviderUsage[]): number | undefined {
-  const percentages = perProvider.flatMap((usage) => usage.windows.map((limit) => limit.usedPercent))
-  if (percentages.length === 0) return undefined
-  const open = percentages.filter((used) => used < 100)
-  return open.length === 0 ? 100 : Math.max(...open)
-}
-
-/**
  * One provider's ring in the rail: its fullest window, since any full window is
  * the one that stops work. Undefined for a provider that did not answer or
  * reported no window, which the rail then leaves out rather than drawing empty.
@@ -59,6 +45,56 @@ export function providerPeak(usage: ProviderUsage): UsageWindow | undefined {
     (fullest, limit) => (fullest === undefined || limit.usedPercent > fullest.usedPercent ? limit : fullest),
     undefined,
   )
+}
+
+/** One provider's usage ring: what is left of its fullest window, and how alarming that is. */
+export interface UsageRing {
+  provider: ProviderUsage['provider']
+  left: number
+  heat: Heat
+}
+
+/** The ring for one provider, or undefined when it has no window to draw. */
+export function usageRing(usage: ProviderUsage): UsageRing | undefined {
+  const limit = providerPeak(usage)
+  return limit === undefined ? undefined : { provider: usage.provider, left: remainingPercent(limit), heat: heatOf(limit) }
+}
+
+/**
+ * The readings worth showing: a provider whose sign-in row says it is missing or
+ * signed out has nothing to show. One with no row yet keeps its reading, the same
+ * benefit of the doubt the first-run screen gives it.
+ */
+export function connectedUsage(
+  perProvider: readonly ProviderUsage[],
+  connections: readonly ProviderConnection[],
+): ProviderUsage[] {
+  return perProvider.filter((usage) => {
+    const row = connections.find((connection) => connection.provider === usage.provider)
+    return row === undefined || row.state === 'ready' || row.state === 'attention'
+  })
+}
+
+/** The providers the phone header always names, in this order, when they report. */
+const HEADER_FIRST: readonly ProviderUsage['provider'][] = ['claude', 'codex']
+
+/**
+ * The phone header's usage pill: Claude, then Codex, as rings; every other
+ * connected provider with a window counts toward `more`. With neither of the two
+ * reporting, the first other one takes the ring, so the pill never reads as a bare
+ * number.
+ */
+export function headerRings(
+  perProvider: readonly ProviderUsage[],
+  connections: readonly ProviderConnection[],
+): { rings: UsageRing[]; more: number } {
+  const all = connectedUsage(perProvider, connections)
+    .sort(byCardOrder)
+    .flatMap((usage) => usageRing(usage) ?? [])
+  const first = HEADER_FIRST.flatMap((provider) => all.find((ring) => ring.provider === provider) ?? [])
+  const rest = all.filter((ring) => !HEADER_FIRST.includes(ring.provider))
+  const rings = first.length > 0 ? first : rest.slice(0, 1)
+  return { rings, more: all.length - rings.length }
 }
 
 /** Matches provider usage displays: a real non-zero fraction should not read as zero. */
@@ -83,9 +119,10 @@ export function resetLabel(resetsAt: number | undefined, now: number): string {
   // Beyond half a day "in 19 hours" is arithmetic the reader has to undo, so the
   // weekly window says which day it lands on instead.
   const sameDay = new Date(now).toDateString() === when.toDateString()
+  // The weekday is interface text, so it stays English whatever the device's language.
   return sameDay
     ? `resets ${time}`
-    : `resets ${when.toLocaleDateString(undefined, { weekday: 'short' })} ${time}`
+    : `resets ${when.toLocaleDateString('en-US', { weekday: 'short' })} ${time}`
 }
 
 export const clockOf = (at: number) =>
@@ -188,6 +225,15 @@ export function elapsedShare(limit: UsageWindow, now: number): number | null {
   const startsAt = limit.startsAt ?? (limit.minutes === undefined ? undefined : limit.resetsAt - limit.minutes * 60_000)
   if (startsAt === undefined || limit.resetsAt <= startsAt) return null
   return Math.max(0, Math.min(1, (now - startsAt) / (limit.resetsAt - startsAt)))
+}
+
+/**
+ * Where even spending would put a bar that shows quota left: the share of the
+ * window's time still to run, 0..100. Null when the provider gave no window timing.
+ */
+export function paceMarkPercent(limit: UsageWindow, now: number): number | null {
+  const elapsed = elapsedShare(limit, now)
+  return elapsed === null ? null : Math.round((1 - elapsed) * 100)
 }
 
 export type LimitPace = 'ahead' | 'on' | 'under'

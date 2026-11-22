@@ -1,6 +1,6 @@
-import type { ProviderUsage } from '@manor/contracts'
+import type { ProviderConnection, ProviderUsage } from '@manor/contracts'
 import { describe, expect, it } from 'vitest'
-import { byCardOrder, displayPercent, elapsedShare, formatDuration, heatOf, paceOf, peakUsed, providerPeak, remainingPercent, resetLabel, resetsIn, subscriptionGraph } from './usage'
+import { byCardOrder, displayPercent, elapsedShare, formatDuration, headerRings, heatOf, paceMarkPercent, paceOf, providerPeak, remainingPercent, resetLabel, resetsIn, subscriptionGraph } from './usage'
 
 const claude: ProviderUsage = {
   provider: 'claude',
@@ -21,39 +21,6 @@ const codex: ProviderUsage = {
   fetchedAt: 1_000,
   windows: [{ label: 'Weekly', usedPercent: 4, minutes: 10080 }],
 }
-
-describe('peakUsed', () => {
-  it('takes the fullest window that is not yet full', () => {
-    expect(peakUsed([claude, codex])).toBe(74)
-  })
-
-  it('skips a full window and takes the next fullest', () => {
-    const spent: ProviderUsage = {
-      ...claude,
-      windows: [
-        { label: 'Weekly', usedPercent: 100, severity: 'critical', binding: true },
-        { label: '5-hour limit', usedPercent: 63, severity: 'normal', binding: false },
-      ],
-    }
-    expect(peakUsed([spent, codex])).toBe(63)
-  })
-
-  it('is 100 only when every returned window is full', () => {
-    const spent: ProviderUsage = {
-      ...claude,
-      windows: [
-        { label: 'Weekly', usedPercent: 100, severity: 'critical', binding: true },
-        { label: '5-hour limit', usedPercent: 104, severity: 'critical', binding: false },
-      ],
-    }
-    expect(peakUsed([spent])).toBe(100)
-  })
-
-  it('is undefined rather than zero when nothing has been read', () => {
-    expect(peakUsed([])).toBeUndefined()
-    expect(peakUsed([{ provider: 'codex', status: 'unavailable', fetchedAt: 1, windows: [] }])).toBeUndefined()
-  })
-})
 
 describe('providerPeak', () => {
   it('takes the fullest window, full ones included, since that one stops work', () => {
@@ -218,5 +185,41 @@ describe('limit pace', () => {
     expect(resetsIn(at(0), 4 * hour)).toBe('resets now')
     expect(formatDuration(3 * 24 * hour + 4 * hour + 59_000)).toBe('3d 4h')
     expect(formatDuration(12 * 60_000)).toBe('12m')
+  })
+})
+
+describe('headerRings', () => {
+  const grok: ProviderUsage = { provider: 'grok', status: 'ok', fetchedAt: 1_000, windows: [{ label: 'Weekly', usedPercent: 8 }] }
+  const cursor: ProviderUsage = { provider: 'cursor', status: 'ok', fetchedAt: 1_000, windows: [{ label: 'Weekly', usedPercent: 9 }] }
+  const row = (provider: ProviderConnection['provider'], state: ProviderConnection['state']): ProviderConnection =>
+    ({ provider, state, installed: true, version: null, signedIn: state === 'ready', canSignIn: true, canInstall: false })
+
+  it('names Claude, then Codex, and folds every other provider into the count', () => {
+    const { rings, more } = headerRings([grok, codex, cursor, claude], [])
+    expect(rings.map((ring) => ring.provider)).toEqual(['claude', 'codex'])
+    expect(rings[0]?.left).toBe(26)
+    expect(more).toBe(2)
+  })
+
+  it('leaves out a signed-out provider and one without a window', () => {
+    const { rings, more } = headerRings(
+      [claude, codex, grok, { ...cursor, status: 'unavailable', windows: [] }],
+      [row('codex', 'sign_in'), row('claude', 'ready')],
+    )
+    expect(rings.map((ring) => ring.provider)).toEqual(['claude'])
+    expect(more).toBe(1)
+  })
+
+  it('gives the ring to another provider when neither Claude nor Codex reports', () => {
+    expect(headerRings([grok, cursor], [])).toEqual({ rings: [{ provider: 'cursor', left: 91, heat: 'normal' }], more: 1 })
+    expect(headerRings([], [])).toEqual({ rings: [], more: 0 })
+  })
+})
+
+describe('paceMarkPercent', () => {
+  it('puts the mark at the share of the window still to run', () => {
+    const hour = 60 * 60_000
+    expect(paceMarkPercent({ label: 'x', usedPercent: 10, resetsAt: 3 * hour, minutes: 300 }, 0)).toBe(60)
+    expect(paceMarkPercent({ label: 'x', usedPercent: 10, minutes: 300 }, 0)).toBeNull()
   })
 })

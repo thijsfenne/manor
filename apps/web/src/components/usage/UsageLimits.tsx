@@ -4,6 +4,7 @@ import {
   STALE_AFTER_MS,
   byCardOrder,
   clockOf,
+  paceMarkPercent,
   paceOf,
   remainingPercent,
   resetsIn,
@@ -12,7 +13,7 @@ import {
 import { ChartDecreaseIcon, ChartIncreaseIcon, DashboardSpeed01Icon } from '@hugeicons/core-free-icons'
 import { Icon } from '../Icon'
 import { ProviderMark } from '../ProviderMark'
-import { PaceMark, paceMarkPercent } from './PaceMark'
+import { PaceMark } from './PaceMark'
 import { UsageHint } from './UsageHint'
 import { PROVIDER_PRESENTATION } from './usageProviders'
 

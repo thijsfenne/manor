@@ -19,16 +19,19 @@ interface SectionScaffoldProps {
    * floating toolbar. Otherwise the content ends where the tab bar starts.
    */
   edgeToEdge?: boolean
+  /** The header's right side, for a tab root: the usage pill. */
+  trailing?: ReactNode
 }
 
 /** Shared phone chrome for every room: the title, and the button to the house menu or back. */
-export function SectionScaffold({ children, title, compactTitle = true, onBack, edgeToEdge = false }: SectionScaffoldProps) {
+export function SectionScaffold({ children, title, compactTitle = true, onBack, edgeToEdge = false, trailing }: SectionScaffoldProps) {
   const menu = useHouseDrawer()
 
   return (
     <SafeAreaView edges={edgeToEdge ? ['top'] : ['top', 'bottom']} style={styles.screen}>
       <View style={styles.header}>
-        <View style={styles.side}>
+        {/* With a trailing control both sides take its width, so the title stays centred. */}
+        <View style={[styles.side, trailing !== undefined && styles.sideWide]}>
           <GlassIconButton
             accessibilityLabel={onBack === undefined ? 'Open menu' : 'Back'}
             {...(onBack === undefined ? { accessibilityState: { expanded: menu.open } } : {})}
@@ -41,7 +44,7 @@ export function SectionScaffold({ children, title, compactTitle = true, onBack, 
           <Text maxFontSizeMultiplier={1.35} numberOfLines={1} style={[styles.title, compactTitle && styles.compactTitle]}>{title}</Text>
         </View>
 
-        <View style={styles.side} />
+        <View style={[styles.side, trailing !== undefined && styles.sideWide, styles.sideEnd]}>{trailing}</View>
       </View>
       <View style={styles.content}>{children}</View>
     </SafeAreaView>
@@ -62,6 +65,9 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.md,
   },
   side: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+  // Fits the usage pill at its widest: two overlapping rings and a count.
+  sideWide: { width: 92, alignItems: 'flex-start' },
+  sideEnd: { flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center' },
   heading: { flex: 1, minWidth: 0, alignItems: 'center', gap: 3, paddingHorizontal: spacing.sm },
   title: {
     maxWidth: '100%',

@@ -23,7 +23,7 @@ const codex: ProviderUsage = {
   windows: [{ label: 'Weekly', usedPercent: 4, minutes: 10080 }],
 }
 
-// The pure reading behind this panel (peakUsed, displayPercent, heatOf,
+// The pure reading behind this panel (providerPeak, displayPercent, heatOf,
 // resetLabel, card order) is shared with the mobile app and tested in
 // `packages/client-runtime/src/usage.test.ts`.
 

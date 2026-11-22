@@ -21,7 +21,7 @@ const ICONS = {
   search: { default: require('../../../assets/images/tab-icons/search.png'), selected: require('../../../assets/images/tab-icons/search-selected.png') },
 } satisfies Record<string, { default: ImageSourcePropType; selected: ImageSourcePropType }>
 
-const ROOMS = new Set<string>(['artifacts', 'routines', 'plugins', 'usage'] satisfies HouseSection[])
+const ROOMS = new Set<string>(['artifacts', 'routines', 'plugins'] satisfies HouseSection[])
 /** The screens that wear the menu button: each tab's root and the rooms. */
 const MENU_SCREENS = new Set<string>([...ROOMS, '(agents)', 'sessions', 'knowledge', 'search'])
 const TAB_SECTIONS: Record<string, HouseSection> = {
