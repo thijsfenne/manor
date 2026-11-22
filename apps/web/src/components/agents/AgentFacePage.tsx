@@ -1,4 +1,4 @@
-import { useRef, useState, type ChangeEvent } from 'react'
+import { useRef, useState, type ChangeEvent, type ReactNode } from 'react'
 import { Cancel01Icon, ColorPickerIcon, Upload01Icon } from '@hugeicons/core-free-icons'
 import { palette } from '@manor/blobatar'
 import type { AgentDraft } from '@manor/contracts'
@@ -16,6 +16,18 @@ const tileClass =
   'grid cursor-pointer place-items-center rounded-full border p-0 leading-none outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:cursor-default disabled:opacity-45'
 const pickedClass = 'border-[var(--color-text)] bg-user-bg'
 const unpickedClass = 'border-transparent hover:border-dim'
+
+/** One face choice: its label above, its tiles on a card of their own, as the rows of Agent settings sit. */
+function FaceSection({ label, groupLabel, gap = 'gap-1', children }: { label: string; groupLabel: string; gap?: string; children: ReactNode }) {
+  return (
+    <div className="flex w-full flex-col gap-2">
+      <span className={formLabelClass}>{label}</span>
+      <div className={`flex flex-wrap justify-center ${gap} rounded-lg border border-line bg-surface-2 p-3`} role="group" aria-label={groupLabel}>
+        {children}
+      </div>
+    </div>
+  )
+}
 
 /**
  * The Face page of Agent settings: the face as it stands, then colour, shape and tone,
@@ -66,7 +78,7 @@ export function AgentFacePage({ draft, onChange }: {
         ) : null}
       </div>
 
-      <div className="flex flex-wrap justify-center gap-1.5" role="group" aria-label="Agent colour">
+      <FaceSection label="Colour" groupLabel="Agent colour" gap="gap-1.5">
         {personaColorChoices(draft.color).map((option) => {
           const selected = option.value.toLowerCase() === accent.toLowerCase()
           return (
@@ -90,53 +102,47 @@ export function AgentFacePage({ draft, onChange }: {
           <Icon icon={ColorPickerIcon} size={14} />
           <input className="absolute inset-0 cursor-pointer opacity-0" type="color" value={accent} aria-label="Custom colour" onChange={(event) => onChange({ color: event.target.value })} />
         </span>
-      </div>
+      </FaceSection>
 
-      <div className="flex w-full flex-col gap-2">
-        <span className={formLabelClass}>Shape</span>
-        <div className="flex flex-wrap justify-center gap-1" role="group" aria-label="Shape">
-          {BLOB_SHAPES.map((option) => {
-            const selected = worn === option.id
-            return (
-              <button
-                key={option.id}
-                type="button"
-                className={`${tileClass} size-11 ${selected ? pickedClass : unpickedClass}`}
-                aria-label={`Shape: ${option.label}`}
-                aria-pressed={selected}
-                title={option.label}
-                disabled={picture}
-                onClick={() => onChange({ avatarShape: option.id })}
-              >
-                <Avatar name={draft.name} color={accent} shape={option.id} tone={draft.avatarTone} size={30} center />
-              </button>
-            )
-          })}
-        </div>
-      </div>
+      <FaceSection label="Shape" groupLabel="Shape">
+        {BLOB_SHAPES.map((option) => {
+          const selected = worn === option.id
+          return (
+            <button
+              key={option.id}
+              type="button"
+              className={`${tileClass} size-11 ${selected ? pickedClass : unpickedClass}`}
+              aria-label={`Shape: ${option.label}`}
+              aria-pressed={selected}
+              title={option.label}
+              disabled={picture}
+              onClick={() => onChange({ avatarShape: option.id })}
+            >
+              <Avatar name={draft.name} color={accent} shape={option.id} tone={draft.avatarTone} size={30} center />
+            </button>
+          )
+        })}
+      </FaceSection>
 
-      <div className="flex w-full flex-col gap-2">
-        <span className={formLabelClass}>Tone</span>
-        <div className="flex flex-wrap justify-center gap-1" role="group" aria-label="Avatar tone">
-          {BLOB_TONES.map((option) => {
-            const selected = (draft.avatarTone ?? DEFAULT_BLOB_TONE) === option.value
-            return (
-              <button
-                key={option.value}
-                type="button"
-                className={`${tileClass} size-11 ${selected ? pickedClass : unpickedClass}`}
-                aria-label={`Tone: ${option.label}`}
-                aria-pressed={selected}
-                title={option.label}
-                disabled={picture}
-                onClick={() => onChange({ avatarTone: option.value })}
-              >
-                <span className="size-[30px] rounded-full" style={{ backgroundColor: palette(accentHue(accent) ?? 0, true, option.value).head }} />
-              </button>
-            )
-          })}
-        </div>
-      </div>
+      <FaceSection label="Tone" groupLabel="Avatar tone">
+        {BLOB_TONES.map((option) => {
+          const selected = (draft.avatarTone ?? DEFAULT_BLOB_TONE) === option.value
+          return (
+            <button
+              key={option.value}
+              type="button"
+              className={`${tileClass} size-11 ${selected ? pickedClass : unpickedClass}`}
+              aria-label={`Tone: ${option.label}`}
+              aria-pressed={selected}
+              title={option.label}
+              disabled={picture}
+              onClick={() => onChange({ avatarTone: option.value })}
+            >
+              <span className="size-[30px] rounded-full" style={{ backgroundColor: palette(accentHue(accent) ?? 0, true, option.value).head }} />
+            </button>
+          )
+        })}
+      </FaceSection>
 
       <Button size="compact" variant="ghost" disabled={shrinking} onClick={() => fileRef.current?.click()}>
         <span className="flex items-center gap-1.5">
