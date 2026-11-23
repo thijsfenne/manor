@@ -13,10 +13,24 @@ export const MAX_REPO_ICON_BYTES = 2 * 1024 * 1024
 /**
  * The folders inside a linked folder where projects keep their icon, relative to its
  * root. A fixed list rather than a walk, so `node_modules`, build output and dot-folders
- * are never read, and the serving route accepts nothing outside it.
+ * are never read, and the serving route accepts nothing outside it. A monorepo keeps its
+ * icons in its packages, so the same folders count inside each `apps/<name>` and
+ * `packages/<name>` too, after the root's.
  */
-const ICON_DIRS = ['', 'public', 'public/favicons', 'public/icons', 'static', 'assets', 'app', 'src/app']
+const ICON_DIRS = ['', 'public', 'public/favicons', 'public/icons', 'static', 'assets', 'assets/images', 'app', 'src/app']
+const WORKSPACE_DIRS = ['apps', 'packages']
+/** A package folder's name: one path segment, no dot-folder or `..`, never `node_modules` in any case. */
+const PACKAGE_NAME = /^(?!node_modules$)[^./\\\0][^/\\\0]*$/i
+/** The wire contract's longest icon path. */
+const MAX_PATH_CHARS = 512
 const ICON_NAME = /^(?:favicon(?:-[\w.-]+)?\.(?:svg|png|ico)|apple-touch-icon[\w.-]*\.png|icon\.(?:svg|png))$/i
+
+/** `dir` with a leading `apps/<name>` or `packages/<name>` taken off; undefined when that name is not a package's. */
+function iconDirOf(dir: string): string | undefined {
+  const [workspace, name, ...rest] = dir.split('/')
+  if (workspace === undefined || name === undefined || !WORKSPACE_DIRS.includes(workspace)) return dir
+  return PACKAGE_NAME.test(name) ? rest.join('/') : undefined
+}
 
 type IconKind = 'svg' | 'png' | 'ico'
 const MIME: Record<IconKind, string> = { svg: 'image/svg+xml', png: 'image/png', ico: 'image/x-icon' }
@@ -24,7 +38,9 @@ const MIME: Record<IconKind, string> = { svg: 'image/svg+xml', png: 'image/png',
 /** Whether `relative` names an icon file in one of the known places, the only paths ever read. */
 export function isRepoIconPath(relative: string): boolean {
   const cut = relative.lastIndexOf('/')
-  return cut !== 0 && ICON_DIRS.includes(cut < 0 ? '' : relative.slice(0, cut)) && ICON_NAME.test(relative.slice(cut + 1))
+  if (relative.length > MAX_PATH_CHARS || cut === 0 || !ICON_NAME.test(relative.slice(cut + 1))) return false
+  const dir = iconDirOf(cut < 0 ? '' : relative.slice(0, cut))
+  return dir !== undefined && ICON_DIRS.includes(dir)
 }
 
 interface RepoIconFile {
@@ -141,21 +157,39 @@ const RANK: Record<IconKind, number> = { svg: 0, png: 1, ico: 2 }
  */
 export async function findRepoIcon(folders: readonly string[]): Promise<ProjectRepoIcon | undefined> {
   for (const folder of folders) {
-    const found: { path: string; kind: IconKind; area: number; opaque: boolean }[] = []
-    for (const dir of ICON_DIRS) {
-      const entries = await readdir(path.join(folder, dir), { withFileTypes: true }).catch(() => [])
-      for (const entry of entries) {
-        if (!entry.isFile() || !ICON_NAME.test(entry.name)) continue
-        const relative = dir === '' ? entry.name : `${dir}/${entry.name}`
-        const icon = await readRepoIcon(folder, relative)
-        if (icon !== undefined) found.push({ path: relative, kind: icon.kind, area: icon.area, opaque: icon.opaque })
-      }
-    }
-    // A stable sort, so equal icons keep the order of ICON_DIRS.
-    const best = found.sort((one, other) => Number(one.opaque) - Number(other.opaque) || RANK[one.kind] - RANK[other.kind] || other.area - one.area)[0]
+    // The root's own icon wins; only a folder without one looks into its packages.
+    const best = await bestIcon(folder, ICON_DIRS) ?? await bestIcon(folder, await packageIconDirs(folder))
     if (best !== undefined) return { folder, path: best.path, ...(best.opaque ? { opaque: true as const } : {}) }
   }
   return undefined
+}
+
+/** The icon folders of every `apps/<name>` and `packages/<name>` in a linked folder, in name order. */
+async function packageIconDirs(folder: string): Promise<string[]> {
+  const dirs: string[] = []
+  for (const workspace of WORKSPACE_DIRS) {
+    const entries = await readdir(path.join(folder, workspace), { withFileTypes: true }).catch(() => [])
+    const names = entries.filter((entry) => entry.isDirectory() && PACKAGE_NAME.test(entry.name)).map((entry) => entry.name).sort()
+    for (const name of names) dirs.push(...ICON_DIRS.map((dir) => (dir === '' ? `${workspace}/${name}` : `${workspace}/${name}/${dir}`)))
+  }
+  return dirs
+}
+
+/** The icon to offer among `dirs`: one without a background first, then svg, png by size, ico. */
+async function bestIcon(folder: string, dirs: readonly string[]) {
+  const found: { path: string; kind: IconKind; area: number; opaque: boolean }[] = []
+  // Listed together, since most of these folders do not exist in a given repo.
+  const listings = await Promise.all(dirs.map((dir) => readdir(path.join(folder, dir), { withFileTypes: true }).catch(() => [])))
+  for (const [index, dir] of dirs.entries()) {
+    for (const entry of listings[index] ?? []) {
+      if (!entry.isFile() || !ICON_NAME.test(entry.name)) continue
+      const relative = dir === '' ? entry.name : `${dir}/${entry.name}`
+      const icon = await readRepoIcon(folder, relative)
+      if (icon !== undefined) found.push({ path: relative, kind: icon.kind, area: icon.area, opaque: icon.opaque })
+    }
+  }
+  // A stable sort, so equal icons keep the order of `dirs`.
+  return found.sort((one, other) => Number(one.opaque) - Number(other.opaque) || RANK[one.kind] - RANK[other.kind] || other.area - one.area)[0]
 }
 
 /**

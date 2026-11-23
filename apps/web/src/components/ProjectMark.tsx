@@ -1,6 +1,6 @@
 import { useState, type CSSProperties } from 'react'
 import type { ProjectIcon } from '@manor/contracts'
-import { isTileRepoIcon, projectIcon } from '../projectAppearance'
+import { isTileRepoIcon, projectIcon, projectTileRadius } from '../projectAppearance'
 import { Icon } from './Icon'
 
 interface ProjectMarkProps {
@@ -24,6 +24,7 @@ interface ProjectMarkProps {
 export function ProjectMark({ icon, color, src, letters, size, className = '', style }: ProjectMarkProps) {
   const [failed, setFailed] = useState<string | null>(null)
   if (src !== undefined && failed !== src) {
+    const tile = isTileRepoIcon(src)
     return (
       <img
         src={src}
@@ -31,8 +32,8 @@ export function ProjectMark({ icon, color, src, letters, size, className = '', s
         width={size}
         height={size}
         draggable={false}
-        className={`flex-none ${isTileRepoIcon(src) ? 'rounded-[22%] object-cover' : 'object-contain'} ${className}`}
-        style={{ width: size, height: size, ...style }}
+        className={`flex-none ${tile ? 'object-cover' : 'object-contain'} ${className}`}
+        style={{ width: size, height: size, ...(tile ? { borderRadius: projectTileRadius(size) } : {}), ...style }}
         onError={() => setFailed(src)}
       />
     )
@@ -41,8 +42,8 @@ export function ProjectMark({ icon, color, src, letters, size, className = '', s
     return (
       <span
         aria-hidden
-        className={`grid flex-none select-none place-items-center rounded-[22%] font-medium leading-none tracking-[-0.02em] ${className}`}
-        style={{ width: size, height: size, fontSize: size * 0.5, color, backgroundColor: `color-mix(in srgb, ${color} 18%, transparent)`, ...style }}
+        className={`grid flex-none select-none place-items-center font-medium leading-none tracking-[-0.02em] ${className}`}
+        style={{ width: size, height: size, borderRadius: projectTileRadius(size), fontSize: size * 0.5, color, backgroundColor: `color-mix(in srgb, ${color} 18%, transparent)`, ...style }}
       >
         {letters}
       </span>

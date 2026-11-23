@@ -230,6 +230,12 @@ export const sameRepoIcon = (one: ProjectRepoIcon | null, other: ProjectRepoIcon
  */
 export const isTileRepoIcon = (src: string) => /[?&]tile(?:[=&#]|$)/.test(src)
 
+/**
+ * The corner of a project tile (a solid repo icon or the letters) drawn `size` px wide:
+ * 22% of it, but never under 3.5px, so a 12px badge reads as rounded like a 16px row.
+ */
+export const projectTileRadius = (size: number) => Math.max(size * 0.22, 3.5)
+
 
 /** What stands in for a project's glyph: its letters, a repo icon, or null for the glyph itself. */
 export type ProjectMarkChoice = ProjectRepoIcon | 'letters' | null

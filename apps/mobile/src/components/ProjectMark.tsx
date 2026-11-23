@@ -1,6 +1,6 @@
 import { HugeiconsIcon } from '@hugeicons/react-native'
 import type { ProjectIcon } from '@manor/contracts'
-import { isTileRepoIcon, projectIcon } from '@manor/client-runtime/project-icons'
+import { isTileRepoIcon, projectIcon, projectTileRadius } from '@manor/client-runtime/project-icons'
 import { Image } from 'expo-image'
 import { useState } from 'react'
 import { View } from 'react-native'
@@ -35,13 +35,13 @@ export function ProjectMark({ icon, color, src, letters, size, strokeWidth = 1.8
         contentFit={tile ? 'cover' : 'contain'}
         onError={() => setFailed(uri)}
         source={{ uri }}
-        style={{ width: size, height: size, borderRadius: tile ? size * 0.22 : 0 }}
+        style={{ width: size, height: size, borderRadius: tile ? projectTileRadius(size) : 0 }}
       />
     )
   }
   if (letters !== undefined && letters !== '') {
     return (
-      <View style={{ width: size, height: size, borderRadius: size * 0.22, backgroundColor: `${color}2E`, alignItems: 'center', justifyContent: 'center' }}>
+      <View style={{ width: size, height: size, borderRadius: projectTileRadius(size), backgroundColor: `${color}2E`, alignItems: 'center', justifyContent: 'center' }}>
         <Text allowFontScaling={false} style={{ color, fontSize: size * 0.52, fontWeight: '500', letterSpacing: -0.2 }}>{letters}</Text>
       </View>
     )

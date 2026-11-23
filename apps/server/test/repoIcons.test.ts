@@ -99,11 +99,31 @@ describe('findRepoIcon', () => {
     expect(await findRepoIcon([])).toBeUndefined()
   })
 
+  it('looks inside a monorepo\'s packages only when its root has no icon', async () => {
+    const mono = folder({
+      'apps/web/public/icons/apple-touch-icon.png': png(180),
+      'apps/desktop/assets/icon.png': png(1024),
+      'apps/mobile/assets/images/icon.png': png(1024, 0),
+      'apps/web/node_modules/pkg/favicon.svg': SVG,
+      'apps/.cache/favicon.svg': SVG,
+      'node_modules/pkg/apps/x/favicon.svg': SVG,
+    })
+    expect(await findRepoIcon([mono])).toEqual({ folder: mono, path: 'apps/mobile/assets/images/icon.png' })
+    const solid = folder({ 'packages/ui/static/favicon.ico': ICO, 'apps/web/public/icon.png': png(512) })
+    expect(await findRepoIcon([solid])).toEqual({ folder: solid, path: 'packages/ui/static/favicon.ico' })
+    const rooted = folder({ 'public/icon.png': png(64), 'apps/web/public/favicon.svg': SVG })
+    expect(await findRepoIcon([rooted])).toEqual({ folder: rooted, path: 'public/icon.png', opaque: true })
+  })
+
   it('accepts only the known icon places as a path', () => {
     expect(isRepoIconPath('favicon.svg')).toBe(true)
     expect(isRepoIconPath('public/favicons/apple-touch-icon-180x180.png')).toBe(true)
     expect(isRepoIconPath('src/app/icon.png')).toBe(true)
-    for (const bad of ['../favicon.svg', 'public/../favicon.svg', 'node_modules/favicon.svg', '.env', 'public/.env', 'README.md', '/favicon.svg', 'icon.ico']) {
+    expect(isRepoIconPath('apps/web/public/icons/apple-touch-icon.png')).toBe(true)
+    expect(isRepoIconPath('packages/ui/favicon.svg')).toBe(true)
+    expect(isRepoIconPath('apps/My App/favicon.svg')).toBe(true)
+    for (const bad of ['../favicon.svg', 'public/../favicon.svg', 'node_modules/favicon.svg', '.env', 'public/.env', 'README.md', '/favicon.svg', 'icon.ico',
+      'apps/favicon.svg', 'apps/../favicon.svg', 'apps/.git/favicon.svg', 'apps/node_modules/favicon.svg', 'apps/Node_Modules/favicon.svg', `apps/${'x'.repeat(500)}/favicon.svg`, 'apps/web/node_modules/favicon.svg', 'apps/web/apps/ui/favicon.svg', 'lib/web/favicon.svg']) {
       expect(isRepoIconPath(bad), bad).toBe(false)
     }
   })
@@ -166,6 +186,16 @@ describe('repo icon serving', () => {
     expect(link.endsWith('?tile')).toBe(true)
     expect(media().src('p1', { folder: root, path: 'assets/icon.png' }).endsWith('?tile')).toBe(false)
     expect((await get(link)).status).toBe(200)
+  })
+
+  it('serves an icon from a monorepo package', async () => {
+    const root = folder({ 'apps/web/public/favicon.svg': SVG })
+    projects.set('p1', project('p1', [root]))
+    expect((await get(media().src('p1', { folder: root, path: 'apps/web/public/favicon.svg' }))).status).toBe(200)
+    // A package folder linked out of the repo serves nothing, even signed.
+    const outside = folder({ 'public/favicon.svg': SVG })
+    symlinkSync(outside, path.join(root, 'apps', 'site'))
+    expect((await get(media().src('p1', { folder: root, path: 'apps/site/public/favicon.svg' }))).status).toBe(404)
   })
 
   it('opens nothing but a signed icon path inside a folder the project still links', async () => {

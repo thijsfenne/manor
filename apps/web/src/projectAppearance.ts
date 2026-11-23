@@ -10,6 +10,7 @@ export {
   projectLetters,
   projectLettersField,
   projectMark,
+  projectTileRadius,
   sameMark,
   sameRepoIcon,
   type ProjectMarkChoice,
