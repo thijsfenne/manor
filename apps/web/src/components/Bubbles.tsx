@@ -3,7 +3,7 @@ import type { FaceState } from '@manor/client-runtime/face-activity'
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import { DISCLOSURE } from '../motion'
 import { AlertCircleIcon, ArrowDown01Icon, Clock01Icon, MinusSignIcon, PencilEdit02Icon, RefreshIcon, TaskDone01Icon, Tick02Icon, Undo02Icon } from '@hugeicons/core-free-icons'
-import { ROUTINE_LATE_AFTER_MS, eventImageSource, imageRefSpans, projectFileWriteDetail, projectFileWriteLabel, type EventImage, type ProjectFileWrite } from '@manor/contracts'
+import { ROUTINE_LATE_AFTER_MS, eventImageSource, imageRefSpans, numberedMarks, projectFileWriteDetail, projectFileWriteLabel, type EventImage, type NumberedMark, type ProjectFileWrite } from '@manor/contracts'
 import type { AgentConfig, EventDocument, FileAttachment, InlineQuote, MessageQuote, MessageReply, NoteQuote, PageContextAttachment, SkillConfig, WakeItem } from '@manor/contracts'
 import { wakeLines } from '../turnLabels'
 import { fileWriteGroups, type MessageQuoteSource, type PendingDocument } from '@manor/client-runtime/state'
@@ -166,9 +166,11 @@ export function UserBubble({
     // A picture that carries marks of its own is never hidden as another's original.
     return original === undefined || images[original] === undefined || images[original].annotation !== undefined ? [] : [original]
   }))
-  const comments = images.flatMap((image) => image.annotation?.pins ?? [])
-  const marked = images.filter((image) => (image.annotation?.pins.length ?? 0) > 0)
-  const hasBubble = text !== '' || comments.length > 0 || hasFiles || pageContexts.length > 0 || replyTo !== undefined || quote !== undefined || noteQuote !== undefined
+  const marked = images.flatMap((image) => {
+    const marks = image.annotation === undefined ? [] : numberedMarks(image.annotation)
+    return marks.length === 0 ? [] : [{ name: image.name, marks }]
+  })
+  const hasBubble = text !== '' || marked.length > 0 || hasFiles || pageContexts.length > 0 || replyTo !== undefined || quote !== undefined || noteQuote !== undefined
   const gallery = images.map((image) => ({ src: eventImageSource(image), alt: image.name }))
   // A message that refers to its pictures by number shows those numbers on them. One
   // that does not, every message from before numbering among them, stays as it was.
@@ -211,10 +213,10 @@ export function UserBubble({
             />
           </div>
         )}
-        {comments.length === 0 ? null : (
+        {marked.length === 0 ? null : (
           <div className={`${noteQuote !== undefined || replyTo !== undefined || hasFiles || pageContexts.length > 0 || text ? 'mb-2' : ''}${tint === undefined ? ' bubble-plain' : ' bubble-ink'}`} {...(tint === undefined ? {} : { style: { '--bubble-ink': tint.ink } as CSSProperties })}>
             {marked.map((image, at) => (
-              <MarkComments key={`${image.name}-${at}`} pins={image.annotation?.pins ?? []} {...(marked.length > 1 ? { title: image.name } : {})} />
+              <MarkComments key={`${image.name}-${at}`} marks={image.marks} {...(marked.length > 1 ? { title: image.name } : {})} />
             ))}
           </div>
         )}
@@ -259,16 +261,16 @@ export function UserBubble({
 const MARKED_IMAGE_WIDTH = 320
 const MARKED_IMAGE_HEIGHT = 360
 
-/** The numbered comments of one marked picture, in the order its pins carry. */
-function MarkComments({ pins, title }: { pins: readonly { comment: string }[]; title?: string }) {
+/** The numbered comments of one marked picture: its pins, then the shapes the user wrote a comment for. */
+function MarkComments({ marks, title }: { marks: readonly NumberedMark[]; title?: string }) {
   return (
     <div className="[&+&]:mt-2">
       {title === undefined ? null : <div className="mb-1 text-meta opacity-70">{title}</div>}
       <ol className="m-0 flex list-none flex-col gap-1 p-0 text-[length:var(--msg-size,16px)] leading-snug" data-mark-comments="">
-        {pins.map((pin, index) => (
-          <li key={index} className="flex items-start gap-2">
-            <span className="mt-px grid h-[20px] w-[20px] flex-none place-items-center rounded-full bg-mark text-[12px] leading-none font-medium text-on-media">{index + 1}</span>
-            <span className="min-w-0 break-words">{pin.comment.trim() === '' ? <span className="opacity-60">No comment</span> : pin.comment}</span>
+        {marks.map((mark) => (
+          <li key={mark.number} className="flex items-start gap-2">
+            <span className="mt-px grid h-[20px] w-[20px] flex-none place-items-center rounded-full bg-mark text-[12px] leading-none font-medium text-on-media">{mark.number}</span>
+            <span className="min-w-0 break-words">{mark.comment.trim() === '' ? <span className="opacity-60">No comment</span> : mark.comment}</span>
           </li>
         ))}
       </ol>

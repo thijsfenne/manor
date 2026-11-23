@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ClipboardEvent, type KeyboardEvent as ReactKeyboardEvent, type MutableRefObject, type ReactNode } from 'react'
 import { ArrowUp01Icon, Attachment01Icon, BotIcon, BoxIcon, ComputerIcon, File01Icon, Globe02Icon, Image01Icon, MessageMultiple01Icon, PlusSignIcon } from '@hugeicons/core-free-icons'
-import { DEFAULT_HOUSE_SETTINGS, MAX_MESSAGE_ATTACHMENTS, MAX_MESSAGE_QUOTES, MAX_PAGE_CONTEXT_ATTACHMENTS, addsAgentMention, compactQuoteRefs, formatImageRef, imageRefSpans, quoteRefSpans, renumberImageRefs, snapRefDeletion } from '@manor/contracts'
+import { DEFAULT_HOUSE_SETTINGS, MAX_MESSAGE_ATTACHMENTS, MAX_MESSAGE_QUOTES, MAX_PAGE_CONTEXT_ATTACHMENTS, addsAgentMention, compactQuoteRefs, formatImageRef, imageRefSpans, numberedMarks, quoteRefSpans, renumberImageRefs, snapRefDeletion } from '@manor/contracts'
 import { insertQuote } from '@manor/client-runtime/message-quotes'
 import type { AgentConfig, ChatCommandContext, ChatOverride, ImageAttachment, InlineQuote, MessageReply, PageContextAttachment, SkillConfig } from '@manor/contracts'
 import { AnimatePresence, animate, motion, useMotionValue, useReducedMotion } from 'motion/react'
@@ -102,6 +102,22 @@ export function plusMentionLabel(
 }
 
 type AnnotatingPicture = { index: number | null; image: ImageAttachment; marks: ImageMarks }
+
+/** How many numbered marks a staged picture carries: its pins and the shapes with a comment. */
+function MarkCountBadge({ image }: { image: DraftImage }) {
+  const count = image.annotation === undefined ? 0 : numberedMarks(image.annotation).length
+  if (count === 0) return null
+  return (
+    <span
+      role="img"
+      data-mark-count={count}
+      aria-label={`${count} numbered ${count === 1 ? 'mark' : 'marks'}`}
+      className="pointer-events-none absolute right-1 bottom-1 grid h-[19px] min-w-[19px] place-items-center rounded-full bg-mark px-1 text-[12px] leading-none font-medium text-on-media"
+    >
+      {count}
+    </span>
+  )
+}
 
 /** One autocomplete row. Every kind shares the list and its keyboard behaviour. */
 type MentionRow =
@@ -1258,16 +1274,7 @@ export function Composer({ agents, commandContext, household, overrides = NO_OVE
         <img src={image.dataUrl} alt={image.name} className="block h-15 w-15 rounded-lg object-cover" />
       </button>
       <ImageNumberBadge number={index + 1} />
-      {image.annotation !== undefined && image.annotation.pins.length > 0 ? (
-        <span
-          role="img"
-          data-pin-count={image.annotation.pins.length}
-          aria-label={`${image.annotation.pins.length} ${image.annotation.pins.length === 1 ? 'pin' : 'pins'}`}
-          className="pointer-events-none absolute right-1 bottom-1 grid h-[19px] min-w-[19px] place-items-center rounded-full bg-mark px-1 text-[12px] leading-none font-medium text-on-media"
-        >
-          {image.annotation.pins.length}
-        </span>
-      ) : null}
+      <MarkCountBadge image={image} />
       <button type="button" aria-label={`Remove ${image.name}`} className="absolute top-1 right-1 h-6 w-6 cursor-pointer rounded-full border-0 bg-media-scrim text-on-media" onClick={() => removeImage(index)}>×</button>
     </div>
   ))

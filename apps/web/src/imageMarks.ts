@@ -1,4 +1,4 @@
-import { ImageAttachmentSchema, MAX_MESSAGE_ATTACHMENTS, type ImageAnnotation, type ImageAttachment } from '@manor/contracts'
+import { ImageAttachmentSchema, MAX_MESSAGE_ATTACHMENTS, numberedMarks, type ImageAnnotation, type ImageAttachment, type NumberedMark } from '@manor/contracts'
 
 /** Pins and outlined areas on one picture, positions as shares of its size. */
 export type ImageMarks = Pick<ImageAnnotation, 'pins' | 'shapes'>
@@ -13,6 +13,15 @@ export const NO_MARKS: ImageMarks = { pins: [], shapes: [] }
  * picture as attached, so reopening the editor starts from the unmarked one.
  */
 export type DraftImage = ImageAttachment & { original?: string }
+
+/**
+ * Where a mark's number sits, as shares of the picture: on a pin itself, on a frame's
+ * top left corner, on a circle's line toward the top left.
+ */
+export function markAnchor(mark: NumberedMark): { x: number; y: number } {
+  if (mark.kind === 'pin' || mark.kind === 'frame') return { x: mark.x, y: mark.y }
+  return { x: mark.x + (mark.w / 2) * (1 - Math.SQRT1_2), y: mark.y + (mark.h / 2) * (1 - Math.SQRT1_2) }
+}
 
 export const hasMarks = (marks: ImageMarks): boolean => marks.pins.length > 0 || marks.shapes.length > 0
 
@@ -110,11 +119,12 @@ export async function burnMarks(original: string, name: string, marks: ImageMark
   context.font = `500 ${Math.round(13 * unit)}px system-ui, sans-serif`
   context.textAlign = 'center'
   context.textBaseline = 'middle'
-  // A pin at the very edge is drawn whole, nudged inside the picture.
+  // A number at the very edge is drawn whole, nudged inside the picture.
   const ring = Math.min(radius + 2 * unit, width / 2, height / 2)
-  for (const [index, pin] of marks.pins.entries()) {
-    const x = Math.min(Math.max(pin.x * width, ring), width - ring)
-    const y = Math.min(Math.max(pin.y * height, ring), height - ring)
+  for (const mark of numberedMarks(marks)) {
+    const anchor = markAnchor(mark)
+    const x = Math.min(Math.max(anchor.x * width, ring), width - ring)
+    const y = Math.min(Math.max(anchor.y * height, ring), height - ring)
     context.beginPath()
     context.arc(x, y, radius + 2 * unit, 0, Math.PI * 2)
     context.fillStyle = ink
@@ -124,7 +134,7 @@ export async function burnMarks(original: string, name: string, marks: ImageMark
     context.fillStyle = colour
     context.fill()
     context.fillStyle = ink
-    context.fillText(String(index + 1), x, y + unit)
+    context.fillText(String(mark.number), x, y + unit)
   }
   const dataUrl = canvas.toDataURL('image/webp', 0.9)
   const parsed = ImageAttachmentSchema.safeParse({ name, dataUrl, annotation: marks })

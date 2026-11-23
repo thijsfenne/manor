@@ -1037,9 +1037,32 @@ export const ImageAnnotationSchema = z.object({
     y: RelativeSchema,
     w: RelativeSchema,
     h: RelativeSchema,
+    /** Optional, unlike a pin's: a shape with words joins the numbered list, one without stays a plain outline. */
+    comment: z.string().max(MAX_IMAGE_COMMENT_CHARS).optional(),
   })).max(MAX_IMAGE_PINS),
 })
 export type ImageAnnotation = z.infer<typeof ImageAnnotationSchema>
+
+type ImageMarkShape = ImageAnnotation['shapes'][number]
+
+/** One numbered mark: a pin, or a shape the user wrote a comment for. */
+export type NumberedMark =
+  | (ImageAnnotation['pins'][number] & { kind: 'pin'; index: number; number: number })
+  | (ImageMarkShape & { comment: string; index: number; number: number })
+
+/**
+ * The marks on a picture that carry a number, in one sequence: every pin from 1, then
+ * each shape with a comment. The editor, the burned picture, the bubble and the
+ * persona's note all count with this, so a number means the same mark everywhere.
+ */
+export function numberedMarks(marks: Pick<ImageAnnotation, 'pins' | 'shapes'>): NumberedMark[] {
+  const pins = marks.pins.map((pin, index): NumberedMark => ({ ...pin, kind: 'pin', index, number: index + 1 }))
+  const shapes = marks.shapes.flatMap((shape, index) => {
+    const comment = shape.comment?.trim() ?? ''
+    return comment === '' ? [] : [{ ...shape, comment, index }]
+  })
+  return [...pins, ...shapes.map((shape, at): NumberedMark => ({ ...shape, number: pins.length + at + 1 }))]
+}
 
 // SVG is renderable but not multimodal: browsers load it in `<img>` under a
 // secure static mode (no scripts, no external fetches), while the provider CLIs

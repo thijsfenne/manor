@@ -1,14 +1,17 @@
 import { Cancel01Icon, CircleIcon, PinLocation01Icon, SquareIcon, Undo02Icon } from '@hugeicons/core-free-icons'
-import { MAX_IMAGE_COMMENT_CHARS, MAX_IMAGE_PINS } from '@manor/contracts'
+import { MAX_IMAGE_COMMENT_CHARS, MAX_IMAGE_PINS, numberedMarks } from '@manor/contracts'
 import { motion, useReducedMotion } from 'motion/react'
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type PointerEvent as ReactPointerEvent, type RefObject } from 'react'
-import type { ImageMarks, ImageShape } from '../imageMarks'
+import { markAnchor, type ImageMarks, type ImageShape } from '../imageMarks'
 import { INSTANT, POPOVER_IN, POPOVER_OUT, POPOVER_PRE_SCALE } from '../motion'
 import { Icon } from './Icon'
 import { Button } from './ui/Button'
 
 type Tool = 'pin' | 'frame' | 'circle'
 type Selection = { kind: 'pin' | 'shape'; index: number } | null
+/** A comment row, named by its mark: `pin:0`, `shape:2`. */
+type RowKey = `${'pin' | 'shape'}:${number}`
+const rowKey = (kind: 'pin' | 'shape', index: number): RowKey => `${kind}:${index}`
 
 const TOOLS: readonly { tool: Tool; label: string; icon: typeof PinLocation01Icon }[] = [
   { tool: 'pin', label: 'Pin', icon: PinLocation01Icon },
@@ -114,12 +117,24 @@ export function ImageAnnotator({ src, name, initial, onCancel, onDone, note }: {
   const [selected, setSelected] = useState<Selection>(null)
   const stageRef = useRef<HTMLDivElement>(null)
   const rootRef = useRef<HTMLDivElement>(null)
-  const inputs = useRef<(HTMLInputElement | null)[]>([])
+  const inputs = useRef(new Map<RowKey, HTMLInputElement>())
   const drag = useRef<Drag | null>(null)
-  // The row whose field takes the caret after the render that adds its pin.
-  const focusRow = useRef<number | null>(null)
+  // The row whose field takes the caret after the render that adds its mark.
+  const focusRow = useRef<RowKey | null>(null)
   // The row being typed in since its last Undo step, so a run of typing undoes as one.
-  const typedRow = useRef<number | null>(null)
+  const typedRow = useRef<RowKey | null>(null)
+  const numbered = numberedMarks(marks)
+  const numbers = new Map(numbered.map((mark) => [rowKey(mark.kind === 'pin' ? 'pin' : 'shape', mark.index), mark.number]))
+  const rows = [
+    ...marks.pins.map((_, index) => ({ key: rowKey('pin', index), kind: 'pin' as const, index })),
+    ...marks.shapes.map((_, index) => ({ key: rowKey('shape', index), kind: 'shape' as const, index })),
+  ]
+
+  const focusInput = (key: RowKey) => {
+    const row = inputs.current.get(key)
+    row?.focus({ preventScroll: true })
+    row?.scrollIntoView({ block: 'nearest' })
+  }
   const fit = useFit(rootRef)
 
   useEffect(() => {
@@ -128,9 +143,7 @@ export function ImageAnnotator({ src, name, initial, onCancel, onDone, note }: {
 
   useLayoutEffect(() => {
     if (focusRow.current === null) return
-    const row = inputs.current[focusRow.current]
-    row?.focus({ preventScroll: true })
-    row?.scrollIntoView({ block: 'nearest' })
+    focusInput(focusRow.current)
     focusRow.current = null
   })
 
@@ -147,6 +160,8 @@ export function ImageAnnotator({ src, name, initial, onCancel, onDone, note }: {
     setHistory((past) => past.slice(0, -1))
     setMarks(previous)
     setSelected(null)
+    // The focused row may be the one undone, so focus stays in the editor for the next ⌘Z.
+    rootRef.current?.focus({ preventScroll: true })
   }
 
   const removePin = (index: number) => {
@@ -175,7 +190,7 @@ export function ImageAnnotator({ src, name, initial, onCancel, onDone, note }: {
       const index = marks.pins.length
       commit(marks, { ...marks, pins: [...marks.pins, { x, y, comment: '' }] })
       setSelected({ kind: 'pin', index })
-      focusRow.current = index
+      focusRow.current = rowKey('pin', index)
       return
     }
     if (marks.shapes.length >= MAX_IMAGE_PINS) return
@@ -238,16 +253,13 @@ export function ImageAnnotator({ src, name, initial, onCancel, onDone, note }: {
       }))
       typedRow.current = null
       setHistory((past) => [...past, current.before])
+      focusRow.current = rowKey('shape', current.index)
       return
     }
     if (current.moved) {
       typedRow.current = null
       setHistory((past) => [...past, current.before])
-    } else if (current.kind === 'pin') {
-      const row = inputs.current[current.index]
-      row?.focus({ preventScroll: true })
-      row?.scrollIntoView({ block: 'nearest' })
-    }
+    } else focusInput(rowKey(current.kind, current.index))
   }
 
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
@@ -260,7 +272,9 @@ export function ImageAnnotator({ src, name, initial, onCancel, onDone, note }: {
       event.preventDefault()
       event.stopPropagation()
       onDone(marks)
-    } else if (!typing && (event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'z') {
+    } else if ((event.metaKey || event.ctrlKey) && !event.shiftKey && event.key.toLowerCase() === 'z') {
+      // Undo is the editor's in a comment field too: a typing run is one of its steps,
+      // and a field that was only focused (a mark just placed) undoes that mark.
       event.preventDefault()
       undo()
     } else if (!typing && (event.key === 'Backspace' || event.key === 'Delete') && selected !== null) {
@@ -270,12 +284,15 @@ export function ImageAnnotator({ src, name, initial, onCancel, onDone, note }: {
     }
   }
 
-  const setComment = (index: number, comment: string) => {
-    if (typedRow.current !== index) {
-      typedRow.current = index
+  const setComment = (kind: 'pin' | 'shape', index: number, comment: string) => {
+    const key = rowKey(kind, index)
+    if (typedRow.current !== key) {
+      typedRow.current = key
       setHistory((past) => [...past, marks])
     }
-    setMarks((value) => ({ ...value, pins: value.pins.map((pin, at) => (at === index ? { ...pin, comment } : pin)) }))
+    setMarks((value) => (kind === 'pin'
+      ? { ...value, pins: value.pins.map((pin, each) => (each === index ? { ...pin, comment } : pin)) }
+      : { ...value, shapes: value.shapes.map((shape, each) => (each === index ? { ...shape, comment } : shape)) }))
   }
 
   return (
@@ -293,7 +310,8 @@ export function ImageAnnotator({ src, name, initial, onCancel, onDone, note }: {
       onKeyDown={onKeyDown}
     >
       <div className={`flex gap-4 ${fit.stacked ? 'flex-col' : ''}`}>
-        <div className="flex min-w-0 flex-1 flex-col gap-2">
+        {/* Side by side, the picture's column hugs the picture and the comments take the rest. */}
+        <div className={`flex min-w-0 flex-col gap-2 ${fit.stacked ? '' : 'flex-[0_1_auto]'}`}>
           <div className="flex flex-wrap items-center gap-1.5" role="toolbar" aria-label="Marks">
             {TOOLS.map((each) => (
               <Button
@@ -325,12 +343,13 @@ export function ImageAnnotator({ src, name, initial, onCancel, onDone, note }: {
               <img src={src} alt={name} draggable={false} className="block max-w-full" style={{ maxHeight: fit.picture }} />
               {marks.shapes.map((shape, index) => {
                 const isSelected = selected?.kind === 'shape' && selected.index === index
+                const number = numbers.get(rowKey('shape', index))
                 return (
                   <div
                     key={`shape-${index}`}
                     role="button"
                     tabIndex={0}
-                    aria-label={`${shape.kind === 'frame' ? 'Frame' : 'Circle'} ${index + 1}`}
+                    aria-label={`${shape.kind === 'frame' ? 'Frame' : 'Circle'} ${index + 1}${number === undefined ? '' : `, number ${number}`}`}
                     aria-pressed={isSelected}
                     onFocus={() => setSelected({ kind: 'shape', index })}
                     data-annotator-shape={shape.kind}
@@ -352,6 +371,21 @@ export function ImageAnnotator({ src, name, initial, onCancel, onDone, note }: {
                   </div>
                 )
               })}
+              {numbered.flatMap((mark) => {
+                if (mark.kind === 'pin') return []
+                const anchor = markAnchor(mark)
+                return [
+                  <span
+                    key={`shape-number-${mark.index}`}
+                    aria-hidden
+                    className="pointer-events-none absolute grid h-[22px] w-[22px] -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full border-2 border-on-media bg-mark text-[12px] leading-none font-medium text-on-media"
+                    // Kept whole inside the picture when the shape touches its edge.
+                    style={{ left: `clamp(11px, ${anchor.x * 100}%, calc(100% - 11px))`, top: `clamp(11px, ${anchor.y * 100}%, calc(100% - 11px))` }}
+                  >
+                    {mark.number}
+                  </span>,
+                ]
+              })}
               {marks.pins.map((pin, index) => {
                 const isSelected = selected?.kind === 'pin' && selected.index === index
                 return (
@@ -372,39 +406,51 @@ export function ImageAnnotator({ src, name, initial, onCancel, onDone, note }: {
             </div>
           </div>
         </div>
-        <div className={`flex flex-none flex-col ${fit.stacked ? 'w-full' : 'w-[240px]'}`}>
+        <div className={`flex flex-col ${fit.stacked ? 'w-full' : 'min-w-[240px] flex-1'}`}>
           <h4 className="m-0 mb-2 text-[13px] font-medium text-text">Comments</h4>
           <ol className="m-0 flex list-none flex-col gap-0.5 overflow-y-auto p-0" style={{ maxHeight: fit.stacked ? 96 : fit.picture - 40 }}>
-            {marks.pins.map((pin, index) => {
-              const isSelected = selected?.kind === 'pin' && selected.index === index
+            {rows.map(({ key, kind, index }, at) => {
+              const shape = kind === 'shape' ? marks.shapes[index] : undefined
+              const comment = (kind === 'pin' ? marks.pins[index]?.comment : shape?.comment) ?? ''
+              const number = numbers.get(key)
+              const label = shape === undefined ? `pin ${index + 1}` : `${shape.kind} ${index + 1}${number === undefined ? '' : `, number ${number}`}`
+              const isSelected = selected?.kind === kind && selected.index === index
               return (
-                <li key={`row-${index}`} className={`group/row flex items-center gap-2 rounded-lg p-1.5 ${isSelected ? 'bg-surface-2' : ''}`}>
-                  <span className="grid h-[22px] w-[22px] flex-none place-items-center rounded-full bg-mark text-[12px] leading-none font-medium text-on-media">{index + 1}</span>
+                <li key={key} className={`group/row flex items-center gap-2 rounded-lg p-1.5 ${isSelected ? 'bg-surface-2' : ''}`}>
+                  {number === undefined ? (
+                    <span className="grid h-[22px] w-[22px] flex-none place-items-center rounded-full border border-mark text-mark">
+                      <Icon icon={shape?.kind === 'circle' ? CircleIcon : SquareIcon} size={11} />
+                    </span>
+                  ) : (
+                    <span className="grid h-[22px] w-[22px] flex-none place-items-center rounded-full bg-mark text-[12px] leading-none font-medium text-on-media">{number}</span>
+                  )}
                   <input
                     ref={(element) => {
-                      inputs.current[index] = element
+                      if (element === null) inputs.current.delete(key)
+                      else inputs.current.set(key, element)
                     }}
-                    value={pin.comment}
+                    value={comment}
                     maxLength={MAX_IMAGE_COMMENT_CHARS}
-                    placeholder="Add a comment"
-                    aria-label={`Comment for pin ${index + 1}`}
+                    placeholder={kind === 'pin' ? 'Add a comment' : 'Optional comment'}
+                    aria-label={`Comment for ${label}`}
                     className="min-w-0 flex-1 rounded-md border border-line bg-transparent px-2 py-1 text-[13px] text-text outline-none placeholder:text-dim focus:border-mark"
-                    onFocus={() => setSelected({ kind: 'pin', index })}
+                    onFocus={() => setSelected({ kind, index })}
                     onBlur={() => {
                       typedRow.current = null
                     }}
-                    onChange={(event) => setComment(index, event.target.value)}
+                    onChange={(event) => setComment(kind, index, event.target.value)}
                     onKeyDown={(event) => {
                       if (event.key !== 'Enter' || event.metaKey || event.ctrlKey) return
                       event.preventDefault()
-                      inputs.current[index + 1]?.focus()
+                      const next = rows[at + 1]
+                      if (next !== undefined) inputs.current.get(next.key)?.focus()
                     }}
                   />
                   <button
                     type="button"
-                    aria-label={`Remove pin ${index + 1}`}
+                    aria-label={`Remove ${label}`}
                     className="grid h-6 w-6 flex-none cursor-pointer place-items-center rounded-md border-0 bg-transparent p-0 text-dim opacity-0 group-hover/row:opacity-100 hover:text-text focus-visible:opacity-100"
-                    onClick={() => removePin(index)}
+                    onClick={() => (kind === 'pin' ? removePin(index) : removeShape(index))}
                   >
                     <Icon icon={Cancel01Icon} size={12} />
                   </button>
@@ -417,7 +463,7 @@ export function ImageAnnotator({ src, name, initial, onCancel, onDone, note }: {
               ? `Up to ${MAX_IMAGE_PINS} pins per picture.`
               : tool === 'pin'
                 ? 'Click the picture to place a pin. Drag a mark to move it.'
-                : `Drag on the picture to draw a ${tool}. Drag a mark to move it.`}
+                : `Drag on the picture to draw a ${tool}. A comment gives it a number.`}
           </p>
           <div className="mt-auto flex flex-col gap-2 pt-3">
             {note ? <p className="m-0 text-[12px] text-danger">{note}</p> : null}

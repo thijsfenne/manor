@@ -11,7 +11,7 @@ import {
   type CatchUpSummary,
   type DocumentExtraction,
   type EventDocument,
-  type ImageAnnotation,
+  type ImageAnnotation, numberedMarks,
   PDF_MIME,
   formatQuoteRef,
   type SkillConfig,
@@ -1317,15 +1317,23 @@ export const annotationNote = (event: { images?: readonly { annotation?: ImageAn
     const original = annotation.original !== undefined && unmarked !== undefined && unmarked.annotation === undefined
       ? ` Image #${annotation.original + 1} is the same picture without marks.`
       : ''
-    const pins = annotation.pins.map((pin, at) =>
-      `${at + 1} (x ${percent(pin.x)}, y ${percent(pin.y)}): ${pin.comment.replace(/\s+/g, ' ').trim() || '(no comment)'}`)
-    const shapes = annotation.shapes.map((shape) =>
-      `${shape.kind === 'frame' ? 'Frame' : 'Circle'} (x ${percent(shape.x)} to ${percent(shape.x + shape.w)}, y ${percent(shape.y)} to ${percent(shape.y + shape.h)})`)
+    const range = (shape: ImageAnnotation['shapes'][number]) =>
+      `(x ${percent(shape.x)} to ${percent(shape.x + shape.w)}, y ${percent(shape.y)} to ${percent(shape.y + shape.h)})`
+    const shapeName = (shape: ImageAnnotation['shapes'][number]) => (shape.kind === 'frame' ? 'Frame' : 'Circle')
+    const numbered = numberedMarks(annotation)
+    const lines = numbered.map((mark) => {
+      const comment = mark.comment.replace(/\s+/g, ' ').trim() || '(no comment)'
+      return mark.kind === 'pin'
+        ? `${mark.number} (x ${percent(mark.x)}, y ${percent(mark.y)}): ${comment}`
+        : `${mark.number} ${shapeName(mark)} ${range(mark)}: ${comment}`
+    })
+    const commented = new Set(numbered.flatMap((mark) => (mark.kind === 'pin' ? [] : [mark.index])))
+    const plain = annotation.shapes.flatMap((shape, at) => (commented.has(at) ? [] : [`${shapeName(shape)} ${range(shape)}`]))
     return [
       `\n[Image #${index + 1} carries the user's marks: numbered pins and outlined areas drawn on the picture.${original} Positions are relative to the picture, from its top left.]`,
-      ...pins,
-      ...shapes,
-      ...(pins.length > 0 ? ['Answer or act per number.'] : []),
+      ...lines,
+      ...plain,
+      ...(lines.length > 0 ? ['Answer or act per number.'] : []),
     ].join('\n')
   }).join('')
 }

@@ -2761,7 +2761,10 @@ describe('Orchestrator', () => {
     const annotation = {
       original: 1,
       pins: [{ x: 0.62, y: 0.18, comment: 'too little contrast' }, { x: 0.9, y: 0.58, comment: 'make it the primary action' }],
-      shapes: [{ kind: 'frame' as const, x: 0.05, y: 0.59, w: 0.9, h: 0.11 }],
+      shapes: [
+        { kind: 'frame' as const, x: 0.05, y: 0.59, w: 0.9, h: 0.11 },
+        { kind: 'circle' as const, x: 0.4, y: 0.05, w: 0.2, h: 0.1, comment: 'logo  too small' },
+      ],
     }
 
     await orchestrator.submitUserMessage(chatId, '@Sage look at these', [
@@ -2782,6 +2785,9 @@ describe('Orchestrator', () => {
     expect(prompt).toContain('1 (x 62%, y 18%): too little contrast')
     expect(prompt).toContain('2 (x 90%, y 58%): make it the primary action')
     expect(prompt).toContain('Frame (x 5% to 95%, y 59% to 70%)')
+    // A shape with a comment joins the numbers after the pins; one without stays a plain outline.
+    expect(prompt).toContain('3 Circle (x 40% to 60%, y 5% to 15%): logo too small')
+    expect(prompt).not.toContain('3 Frame')
     expect(prompt).toContain('Answer or act per number.')
   })
 
