@@ -149,6 +149,7 @@ export function createChatMedia(options: {
       name: image.name,
       src: signed(path),
       ...(size === undefined ? {} : size),
+      ...(image.annotation === undefined ? {} : { annotation: image.annotation }),
     }
   }
 

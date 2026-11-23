@@ -254,6 +254,9 @@
      no say. Same in both themes on purpose. */
   --color-media-scrim: rgb(0 0 0 / 70%);
   --color-on-media: #ffffff;
+  /* Pins and outlines the user draws on a picture, burned into what gets sent. Same in
+     both themes for the same reason: they sit on the picture, and its pixels keep them. */
+  --color-mark: #e5484d;
 
   /* A web page's own canvas: the plate under a browser guest and the page miniatures
      that stand for one. Same in both themes, because a page is white unless it paints. */

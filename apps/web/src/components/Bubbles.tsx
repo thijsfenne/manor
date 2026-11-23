@@ -2,7 +2,7 @@ import { memo, useContext, useId, useLayoutEffect, useRef, useState, type CSSPro
 import type { FaceState } from '@manor/client-runtime/face-activity'
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import { DISCLOSURE } from '../motion'
-import { AlertCircleIcon, ArrowDown01Icon, Clock01Icon, MinusSignIcon, RefreshIcon, TaskDone01Icon, Tick02Icon, Undo02Icon } from '@hugeicons/core-free-icons'
+import { AlertCircleIcon, ArrowDown01Icon, Clock01Icon, MinusSignIcon, PencilEdit02Icon, RefreshIcon, TaskDone01Icon, Tick02Icon, Undo02Icon } from '@hugeicons/core-free-icons'
 import { ROUTINE_LATE_AFTER_MS, eventImageSource, imageRefSpans, projectFileWriteDetail, projectFileWriteLabel, type EventImage, type ProjectFileWrite } from '@manor/contracts'
 import type { AgentConfig, EventDocument, FileAttachment, InlineQuote, MessageQuote, MessageReply, NoteQuote, PageContextAttachment, SkillConfig, WakeItem } from '@manor/contracts'
 import { wakeLines } from '../turnLabels'
@@ -22,6 +22,7 @@ import { ReplyContextChip } from './ReplyContextChip'
 import { quoteAuthorName } from '@manor/client-runtime/message-quotes'
 import { NoteQuoteContextChip, QuoteBlock } from './QuoteContextChip'
 import { useAgentMentions, useMessageChips } from './mentionMarkdown'
+import { AnnotateImageContext } from './annotateImage'
 import { ImageNumberBadge } from './MentionText'
 import { ZoomableImage, type GalleryImage } from './ui/ZoomableImage'
 import { MiddleCut } from './MiddleCut'
@@ -159,7 +160,15 @@ export function UserBubble({
 }) {
   const hasFiles = files.length > 0 || documents.length > 0
   const author = quote === undefined ? undefined : quoteAuthorName(quote, agents, quoteAuthors)
-  const hasBubble = text !== '' || hasFiles || pageContexts.length > 0 || replyTo !== undefined || quote !== undefined || noteQuote !== undefined
+  // A marked picture's original rides along for the persona; the user already sees it under the marks.
+  const originals = new Set(images.flatMap((image, index) => {
+    const original = image.annotation?.original
+    // A picture that carries marks of its own is never hidden as another's original.
+    return original === undefined || images[original] === undefined || images[original].annotation !== undefined ? [] : [original]
+  }))
+  const comments = images.flatMap((image) => image.annotation?.pins ?? [])
+  const marked = images.filter((image) => (image.annotation?.pins.length ?? 0) > 0)
+  const hasBubble = text !== '' || comments.length > 0 || hasFiles || pageContexts.length > 0 || replyTo !== undefined || quote !== undefined || noteQuote !== undefined
   const gallery = images.map((image) => ({ src: eventImageSource(image), alt: image.name }))
   // A message that refers to its pictures by number shows those numbers on them. One
   // that does not, every message from before numbering among them, stays as it was.
@@ -175,8 +184,14 @@ export function UserBubble({
           keeps the same rhythm whatever their size; a press opens the full picture. */}
       {images.length > 0 ? (
         <div className="flex max-w-[78%] flex-wrap justify-end gap-1.5">
-          {images.map((image, index) => (
-            <TranscriptImage key={`${image.name}-${index}`} image={image} gallery={{ images: gallery, index }} {...(numbered ? { number: index + 1 } : {})} />
+          {images.map((image, index) => originals.has(index) ? null : (
+            <TranscriptImage
+              key={`${image.name}-${index}`}
+              image={image}
+              gallery={{ images: gallery, index }}
+              wide={image.annotation !== undefined}
+              {...(numbered ? { number: index + 1 } : {})}
+            />
           ))}
         </div>
       ) : null}
@@ -194,6 +209,13 @@ export function UserBubble({
               {...(author === undefined ? {} : { author })}
               {...(onOpenQuoteSource === undefined ? {} : { onOpen: () => onOpenQuoteSource(quote.eventId) })}
             />
+          </div>
+        )}
+        {comments.length === 0 ? null : (
+          <div className={`${noteQuote !== undefined || replyTo !== undefined || hasFiles || pageContexts.length > 0 || text ? 'mb-2' : ''}${tint === undefined ? ' bubble-plain' : ' bubble-ink'}`} {...(tint === undefined ? {} : { style: { '--bubble-ink': tint.ink } as CSSProperties })}>
+            {marked.map((image, at) => (
+              <MarkComments key={`${image.name}-${at}`} pins={image.annotation?.pins ?? []} {...(marked.length > 1 ? { title: image.name } : {})} />
+            ))}
           </div>
         )}
         {noteQuote === undefined ? null : (
@@ -229,6 +251,27 @@ export function UserBubble({
           </div>
         ) : null}
       </div> : null}
+    </div>
+  )
+}
+
+/** The box a marked picture stands in within a sent message: big enough to read its pins. */
+const MARKED_IMAGE_WIDTH = 320
+const MARKED_IMAGE_HEIGHT = 360
+
+/** The numbered comments of one marked picture, in the order its pins carry. */
+function MarkComments({ pins, title }: { pins: readonly { comment: string }[]; title?: string }) {
+  return (
+    <div className="[&+&]:mt-2">
+      {title === undefined ? null : <div className="mb-1 text-meta opacity-70">{title}</div>}
+      <ol className="m-0 flex list-none flex-col gap-1 p-0 text-[length:var(--msg-size,16px)] leading-snug" data-mark-comments="">
+        {pins.map((pin, index) => (
+          <li key={index} className="flex items-start gap-2">
+            <span className="mt-px grid h-[20px] w-[20px] flex-none place-items-center rounded-full bg-mark text-[12px] leading-none font-medium text-on-media">{index + 1}</span>
+            <span className="min-w-0 break-words">{pin.comment.trim() === '' ? <span className="opacity-60">No comment</span> : pin.comment}</span>
+          </li>
+        ))}
+      </ol>
     </div>
   )
 }
@@ -401,7 +444,7 @@ const FALLBACK_IMAGE_SIZE = { width: 320, height: 240 }
  * Without one it is an agent's picture, sized to its own pixels within the column,
  * and a press asks `onOpen` for the file viewer.
  */
-function TranscriptImage({ image, frame = '', fit = 'object-cover', gallery, number, compact = false, onOpen }: { image: EventImage; frame?: string; fit?: string; gallery?: { images: readonly GalleryImage[]; index: number }; number?: number; compact?: boolean; onOpen?: () => void }) {
+function TranscriptImage({ image, frame = '', fit = 'object-cover', gallery, number, compact = false, wide = false, onOpen }: { image: EventImage; frame?: string; fit?: string; gallery?: { images: readonly GalleryImage[]; index: number }; number?: number; compact?: boolean; wide?: boolean; onOpen?: () => void }) {
   const [attempt, setAttempt] = useState(0)
   const [failed, setFailed] = useState(false)
   const source = eventImageSource(image)
@@ -411,10 +454,12 @@ function TranscriptImage({ image, frame = '', fit = 'object-cover', gallery, num
   const size = image.width !== undefined && image.height !== undefined ? { width: image.width, height: image.height } : loaded ?? FALLBACK_IMAGE_SIZE
   // The pixel width is what a shrink-wrapped bubble sizes itself to; `max-w-full`
   // then fits it to the column, and the ratio gives the height before a byte loads.
+  // A marked picture is read at its own shape, not cropped to a square that may cut a pin.
+  const natural = gallery === undefined || wide
   return (
     <div
-      className={gallery === undefined ? `relative min-h-10 max-w-full overflow-hidden rounded-lg ${frame}` : `relative flex-none overflow-hidden rounded-lg ${compact ? 'h-10 w-10' : 'h-15 w-15'}`}
-      {...(gallery === undefined ? { style: { width: size.width, aspectRatio: `${size.width} / ${size.height}` } } : {})}
+      className={natural ? `relative min-h-10 max-w-full overflow-hidden rounded-lg ${frame}` : `relative flex-none overflow-hidden rounded-lg ${compact ? 'h-10 w-10' : 'h-15 w-15'}`}
+      {...(natural ? { style: { width: wide ? Math.min(size.width, MARKED_IMAGE_WIDTH, (MARKED_IMAGE_HEIGHT * size.width) / size.height) : size.width, aspectRatio: `${size.width} / ${size.height}` } } : {})}
     >
       {failed && image.src !== undefined ? (
         <button
@@ -426,7 +471,7 @@ function TranscriptImage({ image, frame = '', fit = 'object-cover', gallery, num
           className="absolute inset-0 flex items-center justify-center gap-1.5 rounded-lg border border-line bg-surface px-2 text-label text-muted hover:text-text"
         >
           <Icon icon={RefreshIcon} size={16} />
-          {gallery === undefined ? <span className="truncate">Couldn't load {image.name}. Retry</span> : <span className="sr-only">Couldn't load {image.name}. Retry</span>}
+          {natural ? <span className="truncate">Couldn't load {image.name}. Retry</span> : <span className="sr-only">Couldn't load {image.name}. Retry</span>}
         </button>
       ) : onOpen !== undefined ? (
         <button type="button" aria-label={`Open ${image.name}`} className="absolute inset-0 h-full w-full cursor-zoom-in border-0 bg-transparent p-0" onClick={onOpen}>
@@ -467,6 +512,29 @@ function TranscriptImage({ image, frame = '', fit = 'object-cover', gallery, num
   )
 }
 
+/**
+ * Opens an agent's picture in the composer's mark-up editor, so the user can point at
+ * what to change and send it back. Shows on hover, the way a picture's other actions do.
+ */
+function AnnotateButton({ image, annotate }: { image: EventImage; annotate: (image: EventImage) => Promise<void> }) {
+  const [state, setState] = useState<'idle' | 'loading' | 'failed'>('idle')
+  return (
+    <button
+      type="button"
+      data-annotate-image=""
+      disabled={state === 'loading'}
+      className={`absolute right-2 bottom-2 flex h-7 cursor-pointer items-center gap-1.5 rounded-full border-0 bg-media-scrim px-2.5 text-[12px] font-medium text-on-media motion-safe:transition-opacity group-hover/picture:opacity-100 focus-visible:opacity-100 disabled:cursor-default ${state === 'idle' ? 'opacity-0' : 'opacity-100'}`}
+      onClick={() => {
+        setState('loading')
+        annotate(image).then(() => setState('idle'), () => setState('failed'))
+      }}
+    >
+      <Icon icon={state === 'failed' ? RefreshIcon : PencilEdit02Icon} size={13} />
+      {state === 'failed' ? "Couldn't load. Retry" : 'Annotate'}
+    </button>
+  )
+}
+
 interface AgentBubbleProps {
   color: string
   text: string
@@ -488,6 +556,7 @@ interface AgentBubbleProps {
  */
 function AgentBubbleView({ color, text, agents, images = [], live = false, bubble = false, quoteSources, quoteAgentId }: AgentBubbleProps) {
   const { plugins, components } = useAgentMentions(agents)
+  const annotate = useContext(AnnotateImageContext)
   // The file viewer over this message's pictures only, opened at the one pressed.
   const [viewing, setViewing] = useState<number | null>(null)
   const said = quoteSources !== undefined && quoteSources.length > 0 ? quoteSources.some((source) => source.text.length > 0) : text.length > 0
@@ -495,13 +564,10 @@ function AgentBubbleView({ color, text, agents, images = [], live = false, bubbl
   const pictures = images.length > 0 ? (
     <div className={`grid grid-cols-2 gap-1.5 ${said && !bubble ? 'mb-2' : ''}`}>
       {images.map((image, index) => (
-        <TranscriptImage
-          key={`${image.name}-${index}`}
-          image={image}
-          frame="max-h-[36rem]"
-          fit="object-contain"
-          onOpen={() => setViewing(index)}
-        />
+        <div key={`${image.name}-${index}`} className="group/picture relative min-w-0">
+          <TranscriptImage image={image} frame="max-h-[36rem]" fit="object-contain" onOpen={() => setViewing(index)} />
+          {annotate === undefined ? null : <AnnotateButton image={image} annotate={annotate} />}
+        </div>
       ))}
     </div>
   ) : null

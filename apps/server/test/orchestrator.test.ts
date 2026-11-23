@@ -2751,6 +2751,40 @@ describe('Orchestrator', () => {
     expect(seen[1]?.imagePaths).toContain(materialised)
   })
 
+  it('hands the driver the marked picture, the original and the numbered comments', async () => {
+    const scratchDir = mkdtempSync(path.join(os.tmpdir(), 'manor-annotated-input-'))
+    const seen: TurnInput[] = []
+    const { orchestrator, chatId, store } = await harness(
+      scripted(() => [{ type: 'message', messageId: 'answer', text: 'Per number.' }, { type: 'result', text: 'Per number.' }], seen),
+      { scratchDir },
+    )
+    const annotation = {
+      original: 1,
+      pins: [{ x: 0.62, y: 0.18, comment: 'too little contrast' }, { x: 0.9, y: 0.58, comment: 'make it the primary action' }],
+      shapes: [{ kind: 'frame' as const, x: 0.05, y: 0.59, w: 0.9, h: 0.11 }],
+    }
+
+    await orchestrator.submitUserMessage(chatId, '@Sage look at these', [
+      { name: 'login.png', dataUrl: 'data:image/png;base64,bWFya2Vk', annotation },
+      { name: 'login (original).png', dataUrl: 'data:image/png;base64,b3JpZ2luYWw=' },
+    ])
+
+    const stored = (await store.loadEvents(chatId))[0]
+    expect(stored).toMatchObject({ type: 'user_message', images: [{ name: 'login.png', annotation }, { name: 'login (original).png' }] })
+    const input = seen[0]
+    if (input === undefined) throw new Error('expected a turn')
+    const paths = input.imagePaths ?? []
+    expect(paths).toHaveLength(2)
+    expect(await readFile(paths[0]!, 'utf8')).toBe('marked')
+    expect(await readFile(paths[1]!, 'utf8')).toBe('original')
+    const prompt = composeCatchUp({ events: input.catchUp, agents: [], isFullCatchUp: true, imagePaths: paths })
+    expect(prompt).toContain("[Image #1 carries the user's marks: numbered pins and outlined areas drawn on the picture. Image #2 is the same picture without marks.")
+    expect(prompt).toContain('1 (x 62%, y 18%): too little contrast')
+    expect(prompt).toContain('2 (x 90%, y 58%): make it the primary action')
+    expect(prompt).toContain('Frame (x 5% to 95%, y 59% to 70%)')
+    expect(prompt).toContain('Answer or act per number.')
+  })
+
   it('advances the per-agent cursor and accumulates usage across turns', async () => {
     const seen: TurnInput[] = []
     const { orchestrator, chatId, sent } = await harness(recording(createMockDriver({ deltaDelayMs: 0 }), seen))

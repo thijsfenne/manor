@@ -38,6 +38,7 @@ import type { useFloatingBrowser } from '../../useBrowserPlace'
 import type { useChatDialogs } from '../../useChatDialogs'
 import type { useChatReplies } from '../../useChatReplies'
 import { insertQuoteIntoDraft } from '../../composerDrafts'
+import { AnnotateImageContext, annotateImageFor } from '../annotateImage'
 import type { usePageContexts } from '../../useChatSide'
 import type { useOutboundDraftActions } from '../../useOutboundDraftActions'
 import type { usePanelSelections } from '../../usePanelSelections'
@@ -492,6 +493,7 @@ export function StageChatPane({
   <ExternalLinkProvider open={openWebsiteUrl} chatId={chat.id} picksPageContext={hasOwnBrowserPanel(chat, kit.stage.roomThreadOf(chat.id) !== undefined)}>
   <ConnectCardProvider chatId={chat.id} open={manor.openConnectCard} connected={status === 'live'}>
   <DiffReviewContext.Provider value={phone ? undefined : reviewerFor(chat.id)}>
+  <AnnotateImageContext.Provider value={chat.kind === 'pair' ? undefined : annotateImageFor(chat.id)}>
   <ChatPane
     key={`${side}:${chat.id}`}
     chat={chat}
@@ -582,6 +584,7 @@ export function StageChatPane({
       ? { birthPending: bornChat.sent }
       : {})}
   />
+  </AnnotateImageContext.Provider>
   </DiffReviewContext.Provider>
   </ConnectCardProvider>
   </ExternalLinkProvider>

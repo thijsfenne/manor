@@ -1009,12 +1009,45 @@ const eventBase = {
   ts: z.number(),
 }
 
+export const MAX_MESSAGE_ATTACHMENTS = 8
+
+/** A position or length on a picture as a share of its width or height, from its top left. */
+const RelativeSchema = z.number().min(0).max(1)
+
+export const MAX_IMAGE_PINS = 20
+export const MAX_IMAGE_COMMENT_CHARS = 500
+
+/**
+ * The marks the user placed on a picture before sending it. The picture that carries
+ * this already shows them burned in; `original` names the same picture without marks,
+ * by its index in the same message's images, so a persona can see what a mark covers.
+ * A pin's number is its place in `pins` plus one. Clients without this field show the
+ * two pictures and the text, and lose only the comment list.
+ */
+export const ImageAnnotationSchema = z.object({
+  original: z.number().int().nonnegative().max(MAX_MESSAGE_ATTACHMENTS - 1).optional(),
+  pins: z.array(z.object({
+    x: RelativeSchema,
+    y: RelativeSchema,
+    comment: z.string().max(MAX_IMAGE_COMMENT_CHARS),
+  })).max(MAX_IMAGE_PINS),
+  shapes: z.array(z.object({
+    kind: z.enum(['frame', 'circle']),
+    x: RelativeSchema,
+    y: RelativeSchema,
+    w: RelativeSchema,
+    h: RelativeSchema,
+  })).max(MAX_IMAGE_PINS),
+})
+export type ImageAnnotation = z.infer<typeof ImageAnnotationSchema>
+
 // SVG is renderable but not multimodal: browsers load it in `<img>` under a
 // secure static mode (no scripts, no external fetches), while the provider CLIs
 // only accept raster images. See materialiseImages in apps/server/src/turnContext.ts.
 export const ImageAttachmentSchema = z.object({
   name: z.string().min(1).max(160),
   dataUrl: z.string().max(2_000_000).regex(/^data:image\/(png|jpeg|webp|svg\+xml);base64,[A-Za-z0-9+/=]+$/),
+  annotation: ImageAnnotationSchema.optional(),
 })
 export type ImageAttachment = z.infer<typeof ImageAttachmentSchema>
 
@@ -1031,13 +1064,13 @@ export const EventImageSchema = z.object({
   src: z.string().min(1).max(2_000).optional(),
   width: z.number().int().positive().optional(),
   height: z.number().int().positive().optional(),
+  annotation: ImageAnnotationSchema.optional(),
 }).refine((image) => (image.dataUrl === undefined) !== (image.src === undefined), {
   message: 'an event image carries exactly one of dataUrl or src',
 })
 export type EventImage = z.infer<typeof EventImageSchema>
 export const eventImageSource = (image: EventImage): string => image.src ?? image.dataUrl ?? ''
 
-export const MAX_MESSAGE_ATTACHMENTS = 8
 export const MAX_TEXT_FILE_BYTES = 200 * 1_024
 
 /** UTF-8 length without a Node-only Buffer, so the same contract runs in both clients. */

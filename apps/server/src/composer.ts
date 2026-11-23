@@ -11,6 +11,7 @@ import {
   type CatchUpSummary,
   type DocumentExtraction,
   type EventDocument,
+  type ImageAnnotation,
   PDF_MIME,
   formatQuoteRef,
   type SkillConfig,
@@ -1299,6 +1300,36 @@ const imageNote = (event: { images?: readonly unknown[] }, numbered = false): st
   return `\n[${count} attached ${count === 1 ? 'image' : 'images'} supplied separately${names}]`
 }
 
+const percent = (share: number) => `${Math.round(share * 100)}%`
+
+/**
+ * The marks the user placed on a picture, as numbered lines a persona can answer one by
+ * one. The picture shows them burned in; the lines carry the words and the positions,
+ * relative to the picture so they hold at any size it is read at.
+ */
+export const annotationNote = (event: { images?: readonly { annotation?: ImageAnnotation }[] }): string => {
+  const images = event.images ?? []
+  return images.map((image, index) => {
+    const { annotation } = image
+    if (annotation === undefined || (annotation.pins.length === 0 && annotation.shapes.length === 0)) return ''
+    // A picture that carries marks of its own is never named as another's original.
+    const unmarked = annotation.original === undefined ? undefined : images[annotation.original]
+    const original = annotation.original !== undefined && unmarked !== undefined && unmarked.annotation === undefined
+      ? ` Image #${annotation.original + 1} is the same picture without marks.`
+      : ''
+    const pins = annotation.pins.map((pin, at) =>
+      `${at + 1} (x ${percent(pin.x)}, y ${percent(pin.y)}): ${pin.comment.replace(/\s+/g, ' ').trim() || '(no comment)'}`)
+    const shapes = annotation.shapes.map((shape) =>
+      `${shape.kind === 'frame' ? 'Frame' : 'Circle'} (x ${percent(shape.x)} to ${percent(shape.x + shape.w)}, y ${percent(shape.y)} to ${percent(shape.y + shape.h)})`)
+    return [
+      `\n[Image #${index + 1} carries the user's marks: numbered pins and outlined areas drawn on the picture.${original} Positions are relative to the picture, from its top left.]`,
+      ...pins,
+      ...shapes,
+      ...(pins.length > 0 ? ['Answer or act per number.'] : []),
+    ].join('\n')
+  }).join('')
+}
+
 const fileAttachmentNote = (
   event: { files?: readonly { name: string; mime: string; content: string }[] },
 ): string => {
@@ -1505,7 +1536,7 @@ function catchUpSpeaker(event: ThreadEvent, label: (agentId: string) => string, 
 /** Attachment notes and quoted source contents, without a leading newline. */
 function catchUpSupport(event: ThreadEvent, label: (agentId: string) => string): string {
   if (event.type === 'user_message') {
-    return `${imageNote(event, true)}${fileAttachmentNote(event)}${documentNote(event)}${pageContextNote(event)}${replyNote(event, label)}${inlineQuotesNote(event, label)}${quoteNote(event, label)}${noteQuoteNote(event)}`.replace(/^\n/, '')
+    return `${imageNote(event, true)}${annotationNote(event)}${fileAttachmentNote(event)}${documentNote(event)}${pageContextNote(event)}${replyNote(event, label)}${inlineQuotesNote(event, label)}${quoteNote(event, label)}${noteQuoteNote(event)}`.replace(/^\n/, '')
   }
   if (event.type === 'agent_message') return imageNote(event).replace(/^\n/, '')
   if (event.type === 'outbound_draft_submission' && event.status === 'delivered') {

@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type ClipboardEvent, type
 import { ArrowUp01Icon, Attachment01Icon, BotIcon, BoxIcon, ComputerIcon, File01Icon, Globe02Icon, Image01Icon, MessageMultiple01Icon, PlusSignIcon } from '@hugeicons/core-free-icons'
 import { DEFAULT_HOUSE_SETTINGS, MAX_MESSAGE_ATTACHMENTS, MAX_MESSAGE_QUOTES, MAX_PAGE_CONTEXT_ATTACHMENTS, addsAgentMention, compactQuoteRefs, formatImageRef, imageRefSpans, quoteRefSpans, renumberImageRefs, snapRefDeletion } from '@manor/contracts'
 import { insertQuote } from '@manor/client-runtime/message-quotes'
-import type { AgentConfig, ChatCommandContext, ChatOverride, InlineQuote, MessageReply, PageContextAttachment, SkillConfig } from '@manor/contracts'
+import type { AgentConfig, ChatCommandContext, ChatOverride, ImageAttachment, InlineQuote, MessageReply, PageContextAttachment, SkillConfig } from '@manor/contracts'
 import { AnimatePresence, animate, motion, useMotionValue, useReducedMotion } from 'motion/react'
 import { accentStyle } from '../accent'
 import {
@@ -34,6 +34,8 @@ import { base64Bytes, describeBytes, utf8Size, type ComposerAttachments } from '
 import { scrollCaretIntoView } from '../caretScroll'
 import { COMPOSER_GROW, INSTANT, SPRING_COMPOSER } from '../motion'
 import { EMPTY_DRAFT, appendedText, readDraft, subscribeDraftInsert, writeDraft } from '../composerDrafts'
+import { NO_MARKS, burnMarks, fitsWire, hasMarks, imageSlots, stagedImageSlots, wireImages, type DraftImage, type ImageMarks } from '../imageMarks'
+import { ImageAnnotator } from './ImageAnnotator'
 import { continueComposerList, normalizeComposerLists, startComposerList } from '@manor/client-runtime/composer-formatting'
 import { effectiveDriver, isAutoPending, runtimeParts } from '../runtimeChoices'
 import { Avatar } from './Avatar'
@@ -54,7 +56,6 @@ import { IconSwap } from './ui/IconSwap'
 import { MENU_SURFACE, MenuItem } from './ui/Menu'
 import { Popover } from './ui/Popover'
 import { useDismiss } from './ui/useDismiss'
-import { ZoomableImage } from './ui/ZoomableImage'
 import { useHostAuto } from '../useHostAuto'
 import { MiddleCut } from './MiddleCut'
 
@@ -99,6 +100,8 @@ export function plusMentionLabel(
   if (rest.length === 1) return `Mention an agent or ${rest[0]}`
   return `Mention an agent, ${rest.slice(0, -1).join(', ')} or ${rest[rest.length - 1]}`
 }
+
+type AnnotatingPicture = { index: number | null; image: ImageAttachment; marks: ImageMarks }
 
 /** One autocomplete row. Every kind shares the list and its keyboard behaviour. */
 type MentionRow =
@@ -407,6 +410,20 @@ export function Composer({ agents, commandContext, household, overrides = NO_OVE
   const [textFiles, setTextFiles] = useState(() => readDraft(draftKey).files)
   const [documents, setDocuments] = useState(() => readDraft(draftKey).documents ?? [])
   const [quotes, setQuotes] = useState(() => readDraft(draftKey).quotes ?? NO_QUOTES)
+  /**
+   * The picture open in the mark-up editor: a staged one by its place in the tray, or
+   * one handed in from the transcript (`index` null) that joins the tray on Done.
+   */
+  const [annotating, setAnnotatingState] = useState<AnnotatingPicture | null>(null)
+  // The open editor as of now, so a Done that awaits its drawing can tell whether the
+  // editor was cancelled, reopened or its picture removed meanwhile.
+  const annotatingNow = useRef<AnnotatingPicture | null>(null)
+  const burning = useRef<AnnotatingPicture | null>(null)
+  const setAnnotating = (next: AnnotatingPicture | null) => {
+    annotatingNow.current = next
+    setAnnotatingState(next)
+  }
+  const [annotateNote, setAnnotateNote] = useState<string | null>(null)
   /** The user left the caret in this field when they last pressed outside it. */
   const caretHeld = useRef(false)
   const cardRef = useRef<HTMLDivElement | null>(null)
@@ -424,7 +441,7 @@ export function Composer({ agents, commandContext, household, overrides = NO_OVE
    * whole message in silence, so this is counted synchronously and reserved before
    * the first `await` rather than checked twice against stale state.
    */
-  const staged = useRef(images.length + textFiles.length + documents.length)
+  const staged = useRef(stagedImageSlots(images) + textFiles.length + documents.length)
   /**
    * Which draft the reads in flight belong to. Sending and switching chats empty this
    * composer, and a read that was still running when that happened has nothing left to
@@ -585,7 +602,8 @@ export function Composer({ agents, commandContext, household, overrides = NO_OVE
     setDocuments(next.documents ?? [])
     setQuotes(next.quotes ?? NO_QUOTES)
     caretHeld.current = false
-    staged.current = next.images.length + next.files.length + (next.documents?.length ?? 0)
+    staged.current = stagedImageSlots(next.images) + next.files.length + (next.documents?.length ?? 0)
+    setAnnotating(null)
     // Whatever was still being read belonged to the chat we just left, so it is
     // cancelled here rather than allowed to land in this one.
     era.current += 1
@@ -618,6 +636,11 @@ export function Composer({ agents, commandContext, household, overrides = NO_OVE
     if (draftKey === undefined) return
     return subscribeDraftInsert(draftKey, (insert) => {
       const draft = liveDraft.current
+      if (insert.kind === 'annotate') {
+        setAnnotateNote(null)
+        setAnnotating({ index: null, image: insert.image, marks: NO_MARKS })
+        return
+      }
       if (insert.kind === 'text') {
         const next = appendedText(draft.text, insert.text)
         pendingSelection.current = { start: next.length, end: next.length }
@@ -710,7 +733,7 @@ export function Composer({ agents, commandContext, household, overrides = NO_OVE
       setCommandNote(refusal)
       return
     }
-    if (!onSend(text, { images, files: textFiles, documents }, pageContexts.slice(0, MAX_PAGE_CONTEXT_ATTACHMENTS), replyTo, placed.quotes)) return
+    if (!onSend(text, { images: wireImages(images), files: textFiles, documents }, pageContexts.slice(0, MAX_PAGE_CONTEXT_ATTACHMENTS), replyTo, placed.quotes)) return
     // Before the clear, so the editor applies it without taking the focus back.
     if (focusMode) putAway()
     setValue('')
@@ -720,6 +743,7 @@ export function Composer({ agents, commandContext, household, overrides = NO_OVE
     setTextFiles([])
     setDocuments([])
     setQuotes(NO_QUOTES)
+    setAnnotating(null)
     staged.current = 0
     era.current += 1
     setAttachError(null)
@@ -1142,7 +1166,9 @@ export function Composer({ agents, commandContext, household, overrides = NO_OVE
    * references follow: its own go, later ones count down with the thumbnails.
    */
   const removeImage = (index: number) => {
-    staged.current -= 1
+    const removed = images[index]
+    staged.current -= removed === undefined ? 1 : imageSlots(removed)
+    setAnnotating(null)
     const next = renumberImageRefs(value, index + 1, images.length)
     if (next !== value) {
       setValue(next)
@@ -1151,14 +1177,70 @@ export function Composer({ agents, commandContext, household, overrides = NO_OVE
     setImages((current) => current.filter((_, at) => at !== index))
   }
 
+  const openAnnotator = (index: number) => {
+    const image = images[index]
+    if (image === undefined) return
+    setAnnotateNote(null)
+    setAnnotating({
+      index,
+      image: { name: image.name, dataUrl: image.original ?? image.dataUrl },
+      marks: image.annotation === undefined ? NO_MARKS : { pins: image.annotation.pins, shapes: image.annotation.shapes },
+    })
+  }
+
+  /**
+   * The editor's Done: the picture takes its marks burned in and keeps its original
+   * beside them, or goes back to the plain picture when every mark was removed. A
+   * marked picture sends two, so it has to fit beside everything else staged.
+   */
+  const finishAnnotating = async (marks: ImageMarks) => {
+    const open = annotatingNow.current
+    if (open === null || burning.current === open) return
+    const current = open.index === null ? undefined : images[open.index]
+    const before = current === undefined ? 0 : imageSlots(current)
+    const marked = hasMarks(marks)
+    const after = marked ? 2 : 1
+    if (!fitsWire(staged.current - before + after)) {
+      setAnnotateNote(marked
+        ? `A marked picture sends its original too. Remove an attachment first; a message holds ${MAX_MESSAGE_ATTACHMENTS}.`
+        : `A message holds up to ${MAX_MESSAGE_ATTACHMENTS} attachments.`)
+      return
+    }
+    // Held now, so a file dropped while the marks are drawn cannot take the same slot.
+    staged.current += after - before
+    burning.current = open
+    const mine = era.current
+    let next: DraftImage = { name: open.image.name, dataUrl: open.image.dataUrl }
+    let failed: string | null = null
+    if (marked) {
+      try {
+        next = { ...await burnMarks(open.image.dataUrl, open.image.name, marks), original: open.image.dataUrl }
+      } catch (error) {
+        failed = (error as Error).message
+      }
+    }
+    if (burning.current === open) burning.current = null
+    // Sent or switched away while the marks were drawn: the count was reset with the draft.
+    if (era.current !== mine) return
+    if (failed !== null || annotatingNow.current !== open) {
+      staged.current -= after - before
+      if (failed !== null && annotatingNow.current === open) setAnnotateNote(failed)
+      return
+    }
+    setImages((staged) => (open.index === null ? [...staged, next] : staged.map((image, at) => (at === open.index ? next : image))))
+    setAnnotating(null)
+    focusDraft()
+  }
+
   // Each thumbnail wears the number `#` and its chip refer to it by, and drags into the
-  // text as that chip. Dragging is a pointer's way in; the `#` menu is everyone's.
+  // text as that chip. Dragging is a pointer's way in; the `#` menu is everyone's. A
+  // press opens the mark-up editor, where the user points at what they mean.
   const imageThumbs = images.map((image, index) => (
     <div
       key={`${image.name}-${index}`}
       className="group/image relative flex-none cursor-grab"
       draggable={!touchMode}
-      title={touchMode ? undefined : `Drag into your message to refer to Image #${index + 1}`}
+      title={touchMode ? undefined : `Click to mark up. Drag into your message to refer to Image #${index + 1}`}
       onDragStart={(event) => {
         // The picture's own drag would carry the file, and the card would attach it again.
         event.dataTransfer.clearData()
@@ -1167,8 +1249,25 @@ export function Composer({ agents, commandContext, household, overrides = NO_OVE
         event.dataTransfer.effectAllowed = 'copy'
       }}
     >
-      <ZoomableImage src={image.dataUrl} alt={image.name} className="h-15 w-15 rounded-lg object-cover" gallery={{ images: images.map((each) => ({ src: each.dataUrl, alt: each.name })), index }} />
+      <button
+        type="button"
+        aria-label={`Mark up ${image.name}`}
+        className="block cursor-pointer border-0 bg-transparent p-0 hover:opacity-90 motion-safe:transition-opacity"
+        onClick={() => openAnnotator(index)}
+      >
+        <img src={image.dataUrl} alt={image.name} className="block h-15 w-15 rounded-lg object-cover" />
+      </button>
       <ImageNumberBadge number={index + 1} />
+      {image.annotation !== undefined && image.annotation.pins.length > 0 ? (
+        <span
+          role="img"
+          data-pin-count={image.annotation.pins.length}
+          aria-label={`${image.annotation.pins.length} ${image.annotation.pins.length === 1 ? 'pin' : 'pins'}`}
+          className="pointer-events-none absolute right-1 bottom-1 grid h-[19px] min-w-[19px] place-items-center rounded-full bg-mark px-1 text-[12px] leading-none font-medium text-on-media"
+        >
+          {image.annotation.pins.length}
+        </span>
+      ) : null}
       <button type="button" aria-label={`Remove ${image.name}`} className="absolute top-1 right-1 h-6 w-6 cursor-pointer rounded-full border-0 bg-media-scrim text-on-media" onClick={() => removeImage(index)}>×</button>
     </div>
   ))
@@ -1184,6 +1283,22 @@ export function Composer({ agents, commandContext, household, overrides = NO_OVE
       {...(focusMode ? { 'data-focus-composer': '' } : {})}
       {...(travelLayer ? { style: { y: travelY } } : {})}
     >
+      <AnimatePresence>
+        {annotating === null ? null : (
+          <ImageAnnotator
+            key={`${annotating.index ?? 'new'}-${annotating.image.name}`}
+            src={annotating.image.dataUrl}
+            name={annotating.image.name}
+            initial={annotating.marks}
+            note={annotateNote}
+            onCancel={() => {
+              setAnnotating(null)
+              focusDraft()
+            }}
+            onDone={(marks) => void finishAnnotating(marks)}
+          />
+        )}
+      </AnimatePresence>
       <Popover
         open={menuOpen}
         element="ul"

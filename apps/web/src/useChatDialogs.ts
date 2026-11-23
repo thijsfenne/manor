@@ -10,6 +10,7 @@ import type {
 import type { ComposerAttachments } from '@manor/client-runtime/attachments'
 import { offsetQuoteRefs, SINGLE_CHAT_VOICE } from '@manor/contracts'
 import { NEW_CHAT_DRAFT_KEY, readDraft, writeDraft } from './composerDrafts'
+import { stagedFromWire } from './imageMarks'
 import type { ProjectDialogState } from './components/projects/ProjectDialogHost'
 import { withOverride } from './runtimeChoices'
 import { isHomeRoom, type Notice } from './state'
@@ -126,7 +127,7 @@ export function restoreSentDraft(target: NewChatDraft['target'], sent: SentDraft
   const typed = added.trim()
   writeDraft(stageDraftKey(target), {
     text: typed === '' ? sent.text : sent.text === '' ? added : `${sent.text}\n\n${added}`,
-    images: [...sent.images, ...current.images],
+    images: [...stagedFromWire(sent.images), ...current.images],
     files: [...sent.files, ...current.files],
     documents: [...sent.documents, ...(current.documents ?? [])],
     quotes: [...sentQuotes, ...currentQuotes],

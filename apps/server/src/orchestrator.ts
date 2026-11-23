@@ -26,6 +26,7 @@ import {
   type AttachedMcpServer,
   type ChatOverride,
   type FileAttachment,
+  type ImageAttachment,
   type McpServerConfig,
   type MessageReply,
   type InlineQuote,
@@ -647,7 +648,7 @@ export class Orchestrator {
   submitUserMessage(
     chatId: string,
     text: string,
-    images: { name: string; dataUrl: string }[] = [],
+    images: ImageAttachment[] = [],
     origin?: MessageOrigin,
     pageContexts: PageContextAttachment[] = [],
     files: FileAttachment[] = [],
