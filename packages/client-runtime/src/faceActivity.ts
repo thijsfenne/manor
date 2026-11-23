@@ -7,8 +7,8 @@
  * each moment looks: what the eyes do, which library pose they hold, and which body
  * gesture plays (see `faceGesture`).
  *
- * The current busy loop stays what a working face does. Only the moments that have a
- * better answer than "busy" get one of their own.
+ * Every kind of work looks the same: the working loop of `busyFace`, which moves the
+ * whole face. Writing has its own look, and so have the moments that are not work.
  */
 import { isCompacting } from './compacting'
 import type { EyePose } from './busyFace'
@@ -25,13 +25,13 @@ export type FaceState = FaceActivity | FaceMoment
 
 export interface FaceLook {
   /**
-   * `loop` is the current busy loop, whole. `dots` is its melt into three dots, held.
-   * `scan`, `toward` and `seesaw` are small moves added on top of where the eyes are.
-   * `still` leaves them to the pose.
+   * `loop` is the working loop, body and eyes. `dots` is the melt into three dots, held.
+   * `toward` is a small move added on top of where the eyes are. `still` leaves them to
+   * the pose.
    */
-  eyes: 'loop' | 'dots' | 'scan' | 'toward' | 'seesaw' | 'still'
+  eyes: 'loop' | 'dots' | 'toward' | 'still'
   /** A pose of the face library, by its name there. */
-  pose?: 'thinking' | 'sleepy' | 'happy' | 'sad'
+  pose?: 'sleepy' | 'happy' | 'sad'
   gesture?: GestureId
   /**
    * How many times the gesture plays before the body is still again. Absent, it plays
@@ -41,18 +41,18 @@ export interface FaceLook {
   passes?: number
 }
 
+/** Work of any kind. The loop is one continuous piece, so a turn that goes from reading to running does not restart it. */
+const WORK: FaceLook = { eyes: 'loop' }
+
 export const FACE_LOOK: Record<FaceState, FaceLook> = {
-  working: { eyes: 'loop' },
-  thinking: { eyes: 'seesaw', pose: 'thinking', gesture: 'tilt' },
-  reading: { eyes: 'scan', gesture: 'follow' },
-  // The kinds of work below keep the busy loop and add a body move of their own. One
-  // that would read as fidgeting if it held says its piece and stops.
-  searching: { eyes: 'loop', gesture: 'rock', passes: 2 },
-  editing: { eyes: 'loop', gesture: 'lean' },
-  running: { eyes: 'loop', gesture: 'jelly', passes: 1 },
-  /** The newest call failed and the turn carries on: a small start, not the shake of a failed turn. */
-  snagged: { eyes: 'loop', gesture: 'shiver', passes: 1 },
-  compacting: { eyes: 'loop', gesture: 'roll', passes: 1 },
+  working: WORK,
+  thinking: WORK,
+  reading: WORK,
+  searching: WORK,
+  editing: WORK,
+  running: WORK,
+  snagged: WORK,
+  compacting: WORK,
   typing: { eyes: 'dots' },
   waiting: { eyes: 'still', pose: 'sleepy', gesture: 'sink' },
   needs: { eyes: 'toward', gesture: 'bounce', passes: 2 },
@@ -158,48 +158,14 @@ export interface EyeStop {
   ease: string
 }
 
-/** How far the reading scan runs to each side, and how far apart its three lines are. */
-const SCAN = { reach: 5.5, line: 2.4, read: 0.27 }
-
-/**
- * Reading: three lines from left to right, with a quick return between them. Both eyes
- * take the same stops. `toMiddle` moves the pair from where the resting gaze leaves it
- * to the middle of the face, so the lines run evenly to both sides. One pass takes as
- * long as the `follow` gesture, whose dips fall on the returns.
- */
-export function scanStops(toMiddle: number): EyeStop[] {
-  const lines = [-SCAN.line, 0, SCAN.line]
-  return [
-    ...lines.flatMap((y, index): EyeStop[] => [
-      { offset: index / lines.length, x: toMiddle - SCAN.reach, y, ease: 'linear' },
-      { offset: index / lines.length + SCAN.read, x: toMiddle + SCAN.reach, y, ease: 'cubic-bezier(0.4, 0, 0.2, 1)' },
-    ]),
-    { offset: 1, x: toMiddle - SCAN.reach, y: lines[0]!, ease: 'linear' },
-  ]
-}
-
 /** Needs you: the pair turns from its resting gaze to face the reader. */
 export const towardStops = (toMiddle: number): EyeStop[] => [
   { offset: 0, x: toMiddle, y: 0, ease: 'linear' },
   { offset: 1, x: toMiddle, y: 0, ease: 'linear' },
 ]
 
-/**
- * Thinking: the library's pose sets the eyes at two heights, `drop` apart, and this
- * trades those heights back and forth. `side` is -1 for the left eye and 1 for the
- * right, which starts where the pose put it.
- */
-export const seesawStops = (drop: number, side: -1 | 1): EyeStop[] => {
-  const far = side === 1 ? -drop : drop
-  return [
-    { offset: 0, x: 0, y: 0, ease: 'ease-in-out' },
-    { offset: 0.5, x: 0, y: far, ease: 'ease-in-out' },
-    { offset: 1, x: 0, y: 0, ease: 'ease-in-out' },
-  ]
-}
-
-/** One pass of each added eye move, in milliseconds. */
-export const EYE_MOVE_MS = { scan: 3900, toward: 1000, seesaw: 3000 } as const
+/** One pass of the added eye move, in milliseconds. */
+export const EYE_MOVE_MS = { toward: 1000 } as const
 
 /** Where an added eye move has the eye at `progress` through its pass, for walking it home from there. */
 export function eyeAt(stops: readonly EyeStop[], progress: number): Pick<EyePose, 'x' | 'y'> {

@@ -1,20 +1,18 @@
-import { thinking } from '@manor/blobatar/expression'
-import { EYE_MOVE_MS, eyeAt, scanStops, seesawStops, towardStops, type EyeStop, type FaceLook } from '@manor/client-runtime/face-activity'
+import { EYE_MOVE_MS, eyeAt, towardStops, type FaceLook } from '@manor/client-runtime/face-activity'
 import { frameOf, outlinePoints, plan, type GestureId } from '@manor/client-runtime/face-gesture'
 import { useLayoutEffect, type RefObject } from 'react'
-import { headOf, partsMiddle } from './busyFace'
+import { bodyMiddle, headParts } from './busyFace'
 
 /**
- * The parts of a face's language the busy loop does not play, on the web: the body
- * gestures and the small eye moves that are added to a pose (see the client runtime's
+ * The parts of a face's language the working loop does not play, on the web: the body
+ * gestures and the small eye move that is added to a pose (see the client runtime's
  * `faceGesture` and `faceActivity`, which plan them). Driven by the Web Animations
  * API on the library's own groups, like the loop, because a stop has to read where a
  * move is and walk home from there.
  *
  * The library nests two groups around the figure, for a breathe and a bob Manor does
- * not play. A gesture uses them as its two layers: the outer one moves, stretches and
- * leans the figure about its foot, the inner one turns it and draws it in about its
- * middle.
+ * not play. A gesture uses them as its two layers: the outer one moves and stretches
+ * the figure about its foot, the inner one turns it and draws it in about its middle.
  */
 
 const WALK = 240
@@ -54,22 +52,17 @@ function startGesture(host: HTMLElement, id: GestureId, passes?: number) {
   if (outer === null || inner === null || body === null || still()) return undefined
 
   // The head's own parts, never its group: the clay finish adds full-box rects to that,
-  // and a rig the busy loop left on it adds its dots.
-  const head = headOf(body)
-  const paths = [...head.querySelectorAll<SVGPathElement>(':scope > path')].flatMap((path) => path.getAttribute('d') ?? [])
-  const circles = [...head.querySelectorAll<SVGCircleElement>(':scope > circle')].map((circle) => ({
-    cx: Number(circle.getAttribute('cx')),
-    cy: Number(circle.getAttribute('cy')),
-    r: Number(circle.getAttribute('r')),
-  }))
-  const moves = plan(id, frameOf(outlinePoints(paths, circles)))
+  // and a face still walking home from work has its shapes redrawn.
+  const parts = headParts(body)
+  const moves = plan(id, frameOf(outlinePoints(parts.filter((part) => typeof part === 'string'), parts.filter((part) => typeof part !== 'string'))))
   outer.style.transformOrigin = `${moves.foot[0]}px ${moves.foot[1]}px`
   inner.style.transformOrigin = `${moves.middle[0]}px ${moves.middle[1]}px`
 
+  const drawIn = `${moves.fit.drawIn} ${moves.fit.drawIn}`
   const runs = [
-    enter(outer, moves.fig.map((key) => ({ offset: key.offset, translate: `${key.x}px ${key.y}px`, scale: `${key.sx} ${key.sy}`, transform: `skewX(${key.k}deg)` })), moves.ms, 'gesture', { translate: '0px 0px', scale: '1 1', transform: 'skewX(0deg)' }, passes),
+    enter(outer, moves.fig.map((key) => ({ offset: key.offset, translate: `${key.x}px ${key.y}px`, scale: `${key.sx} ${key.sy}` })), moves.ms, 'gesture', { translate: '0px 0px', scale: '1 1' }, passes),
     enter(inner, moves.rot.map((key) => ({ offset: key.offset, rotate: `${key.degrees}deg` })), moves.ms, 'gesture-turn', { rotate: '0deg' }, passes),
-    enter(inner, moves.draw.map((key) => ({ offset: key.offset, scale: `${key.d} ${key.d}` })), moves.ms, 'gesture-draw', { scale: '1 1' }, passes),
+    enter(inner, [0, 1].map((offset) => ({ offset, scale: drawIn })), moves.ms, 'gesture-draw', { scale: '1 1' }, passes),
   ]
   return () => {
     void Promise.all(runs.map((run) => run.leave())).then(() => {
@@ -95,7 +88,7 @@ export function useFaceGesture(slot: RefObject<HTMLElement | null>, gesture: Ges
   }, [slot, gesture, face, passes])
 }
 
-type EyeMove = Extract<FaceLook['eyes'], 'scan' | 'toward' | 'seesaw'>
+type EyeMove = Extract<FaceLook['eyes'], 'toward'>
 
 function startEyes(host: HTMLElement, move: EyeMove) {
   const body = host.querySelector<SVGGElement>('.mo-bob > g:not(.mo-eyes)')
@@ -105,20 +98,17 @@ function startEyes(host: HTMLElement, move: EyeMove) {
 
   // From the middle of the pair, where the resting gaze leaves it, to the middle of the face.
   const centre = (eye: SVGGElement) => Number.parseFloat(getComputedStyle(eye).transformOrigin)
-  const toMiddle = partsMiddle(body)[0] - (centre(left) + centre(right)) / 2
-  const stops = (side: -1 | 1): EyeStop[] =>
-    move === 'scan' ? scanStops(toMiddle) : move === 'toward' ? towardStops(toMiddle) : seesawStops(thinking.p.edy2, side)
+  const stops = towardStops(bodyMiddle(body)[0] - (centre(left) + centre(right)) / 2)
+  const frames = stops.map((stop) => ({ offset: stop.offset, easing: stop.ease, translate: `${stop.x}px ${stop.y}px` }))
 
   // Added to wherever the pose has the eye, so a pose still morphing underneath is not read as home.
-  const runs = [left, right].map((eye, index) => {
-    const mine = stops(index === 0 ? -1 : 1)
-    const frames = mine.map((stop) => ({ offset: stop.offset, easing: stop.ease, translate: `${stop.x}px ${stop.y}px` }))
+  const runs = [left, right].map((eye) => {
     const lead = eye.animate([{ translate: '0px 0px' }, { translate: frames[0]!.translate }], { ...HOME, id: 'face-eyes', composite: 'add' })
     const loop = eye.animate(frames, { id: 'face-eyes', duration: EYE_MOVE_MS[move], delay: WALK, iterations: Infinity, composite: 'add' })
     return () => {
       // Still walking out, the eye is somewhere short of its first stop; home from there is close enough.
       const progress = loop.effect?.getComputedTiming().progress
-      const at = progress === null || progress === undefined ? mine[0]! : eyeAt(mine, progress)
+      const at = progress === null || progress === undefined ? stops[0]! : eyeAt(stops, progress)
       lead.cancel()
       loop.cancel()
       if (eye.isConnected) eye.animate([{ translate: `${at.x}px ${at.y}px` }, { translate: '0px 0px' }], { ...HOME, id: 'face-eyes-home', composite: 'add' })

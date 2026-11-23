@@ -1,6 +1,6 @@
 import type { ThreadEvent } from '@manor/contracts'
 import { describe, expect, it } from 'vitest'
-import { FACE_HOLD_MS, FACE_LOOK, FACE_MOMENT_MS, endFace, endedWell, eyeAt, scanStops, seesawStops, settleFace, turnFace } from './faceActivity'
+import { FACE_HOLD_MS, FACE_LOOK, FACE_MOMENT_MS, endFace, endedWell, eyeAt, settleFace, towardStops, turnFace, type FaceState } from './faceActivity'
 import { GESTURES, type Gesture } from './faceGesture'
 import type { TurnRow } from './state'
 import { emptyThread } from './threadState'
@@ -22,7 +22,7 @@ describe('what a turn asks of its face', () => {
     expect(turnFace(turnOf([sent, call('Read', 'c1'), call('Bash', 'c2')], live()))).toBe('running')
     expect(turnFace(turnOf([sent, call('WebSearch', 'c1')], live()))).toBe('searching')
     expect(turnFace(turnOf([sent, call('Edit', 'c1')], live()))).toBe('editing')
-    // Everything without a look of its own keeps the busy loop.
+    // A call of no known kind is plain work.
     expect(turnFace(turnOf([sent, call('mcp__mail__mail_draft', 'c1')], live()))).toBe('working')
     // Reasoning after a call is thinking again.
     expect(turnFace(turnOf([sent, call('Bash', 'c1'), event({ type: 'reasoning', agentId: 'smith', turnId: 't1', text: 'So.' })], live()))).toBe('thinking')
@@ -107,7 +107,7 @@ describe('how a face settles on a state', () => {
   })
 })
 
-describe('the looks and the added eye moves', () => {
+describe('the looks and the added eye move', () => {
   it('names only gestures that exist, and plays every one of them somewhere', () => {
     for (const look of Object.values(FACE_LOOK)) if (look.gesture) expect(GESTURES[look.gesture]).toBeDefined()
     expect(new Set(Object.values(FACE_LOOK).flatMap((look) => look.gesture ?? []))).toEqual(new Set(Object.keys(GESTURES)))
@@ -123,27 +123,22 @@ describe('the looks and the added eye moves', () => {
         expect(key.y ?? 0, look.gesture).toBe(0)
         expect(key.sx ?? 1, look.gesture).toBe(1)
         expect(key.sy ?? 1, look.gesture).toBe(1)
-        expect(key.k ?? 0, look.gesture).toBe(0)
       }
       expect(gesture.rot?.[0]?.[1] ?? 0, look.gesture).toBe(0)
       expect((gesture.rot?.at(-1)?.[1] ?? 0) % 360, look.gesture).toBe(0)
     }
   })
 
-  it('scans three lines evenly about the middle of the face, in step with the follow gesture', () => {
-    const stops = scanStops(3)
-    expect(stops.map((stop) => stop.x)).toEqual([-2.5, 8.5, -2.5, 8.5, -2.5, 8.5, -2.5])
-    expect(new Set(stops.map((stop) => stop.y)).size).toBe(3)
-    expect(stops.at(-1)).toMatchObject({ offset: 1, x: stops[0]!.x, y: stops[0]!.y })
-    // The body dips where the eyes return: just past the end of each line.
-    const dips = GESTURES.follow.fig.filter(([, key]) => 'y' in key).map(([offset]) => offset)
-    const returns = stops.filter((stop, index) => index % 2 === 1).map((stop) => stop.offset)
-    dips.forEach((dip, index) => expect(dip).toBeGreaterThan(returns[index]!))
+  it('plays the working loop for every kind of work, the dots only while she writes', () => {
+    const work: FaceState[] = ['working', 'thinking', 'reading', 'searching', 'editing', 'running', 'snagged', 'compacting']
+    for (const state of work) expect(FACE_LOOK[state], state).toEqual({ eyes: 'loop' })
+    expect(FACE_LOOK.typing).toEqual({ eyes: 'dots' })
+    const others = (Object.keys(FACE_LOOK) as FaceState[]).filter((state) => !work.includes(state) && state !== 'typing')
+    for (const state of others) expect(FACE_LOOK[state].eyes, state).not.toBe('loop')
   })
 
-  it('trades the heights of the two eyes, and reads back where an eye is', () => {
-    expect(seesawStops(-8.4, 1)[1]!.y).toBe(8.4)
-    expect(seesawStops(-8.4, -1)[1]!.y).toBe(-8.4)
-    expect(eyeAt(seesawStops(-8.4, 1), 0.25)).toEqual({ x: 0, y: 4.2 })
+  it('turns the pair to the reader and holds it there, and reads back where an eye is', () => {
+    expect(towardStops(3).map((stop) => [stop.x, stop.y])).toEqual([[3, 0], [3, 0]])
+    expect(eyeAt([{ offset: 0, x: 0, y: 0, ease: 'linear' }, { offset: 1, x: 4, y: -8, ease: 'linear' }], 0.25)).toEqual({ x: 1, y: -2 })
   })
 })

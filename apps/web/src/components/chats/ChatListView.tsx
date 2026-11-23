@@ -236,9 +236,9 @@ export function ChatListView({
  * chief of staff, since everything unaddressed goes to her. With two pinned they
  * share the row at a smaller size.
  *
- * Her running spinner sits in the top right of the card. Waiting and unread
- * standing remain beside her name. While her turn runs the face itself squints,
- * the way the transcript header's does.
+ * While her turn runs the face itself says so: it plays the working loop, the way
+ * the transcript's does, and nothing else marks it. Waiting and unread standing
+ * remain beside her name.
  *
  * Being lifted out of the list costs her nothing a row has: the same right-click
  * menu and the same confirm strip in the same place, because the thread behind the
@@ -310,12 +310,8 @@ function HeadCard({
         aria-current={selected ? 'page' : undefined}
         onClick={onOpen}
       >
-        {row.running && !row.waiting ? (
-          <span className="absolute right-3 top-3">
-            <Standing waiting={false} unread={row.unread} running lastMessageAt={null} now={0} />
-          </span>
-        ) : null}
-        <Avatar name={agent.name} color={agent.color} src={agent.avatar} shape={agent.avatarShape} tone={agent.avatarTone} size={compact ? PINNED_FACE_SIZE : CHIEF_FACE_SIZE} center sidebarWorking={row.running && !row.waiting} />
+        <Avatar name={agent.name} color={agent.color} src={agent.avatar} shape={agent.avatarShape} tone={agent.avatarTone} size={compact ? PINNED_FACE_SIZE : CHIEF_FACE_SIZE} center working={row.running && !row.waiting} />
+        {row.running && !row.waiting ? <span className="sr-only">Working</span> : null}
         <span className="flex max-w-full min-w-0 flex-col items-center gap-1">
           {/* The mark hangs beside the name instead of in its flow, so the name stays centred
               under the face when it comes and goes. The padding is its room on both sides,
@@ -323,11 +319,9 @@ function HeadCard({
           <span className={`flex max-w-full min-w-0 justify-center ${row.waiting ? 'px-[3.375rem]' : 'px-[1.375rem]'}`}>
             <span className="relative flex min-w-0">
               <span className="min-w-0 truncate text-[15px] font-medium text-text">{agent.name}</span>
-              {row.running && !row.waiting ? null : (
-                <span className="absolute left-full top-1/2 ml-1.5 flex -translate-y-1/2">
-                  <Standing waiting={row.waiting} unread={row.unread} running={row.running} lastMessageAt={null} now={0} />
-                </span>
-              )}
+              <span className="absolute left-full top-1/2 ml-1.5 flex -translate-y-1/2">
+                <Standing waiting={row.waiting} unread={row.unread} running={false} lastMessageAt={null} now={0} />
+              </span>
             </span>
           </span>
           {agent.role || agent.isCos ? <RoleBadge label={agent.role || 'Chief of staff'} /> : null}
@@ -448,7 +442,7 @@ function ChatRow({
       >
         <span className="flex flex-none justify-center" style={{ width: FACE_WIDTH }}>
           {persona !== null ? (
-            <Avatar name={persona.name} color={persona.color} src={persona.avatar} shape={persona.avatarShape} tone={persona.avatarTone} size={FACE_WIDTH} sidebarWorking={row.running && !row.waiting} />
+            <Avatar name={persona.name} color={persona.color} src={persona.avatar} shape={persona.avatarShape} tone={persona.avatarTone} size={FACE_WIDTH} working={row.running && !row.waiting} />
           ) : (
             <AgentStack agentIds={row.agentIds} agents={agents} size={GROUP_FACE_SIZE} footprint={FACE_WIDTH} />
           )}
@@ -465,13 +459,16 @@ function ChatRow({
               </span>
             )}
             <span className="ml-auto flex flex-none self-center pl-1">
+              {/* A persona's own face plays the working loop while her turn runs, so the row
+                  keeps its time. A group has no one face to move and keeps the spinner. */}
               <Standing
                 waiting={row.waiting}
                 unread={row.unread}
-                running={row.running}
+                running={row.running && persona === null}
                 lastMessageAt={row.lastMessageAt}
                 now={now}
               />
+              {row.running && !row.waiting && persona !== null ? <span className="sr-only">Working</span> : null}
             </span>
           </span>
           {/* Reserved even when empty: a persona nobody has written to yet keeps the

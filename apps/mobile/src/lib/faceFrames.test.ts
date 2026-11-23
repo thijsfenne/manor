@@ -1,4 +1,4 @@
-import { scanStops, seesawStops } from '@manor/client-runtime/face-activity'
+import { towardStops } from '@manor/client-runtime/face-activity'
 import { frameOf, plan } from '@manor/client-runtime/face-gesture'
 import { describe, expect, it } from 'vitest'
 import { eyeFrames, gestureFrames, type Transform } from './faceFrames'
@@ -9,14 +9,14 @@ const value = (transform: Transform, key: string) => transform.find((step) => ke
 
 describe('a gesture as native keyframes', () => {
   it('rests at the first key of a held gesture and loops from there, so nothing jumps', () => {
-    const { fig, turn } = gestureFrames(plan('tilt', ring(30)), 0.32)
-    expect(value(turn.rest, 'rotate')).toBe('9deg')
-    // Measured from the rest: nothing at the ends, the sway in between.
-    expect(value(turn.loop.keyframes['0%']!.transform, 'rotate')).toBe('0deg')
-    expect(value(turn.loop.keyframes['50%']!.transform, 'rotate')).toBe('-4deg')
-    expect(value(turn.loop.keyframes['100%']!.transform, 'rotate')).toBe('0deg')
-    expect(turn.loop.passes).toBe('infinite')
+    const { fig, turn } = gestureFrames(plan('sink', ring(30)), 0.32)
     expect(value(fig.rest, 'scaleX')).toBe(1)
+    // Measured from the rest: nothing at the ends, the breath out in between.
+    expect(value(fig.loop.keyframes['0%']!.transform, 'scaleY')).toBe(1)
+    expect(value(fig.loop.keyframes['50%']!.transform, 'scaleY')).toBeCloseTo(0.93)
+    expect(value(fig.loop.keyframes['100%']!.transform, 'scaleY')).toBe(1)
+    expect(fig.loop.passes).toBe('infinite')
+    expect(value(turn.rest, 'rotate')).toBe('0deg')
   })
 
   it('plays a counted gesture end to end, starting and ending at home', () => {
@@ -35,24 +35,9 @@ describe('a gesture as native keyframes', () => {
     expect(Object.values(turn.loop.keyframes).some((key) => value(key.transform, 'scale') === moves.fit.drawIn)).toBe(true)
   })
 
-  it('keeps a full turn tucked in while it spins, counted as well as held', () => {
-    // A square's corners sweep past the slot's edge on a turn.
-    const square = frameOf(Array.from({ length: 40 }, (_, i) => {
-      const side = Math.floor(i / 10)
-      const u = -40 + (i % 10) * 8
-      return [[50 + u, 10], [90, 50 + u], [50 - u, 90], [10, 50 - u]][side]! as unknown as readonly [number, number]
-    }))
-    const moves = plan('roll', square)
-    expect(moves.fit.tuck).toBeLessThan(1)
-    const { turn } = gestureFrames(moves, 0.32, 1)
-    const least = Math.min(...Object.values(turn.loop.keyframes).map((key) => Number(value(key.transform, 'scale'))))
-    expect(least).toBeCloseTo(moves.fit.tuck * moves.fit.drawIn)
-  })
-
   it('keeps every keyframe the same shape, which the native runtime needs', () => {
-    const held = new Set(['tilt', 'sink', 'follow', 'lean'])
-    for (const id of ['nod', 'shake', 'tilt', 'sink', 'follow', 'bounce', 'rock', 'roll', 'jelly', 'lean', 'shiver'] as const) {
-      const { fig, turn } = gestureFrames(plan(id, ring(36)), 0.32, held.has(id) ? undefined : 1)
+    for (const id of ['nod', 'shake', 'sink', 'bounce'] as const) {
+      const { fig, turn } = gestureFrames(plan(id, ring(36)), 0.32, id === 'sink' ? undefined : 1)
       for (const layer of [fig, turn]) {
         const shape = layer.rest.map((step) => Object.keys(step)[0])
         for (const key of Object.values(layer.loop.keyframes)) expect(key.transform.map((step) => Object.keys(step)[0])).toEqual(shape)
@@ -62,16 +47,12 @@ describe('a gesture as native keyframes', () => {
 })
 
 describe('an added eye move as native keyframes', () => {
-  it('rests at the first stop of the scan and reads on from there', () => {
-    const layer = eyeFrames(scanStops(3), 0.5, 3900)
-    expect(layer.rest).toEqual([{ translateX: -1.25 }, { translateY: -1.2 }])
+  it('rests at home and measures the look toward the reader from there', () => {
+    const stops = towardStops(3)
+    const layer = eyeFrames(stops, 0.5, 1000)
+    expect(layer.rest).toEqual([{ translateX: stops[0]!.x * 0.5 }, { translateY: stops[0]!.y * 0.5 }])
     expect(layer.loop.keyframes['0%']!.transform).toEqual([{ translateX: 0 }, { translateY: 0 }])
-    expect(layer.loop.keyframes['27%']!.transform).toEqual([{ translateX: 5.5 }, { translateY: 0 }])
-  })
-
-  it('leaves the seesaw at home between its swings', () => {
-    const layer = eyeFrames(seesawStops(-8.4, 1), 1, 3000)
-    expect(layer.rest).toEqual([{ translateX: 0 }, { translateY: 0 }])
-    expect(layer.loop.keyframes['50%']!.transform).toEqual([{ translateX: 0 }, { translateY: 8.4 }])
+    const last = stops.at(-1)!
+    expect(layer.loop.keyframes['100%']!.transform).toEqual([{ translateX: (last.x - stops[0]!.x) * 0.5 }, { translateY: (last.y - stops[0]!.y) * 0.5 }])
   })
 })

@@ -96,7 +96,7 @@ export function DmWorkingIndicator({ working, done = false, persona, agents, bar
         <View style={styles.face}>
           <Blobatar
             animate
-            busy={!done}
+            working={!done}
             face={face}
             color={persona.color}
             name={persona.name}

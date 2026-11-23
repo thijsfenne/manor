@@ -1,6 +1,6 @@
 import type { AgentConfig } from '@manor/contracts'
 import { chatList, chatListPins, createListedState, type ChatListRow } from '@manor/client-runtime/state'
-import { router, useFocusEffect } from 'expo-router'
+import { router, useFocusEffect, useIsFocused } from 'expo-router'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { FlatList, Pressable, StyleSheet, View } from 'react-native'
 
@@ -46,6 +46,8 @@ function DirectList() {
   })
   const headKeys = new Set(heads.map((head) => head.row.key))
   const conversationRows = rows.filter((row) => !headKeys.has(row.key) && row.chat?.kind !== 'pair')
+  // A list under an open chat stays mounted; its faces rest there rather than play to nobody.
+  const focused = useIsFocused()
   const [pending, setPending] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -108,6 +110,7 @@ function DirectList() {
     <FlatList
       contentContainerStyle={styles.list}
       data={conversationRows}
+      extraData={focused}
       keyExtractor={(row) => row.key}
       ListEmptyComponent={heads.length === 0 ? <Text style={styles.empty}>No one to talk to yet. Agents show up once your Mac sends them over.</Text> : null}
       ListHeaderComponent={(
@@ -120,6 +123,7 @@ function DirectList() {
                   key={row.key}
                   agent={agent}
                   compact={heads.length > 1}
+                  focused={focused}
                   disabled={pending !== null && row.chat === null}
                   onPress={() => enter(row)}
                   row={row}
@@ -135,6 +139,7 @@ function DirectList() {
           <ConversationRow
             agent={agent}
             disabled={pending !== null && item.chat === null}
+            focused={focused}
             onPress={() => enter(item)}
             row={item}
             roster={agents}
@@ -153,7 +158,8 @@ function DirectList() {
 const busy = (row: ChatListRow) => row.running && !row.waiting
 
 /** A persona pinned above the list, usually the chief of staff. */
-function HeadCard({ row, agent, compact, disabled, onPress }: { row: ChatListRow; agent: AgentConfig; compact: boolean; disabled: boolean; onPress: () => void }) {
+function HeadCard({ row, agent, compact, disabled, focused, onPress }: { row: ChatListRow; agent: AgentConfig; compact: boolean; disabled: boolean; focused: boolean; onPress: () => void }) {
+  const working = focused && busy(row)
   return (
     <Pressable
       accessibilityLabel={`Open conversation with ${agent.name}`}
@@ -162,16 +168,16 @@ function HeadCard({ row, agent, compact, disabled, onPress }: { row: ChatListRow
       onPress={onPress}
       style={({ pressed }) => [styles.chief, compact && styles.chiefCompact, pressed && styles.chiefPressed, disabled && styles.disabled]}
     >
-      {/* The face holds a squint while working and blinks at rest. */}
+      {/* The face plays the working loop while her turn runs and blinks at rest. */}
       <Blobatar
-        animate={busy(row) ? true : 'blink'}
+        animate={working ? true : 'blink'}
         color={agent.color}
         name={agent.name}
         shape={agent.avatarShape}
         tone={agent.avatarTone}
         size={compact ? PINNED_FACE_SIZE : CHIEF_FACE_SIZE}
         src={agent.avatar}
-        sidebarWorking={busy(row)}
+        working={working}
       />
       <View style={styles.chiefNameRow}>
         <View style={styles.chiefNameInner}>
@@ -195,14 +201,17 @@ function ConversationRow({
   agent,
   roster,
   disabled,
+  focused,
   onPress,
 }: {
   row: ChatListRow
   agent: AgentConfig | undefined
   roster: AgentConfig[]
   disabled: boolean
+  focused: boolean
   onPress: () => void
 }) {
+  const working = focused && busy(row)
   return (
     <Pressable
       accessibilityRole="button"
@@ -214,16 +223,16 @@ function ConversationRow({
         {agent === undefined ? (
           <AgentStack agentIds={row.agentIds} agents={roster} alive footprint={FACE_WIDTH} size={40} />
         ) : (
-          // Every face in the list blinks; the working face also holds a squint.
+          // Every face in the list blinks; one whose turn runs plays the working loop instead.
           <Blobatar
-            animate={busy(row) ? true : 'blink'}
+            animate={working ? true : 'blink'}
             color={agent.color}
             name={agent.name}
             shape={agent.avatarShape}
             tone={agent.avatarTone}
             size={FACE_WIDTH}
             src={agent.avatar}
-            sidebarWorking={busy(row)}
+            working={working}
           />
         )}
       </View>

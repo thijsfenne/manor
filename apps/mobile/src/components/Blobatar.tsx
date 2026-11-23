@@ -1,21 +1,41 @@
 import { accentHue } from '@manor/client-runtime/accent-hue'
-import { BLOB_FACE_TRAITS, DEFAULT_BLOB_TONE, SIDEBAR_WORKING_GAZE, WORKING_GAZE, blobShapeOf } from '@manor/client-runtime/blob-shapes'
-import { BUSY_LOOK, DOT, order, timeline, type Key, type Pair } from '@manor/client-runtime/busy-face'
-import { EYE_MOVE_MS, FACE_LOOK, scanStops, seesawStops, towardStops, type FaceLook, type FaceState } from '@manor/client-runtime/face-activity'
+import { BLOB_FACE_TRAITS, DEFAULT_BLOB_TONE, WORKING_GAZE, blobShapeOf } from '@manor/client-runtime/blob-shapes'
+import { DOT, DOTS_RATE, WAKE, loopSteps, type Dot as MeltDot, type DotsPlan, type EyePose, type Key, type MoveId, type Step } from '@manor/client-runtime/busy-face'
+import { EYE_MOVE_MS, FACE_LOOK, towardStops, type FaceLook, type FaceState } from '@manor/client-runtime/face-activity'
 import { frameOf, outlinePoints, plan, type GestureId } from '@manor/client-runtime/face-gesture'
 import { CLAY, clayTones, palette, sheenInk, traits as seedTraits, type Glow, type Tones } from '@manor/blobatar'
-import { happy, sad, sleepy, thinking, unsure } from '@manor/blobatar/expression'
+import { happy, sad, sleepy, unsure } from '@manor/blobatar/expression'
 import { _parts } from '@manor/blobatar/internal'
-import MaskedView from '@react-native-masked-view/masked-view'
 import { Image } from 'expo-image'
-import { Fragment, useEffect, useId, useMemo, useState, type ReactNode } from 'react'
+import { Fragment, useEffect, useEffectEvent, useId, useMemo, useRef, useState, type ReactNode } from 'react'
 import { StyleSheet, View, type ColorValue, type ViewStyle } from 'react-native'
-import Animated, { cubicBezier, useReducedMotion, type CSSAnimationKeyframes, type CSSAnimationTimingFunction, type CSSStyle, FadeIn, FadeOut, LayoutAnimationConfig, ReduceMotion } from 'react-native-reanimated'
+import Animated, {
+  Easing,
+  FadeIn,
+  FadeOut,
+  LayoutAnimationConfig,
+  ReduceMotion,
+  cancelAnimation,
+  cubicBezier,
+  runOnJS,
+  runOnUI,
+  useAnimatedProps,
+  useAnimatedStyle,
+  useDerivedValue,
+  useReducedMotion,
+  useSharedValue,
+  withTiming,
+  type CSSAnimationKeyframes,
+  type CSSAnimationTimingFunction,
+  type CSSStyle,
+  type SharedValue,
+} from 'react-native-reanimated'
 import Svg, { Circle, ClipPath, Defs, G, Path, RadialGradient, Rect, Stop } from 'react-native-svg'
 
 import { keyOffsets } from '@/lib/busyFrames'
 import { eyeFrames, gestureFrames, type Layer } from '@/lib/faceFrames'
-import { colors, shimmerTones } from '@/theme'
+import { drawnAt, eyeBoxAt, held, meltAt, meltPlan, morphStep, moveKeys, placeAt, rigOf, topAt, walkTo, type Keys, type Melted, type Rig } from '@/lib/loopFrames'
+import { colors } from '@/theme'
 
 /** A block of CSS animation or transition settings, as the view's style takes them. */
 type Motion = CSSStyle<ViewStyle>
@@ -24,16 +44,22 @@ type Motion = CSSStyle<ViewStyle>
 const BOX = 100
 
 /** The library's poses a face state can name. */
-const POSES = { thinking, sleepy, happy, sad }
+const POSES = { sleepy, happy, sad }
 
 /**
- * How the one fully moving face changes from one way of being drawn to the next. Each
- * way is a component of its own with declared keyframes, and none of them can be asked
- * where it is, so nothing can be walked home. The next one fades in over the last
- * instead, and the last leaves once it is covered.
+ * How the one fully moving face changes from one way of being drawn to the next: at
+ * rest, at work, or in a moment with a look of its own. Each way is a component of its
+ * own, and the ones with declared keyframes cannot be asked where they are. So the next
+ * one fades in over the last, and the last leaves once it is covered. The working face
+ * is the exception on its own side of the fade: it walks home first, so what is faded
+ * over is the face at rest.
  */
 const FACE_IN = FadeIn.duration(200).reduceMotion(ReduceMotion.System)
 const FACE_OUT = FadeOut.delay(160).duration(120).reduceMotion(ReduceMotion.System)
+
+/** How long the face takes to swell back out of the dots she wrote behind, and its curve. */
+const DOTS_HOME_MS = 450
+const dotsHome = cubicBezier(0.4, 0, 0.2, 1)
 
 interface BlobatarProps {
   name: string
@@ -45,39 +71,39 @@ interface BlobatarProps {
   /** Chosen swatch position; absent keeps the existing deep tone. */
   tone?: number
   size: number
-  /** Her turn is running in a bubble, with thought dots above her face. */
-  working?: boolean
   /**
-   * Her turn is running, worn the way the Mac wears it: the busy loop, eyes on the
-   * move and now and then melting into three dots. A portrait, or a reader who asks
-   * for reduced motion, gets the still working face with thought dots instead.
+   * Her turn is running. On the face that moves fully (`animate`), her whole face plays
+   * the working loop, body and eyes, and melts into three dots while she writes. Any
+   * other face, a portrait, or a reader who asks for reduced motion gets the still
+   * working face: a sideways gaze, with thought dots above it where it moves fully.
    */
-  busy?: boolean
-  /** A running DM in the sidebar holds an upward squint and blinks without dots. */
-  sidebarWorking?: boolean
+  working?: boolean
   /**
    * How much of her moves, and what that costs.
    *
    * `true` is the full live face: breathe, bob, glance, blink and a pose per eye,
-   * which is ten native views and about seven animations. A sidebar working face
-   * keeps the posed eyes and blink but drops the ambient loops. `'blink'` is the
-   * cheap living face for a resting persona: three views and one animation. `false` is
-   * one still SVG and nothing else.
+   * which is ten native views and about seven animations. At work it is the loop
+   * instead: seven views, with the body and each eye placed on the UI thread every
+   * frame. `'blink'` is the cheap living face for a resting persona: three views and
+   * one animation. `false` is one still SVG and nothing else.
    *
    * Off by default. A list where every face moves fully is a list that stutters, so
    * only the face behind the latest reply earns `true` while at rest; every other
-   * face in a list takes `'blink'`, the idle motion that reads at avatar size.
+   * face in a list takes `'blink'`, the idle motion that reads at avatar size. A row
+   * whose turn runs earns `true` for as long as it does.
    */
   animate?: boolean | 'blink'
   /**
    * What the turn behind this face is doing, where the caller knows more than that it
-   * runs: she thinks, reads, types, waits, needs the user, or has just finished. Only
-   * the face that moves fully shows it, with her eyes, a pose and her body. Work with
-   * no look of its own stays what `working` and `busy` already draw. A portrait, or a
-   * reader who asks for reduced motion, shows none of it.
+   * runs: she writes, waits, needs the user, or has just finished. Only the face that
+   * moves fully shows it, with her eyes, a pose and her body. Absent, a working face
+   * plays the loop. A portrait, or a reader who asks for reduced motion, shows none of it.
    */
   face?: FaceState
 }
+
+/** What the working face plays: the loop, the dots she writes behind, or the walk home at the end of her turn. */
+type Play = 'loop' | 'dots' | 'home'
 
 /**
  * A persona's face, drawn from the same generator the web uses and moving the way
@@ -86,44 +112,51 @@ interface BlobatarProps {
  * and the breathe, bob, blink and glance of `blobatar/motion.css` are restated as
  * Reanimated CSS animations with the library's own seeded timings. Those run on the
  * native side without a worklet per frame, which is what lets a transcript full of
- * faces scroll at speed.
+ * faces scroll at speed. Only a face at work costs more; see `WorkFace`.
  */
-export function Blobatar({ name, color, src, shape, tone = DEFAULT_BLOB_TONE, size, working: asked = false, busy: busyAsked = false, sidebarWorking = false, animate = false, face: state }: BlobatarProps) {
+export function Blobatar({ name, color, src, shape, tone = DEFAULT_BLOB_TONE, size, working = false, animate = false, face: state }: BlobatarProps) {
   const still = useReducedMotion()
-  const live = animate === true && !sidebarWorking
+  const full = animate === true
   const hue = accentHue(color)
   const square = { width: size, height: size }
   const portrait = src !== undefined && src !== ''
-  // A state with a look of its own takes the face over. Plain work has none: the loop and the still working face stand.
-  const look = state === undefined || !live || portrait || still ? undefined : FACE_LOOK[state]
-  const own = look === undefined || look.eyes === 'loop' ? undefined : look
-  // The busy face wears her resting traits, so only the still working face pins its own gaze.
-  const busy = busyAsked && live && !portrait && !still && own === undefined
-  const working = own === undefined && (asked || (busyAsked && !busy))
-  const pose = own?.pose
+  // Only a face that moves fully, and may, shows what its turn is doing.
+  const look = state === undefined || !full || portrait || still ? undefined : FACE_LOOK[state]
+  // Work plays the loop and writing the dots. A state with a look of its own takes the face over.
+  const own = look === undefined || look.eyes === 'loop' || look.eyes === 'dots' ? undefined : look
+  const asked: Play | undefined = !working || !full || portrait || still || own !== undefined ? undefined : look?.eyes === 'dots' ? 'dots' : 'loop'
+  // A face whose turn just ended stays at work a moment longer, to walk home from
+  // wherever the loop had it. It says when it is there.
+  const [last, setLast] = useState(asked)
+  const [homing, setHoming] = useState(false)
+  if (last !== asked) {
+    setLast(asked)
+    setHoming(asked === undefined)
+  }
+  const playing: Play | undefined = asked ?? (homing ? 'home' : undefined)
+  const plays = playing !== undefined
+
   const worn = blobShapeOf(name, shape)
-  const face = useMemo(() => {
-    if (portrait) return null
-    const traits = { ...BLOB_FACE_TRAITS, ...(sidebarWorking ? SIDEBAR_WORKING_GAZE : working ? WORKING_GAZE : {}) }
-    return takeApart(
-      _parts(name, {
-        size,
-        tone,
-        animate: 'always',
-        ...(hue === undefined ? {} : { hue }),
-        traits,
-        ...(shape === undefined ? {} : { shape }),
-        ...(pose !== undefined ? { expression: POSES[pose] } : working || sidebarWorking ? { expression: unsure } : {}),
-      }),
-      size,
-    )
-  }, [hue, name, portrait, pose, shape, size, tone, working, sidebarWorking])
+  // The working face wears her resting traits, so a turn starting moves the face she has
+  // rather than drawing a new one.
+  const rest = useMemo(() => (portrait ? null : faceOf({ name, size, tone, hue, shape })), [hue, name, portrait, shape, size, tone])
+  // A face the loop cannot measure works the still way.
+  const rig = useMemo(() => (plays && rest !== null ? rigFor(rest) : undefined), [plays, rest])
+  const work = rig === undefined || playing === undefined || rest === null ? undefined : { rig, play: playing, face: rest }
+  // The still working face pins its own gaze; a moment waits until the walk home is over.
+  const pinned = working && own === undefined && work === undefined
+  const moment = work === undefined ? own : undefined
+  const pose = moment?.pose
+  const face = useMemo(
+    () => (rest === null || (pose === undefined && !pinned) ? rest : faceOf({ name, size, tone, hue, shape, pinned, pose })),
+    [hue, name, pinned, pose, rest, shape, size, tone],
+  )
 
   if (portrait || face === null) {
     return (
       <View style={square}>
         <Image contentFit="cover" source={{ uri: src }} style={[square, { borderRadius: size / 2 }]} />
-        {working && live ? <ThoughtDots color={color} size={size} /> : null}
+        {working && full ? <ThoughtDots color={color} size={size} /> : null}
       </View>
     )
   }
@@ -131,35 +164,31 @@ export function Blobatar({ name, color, src, shape, tone = DEFAULT_BLOB_TONE, si
   // The triangle draws its ink high in its viewBox; the lift levels it with a name.
   const lift = worn?.lift === undefined ? 0 : (worn.lift / 100) * size
 
-  const plain = busy ? (
-    <BusyFace face={face} size={size} />
-  ) : sidebarWorking && animate ? (
-    <LiveFace face={face} size={size} blinkOnly />
-  ) : live ? (
+  const chosen = work !== undefined ? (
+    // Another size or shape is another face at work: it starts over, so one never plays across two rigs.
+    <WorkFace face={work.face} key={`${size} ${name} ${shape}`} onHome={() => setHoming(false)} play={work.play} rig={work.rig} size={size} />
+  ) : moment !== undefined ? (
+    <StateFace face={face} look={moment} size={size} />
+  ) : full ? (
     <LiveFace face={face} size={size} />
   ) : animate ? (
     <BlinkFace face={face} size={size} />
   ) : (
     <StillFace face={face} size={size} />
   )
-  const chosen = own?.eyes === 'dots' ? (
-    <BusyFace face={face} size={size} held />
-  ) : own !== undefined ? (
-    <StateFace face={face} look={own} size={size} />
-  ) : plain
   // The body gesture of the moment moves whichever face is drawn, so the whole figure moves as one.
-  const drawn = look?.gesture === undefined ? chosen : (
-    <GestureLayers face={face} gesture={look.gesture} size={size} {...(look.passes === undefined ? {} : { passes: look.passes })}>
+  const drawn = moment?.gesture === undefined ? chosen : (
+    <GestureLayers face={face} gesture={moment.gesture} size={size} {...(moment.passes === undefined ? {} : { passes: moment.passes })}>
       {chosen}
     </GestureLayers>
   )
   // Which way she is drawn, and for a state which look: a change of either is a fade.
-  // The live face is one way whether she works or rests, so its pose still eases in place.
-  const way = own?.eyes === 'dots' ? 'held' : own !== undefined ? `state ${state}` : `${busy ? 'busy' : 'live'} ${look?.gesture ?? ''}`
+  // The loop and the dots are one way: the working face hands over between them itself.
+  const way = work !== undefined ? 'work' : moment !== undefined ? `state ${state}` : 'live'
 
   return (
     <View style={[square, lift === 0 ? null : { transform: [{ translateY: lift }] }]}>
-      {live ? (
+      {full || work !== undefined ? (
         // A face that has just come on screen is simply there; only a change fades.
         <LayoutAnimationConfig skipEntering>
           <Animated.View entering={FACE_IN} exiting={FACE_OUT} key={way} style={StyleSheet.absoluteFill}>
@@ -167,9 +196,40 @@ export function Blobatar({ name, color, src, shape, tone = DEFAULT_BLOB_TONE, si
           </Animated.View>
         </LayoutAnimationConfig>
       ) : drawn}
-      {working && live ? <ThoughtDots color={workingDot(name, hue, tone)} size={size} /> : null}
+      {pinned && full ? <ThoughtDots color={workingDot(name, hue, tone)} size={size} /> : null}
     </View>
   )
+}
+
+/** A face taken apart: at rest, in a pose of the library, or pinned to the still working gaze. */
+function faceOf({ name, size, tone, hue, shape, pinned = false, pose }: {
+  name: string
+  size: number
+  tone: number
+  hue: number | undefined
+  shape: string | undefined
+  pinned?: boolean
+  pose?: keyof typeof POSES | undefined
+}) {
+  return takeApart(
+    _parts(name, {
+      size,
+      tone,
+      animate: 'always',
+      ...(hue === undefined ? {} : { hue }),
+      traits: { ...BLOB_FACE_TRAITS, ...(pinned ? WORKING_GAZE : {}) },
+      ...(shape === undefined ? {} : { shape }),
+      ...(pose !== undefined ? { expression: POSES[pose] } : pinned ? { expression: unsure } : {}),
+    }),
+    size,
+  )
+}
+
+/** The loop's rig for a face: its shapes in the library's order, and its eyes from left to right. */
+function rigFor(face: Face): Rig | undefined {
+  const [left, right, more] = [...face.eyes].sort((a, b) => a.cx - b.cx)
+  if (left === undefined || right === undefined || more !== undefined) return undefined
+  return rigOf(face.body.map((part) => (part.kind === 'path' ? part.d : { cx: part.cx, cy: part.cy, r: part.r })), [left.d, right.d], face.silhouette)
 }
 
 /** Match the dots to the colour the library resolved for this face. */
@@ -398,16 +458,16 @@ const GLANCE_CEILING = 0.05
 /** The web's `ease-in-out`, by its CSS curve. */
 const easeInOut = cubicBezier(0.42, 0, 0.58, 1)
 
-function LiveFace({ face, size, blinkOnly = false }: { face: Face; size: number; blinkOnly?: boolean }) {
+function LiveFace({ face, size }: { face: Face; size: number }) {
   const still = useReducedMotion()
   const unit = size / BOX
   const square = { width: size, height: size }
 
   const amp = bodyAmp(size, unit)
-  const breathe = blinkOnly ? null : breatheMotion(face.breathePhase, still, Math.min(amp, BREATHE_CAP))
-  const bob = blinkOnly ? null : bobMotion(face.bobPhase, unit, still, amp)
+  const breathe = breatheMotion(face.breathePhase, still, Math.min(amp, BREATHE_CAP))
+  const bob = bobMotion(face.bobPhase, unit, still, amp)
   const gaze = useMemo<Motion | null>(() => {
-    if (still || blinkOnly) return null
+    if (still) return null
     const reach = Math.abs(face.lookX) * unit
     const travel = Math.min(Math.max(reach, GLANCE_FLOOR), size * GLANCE_CEILING)
     const amp = reach === 0 ? 1 : Math.max(1, travel / reach)
@@ -424,7 +484,7 @@ function LiveFace({ face, size, blinkOnly = false }: { face: Face; size: number;
       animationIterationCount: 'infinite' as const,
       animationTimingFunction: 'linear' as const,
     }
-  }, [blinkOnly, face.lookX, face.lookY, face.saccade, face.saccadePhase, size, still, unit])
+  }, [face.lookX, face.lookY, face.saccade, face.saccadePhase, size, still, unit])
 
   return (
     <View style={square}>
@@ -553,17 +613,23 @@ function Eyes({ face }: { face: Face }) {
   )
 }
 
-/** The soft sheen inside a dark eye: the web's `CLAY.sheen`, in the eye's own box. */
+/** The soft sheen inside a dark eye: the web's `CLAY.sheen`, in the box of whatever it fills. */
+function SheenGlow({ id }: { id: string }) {
+  const { sheen } = CLAY
+  return (
+    <RadialGradient cx={sheen.cx} cy={sheen.cy} id={id} r={sheen.r}>
+      <Stop offset={0} stopColor="white" stopOpacity={sheen.opacity} />
+      <Stop offset={1} stopColor="white" stopOpacity={0} />
+    </RadialGradient>
+  )
+}
+
 function Sheen({ d }: { d: string }) {
   const id = useId().replace(/[^\w-]/g, '')
-  const { sheen } = CLAY
   return (
     <>
       <Defs>
-        <RadialGradient cx={sheen.cx} cy={sheen.cy} id={id} r={sheen.r}>
-          <Stop offset={0} stopColor="white" stopOpacity={sheen.opacity} />
-          <Stop offset={1} stopColor="white" stopOpacity={0} />
-        </RadialGradient>
+        <SheenGlow id={id} />
       </Defs>
       <Path d={d} fill={`url(#${id})`} />
     </>
@@ -649,8 +715,10 @@ const CLAY_STEPS = 6
  * things the web draws are left out here. The bounce light is a second band, the lip under each eye would have to ride every eye layer,
  * and the larger eyes of a small face would have to be redrawn from the layout;
  * none is worth its cost on a scrolling list.
+ *
+ * With `morph`, the head's shapes are the working face's: see `MorphPath`.
  */
-function Body({ face }: { face: Face }) {
+function Body({ face, morph }: { face: Face; morph?: Morph }) {
   const id = useId().replace(/[^\w-]/g, '')
   const fill = face.bodyFill ?? colors.muted
   const tones = useMemo(() => (face.bodyFill === undefined ? undefined : clayTones(face.bodyFill)), [face.bodyFill])
@@ -672,17 +740,19 @@ function Body({ face }: { face: Face }) {
       </G>
     </G>
   )
+  // A working face draws every shape at the step of the morph it is on, in the clip as well, so the finish follows.
+  const morphing = morph?.shapes.map((steps, index) => <MorphPath key={index} step={morph.step} steps={steps} />)
   return (
     <>
       <Defs>
         <ClipPath id={`${id}k`}>
-          {face.silhouette.map((d, index) => <Path d={d} key={index} />)}
+          {morphing ?? face.silhouette.map((d, index) => <Path d={d} key={index} />)}
         </ClipPath>
         {tones ? <ClayGlow glow={CLAY.light} id={`${id}l`} tones={tones} /> : null}
         {tones && !small ? <ClayGlow glow={CLAY.highlight} id={`${id}h`} keep={whites} tones={tones} /> : null}
       </Defs>
       <G fill={fill}>
-        <Parts body={face.body} />
+        {morphing ?? <Parts body={face.body} />}
       </G>
       {tones ? (
         <G clipPath={clip} clipRule="nonzero">
@@ -805,103 +875,272 @@ function busyMotion<V>(keys: readonly Key<V>[], total: number, duration: number,
   }
 }
 
-/** The middle of the body's drawn box, where the Mac's `getBBox` puts the dots. Curve handles count, which barely moves a blob's middle. */
-function bodyMiddle(body: readonly BodyPart[]): Pair {
-  let [left, top, right, bottom] = [Infinity, Infinity, -Infinity, -Infinity]
-  const add = (x: number, y: number) => {
-    left = Math.min(left, x)
-    right = Math.max(right, x)
-    top = Math.min(top, y)
-    bottom = Math.max(bottom, y)
-  }
-  for (const part of body) {
-    if (part.kind === 'circle') {
-      add(part.cx - part.r, part.cy - part.r)
-      add(part.cx + part.r, part.cy + part.r)
-      continue
-    }
-    let [x, y] = [0, 0]
-    for (const [, command, args = ''] of part.d.matchAll(/([MLCQHVZ])([^MLCQHVZ]*)/g)) {
-      const values = args.trim().split(/[\s,]+/).filter(Boolean).map(Number)
-      if (command === 'H') for (const value of values) add((x = value), y)
-      else if (command === 'V') for (const value of values) add(x, (y = value))
-      else for (let index = 0; index + 1 < values.length; index += 2) add((x = values[index]!), (y = values[index + 1]!))
-    }
-  }
-  return left === Infinity ? [BOX / 2, BOX / 2] : [(left + right) / 2, (top + bottom) / 2]
+/** The head's shapes on their way into the top view, and the step of it the face is on; see `morphShapes`. */
+interface Morph {
+  shapes: string[][]
+  step: SharedValue<number>
 }
 
-/** Each busy face that starts takes the next variation, so two turns in a row differ. */
-let busyTurns = 0
+const AnimatedPath = Animated.createAnimatedComponent(Path)
+const AnimatedRect = Animated.createAnimatedComponent(Rect)
 
 /**
- * The Mac's working face: the shared busy loop played as native keyframes. Each eye
- * runs its track on a layer of its own, clipped to the silhouette so it can leave the
- * shape and stay out of sight until it comes back; between two variations the body
- * shrinks into three dots in its own colour and swells back out of them. It blinks
- * underneath, as the Mac's does, and nothing else moves: no breath, bob or glance.
- *
- * The Mac also runs a goo filter while the dots bud and merge. Native views have no
- * cheap filter to animate, so here the drops overlap the shrinking body instead.
- *
- * `held` is the melt alone, kept up: what she does while her answer streams in.
+ * One of the head's shapes at the step of the morph the face is on. The outlines are
+ * sampled ahead, so a frame only picks one, and only a frame on which the step changes
+ * draws anything.
  */
-function BusyFace({ face, size, held = false }: { face: Face; size: number; held?: boolean }) {
-  const [seed] = useState(() => busyTurns++)
-  const unit = size / BOX
-  const rig = useMemo(() => {
-    const left = face.eyes.find((eye) => eye.wrap < 0)
-    const right = face.eyes.find((eye) => eye.wrap > 0)
-    if (left === undefined || right === undefined) return null
-    const middle = bodyMiddle(face.body)
-    const pull = (eye: Eye): Pair => [middle[0] - eye.cx, middle[1] - eye.cy]
-    const plan = timeline(
-      order(held ? 'dots' : BUSY_LOOK.variation, seed),
-      [(right.cx - left.cx) / 2, (right.cy - left.cy) / 2],
-      [pull(left), pull(right)],
-      held || BUSY_LOOK.dots,
-    )
-    const duration = (plan.total * 1000) / BUSY_LOOK.speed
-    const silhouette = [...face.body].reverse().find((part) => part.kind === 'path')
-    return {
-      middle,
-      silhouette: silhouette?.kind === 'path' ? silhouette.d : undefined,
-      eyes: new Map([left, right].map((eye, index) => [eye.wrap, busyMotion(plan.eyes[index]!.map((stop) => ({ t: stop.t, v: stop.pose, ease: stop.ease })), plan.total, duration, (pose) => ({
-        transform: [
-          { translateX: pose.x * unit },
-          { translateY: pose.y * unit },
-          // Reanimated's angle parser refuses exponent notation, which eased values near zero produce.
-          { rotate: `${Number(pose.r.toFixed(3))}deg` },
-          { scaleX: Math.max(pose.sx, GONE) },
-          { scaleY: Math.max(pose.sy, GONE) },
-        ],
-      }))])),
-      body: busyMotion(plan.body, plan.total, duration, (scale) => ({ transform: [{ scale: Math.max(scale, GONE) }] })),
-      dots: plan.dots.map((keys) => busyMotion(keys, plan.total, duration, (dot) => ({
-        transform: [{ translateX: dot.x * unit }, { translateY: dot.y * unit }, { scale: Math.max(dot.s, GONE) }],
-      }))),
-    }
-  }, [face, held, seed, unit])
+function MorphPath({ steps, step }: { steps: string[]; step: SharedValue<number> }) {
+  const drawn = useAnimatedProps(() => ({ d: steps[step.get()] ?? steps[0]! }))
+  return <AnimatedPath animatedProps={drawn} />
+}
 
-  if (rig === null) return <BlinkFace face={face} size={size} />
-
-  const [mx, my] = rig.middle
-  const eyes = face.eyes.map((eye) => (
-    <Animated.View key={eye.wrap} style={[StyleSheet.absoluteFill, { transformOrigin: [`${eye.cx}%`, `${eye.cy}%`, 0] as (string | number)[] }, rig.eyes.get(eye.wrap)]}>
-      <EyeLayer eye={eye} fill={face.eyeFill} pose={face.pose} sheen={face.sheen} size={size} still={false} timing={face} />
-    </Animated.View>
-  ))
-  const drop = DOT.r * unit
+/**
+ * One working eye: a rounded rect in the head's own space, an ellipse at no roundness
+ * and a pill at full, cut off at the edge of the core. It is an SVG of its own, so a
+ * frame that moves the eyes redraws two small rects and not the shaded head under them.
+ */
+function WorkEye({ face, size, side, core, step, stage, clock }: {
+  face: Face
+  size: number
+  side: 0 | 1
+  /** The core outline per step of the morph, which the eye is cut off at. */
+  core: string[]
+  step: SharedValue<number>
+  stage: SharedValue<Keys>
+  clock: SharedValue<number>
+}) {
+  const id = useId().replace(/[^\w-]/g, '')
+  const box = useAnimatedProps(() => eyeBoxAt(stage.get(), side, clock.get()))
   return (
-    <>
-      <Animated.View style={[StyleSheet.absoluteFill, { transformOrigin: [`${mx}%`, `${my}%`, 0] as (string | number)[] }, rig.body]}>
+    <Svg height={size} viewBox={`0 0 ${BOX} ${BOX}`} width={size}>
+      <Defs>
+        <ClipPath id={`${id}c`}>
+          <MorphPath step={step} steps={core} />
+        </ClipPath>
+        {face.sheen ? <SheenGlow id={`${id}s`} /> : null}
+      </Defs>
+      <G clipPath={`url(#${id}c)`} {...(face.eyeFill === undefined ? {} : { fill: face.eyeFill })}>
+        <AnimatedRect animatedProps={box} />
+        {face.sheen ? <AnimatedRect animatedProps={box} fill={`url(#${id}s)`} /> : null}
+      </G>
+    </Svg>
+  )
+}
+
+const shrunk = (scale: number): ViewStyle => ({ transform: [{ scale: Math.max(scale, GONE) }] })
+const dotted = (dot: MeltDot, unit: number): ViewStyle => ({
+  transform: [{ translateX: dot.x * unit }, { translateY: dot.y * unit }, { scale: Math.max(dot.s, GONE) }],
+})
+const sunk = (pose: EyePose, unit: number): ViewStyle => ({
+  transform: [{ translateX: pose.x * unit }, { translateY: pose.y * unit }, { scaleX: Math.max(pose.sx, GONE) }, { scaleY: Math.max(pose.sy, GONE) }],
+})
+
+/** The shared melt as native keyframes: the body's scale, the three dots, and each eye's way into the middle. */
+function meltMotion(melt: DotsPlan, unit: number) {
+  const duration = (melt.seconds * 1000) / DOTS_RATE
+  return {
+    body: busyMotion(melt.body, melt.seconds, duration, shrunk),
+    dots: melt.dots.map((keys) => busyMotion(keys, melt.seconds, duration, (dot) => dotted(dot, unit))),
+    eyes: melt.eyes.map((stops) => busyMotion(stops.map((stop) => ({ t: stop.t, v: stop.pose, ease: stop.ease })), melt.seconds, duration, (pose) => sunk(pose, unit))),
+  }
+}
+
+/** The way back out of the dots, once, from where they were: the body swells, the dots run into it, the eyes pop out. */
+function leaveMotion(from: Melted, unit: number) {
+  const home = (start: ViewStyle, end: ViewStyle): Motion => ({
+    animationName: { from: start, to: end } as CSSAnimationKeyframes<ViewStyle>,
+    animationDuration: DOTS_HOME_MS,
+    animationTimingFunction: dotsHome,
+    animationFillMode: 'forwards',
+  })
+  return {
+    body: home(shrunk(from.body), shrunk(1)),
+    dots: from.dots.map((dot) => home(dotted(dot, unit), dotted({ x: 0, y: 0, s: 0 }, unit))),
+    eyes: from.eyes.map((pose) => home(sunk(pose, unit), sunk({ x: 0, y: 0, sx: 1, sy: 1 }, unit))),
+  }
+}
+
+/** Each face that starts to work takes the next order of moves, from somewhere new on every launch. */
+let rounds = Math.floor(Math.random() * 0x10000)
+
+/** What a working face remembers between renders, off the UI thread. */
+interface Run {
+  /** Counts what the face was last asked to do, so what an earlier request still had coming is dropped. */
+  ask: number
+  /** The moves left of this round, the last one played, and which round is next. */
+  queue: Step[]
+  last: MoveId | undefined
+  round: number | undefined
+  /** When the dots came on, while they are. */
+  wrote: number | undefined
+  /** The dots on their way out, as the pass home that takes them there. */
+  leaving: Melted | undefined
+  /** The walk this face was last asked for has arrived. */
+  landed: boolean
+  /** What comes once the walk has arrived and the dots are gone: the next move, or word that she is home. */
+  after: (() => void) | undefined
+}
+
+/** Goes on to what waits, once, when both the walk and the dots are over. */
+function settle(state: Run) {
+  if (!state.landed || state.wrote !== undefined || state.leaving !== undefined) return
+  const after = state.after
+  state.after = undefined
+  after?.()
+}
+
+/**
+ * Her face at work: the shared loop (see the client runtime's `busyFace`), and the dots
+ * she writes behind.
+ *
+ * The loop is not declared keyframes, because it has to be cut short anywhere: for the
+ * dots when she starts to write, and for the walk home when her turn ends. One clock
+ * runs on the UI thread through the keys of the move being played. The body's place is
+ * read off them as a view transform, each eye as the geometry of a rect, and the
+ * outline as a step of its morph, every frame, by worklets. A change of plan is a walk
+ * from what the keys draw at that moment, made on the same thread, so nothing jumps.
+ * The JS thread only says what comes next: a move, once every few seconds, and it may
+ * be late, because every move ends in the working pose and holds it.
+ *
+ * The dots stay the declared keyframes they were, on layers inside the body's
+ * transform: the body's scale about its middle, three dots, and a wrapper per eye that
+ * sinks it into the middle. They start as the walk to the working pose starts, so a
+ * move that is cut short runs straight into the melt. On the way back they are swapped
+ * for one pass home from where the plan says they are by then (see `meltAt`), and only
+ * when that is over does the loop go on, or the face say it is home.
+ *
+ * She does not breathe, bob, glance or blink here; the loop is all of it.
+ */
+function WorkFace({ face, rig, size, play, onHome }: {
+  face: Face
+  rig: Rig
+  size: number
+  play: Play
+  /** The face has walked home, and may be swapped for the one at rest. */
+  onHome: () => void
+}) {
+  const unit = size / BOX
+  const middle = rig.head.c
+  const [mx, my] = rig.middle
+  // The keys the face draws from, and how many seconds into them it is.
+  const stage = useSharedValue<Keys>(held(rig.home))
+  const clock = useSharedValue(0)
+  // A derived value, so the paths that read the step are worked out after it, in the same frame as the eyes.
+  const step = useDerivedValue(() => morphStep(topAt(stage.get(), clock.get())))
+  const placed = useAnimatedStyle(() => {
+    const place = placeAt(stage.get(), clock.get(), middle, unit)
+    return { transform: [{ translateX: place.x }, { translateY: place.y }, { rotate: `${place.lean.toFixed(3)}deg` }, { scale: place.scale }] }
+  })
+
+  const run = useRef<Run>({ ask: 0, queue: [], last: undefined, round: undefined, wrote: undefined, leaving: undefined, landed: false, after: undefined })
+  const home = useEffectEvent(onHome)
+  // The dots: playing, or on their way out from where they were.
+  const [melt, setMelt] = useState<'on' | Melted>()
+
+  useEffect(() => {
+    const state = run.current
+    const mine = ++state.ask
+
+    const land = (asked: number) => {
+      if (state.ask !== asked) return
+      state.landed = true
+      settle(state)
+    }
+    /** Walks from what the face draws right now, and says so when it has arrived. */
+    const walk = (to: number[]) => {
+      state.landed = false
+      runOnUI(() => {
+        'worklet'
+        stage.set(walkTo(drawnAt(stage.get(), clock.get()), to, WAKE))
+        clock.set(0)
+        clock.set(withTiming(WAKE, { duration: WAKE * 1000, easing: Easing.linear }, (finished) => {
+          'worklet'
+          if (finished === true) runOnJS(land)(mine)
+        }))
+      })()
+    }
+    /** Plays the next move of the round and the breath after it, then the one after that. */
+    const advance = (asked: number) => {
+      if (state.ask !== asked) return
+      state.round ??= rounds++
+      if (state.queue.length === 0) state.queue = loopSteps(state.round++, state.last)
+      const next = state.queue.shift()!
+      state.last = next.move
+      const keys = moveKeys(rig, next.move)
+      const seconds = keys.seconds + next.rest
+      runOnUI(() => {
+        'worklet'
+        stage.set(keys)
+        clock.set(0)
+        clock.set(withTiming(seconds, { duration: seconds * 1000, easing: Easing.linear }, (finished) => {
+          'worklet'
+          if (finished === true) runOnJS(advance)(asked)
+        }))
+      })()
+    }
+
+    // What is next waits for this walk, and for dots that are on or on their way out; see `settle`.
+    state.after = play === 'dots' ? undefined : play === 'home' ? () => { if (state.ask === mine) home() } : () => advance(mine)
+    walk(play === 'home' ? rig.home : rig.work)
+    // The dots are declared keyframes, which React has to draw: on when she starts to
+    // write, and out from where the plan has them when she stops.
+    const frame = requestAnimationFrame(() => {
+      if (play === 'dots') {
+        if (state.wrote !== undefined) return
+        // A pass home that was still on its way is dropped here, so its end cannot take these dots with it.
+        state.wrote = Date.now()
+        state.leaving = undefined
+        setMelt('on')
+      } else if (state.wrote !== undefined) {
+        const from = meltAt(meltPlan(rig), ((Date.now() - state.wrote) / 1000) * DOTS_RATE)
+        state.wrote = undefined
+        state.leaving = from
+        setMelt(from)
+      }
+    })
+    return () => {
+      state.ask += 1
+      cancelAnimationFrame(frame)
+    }
+  }, [clock, play, rig, stage])
+
+  const layers = useMemo(
+    () => (melt === undefined ? undefined : melt === 'on' ? meltMotion(meltPlan(rig), unit) : leaveMotion(melt, unit)),
+    [melt, rig, unit],
+  )
+
+  // The dots' keyframes start when they are drawn, which is a little after they were asked for.
+  useEffect(() => {
+    const state = run.current
+    if (melt === undefined) return undefined
+    if (melt === 'on') {
+      if (state.wrote !== undefined) state.wrote = Date.now()
+      return undefined
+    }
+    const timer = setTimeout(() => {
+      if (state.leaving !== melt) return
+      state.leaving = undefined
+      setMelt(undefined)
+      settle(state)
+    }, DOTS_HOME_MS)
+    return () => clearTimeout(timer)
+  }, [melt])
+
+  useEffect(() => () => cancelAnimation(clock), [clock])
+
+  const drop = DOT.r * unit
+  const core = rig.shapes[rig.shapes.length - 1]!
+  return (
+    <Animated.View style={[StyleSheet.absoluteFill, placed]}>
+      <Animated.View style={[StyleSheet.absoluteFill, about(rig.middle), layers?.body]}>
         <Svg height={size} viewBox={`0 0 ${BOX} ${BOX}`} width={size}>
-          <Body face={face} />
+          <Body face={face} morph={{ shapes: rig.shapes, step }} />
         </Svg>
       </Animated.View>
-      {rig.dots.map((motion, index) => (
+      {layers?.dots.map((motion, index) => (
         <Animated.View
-          key={index}
+          // A dot on its way out is a new view, so its one pass home starts when it is drawn.
+          key={`${melt === 'on' ? 'on' : 'out'} ${index}`}
           pointerEvents="none"
           style={[
             styles.busyDot,
@@ -910,22 +1149,12 @@ function BusyFace({ face, size, held = false }: { face: Face; size: number; held
           ]}
         />
       ))}
-      {rig.silhouette === undefined ? (
-        <View pointerEvents="none" style={StyleSheet.absoluteFill}>{eyes}</View>
-      ) : (
-        <MaskedView
-          maskElement={
-            <Svg height={size} viewBox={`0 0 ${BOX} ${BOX}`} width={size}>
-              <Path d={rig.silhouette} fill={shimmerTones.mask} />
-            </Svg>
-          }
-          pointerEvents="none"
-          style={StyleSheet.absoluteFill}
-        >
-          {eyes}
-        </MaskedView>
-      )}
-    </>
+      {([0, 1] as const).map((side) => (
+        <Animated.View key={side} pointerEvents="none" style={[StyleSheet.absoluteFill, about(rig.eyes[side]), layers?.eyes[side]]}>
+          <WorkEye clock={clock} core={core} face={face} side={side} size={size} stage={stage} step={step} />
+        </Animated.View>
+      ))}
+    </Animated.View>
   )
 }
 
@@ -1019,13 +1248,7 @@ function StateFace({ face, size, look }: { face: Face; size: number; look: FaceL
   const eyes = useMemo(() => {
     // From the middle of the pair, where the resting gaze leaves it, to the middle of the face.
     const toMiddle = frameOfFace(face).middle[0] - face.eyes.reduce((sum, eye) => sum + eye.cx, 0) / Math.max(face.eyes.length, 1)
-    return new Map(face.eyes.map((eye) => [
-      eye.wrap,
-      move === 'scan' ? eyeFrames(scanStops(toMiddle), unit, EYE_MOVE_MS.scan)
-        : move === 'toward' ? eyeFrames(towardStops(toMiddle), unit, EYE_MOVE_MS.toward)
-        : move === 'seesaw' ? eyeFrames(seesawStops(thinking.p.edy2, eye.wrap < 0 ? -1 : 1), unit, EYE_MOVE_MS.seesaw)
-        : undefined,
-    ]))
+    return new Map(face.eyes.map((eye) => [eye.wrap, move === 'toward' ? eyeFrames(towardStops(toMiddle), unit, EYE_MOVE_MS.toward) : undefined]))
   }, [face, move, unit])
 
   return (

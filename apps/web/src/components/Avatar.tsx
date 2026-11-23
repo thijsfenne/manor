@@ -1,21 +1,19 @@
 import { Blobatar } from '@manor/blobatar/react'
 import { palette, traits as seedTraits } from '@manor/blobatar'
-import { happy, sad, sleepy, thinking, unsure } from '@manor/blobatar/expression'
+import { happy, sad, sleepy, unsure } from '@manor/blobatar/expression'
 import { FACE_LOOK, type FaceState } from '@manor/client-runtime/face-activity'
 import '@manor/blobatar/motion.css'
 import { useReducedMotion } from 'motion/react'
 import { memo, useEffect, useRef, useState, type CSSProperties } from 'react'
 import { accentHue, accentStyle } from '../accent'
-import { BLOB_FACE_TRAITS, DEFAULT_BLOB_TONE, SIDEBAR_WORKING_GAZE, WORKING_GAZE, blobShapeOf } from '../blobShapes'
-import { BUSY_LOOK, useBusyFace } from './busyFace'
+import { BLOB_FACE_TRAITS, DEFAULT_BLOB_TONE, WORKING_GAZE, blobShapeOf } from '../blobShapes'
+import { BUSY_LOOK, DOTS_LOOK, useBusyFace } from './busyFace'
 import { useFaceEyes, useFaceGesture } from './faceMotion'
 
 /** How long a face that stops working stays live, so its eyes and body can walk home. */
 const SETTLE_MS = 600
 
-/** The melt alone, held: what a face does while its answer streams in. */
-const DOTS_LOOK = { ...BUSY_LOOK, variation: 'dots', dots: true } as const
-const POSES = { thinking, sleepy, happy, sad }
+const POSES = { sleepy, happy, sad }
 
 interface AvatarProps {
   name: string
@@ -34,22 +32,20 @@ interface AvatarProps {
    */
   center?: boolean
   /**
-   * Her turn is running in the transcript: her eyes run the busy loop and her face
-   * melts into thinking dots between its variations. A portrait, or a reader who
-   * asks for reduced motion, gets the still working face with thought dots above it.
+   * Her turn is running: her whole face plays the working loop, body and eyes. A
+   * portrait, or a reader who asks for reduced motion, gets the still working face
+   * with thought dots above it.
    *
    * Passed where a face stands for a conversation with a turn behind it: the
-   * transcript header and the DM list. Never on the roster, whose entry is a
-   * persona and is never busy.
+   * transcript, the DM list and the pinned head card. Never on the roster, whose
+   * entry is a persona and is never busy.
    */
   working?: boolean
-  /** A running DM in the sidebar holds an upward squint and blinks without dots. */
-  sidebarWorking?: boolean
   /**
    * What the turn behind this face is doing, where the caller knows more than that it
-   * runs: she reads, types, waits, needs the user, or has just finished. The eyes,
-   * the pose and the body follow it. Absent, a working face plays the busy loop as
-   * before. A portrait, or a reader who asks for reduced motion, shows none of it.
+   * runs: she writes, waits, needs the user, or has just finished. The eyes, the pose
+   * and the body follow it. Absent, a working face plays the loop. A portrait, or a
+   * reader who asks for reduced motion, shows none of it.
    */
   face?: FaceState
 }
@@ -60,7 +56,7 @@ interface AvatarProps {
  * Purely decorative everywhere it appears, because the name is always right next
  * to it, so it takes no alt text and no role.
  */
-export const Avatar = memo(function Avatar({ name, color, src, shape, tone = DEFAULT_BLOB_TONE, size, center = false, working = false, sidebarWorking = false, face }: AvatarProps) {
+export const Avatar = memo(function Avatar({ name, color, src, shape, tone = DEFAULT_BLOB_TONE, size, center = false, working = false, face }: AvatarProps) {
   const slot = useRef<HTMLSpanElement>(null)
   const [onScreen, setOnScreen] = useState(false)
   const [pageVisible, setPageVisible] = useState(true)
@@ -70,10 +66,10 @@ export const Avatar = memo(function Avatar({ name, color, src, shape, tone = DEF
   const portrait = src !== undefined && src !== ''
   const lively = !reduceMotion && !portrait
   const look = face === undefined || !lively ? undefined : FACE_LOOK[face]
-  // The loop is still what work looks like. A state with eyes of its own takes them over.
+  // Work plays the loop and writing the dots. A state with a look of its own takes the face over.
   const busy = working && lively && (look === undefined || look.eyes === 'loop' || look.eyes === 'dots')
-  // A face whose turn just ended stays live a moment, or the eyes would snap home
-  // from wherever the loop had them, mid-melt included.
+  // A face whose turn just ended stays live a moment, or it would snap home from
+  // wherever the loop had it, mid-melt included.
   const [settling, setSettling] = useState(false)
   const [wasBusy, setWasBusy] = useState(busy)
   if (busy !== wasBusy) {
@@ -108,17 +104,18 @@ export const Avatar = memo(function Avatar({ name, color, src, shape, tone = DEF
       window.removeEventListener('blur', updateAttention)
     }
   }, [])
-  const moving = pageVisible && (working || settling || sidebarWorking || look !== undefined || (onScreen && (hovered || windowFocused)))
+  const moving = pageVisible && (working || settling || look !== undefined || (onScreen && (hovered || windowFocused)))
   const square = { width: size, height: size }
   const hue = accentHue(color)
   // The loop is the costly part of a working face, so one scrolled out of view rests
-  // and picks up the next variation when it comes back.
+  // and wakes into another order of moves when it comes back. Going from the loop to
+  // the dots and back is handed over on the running face.
   const drawn = JSON.stringify([name, hue, tone, shape, size])
   useBusyFace(slot, busy && moving && onScreen, look?.eyes === 'dots' ? DOTS_LOOK : BUSY_LOOK, drawn)
-  // The body and the added eye moves rest with the loop when the face is out of sight.
+  // The body and the added eye move rest with the loop when the face is out of sight.
   const shown = moving && onScreen ? look : undefined
   useFaceGesture(slot, shown?.gesture, drawn, shown?.passes)
-  useFaceEyes(slot, shown?.eyes === 'scan' || shown?.eyes === 'toward' || shown?.eyes === 'seesaw' ? shown.eyes : undefined, drawn)
+  useFaceEyes(slot, shown?.eyes === 'toward' ? shown.eyes : undefined, drawn)
 
   if (portrait) {
     return (
@@ -138,10 +135,10 @@ export const Avatar = memo(function Avatar({ name, color, src, shape, tone = DEF
   const worn = blobShapeOf(name, shape)
   // Keep the face family consistent while leaving her silhouette individually
   // seeded or explicitly chosen.
-  // The busy face wears her resting traits, so a turn starting moves the eyes she has
-  // rather than drawing a new face; only the still working face pins its own gaze.
+  // The busy face wears her resting traits, so a turn starting moves the face she has
+  // rather than drawing a new one; only the still working face pins its own gaze.
   const still = working && !lively
-  const traits = { ...BLOB_FACE_TRAITS, ...(sidebarWorking ? SIDEBAR_WORKING_GAZE : still ? WORKING_GAZE : {}) }
+  const traits = { ...BLOB_FACE_TRAITS, ...(still ? WORKING_GAZE : {}) }
   // Nine of the ten silhouettes need none of this. The tenth draws its ink high in
   // its own viewBox, so centring the box leaves the face hovering above the name
   // beside it; the lift is stated in viewBox units and scales with what is drawn.
@@ -155,9 +152,8 @@ export const Avatar = memo(function Avatar({ name, color, src, shape, tone = DEF
       onPointerLeave={() => setHovered(false)}
       style={{ ...square, ...(lift === undefined ? {} : { transform: `translateY(${lift.toFixed(2)}px)` }) }}
       data-avatar="blobatar"
-      data-sidebar-working={sidebarWorking ? 'true' : undefined}
-      // Only the still face asks for the library's full motion. The busy loop moves the
-      // eyes itself, and breathing and bob under it stay off, as in the playground.
+      // Only the still face asks for the library's full motion. The loop moves the
+      // face itself, and breathing and bob under it stay off, as in the playground.
       data-working={still ? 'true' : undefined}
       aria-hidden="true"
     >
@@ -173,7 +169,7 @@ export const Avatar = memo(function Avatar({ name, color, src, shape, tone = DEF
         {...(hue === undefined ? {} : { hue })}
         traits={traits}
         {...(shape === undefined ? {} : { shape })}
-        {...(look?.pose !== undefined ? { expression: POSES[look.pose] } : still || sidebarWorking ? { expression: unsure } : {})}
+        {...(look?.pose !== undefined ? { expression: POSES[look.pose] } : still ? { expression: unsure } : {})}
       />
       {still && moving ? <ThoughtDots color={workingDot(name, hue, tone)} size={size} /> : null}
     </span>

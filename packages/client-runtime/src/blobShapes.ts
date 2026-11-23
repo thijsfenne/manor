@@ -15,9 +15,6 @@ export const BLOB_TONES = [
 /** The transcript face glances away from its resting gaze while working. */
 export const WORKING_GAZE = { 'gaze.x': 0.05, 'gaze.y': 0 } as const
 
-/** The sidebar face holds its gaze toward the upper right. */
-export const SIDEBAR_WORKING_GAZE = { 'gaze.x': 0.999, 'gaze.y': 0 } as const
-
 /**
  * The shared proportions of every generated persona face.
  *

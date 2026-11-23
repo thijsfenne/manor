@@ -36,7 +36,7 @@ describe('a body gesture', () => {
   it('would clip a tight body that did not draw in', () => {
     const tight = BLOB_SHAPES.flatMap(({ id: shape }) => names.map((name) => frame(name, shape))).filter((face) => fit(face, GESTURES.bounce).drawIn < 1)
     expect(tight.length).toBeGreaterThan(0)
-    for (const face of tight) expect(margin(face, GESTURES.bounce, { amount: 1, drawIn: 1, tuck: 1 })).toBeLessThan(1)
+    for (const face of tight) expect(margin(face, GESTURES.bounce, { amount: 1, drawIn: 1 })).toBeLessThan(1)
   })
 
   it('starts and ends each loop on the same key, so it repeats without a jump', () => {
@@ -50,13 +50,10 @@ describe('a body gesture', () => {
 
   it('hands a client keys it can play as they are', () => {
     const face = frame('Wren', 'triangle')
-    const roll = plan('roll', face)
-    expect(roll.rot.map((key) => key.degrees)).toEqual([0, 360, 360])
-    // A triangle has to draw in to turn all the way round, and only while it turns.
-    expect(roll.fit.tuck).toBeLessThan(1)
-    expect(roll.draw[1]?.d).toBeCloseTo(roll.fit.tuck * roll.fit.drawIn)
-    expect(roll.draw[0]?.d).toBe(roll.fit.drawIn)
-    // A gesture that only turns still hands over a resting figure, so a client plays every track.
-    expect(plan('tilt', face).fig.every((key) => key.x === 0 && key.sx === 1)).toBe(true)
+    const shake = plan('shake', face)
+    expect(shake.rot.map((key) => key.degrees)).toEqual([0, 4, -4, 3, -3, 1.5, 0, 0])
+    expect(shake.fig.map((key) => key.offset)).toEqual(shake.rot.map((key) => key.offset))
+    // A gesture that never turns still hands over a level turn, so a client plays every track.
+    expect(plan('nod', face).rot.every((key) => key.degrees === 0)).toBe(true)
   })
 })

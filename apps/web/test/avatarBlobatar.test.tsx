@@ -2,8 +2,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { act, create } from 'react-test-renderer'
 import { Blobatar } from '@manor/blobatar/react'
 import { _layout, palette } from '@manor/blobatar'
-import { unsure } from '@manor/blobatar/expression'
-import { BLOB_FACE_TRAITS, BLOB_TONES, SIDEBAR_WORKING_GAZE } from '../src/blobShapes'
+import { BLOB_FACE_TRAITS, BLOB_TONES } from '../src/blobShapes'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { accentHue } from '../src/accent'
 import { Avatar } from '../src/components/Avatar'
@@ -173,14 +172,26 @@ describe('the face of a persona with no picture', () => {
 const dot = (html: string) => /--dot:([^;"]+)/.exec(html)?.[1]
 
 describe('the face of a persona whose turn is running', () => {
-  it('runs the busy loop in a bubble instead of thought dots', () => {
+  it('plays the working loop on her own resting face instead of thought dots', () => {
     const html = renderToStaticMarkup(<Avatar name="Wren" color="#C77DBB" size={32} working />)
 
     expect(html).toContain('mo-always')
-    // The loop moves the eyes itself; breathing and bob stay off under it.
+    // The loop moves the face itself; breathing and bob stay off under it.
     expect(html).not.toContain('data-working')
     expect(html).not.toContain('thought-dots')
-    expect(html).not.toContain('data-sidebar-working')
+    // It moves the face she has: the same drawing as at rest, live instead of a picture.
+    const resting = _layout('Wren', { traits: BLOB_FACE_TRAITS })
+    expect(html).toContain(`transform-origin:${resting.eyes[0]!.cx.toFixed(2)}px ${resting.eyes[0]!.cy.toFixed(2)}px`)
+  })
+
+  it('looks the same for every kind of work, and keeps its own look for the rest', () => {
+    const working = renderToStaticMarkup(<Avatar name="Wren" color="#C77DBB" size={32} working />)
+    for (const face of ['working', 'thinking', 'reading', 'searching', 'editing', 'running', 'snagged', 'compacting', 'typing'] as const) {
+      expect(renderToStaticMarkup(<Avatar name="Wren" color="#C77DBB" size={32} working face={face} />), face).toBe(working)
+    }
+    for (const face of ['waiting', 'done', 'failed'] as const) {
+      expect(renderToStaticMarkup(<Avatar name="Wren" color="#C77DBB" size={32} working face={face} />), face).not.toBe(working)
+    }
   })
 
   it('keeps the still face and its thought dots when motion is reduced', () => {
@@ -192,34 +203,20 @@ describe('the face of a persona whose turn is running', () => {
     expect(html).not.toBe(stillRender(<Avatar name="Wren" color="#C77DBB" size={32} />))
   })
 
-  it('looks toward the upper right with one eye squinted in the sidebar', () => {
-    const html = renderToStaticMarkup(<Avatar name="Wren" color="#C77DBB" size={32} sidebarWorking />)
-    const working = _layout('Wren', { traits: { ...BLOB_FACE_TRAITS, ...SIDEBAR_WORKING_GAZE }, expression: unsure })
-    const neutral = _layout('Wren', { traits: { ...BLOB_FACE_TRAITS, 'gaze.x': 0.5, 'gaze.y': 0.714 } })
-
-    expect(html).toContain('data-sidebar-working="true"')
-    expect(html).not.toContain('thought-dots')
-    expect(working.eyes[0]!.cx).toBeGreaterThan(neutral.eyes[0]!.cx)
-    expect(working.eyes[0]!.cy).toBeLessThan(neutral.eyes[0]!.cy)
-    expect(working.eyes[1]!.ry).toBeLessThan(working.eyes[0]!.ry)
-    expect(html).not.toBe(renderToStaticMarkup(<Avatar name="Wren" color="#C77DBB" size={32} />))
-  })
-
   it('returns to her resting expression once the turn has settled', () => {
     const settled = renderToStaticMarkup(<Avatar name="Wren" color="#C77DBB" size={32} />)
 
-    expect(settled).not.toContain('data-sidebar-working')
+    expect(settled).not.toContain('mo-always')
     expect(settled).not.toContain('thought-dots')
   })
 
-  it('keeps the portrait dots in a bubble and out of the sidebar', () => {
+  it('puts thought dots over a working portrait, which has no face to move', () => {
     const picture = 'data:image/webp;base64,UklGRhoAAABXRUJQVlA4TA0AAAAvAAAAEAcQERGIiP4HAA=='
-    const bubble = renderToStaticMarkup(<Avatar name="Smith" color="#D08A3E" src={picture} size={32} working />)
-    const sidebar = renderToStaticMarkup(<Avatar name="Smith" color="#D08A3E" src={picture} size={32} sidebarWorking />)
+    const working = renderToStaticMarkup(<Avatar name="Smith" color="#D08A3E" src={picture} size={32} working />)
 
-    expect(bubble).toContain(picture)
-    expect(bubble).toContain('thought-dots')
-    expect(dot(bubble)).toBe('var(--accent-fg)')
-    expect(sidebar).not.toContain('thought-dots')
+    expect(working).toContain(picture)
+    expect(working).toContain('thought-dots')
+    expect(dot(working)).toBe('var(--accent-fg)')
+    expect(renderToStaticMarkup(<Avatar name="Smith" color="#D08A3E" src={picture} size={32} />)).not.toContain('thought-dots')
   })
 })

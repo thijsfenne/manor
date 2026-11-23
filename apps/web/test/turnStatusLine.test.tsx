@@ -251,6 +251,5 @@ describe('the status line beside a persona’s name', () => {
     expect(html).toContain('text-text')
     expect(html).not.toContain('text-[var(--accent-fg)]')
     expect(html).toContain('mo-always')
-    expect(html).not.toContain('data-sidebar-working')
   })
 })

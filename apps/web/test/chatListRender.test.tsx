@@ -128,17 +128,38 @@ describe('the chat list on screen', () => {
 
     const settled = render(agents, chats)
 
-    // Running is the Work spinner and a held working face; both settle with the turn.
-    expect(working).toContain('aria-label="Working"')
-    expect(working).toContain('animate-spin-calm')
-    expect(working).toContain('data-sidebar-working="true"')
+    // Running is her own face playing the working loop, with no spinner beside it; it settles with the turn.
+    expect(working).toContain('mo-always')
+    expect(working).toContain('<span class="sr-only">Working</span>')
+    expect(working).not.toContain('animate-spin-calm')
     expect(working).not.toContain('thought-dots')
-    expect(settled).not.toContain('animate-spin-calm')
-    expect(settled).not.toContain('data-sidebar-working')
+    expect(settled).not.toContain('mo-always')
+    expect(settled).not.toContain('Working')
     expect(waiting).toContain('Waiting')
     expect(waiting).not.toContain('Working')
-    expect(waiting).not.toContain('data-sidebar-working')
+    expect(waiting).not.toContain('mo-always')
     expect(waiting).toContain('text-warn')
+  })
+
+  it('keeps the time and the Done dot on a row whose face is working', () => {
+    const agents = [agent('iris', 'Iris', '#8b5cf6')]
+    const chats = [chat({ id: 'dm', kind: 'dm', memberIds: ['iris'], lastMessageAt: Date.now() - 120_000 })]
+    const turn = { runningTurns: ['turn_1'], runStartedAt: 1, sawStart: true, awaitingInput: [], answeredInput: [] }
+
+    expect(render(agents, chats, { dm: { unread: false, ...turn } })).toContain('2m')
+    expect(render(agents, chats, { dm: { unread: true, ...turn } })).toContain('aria-label="Done"')
+  })
+
+  // A group has no one face to move, so its row still says it is working the way the Work inbox does.
+  it('keeps the spinner on a running group, whose row has no single face', () => {
+    const agents = [agent('iris', 'Iris', '#8b5cf6'), agent('sage', 'Sage', '#22c55e')]
+    const chats = [chat({ id: 'room', kind: 'group', memberIds: ['iris', 'sage'], lastMessageAt: Date.now() })]
+    const working = render(agents, chats, {
+      room: { unread: false, runningTurns: ['turn_1'], runStartedAt: 1, sawStart: true, awaitingInput: [], answeredInput: [] },
+    })
+
+    expect(working).toContain('aria-label="Working"')
+    expect(working).toContain('animate-spin-calm')
   })
 
   // The stage says what it is fetching; a list that said it too would put a word
@@ -179,7 +200,7 @@ describe('the chat list on screen', () => {
     expect(html).toContain('bg-role-badge')
   })
 
-  it('puts the chief’s working spinner in the top right of her card', () => {
+  it('shows the chief working on her own face, with no spinner on her card', () => {
     const chief = { ...agent('jeeves', 'Jeeves', '#8b5cf6'), isCos: true, pinned: true }
     const chats = [chat({ id: 'dm_jeeves', kind: 'dm', memberIds: ['jeeves'], lastMessageAt: Date.now() })]
     const working = render([chief], chats, {
@@ -187,11 +208,12 @@ describe('the chat list on screen', () => {
     })
     const settled = render([chief], chats)
 
-    expect(working).toContain('absolute right-3 top-3')
-    expect(working).toContain('aria-label="Working"')
-    expect(working).toContain('data-sidebar-working="true"')
-    expect(settled).not.toContain('absolute right-3 top-3')
-    expect(settled).not.toContain('data-sidebar-working')
+    expect(working).toContain('mo-always')
+    expect(working).toContain('<span class="sr-only">Working</span>')
+    expect(working).not.toContain('animate-spin-calm')
+    expect(working).not.toContain('absolute right-3 top-3')
+    expect(settled).not.toContain('mo-always')
+    expect(settled).not.toContain('Working')
   })
 
   // Her place above the list is a layout, not a smaller set of acts: the delete a

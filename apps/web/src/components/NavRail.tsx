@@ -240,7 +240,7 @@ function NavRailDoors({
           <div className="flex flex-col items-center gap-1">
             {pins.map(({ agent, unread, running, waiting }) => {
               const current = agent.id === stageAgentId
-              const standing = waiting ? ', waiting for you' : unread ? ', unread messages' : ''
+              const standing = `${running && !waiting ? ', working' : ''}${waiting ? ', waiting for you' : unread ? ', unread messages' : ''}`
               return (
                 <button
                   key={agent.id}
@@ -273,7 +273,7 @@ function NavRailDoors({
                       tone={agent.avatarTone}
                       size={size - 12}
                       center
-                      sidebarWorking={running && !waiting}
+                      working={running && !waiting}
                     />
                   </span>
                   {waiting || unread ? (

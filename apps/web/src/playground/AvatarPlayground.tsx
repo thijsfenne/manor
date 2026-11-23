@@ -6,17 +6,17 @@ import { FACE_LOOK, type FaceState } from '@manor/client-runtime/face-activity'
 import { GESTURES, type GestureId } from '@manor/client-runtime/face-gesture'
 import { useEffect, useId, useRef, useState } from 'react'
 import { accentHue } from '../accent'
-import { BLOB_FACE_TRAITS, BLOB_SHAPES, BLOB_TONES, DEFAULT_BLOB_TONE, SIDEBAR_WORKING_GAZE, WORKING_GAZE } from '../blobShapes'
+import { BLOB_FACE_TRAITS, BLOB_SHAPES, BLOB_TONES, DEFAULT_BLOB_TONE, WORKING_GAZE } from '../blobShapes'
 import { ThoughtDots } from '../components/Avatar'
 import { Icon } from '../components/Icon'
 import { Button } from '../components/ui/Button'
 import { FormField, formFieldClass, formHintClass, formInputClass, formLabelClass } from '../components/ui/FormField'
 import { Select } from '../components/ui/Select'
 import { Switch } from '../components/ui/Switch'
-import { BUSY_LOOK, VARIATIONS, VARIATION_IDS, stepLabels, useBusyFace, type BusyLook, type Segment } from '../components/busyFace'
+import { BUSY_LOOK, MOVE_IDS, moveInfo, useBusyFace, type BusyLook, type BusyRun } from '../components/busyFace'
 import { useFaceEyes, useFaceGesture } from '../components/faceMotion'
 
-type Mode = 'resting' | 'working' | 'sidebar' | 'busy'
+type Mode = 'resting' | 'working' | 'busy'
 
 /**
  * Everything one face is drawn from. Plain data, because it is posted into the two
@@ -54,15 +54,15 @@ const EXPRESSIONS = Object.entries(poses).filter(
 const MODES = [
   { value: 'resting', label: 'Resting' },
   { value: 'working', label: 'Working, reduced motion' },
-  { value: 'sidebar', label: 'Sidebar working' },
   { value: 'busy', label: 'Working' },
 ] as const
 
-const VARIATION_OPTIONS = [
-  { value: 'shuffle', label: 'Shuffle, like a turn' },
-  ...VARIATION_IDS.map((id) => ({ value: id, label: VARIATIONS[id].label })),
-  { value: 'dots', label: 'Dots alone, held' },
-] as const
+/** What the working face can be asked to play: the loop as a turn plays it, each of its moves, and the dots. */
+const PLAYS: ReadonlyArray<{ play: BusyLook['play']; label: string; hint: string }> = [
+  { play: 'loop', label: 'Loop', hint: 'All eight moves in a shuffled order, as a turn plays them. Another order on every play.' },
+  ...MOVE_IDS.map((id) => ({ play: id, label: moveInfo(id).label, hint: `${moveInfo(id).label}, ${moveInfo(id).seconds.toFixed(1)} s.` })),
+  { play: 'dots', label: 'Dots', hint: 'The melt into three dots, held while she writes.' },
+]
 
 const named = (id: string) => id.charAt(0).toUpperCase() + id.slice(1)
 const GESTURE_OPTIONS = [{ value: '', label: 'None' }, ...Object.keys(GESTURES).map((id) => ({ value: id, label: named(id) }))]
@@ -122,7 +122,13 @@ export function AvatarPlayground() {
   }
 
   const busy = settings.mode === 'busy'
-  const gazePinned = settings.mode === 'working' || settings.mode === 'sidebar'
+  const gazePinned = settings.mode === 'working'
+  const single = settings.busy.play !== 'loop' && settings.busy.play !== 'dots'
+  // A move played once leaves the face at rest, so there is nothing to stop: the button plays it again.
+  const stops = busy && !(single && settings.busy.once)
+  // Every play is a new start, in another order of moves, the way the next turn would be.
+  const start = (change: Partial<BusyLook> = {}) =>
+    setSettings((current) => ({ ...current, mode: 'busy', moment: '', busy: { ...current.busy, ...change, seed: (current.busy.seed ?? 0) + 1 } }))
 
   return (
     <div className="flex h-full bg-bg text-text">
@@ -135,19 +141,12 @@ export function AvatarPlayground() {
         <Button
           variant="primary"
           className="inline-flex items-center justify-center gap-2"
-          aria-pressed={busy}
+          aria-pressed={stops}
           disabled={!busy && !settings.animate}
-          onClick={() =>
-            // Each play starts a shuffle on the next variation, the way the next turn would.
-            setSettings((current) =>
-              current.mode === 'busy'
-                ? { ...current, mode: 'resting' }
-                : { ...current, mode: 'busy', busy: { ...current.busy, seed: (current.busy.seed ?? 0) + 1 } },
-            )
-          }
+          onClick={() => (stops ? setSettings((current) => ({ ...current, mode: 'resting', moment: '' })) : start())}
         >
-          <Icon icon={busy ? StopIcon : PlayIcon} size={16} />
-          {busy ? 'Stop' : 'Play busy eyes'}
+          <Icon icon={stops ? StopIcon : PlayIcon} size={16} />
+          {stops ? 'Stop' : `Play ${PLAYS.find((each) => each.play === settings.busy.play)?.label.toLowerCase() ?? ''}`}
         </Button>
 
         <FormField label="Name">
@@ -191,30 +190,32 @@ export function AvatarPlayground() {
           </div>
         )}
 
-        <section aria-label="Busy eyes" className="flex flex-col gap-3 border-t border-line pt-4">
-          <h2 className="text-[14px] font-medium">Busy eyes</h2>
-          <FormField
-            label="Variation"
-            custom
-            hint={
-              settings.busy.variation === 'shuffle'
-                ? 'Starts on another variation each play, then runs through all of them.'
-                : settings.busy.variation === 'dots'
-                  ? 'The melt on its own, held while an answer streams in.'
-                  : stepLabels(settings.busy.variation).join(' · ')
-            }
-          >
-            <Select label="Variation" value={settings.busy.variation} options={VARIATION_OPTIONS} onChange={(variation) => setBusy({ variation })} />
-          </FormField>
+        <section aria-label="Working face" className="flex flex-col gap-3 border-t border-line pt-4">
+          <h2 className="text-[14px] font-medium">Working face</h2>
+          <div role="group" aria-label="Plays" className="grid grid-cols-2 gap-1.5">
+            {PLAYS.map(({ play, label }) => (
+              <Button
+                key={play}
+                size="compact"
+                variant={settings.busy.play === play ? 'primary' : 'secondary'}
+                aria-pressed={busy && settings.busy.play === play}
+                disabled={!settings.animate}
+                onClick={() => start({ play })}
+              >
+                {label}
+              </Button>
+            ))}
+          </div>
+          <p className={formHintClass}>{PLAYS.find((each) => each.play === settings.busy.play)?.hint}</p>
           <div className="flex items-center justify-between">
-            <span className={formLabelClass}>Dots between variations</span>
-            <Switch label="Dots between variations" checked={settings.busy.dots} onChange={(dots) => setBusy({ dots })} />
+            <span className={formLabelClass}>Repeat a single move</span>
+            <Switch label="Repeat a single move" checked={!settings.busy.once} onChange={(repeat) => setBusy({ once: !repeat })} />
           </div>
           <Range label="Speed" value={settings.busy.speed} min={0.25} max={2} step={0.05} digits={2} unit="×" onChange={(speed) => setBusy({ speed })} />
         </section>
 
         <section aria-label="Face traits" className="flex flex-col gap-3 border-t border-line pt-4">
-          <p className={formHintClass}>Pinned for every persona in blob-shapes. Sidebar working and reduced-motion working pin the gaze again.</p>
+          <p className={formHintClass}>Pinned for every persona in blob-shapes. Reduced-motion working pins the gaze again.</p>
           {Object.keys(BLOB_FACE_TRAITS).map((key) => (
             <Range
               key={key}
@@ -282,7 +283,7 @@ export function PlaygroundPane({ theme }: { theme: string }) {
 /**
  * Composed the way `Avatar` composes a persona's face, with the playground's traits in
  * place of the house ones. Busy wears the resting face and traits, so starting and
- * stopping it moves the same eyes rather than drawing a new face.
+ * stopping it moves the same face rather than drawing a new one.
  */
 function Face({ settings }: { settings: Settings }) {
   const { name, color, tone, shape, size, mode, animate } = settings
@@ -290,15 +291,14 @@ function Face({ settings }: { settings: Settings }) {
   // A moment is composed the way `Avatar` composes it: eyes, pose and gesture from one look.
   const look = settings.moment === '' || !animate ? undefined : FACE_LOOK[settings.moment as FaceState]
   const working = look === undefined && mode === 'working'
-  const sidebarWorking = look === undefined && mode === 'sidebar'
-  const traits = { ...settings.traits, ...(sidebarWorking ? SIDEBAR_WORKING_GAZE : working ? WORKING_GAZE : {}) }
+  const traits = { ...settings.traits, ...(working ? WORKING_GAZE : {}) }
   const expression =
     look !== undefined
       ? look.pose === undefined ? undefined : poses[look.pose]
       : mode === 'busy'
       ? undefined
       : settings.expression === AUTO
-        ? working || sidebarWorking
+        ? working
           ? poses.unsure
           : undefined
         : EXPRESSIONS.find(([id]) => id === settings.expression)?.[1]
@@ -306,22 +306,23 @@ function Face({ settings }: { settings: Settings }) {
   const slot = useRef<HTMLSpanElement>(null)
   const busy = animate && (look === undefined ? mode === 'busy' : look.eyes === 'loop' || look.eyes === 'dots')
   const drawn = JSON.stringify([name, color, tone, traits, shape, size])
-  const run = useBusyFace(slot, busy, look?.eyes === 'dots' ? { ...settings.busy, variation: 'dots', dots: true } : settings.busy, drawn)
+  // A moment plays what a turn would: the loop for work, the dots for writing. Going from one to the other is handed over.
+  const run = useBusyFace(slot, busy, look === undefined ? settings.busy : { speed: settings.busy.speed, play: look.eyes === 'dots' ? 'dots' : 'loop' }, drawn)
   const gesture = look === undefined ? settings.gesture : (look.gesture ?? '')
   useFaceGesture(slot, animate && gesture !== '' ? (gesture as GestureId) : undefined, drawn, look?.passes)
-  useFaceEyes(slot, look?.eyes === 'scan' || look?.eyes === 'toward' || look?.eyes === 'seesaw' ? look.eyes : undefined, drawn)
-  const [segment, setSegment] = useState<Segment>()
+  useFaceEyes(slot, look?.eyes === 'toward' ? look.eyes : undefined, drawn)
+  const [now, setNow] = useState<ReturnType<BusyRun['playing']>>()
   useEffect(() => {
     if (!busy) return
-    const timer = window.setInterval(() => setSegment(run.current?.playing()), 200)
+    const timer = window.setInterval(() => setNow(run.current?.playing()), 100)
     return () => window.clearInterval(timer)
   }, [run, busy])
-  const playing = busy ? segment : undefined
+  const playing = busy ? now : undefined
 
   return (
     <>
       {playing === undefined ? null : (
-        <span className="absolute top-4 right-5 text-label text-dim">{playing === 'dots' ? 'Dots' : VARIATIONS[playing].label}</span>
+        <span className="absolute top-4 right-5 text-label text-dim">{playing === 'dots' ? 'Dots' : moveInfo(playing).label}</span>
       )}
       <span
         ref={slot}
@@ -331,7 +332,6 @@ function Face({ settings }: { settings: Settings }) {
         style={{ width: size, height: size }}
         data-avatar="blobatar"
         data-working={working ? 'true' : undefined}
-        data-sidebar-working={sidebarWorking ? 'true' : undefined}
       >
         <Blobatar
           name={name}

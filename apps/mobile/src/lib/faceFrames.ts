@@ -39,16 +39,15 @@ const WALK = 240
 const degrees = (value: number) => `${Number(value.toFixed(3))}deg`
 const percent = (offset: number) => `${Number((Math.min(Math.max(offset, 0), 1) * 100).toFixed(3))}%`
 
-interface FigKey { x: number; y: number; sx: number; sy: number; k: number }
-const HOME: FigKey = { x: 0, y: 0, sx: 1, sy: 1, k: 0 }
+interface FigKey { x: number; y: number; sx: number; sy: number }
+const HOME: FigKey = { x: 0, y: 0, sx: 1, sy: 1 }
 
-/** Lean first, then stretch, then move: the order the Mac's stylesheet composes them in. */
+/** Stretch first, then move: the order the Mac's stylesheet composes them in. */
 const figure = (key: FigKey, unit: number): Transform => [
   { translateX: key.x * unit },
   { translateY: key.y * unit },
   { scaleX: key.sx },
   { scaleY: key.sy },
-  { skewX: degrees(key.k) },
 ]
 const turned = (angle: number, draw: number): Transform => [{ rotate: degrees(angle) }, { scale: draw }]
 
@@ -65,17 +64,15 @@ const repeated = <K extends { offset: number }>(keys: readonly K[], passes: numb
   Array.from({ length: passes }, (_, pass) => keys.filter((key) => pass === 0 || key.offset > 0).map((key) => ({ ...key, offset: (pass + key.offset) / passes }))).flat()
 
 /**
- * A gesture as two layers: `fig` moves, stretches and leans the figure about its foot,
+ * A gesture as two layers: `fig` moves and stretches the figure about its foot,
  * `turn` turns it and draws it in about its middle. `unit` is points per box unit.
  */
 export function gestureFrames(plan: GesturePlan, unit: number, passes?: number): { fig: Layer; turn: Layer } {
   if (passes === undefined) {
     const first = plan.fig[0]!
     const angle = plan.rot[0]!.degrees
-    const draw = plan.draw[0]!.d
-    const offsets = [...new Set([...plan.rot, ...plan.draw].map((key) => key.offset))].sort((a, b) => a - b)
+    const draw = plan.fit.drawIn
     const rot = plan.rot.map((key) => [key.offset, key.degrees] as const)
-    const drawn = plan.draw.map((key) => [key.offset, key.d] as const)
     return {
       fig: {
         home: figure(HOME, unit),
@@ -84,7 +81,7 @@ export function gestureFrames(plan: GesturePlan, unit: number, passes?: number):
           duration: plan.ms,
           passes: 'infinite',
           keyframes: Object.fromEntries(plan.fig.map((key) => [percent(key.offset), {
-            transform: figure({ x: key.x - first.x, y: key.y - first.y, sx: key.sx / first.sx, sy: key.sy / first.sy, k: key.k - first.k }, unit),
+            transform: figure({ x: key.x - first.x, y: key.y - first.y, sx: key.sx / first.sx, sy: key.sy / first.sy }, unit),
           }])),
         },
       },
@@ -94,7 +91,7 @@ export function gestureFrames(plan: GesturePlan, unit: number, passes?: number):
         loop: {
           duration: plan.ms,
           passes: 'infinite',
-          keyframes: Object.fromEntries(offsets.map((offset) => [percent(offset), { transform: turned(at(rot, offset) - angle, at(drawn, offset) / draw) }])),
+          keyframes: Object.fromEntries(rot.map(([offset, degrees]) => [percent(offset), { transform: turned(degrees - angle, 1) }])),
         },
       },
     }
@@ -104,11 +101,9 @@ export function gestureFrames(plan: GesturePlan, unit: number, passes?: number):
   const lead = WALK / duration
   const rot = repeated(plan.rot, passes).map((key) => [key.offset, key.degrees] as const)
   // Drawn in over the first moments, held for the whole of the run, let go at the end.
-  // A full turn tucks in further on top of that while it spins.
   const draw = plan.fit.drawIn
   const drawn = [[0, 1], [lead, draw], [1 - lead, draw], [1, 1]] as const
-  const tucked = repeated(plan.draw, passes).map((key) => [key.offset, key.d / draw] as const)
-  const offsets = [...new Set([...rot, ...drawn, ...tucked].map(([offset]) => offset))].sort((a, b) => a - b)
+  const offsets = [...new Set([...rot, ...drawn].map(([offset]) => offset))].sort((a, b) => a - b)
   return {
     fig: {
       home: figure(HOME, unit),
@@ -120,7 +115,7 @@ export function gestureFrames(plan: GesturePlan, unit: number, passes?: number):
       rest: turned(0, 1),
       // Straight between keys: the keys that draw the body in fall mid swing, and an
       // eased segment on each side of one would stall the turn there.
-      loop: { duration, passes: 1, keyframes: Object.fromEntries(offsets.map((offset) => [percent(offset), { transform: turned(at(rot, offset), at(drawn, offset) * at(tucked, offset)), ease: 'linear' }])) },
+      loop: { duration, passes: 1, keyframes: Object.fromEntries(offsets.map((offset) => [percent(offset), { transform: turned(at(rot, offset), at(drawn, offset)), ease: 'linear' }])) },
     },
   }
 }

@@ -1,4 +1,5 @@
 import { _layout, blobatar } from '@manor/blobatar'
+import { inside } from '@manor/client-runtime/busy-face'
 import { outlinePoints } from '@manor/client-runtime/face-gesture'
 import { describe, expect, it } from 'vitest'
 import { BLOB_FACE_TRAITS, BLOB_SHAPES, blobShapeOf } from './blobShapes'
@@ -69,15 +70,6 @@ describe('blobatar shapes', () => {
   // A working face clips its moving eyes to the core path alone, so eyes outside it
   // would be cut off mid-loop while the head around them still shows.
   it('keeps the eyes inside the core path of every silhouette', () => {
-    const inside = (pts: ReadonlyArray<readonly [number, number]>, [x, y]: readonly [number, number]) => {
-      let hit = false
-      for (let i = 0, j = pts.length - 1; i < pts.length; j = i, i += 1) {
-        const [xi, yi] = pts[i]!
-        const [xj, yj] = pts[j]!
-        if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) hit = !hit
-      }
-      return hit
-    }
     for (const shape of BLOB_SHAPES) {
       for (const name of ['Jeeves', 'Smith', 'Wren']) {
         const markup = blobatar(name, { traits: BLOB_FACE_TRAITS, shape: shape.id })

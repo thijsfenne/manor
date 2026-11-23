@@ -3,9 +3,9 @@ const JUMP = 1e-6
 
 /**
  * Keyframe selectors for a timed track, as Reanimated reads them: fractions of the
- * loop, as strings. A zero-length beat puts two keys at one moment (the busy face's
- * jump from one side of the shape to the other), and a keyframes object would fold
- * those into one, so the later key moves a hair past the earlier and the jump survives.
+ * loop, as strings. A zero-length beat puts two keys at one moment (a jump), and a
+ * keyframes object would fold those into one, so the later key moves a hair past the
+ * earlier and the jump survives.
  */
 export function keyOffsets(times: readonly number[], total: number): string[] {
   let last = -1

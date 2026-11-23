@@ -1620,10 +1620,10 @@ input:focus-visible + .checkbox-box {
   }
 }
 
-/* Only the still working face moves fully. Every other face, the busy face and a
-   sidebar face whose chat is working included, only blinks under whatever drives its
-   eyes: breathe and bob are imperceptible at avatar size, and a screen of fully moving
-   faces kept the GPU busy all day. */
+/* Only the still working face plays the library's own motion. Every other face only
+   blinks, the busy face included, which the working loop moves by itself: breathe and
+   bob are imperceptible at avatar size, and a screen of fully moving faces kept the
+   GPU busy all day. */
 [data-avatar='blobatar']:not([data-working]) .mo-root,
 [data-avatar='blobatar']:not([data-working]) .mo-breathe,
 [data-avatar='blobatar']:not([data-working]) .mo-bob,
@@ -1632,17 +1632,19 @@ input:focus-visible + .checkbox-box {
   animation: none;
 }
 
+/* The working loop fits the body to its slot, so the library's lift on hover would
+   push a leaning face past the edge. `data-busy` is on for as long as the loop holds
+   the face, its walk home included. */
+[data-avatar='blobatar'][data-busy] .mo-root:hover {
+  transform: none;
+}
+
 @media (prefers-reduced-motion: no-preference) {
   [data-avatar='blobatar']:not([data-working]) .mo-eye > * {
     animation-name: mo-blink;
     animation-duration: calc(var(--mo-blink, 4800ms) * var(--mo-rate, 1));
     animation-delay: calc(var(--mo-blink-phase, 0ms) * var(--mo-rate, 1));
   }
-}
-
-/* A sidebar face holds still on hover too. */
-[data-avatar='blobatar'][data-sidebar-working='true'] .mo-root:hover {
-  transform: none;
 }
 
 .thought-dots {
