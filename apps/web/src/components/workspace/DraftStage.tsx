@@ -16,6 +16,7 @@ import { AddFolderDialog } from '../projects/AddFolderDialog'
 import { ProjectPicker } from '../projects/ProjectPicker'
 import { useAddFolder } from '../../useAddFolder'
 import { chatRoster } from '../../chatRoster'
+import { stageTheme } from '../../colorThemes'
 import { insertIntoDraft } from '../../composerDrafts'
 import { roomAgents } from '../../mentions'
 import { effectiveDriver, isAutoOn, withAuto } from '../../runtimeChoices'
@@ -365,7 +366,8 @@ export function DraftStage({
       <main className={birthing === null ? `relative flex ${docked ? '' : 'h-full '}min-h-0 min-w-0 flex-col items-center justify-center bg-bg` : 'flex min-h-0 min-w-0 justify-center bg-bg'}>
         {birthing === null ? (
           <>
-          <StageBackdrop theme={theme} />
+          {/* The scenes are drawn in Manor's tones, so another theme keeps its plain canvas. */}
+          {stageTheme(manor.workspace.houseSettings, theme) === 'manor' ? <StageBackdrop theme={theme} /> : null}
           <div className={`relative flex w-full max-w-[900px] flex-col items-center ${inPane ? 'px-3' : 'px-5'} pt-14 pb-10`}>
             {/* A DM has no room to pick, so the question is simply who is being
                 written to: the picker would be a control with one dead option. */}

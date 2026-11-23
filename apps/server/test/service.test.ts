@@ -676,6 +676,15 @@ describe('ManorService', () => {
     const dictation = { dictationModel: 'parakeet-tdt-v3', dictationLanguage: 'nl', dictationMicrophone: 'usb-mic-1' } as const
     await manor.handle({ type: 'save_house_settings', settings: { ...DEFAULT_HOUSE_SETTINGS, browserSearchEngine: 'kagi', ...dictation } }, reply)
     expect(await store.getHouseSettings()).toEqual({ ...DEFAULT_HOUSE_SETTINGS, browserSearchEngine: 'kagi', ...dictation })
+    // The light and the dark theme are picked apart; a theme the app does not offer is refused.
+    const themes = { lightTheme: 'parchment', darkTheme: 'indigo' } as const
+    await manor.handle({ type: 'save_house_settings', settings: { ...DEFAULT_HOUSE_SETTINGS, browserSearchEngine: 'kagi', ...dictation, ...themes } }, reply)
+    expect(await store.getHouseSettings()).toMatchObject(themes)
+    const repliesBefore = replies.length
+    await manor.handle({ type: 'save_house_settings', settings: { ...DEFAULT_HOUSE_SETTINGS, darkTheme: 'neon' } }, reply)
+    expect(replies.length).toBe(repliesBefore + 1)
+    expect(replies.at(-1)).toMatchObject({ type: 'notice', kind: 'error' })
+    expect(await store.getHouseSettings()).toMatchObject(themes)
 
     const threeDays = 3 * 24 * 60 * 60 * 1000
     expect(await manor.purgeExpiredArchivedChats(archivedAt + threeDays)).toEqual([])

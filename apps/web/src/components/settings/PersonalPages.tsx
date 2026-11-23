@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState, type ChangeEvent } from 'react'
 import { DEFAULT_USER_PROFILE, type AgentConfig, type AgentDraft, type HouseSettings, type SystemInfo, type UserProfile } from '@manor/contracts'
 import { AVATAR_ACCEPT, shrinkToAvatar } from '../../avatar'
+import { DEFAULT_THEMES, type ThemePair } from '../../colorThemes'
 import { cleanDraft, cosOf, draftOf } from '../../persona'
 import type { Notice } from '../../state'
 import type { ThemeChoice as Choice } from '../../useTheme'
@@ -15,7 +16,7 @@ import { BrowserGroup } from './BrowserSettings'
 import { FontGroup } from './FontSettings'
 import { PowerGroup } from './PowerSettings'
 import { SimulatorGroup } from './SimulatorSettings'
-import { ThemePicker } from './ThemePicker'
+import { ModePicker, ThemeGrid } from './ThemePicker'
 
 const OFFLINE = 'Nothing was sent, the connection is down. Try again once it is back.'
 
@@ -193,15 +194,37 @@ function ProfileGroup({ profile, requestEvents, onSave, onProblem, onDismissNoti
   )
 }
 
-export function AppearancePage({ choice, onChange }: { choice: Choice; onChange: (choice: Choice) => void }) {
+export function AppearancePage({ choice, onChange, settings, onSaveSettings }: {
+  choice: Choice
+  onChange: (choice: Choice) => void
+  /** Null until the server has sent them; the theme cards wait, the mode does not. */
+  settings: HouseSettings | null
+  onSaveSettings: (settings: HouseSettings) => void
+}) {
+  const themes = settings === null ? DEFAULT_THEMES : { light: settings.lightTheme, dark: settings.darkTheme }
+  const saveThemes = ({ light, dark }: ThemePair) => {
+    if (settings !== null) onSaveSettings({ ...settings, lightTheme: light, darkTheme: dark })
+  }
   return (
     <SettingsPage title="Appearance">
-      <SettingsGroup title="Theme" onRestore={() => onChange('system')} restoreDisabled={choice === 'system'}>
+      <SettingsGroup title="Mode" onRestore={() => onChange('system')} restoreDisabled={choice === 'system'}>
         <div className="flex flex-col gap-3 pt-2">
-          <ThemePicker choice={choice} onChange={onChange} />
+          <ModePicker choice={choice} themes={themes} onChange={onChange} />
           <p className="m-0 text-label text-muted">System follows macOS. Remembered per device.</p>
         </div>
       </SettingsGroup>
+      {settings === null ? null : (
+        <SettingsGroup
+          title="Themes"
+          onRestore={() => saveThemes(DEFAULT_THEMES)}
+          restoreDisabled={themes.light === DEFAULT_THEMES.light && themes.dark === DEFAULT_THEMES.dark}
+        >
+          <div className="flex flex-col gap-3 pt-2">
+            <ThemeGrid themes={themes} onChange={saveThemes} />
+            <p className="m-0 text-label text-muted">The left orb is the light version, the right orb the dark one. Pick each separately; they may come from different themes.</p>
+          </div>
+        </SettingsGroup>
+      )}
       <FontGroup />
     </SettingsPage>
   )

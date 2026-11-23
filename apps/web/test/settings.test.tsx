@@ -4,7 +4,7 @@ import type { AutoRules, AutoRulesDraft, ContextFile, ProviderUsage } from '@man
 import { AccountPopover } from '../src/components/AccountPopover'
 import { AutoRulesPage } from '../src/components/settings/AutoRulesPage'
 import { reconcileDrafts } from '../src/components/settings/ContextFilesPage'
-import { ThemePicker } from '../src/components/settings/ThemePicker'
+import { ModePicker, ThemeGrid } from '../src/components/settings/ThemePicker'
 import type { RequestResponse } from '../src/useRequest'
 import { isSettingsShortcut, isWorkspaceShortcut } from '../src/components/settings/sections'
 import { useSettings, type SettingsController } from '../src/useSettings'
@@ -197,18 +197,34 @@ describe('account popover', () => {
 })
 
 describe('theme picker', () => {
-  it('keeps only the chosen card in the tab order and moves the choice with the arrows', () => {
+  it('keeps only the chosen mode card in the tab order and moves the choice with the arrows', () => {
     const onChange = vi.fn()
     act(() => {
-      tree = create(<ThemePicker choice="dark" onChange={onChange} />, { createNodeMock: () => ({ focus: () => {} }) })
+      tree = create(<ModePicker choice="dark" themes={{ light: 'manor', dark: 'manor' }} onChange={onChange} />, { createNodeMock: () => ({ focus: () => {} }) })
     })
     const cards = tree!.root.findAll((node) => node.type === 'button' && node.props.role === 'radio')
-    expect(cards.map((card) => card.props['aria-checked'])).toEqual([false, true, false])
-    expect(cards.map((card) => card.props.tabIndex)).toEqual([-1, 0, -1])
+    expect(cards.map((card) => card.props['aria-checked'])).toEqual([false, false, true])
+    expect(cards.map((card) => card.props.tabIndex)).toEqual([-1, -1, 0])
 
-    act(() => cards[1]!.props.onKeyDown({ key: 'ArrowRight', preventDefault: () => {} }))
+    act(() => cards[2]!.props.onKeyDown({ key: 'ArrowRight', preventDefault: () => {} }))
     expect(onChange).toHaveBeenLastCalledWith('system')
-    act(() => cards[1]!.props.onKeyDown({ key: 'ArrowLeft', preventDefault: () => {} }))
+    act(() => cards[2]!.props.onKeyDown({ key: 'ArrowLeft', preventDefault: () => {} }))
     expect(onChange).toHaveBeenLastCalledWith('light')
+  })
+
+  it('picks the light and the dark theme apart, from different themes', () => {
+    const onChange = vi.fn()
+    act(() => {
+      tree = create(<ThemeGrid themes={{ light: 'parchment', dark: 'manor' }} onChange={onChange} />)
+    })
+    const orb = (label: string) => tree!.root.find((node) => node.type === 'button' && node.props['aria-label'] === label)
+    expect(orb('Parchment for light mode').props['aria-pressed']).toBe(true)
+    expect(orb('Parchment for dark mode').props['aria-pressed']).toBe(false)
+
+    act(() => orb('Indigo for dark mode').props.onClick())
+    expect(onChange).toHaveBeenLastCalledWith({ light: 'parchment', dark: 'indigo' })
+    onChange.mockClear()
+    act(() => orb('Parchment for light mode').props.onClick())
+    expect(onChange).not.toHaveBeenCalled()
   })
 })

@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
+import type { HouseSettings } from '@manor/contracts'
+import { applyThemes } from './colorThemes'
 
 /** What the user picked. `system` is a standing deferral, not a third palette. */
 export type ThemeChoice = 'system' | 'light' | 'dark'
@@ -80,4 +82,16 @@ function read(): ThemeChoice {
   } catch {
     return 'system'
   }
+}
+
+/**
+ * Keeps the colour themes on the page in step with the settings record. Until the
+ * record arrives the page shows what index.html laid from the last session's cache.
+ */
+export function useColorThemes(settings: HouseSettings | null) {
+  const light = settings?.lightTheme
+  const dark = settings?.darkTheme
+  useEffect(() => {
+    if (light !== undefined && dark !== undefined) applyThemes({ light, dark })
+  }, [light, dark])
 }

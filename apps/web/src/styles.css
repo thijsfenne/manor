@@ -423,11 +423,11 @@
  * its fills.
  */
 :root[data-theme='light'] .sidebar-surface {
-  --color-surface-2: #e8eaee;
-  --color-tree-hover: #e8eaee;
-  --color-user-bg: #e3e5e9;
-  --color-icon-fill: #e3e5e9;
-  --color-composer-tray: #ffffff;
+  --color-surface-2: var(--color-side-hover);
+  --color-tree-hover: var(--color-side-hover);
+  --color-user-bg: var(--color-user-bubble);
+  --color-icon-fill: var(--color-user-bubble);
+  --color-composer-tray: var(--color-raised);
 }
 
 /*
@@ -519,6 +519,9 @@
   --color-frame: #e9ebef;
   --color-frame-fill: #d9dde3;
   --color-user-bg: #e8eaee;
+  /* The hover fill on the sidebar's grey step, the selected fill of the white stage.
+     Its own name because inside `.sidebar-surface` user-bg itself moves. */
+  --color-side-hover: #e8eaee;
   --color-menu-selected: #dcdfe4;
   --color-user-bubble: #e3e5e9;
   --color-bubble: #eff1f4;
@@ -662,28 +665,6 @@ body,
 @utility surface-floating {
   background-color: color-mix(in srgb, var(--color-raised) 70%, transparent);
   backdrop-filter: blur(16px) saturate(1.08);
-}
-
-/* The miniature Manor on each Appearance theme card. A card shows its own theme
-   whichever one is on screen, so these cannot follow `data-theme`; they restate the
-   dark defaults and the light block above, and move with them when the palette does.
-   The card reads them as `bg-(--preview-canvas)` and so on. */
-@utility theme-preview-dark {
-  --preview-sidebar: #121314;
-  --preview-canvas: #0f1011;
-  --preview-bubble: #191a1b;
-  --preview-own: #26262b;
-  --preview-composer: #171819;
-  --preview-line: rgb(255 255 255 / 8%);
-}
-
-@utility theme-preview-light {
-  --preview-sidebar: #f7f8fa;
-  --preview-canvas: #ffffff;
-  --preview-bubble: #eff1f4;
-  --preview-own: #e3e5e9;
-  --preview-composer: #ffffff;
-  --preview-line: rgb(0 0 0 / 11%);
 }
 
 /* Native guests must not take the pointer from the shell during a panel drag. */

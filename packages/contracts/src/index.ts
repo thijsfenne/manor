@@ -2964,6 +2964,9 @@ export type DictationModelId = z.infer<typeof DictationModelIdSchema>
 /** `auto` lets the model find the language itself. */
 export const DictationLanguageSchema = z.enum(['auto', 'nl', 'en'])
 export type DictationLanguage = z.infer<typeof DictationLanguageSchema>
+/** The colour themes Appearance offers. `manor` is the house tones, unchanged. */
+export const ColorThemeSchema = z.enum(['manor', 'parchment', 'indigo', 'moss', 'plum'])
+export type ColorTheme = z.infer<typeof ColorThemeSchema>
 
 export const HouseSettingsSchema = z.object({
   /** A project chat quiet this long is settled. Null leaves every chat where it is. */
@@ -3009,6 +3012,9 @@ export const HouseSettingsSchema = z.object({
    * downloaded, started or listed, and the panel's door is not drawn.
    */
   simulator: z.boolean().default(false),
+  /** The colour theme while the light mode shows, and while the dark mode shows. */
+  lightTheme: ColorThemeSchema.default('manor'),
+  darkTheme: ColorThemeSchema.default('manor'),
 })
 export type HouseSettings = z.infer<typeof HouseSettingsSchema>
 

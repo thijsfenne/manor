@@ -17,6 +17,8 @@
 #   - apps/desktop/src/browserHost.ts  Electron native view background; a chrome
 #                                    surface outside the DOM cannot read a CSS token
 #   - apps/mobile/src/theme.ts       the native app's own token file (no CSS there)
+#   - apps/web/src/colorThemes.ts    the Appearance themes' palettes; written onto the
+#                                    tokens at runtime, and drawn on each theme's card
 
 set -uo pipefail
 
@@ -41,6 +43,7 @@ case "$file" in
   */apps/server/src/agents.ts) exit 0 ;;
   */apps/desktop/src/browserHost.ts) exit 0 ;;
   */apps/mobile/src/theme.ts) exit 0 ;;
+  */apps/web/src/colorThemes.ts) exit 0 ;;
   */apps/web/test/*.test.ts|*/apps/web/test/*.test.tsx) exit 0 ;;
   *.tsx|*.ts|*.jsx|*.js) ;;
   *) exit 0 ;;

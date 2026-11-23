@@ -61,7 +61,7 @@ import { chatOnStage, focusedSplitChatId, occupiedSplitIds, type SplitStage } fr
 import { useSplitActions, useSplitStage } from './useSplitStage'
 import { subagentChrome } from './subagentChrome'
 import { useSubagentViews } from './useSubagentViews'
-import { useTheme } from './useTheme'
+import { useColorThemes, useTheme } from './useTheme'
 import { useViewportWidth } from './useViewportWidth'
 import { useWorkspace, type WorkspaceAuth } from './useWorkspace'
 import { useWorkspaceLists } from './useWorkspaceLists'
@@ -119,6 +119,7 @@ function Workspace({
 }) {
   const manor = useWorkspace(WS_URL, auth)
   const { workspace, status } = manor
+  useColorThemes(workspace.houseSettings)
   const viewportWidth = useViewportWidth()
   const phone = isPhoneLayout(viewportWidth)
   /** Focus mode as asked for; see `focusMode` below. While it is on, the hidden chrome's own keys are off. */

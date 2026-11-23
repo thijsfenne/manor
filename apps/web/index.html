@@ -26,6 +26,17 @@
       } catch (error) {
         document.documentElement.dataset.theme = 'dark'
       }
+      // The colour themes picked in Appearance, as colorThemes.ts last wrote them: same
+      // key, same style id. Absent means the house tones, which need no sheet.
+      try {
+        var palette = localStorage.getItem('manor:palette')
+        if (palette) {
+          var sheet = document.createElement('style')
+          sheet.id = 'manor-palette'
+          sheet.textContent = palette
+          document.head.appendChild(sheet)
+        }
+      } catch (error) {}
     </script>
   </head>
   <body>

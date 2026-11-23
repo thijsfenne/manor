@@ -73,7 +73,7 @@ export function SettingsHost({
           />
         )
       case 'appearance':
-        return <AppearancePage choice={theme.choice} onChange={theme.set} />
+        return <AppearancePage choice={theme.choice} onChange={theme.set} settings={workspace.houseSettings} onSaveSettings={manor.saveHouseSettings} />
       case 'keybindings':
         return <KeybindingsPage />
       case 'voice':
