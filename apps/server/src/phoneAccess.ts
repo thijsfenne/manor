@@ -51,6 +51,8 @@ export function createPhoneAccess(options: {
   broadcast: (message: ServerMessage) => void
   /** Removes a push address from the house's list, so a revoked phone gets no more notices. */
   dropPushToken: (token: string) => void
+  /** A device was revoked; anything it was handed outside its socket must stop working too. */
+  onRevoked?: (deviceId: string) => void
 }) {
   const sockets = new Map<PhoneSocket, Connection>()
   let tailscale: TailscaleStatus | undefined
@@ -75,9 +77,10 @@ export function createPhoneAccess(options: {
   /** Revoke from Settings or from the device itself: token, push address and open sockets all go. */
   const forget = (deviceId: string) => {
     const pushToken = options.devices.pushToken(deviceId)
-    options.devices.revoke(deviceId)
+    const revoked = options.devices.revoke(deviceId)
     if (pushToken !== null) options.dropPushToken(pushToken)
     closeDevice(deviceId)
+    if (revoked) options.onRevoked?.(deviceId)
     announce()
   }
 

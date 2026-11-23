@@ -38,6 +38,24 @@ describe('chatRailItems', () => {
       expect(items).toEqual([expect.objectContaining({ id: 'agents', label: 'Session', busy: true })])
     })
   })
+  describe('the Simulator door', () => {
+    const has = (kind: Chat['kind'], extra: Partial<Parameters<typeof chatRailItems>[1]> = {}) =>
+      chatRailItems({ kind } as Chat, { ...options, hasSimulator: true, ...extra }).some((item) => item.id === 'simulator')
+    it('sits in a standalone Session and in a Session its project thread started', () => {
+      expect(has('project')).toBe(true)
+      expect(has('project', { roomSession: true, hasRepo: false })).toBe(true)
+    })
+    it('is absent from the project thread, a DM, the phone and other chat kinds', () => {
+      expect(has('project', { projectThread: true })).toBe(false)
+      expect(has('dm')).toBe(false)
+      expect(has('project', { phone: true })).toBe(false)
+      expect(has('group')).toBe(false)
+    })
+    it('is absent everywhere while the Settings toggle is off', () => {
+      expect(has('project', { hasSimulator: false })).toBe(false)
+      expect(has('project', { roomSession: true, hasSimulator: false })).toBe(false)
+    })
+  })
   describe('offersSideChat', () => {
     const offers = (kind: Chat['kind'], extra: Partial<Parameters<typeof chatRailItems>[1]> = {}) =>
       offersSideChat(chatRailItems({ kind } as Chat, { ...options, ...extra }))

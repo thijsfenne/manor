@@ -27,6 +27,7 @@ import {
   type ServerMessage,
   type SubagentPolicy,
   type UserProfile,
+  type SimulatorAction,
   type HouseSettings,
   type UsageWindowDays,
   type ContextFileName,
@@ -441,6 +442,8 @@ export interface Manor {
   updateProviders: (provider?: ProviderUpdate['provider']) => boolean
   /** Asks every provider CLI again whether it is installed and signed in; the answer is `workspace.providerConnections`. */
   checkProviders: () => boolean
+  /** A Simulator panel action; the answer is `workspace.simulator`. */
+  simulatorAction: (action: SimulatorAction, udid?: string) => boolean
   /** Starts the provider's own sign-in on the Mac, which opens the browser there. */
   signInProvider: (provider: ProviderUpdate['provider']) => boolean
   /** Stops waiting for a sign-in that was started and abandoned. */
@@ -1236,6 +1239,10 @@ export function useWorkspace(url: string, auth?: WorkspaceAuth): Manor {
   )
 
   const checkProviders = useCallback(() => send({ type: 'check_providers' }), [send])
+  const simulatorAction = useCallback(
+    (action: SimulatorAction, udid?: string) => send({ type: 'simulator', action, ...(udid === undefined ? {} : { udid }) }),
+    [send],
+  )
   const signInProvider = useCallback((provider: ProviderUpdate['provider']) => send({ type: 'sign_in_provider', provider }), [send])
   const cancelProviderSignIn = useCallback((provider: ProviderUpdate['provider']) => send({ type: 'cancel_provider_sign_in', provider }), [send])
   const installProvider = useCallback((provider: ProviderUpdate['provider']) => send({ type: 'install_provider', provider }), [send])
@@ -1797,6 +1804,7 @@ export function useWorkspace(url: string, auth?: WorkspaceAuth): Manor {
     refreshProviderUsage,
     updateProviders,
     checkProviders,
+    simulatorAction,
     signInProvider,
     cancelProviderSignIn,
     installProvider,

@@ -6,7 +6,7 @@ export const DOCK_PANEL_GAP = 8
 const KEY = 'manor:right-panel-by-chat'
 
 /** The panels the rail can put in the region beside the chat. */
-export type RightPanelId = 'agent' | 'memory' | 'agents' | 'files' | 'browser' | 'runs' | 'side' | 'knowledge' | 'diff'
+export type RightPanelId = 'agent' | 'memory' | 'agents' | 'files' | 'browser' | 'runs' | 'side' | 'knowledge' | 'diff' | 'simulator'
 
 /** The rail shortcuts, kept pure so a key cannot quietly steal a native command. */
 export function rightPanelShortcut(
@@ -206,7 +206,7 @@ export const MAX_RIGHT_PANELS = 4
 
 export const NO_PANELS: PanelLayout = []
 
-const PANEL_IDS: readonly RightPanelId[] = ['agent', 'memory', 'agents', 'files', 'browser', 'runs', 'side', 'knowledge', 'diff']
+const PANEL_IDS: readonly RightPanelId[] = ['agent', 'memory', 'agents', 'files', 'browser', 'runs', 'side', 'knowledge', 'diff', 'simulator']
 const isPanelId = (value: string): value is RightPanelId => (PANEL_IDS as readonly string[]).includes(value)
 
 export const layoutHas = (layout: PanelLayout, id: RightPanelId) => layout.some((column) => column.includes(id))

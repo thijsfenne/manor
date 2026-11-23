@@ -65,7 +65,7 @@ const props = (chat: Chat): ComponentProps<typeof ChatPanelRegion> => ({
   instant: false, ownsBrowserView: true, browserBridge: undefined, selectedFile: `${chat.id}.md`,
   setSelectedFiles: vi.fn(), selectedNote: null, setSelectedNotes: vi.fn(), pageContextCount: 0, onAddPageContext: vi.fn(),
   onQuoteNote: vi.fn(), onAddNoteToSideChat: vi.fn(),
-  onClose: vi.fn(), onFloat: vi.fn(),
+  onClose: vi.fn(), onFloat: vi.fn(), onFloatSimulator: vi.fn(),
   onOpenChat: vi.fn(), onRevealMessage: vi.fn(), onOpenRoutine: vi.fn(), onOpenRoutines: vi.fn(),
   onDialogChange: vi.fn(), onEditGroup: vi.fn(),
   diffScope: { kind: 'session' }, onDiffScope: vi.fn(), onToggleDiff: vi.fn(), onOpenFile: vi.fn(),

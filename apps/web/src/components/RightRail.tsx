@@ -1,6 +1,6 @@
 import { useLayoutEffect, useRef, useState, type ComponentProps, type RefObject } from 'react'
 import type { Chat } from '@manor/contracts'
-import { Clock01Icon, BookOpen01Icon, BubbleChatQuestionIcon, Files01Icon, Folder01Icon, Globe02Icon, MoreVerticalIcon } from '@hugeicons/core-free-icons'
+import { Clock01Icon, BookOpen01Icon, BubbleChatQuestionIcon, Files01Icon, Folder01Icon, Globe02Icon, MoreVerticalIcon, SmartPhone01Icon } from '@hugeicons/core-free-icons'
 import {
   Clock01Icon as Clock01SolidIcon,
   BookOpen01Icon as BookOpen01SolidIcon,
@@ -9,6 +9,7 @@ import {
   Folder01Icon as Folder01SolidIcon,
   GitCompareIcon as GitCompareSolidIcon,
   Globe02Icon as Globe02SolidIcon,
+  SmartPhone01Icon as SmartPhone01SolidIcon,
 } from '@manor/client-runtime/solid-icons'
 import { MAX_RIGHT_PANELS, layoutFull, layoutHas, type PanelLayout, type RightPanelId } from '../useRightPanel'
 import { AiBotHeadLookingIcon, AiBotHeadLookingSolidIcon, SessionListIcon, SessionListSolidIcon } from './customIcons'
@@ -43,6 +44,7 @@ const ACTIVE_ICON: Record<RightPanelId, RailItem['icon']> = {
   files: Folder01SolidIcon,
   knowledge: BookOpen01SolidIcon,
   browser: Globe02SolidIcon,
+  simulator: SmartPhone01SolidIcon,
   memory: Files01SolidIcon,
   diff: GitCompareSolidIcon,
 }
@@ -77,15 +79,24 @@ export function chatRailItems(
     hasHelpers?: boolean
     /** Any of them is working now. */
     helpersRunning?: boolean
+    /** The Settings toggle for the iOS Simulator is on (desktop and web, never the phone). */
+    hasSimulator?: boolean
   },
 ): RailItem[] {
   if (chat.kind === 'pair') return []
   const hasHelpers = options.hasHelpers === true
   const busy = options.helpersRunning === true ? { busy: true } : {}
+  // One device on the Mac, watched from any Session: never a DM's or a project thread's door.
+  const simulator: RailItem[] = options.hasSimulator === true && !options.phone && chat.kind === 'project' && options.projectThread !== true
+    ? [{ id: 'simulator', label: 'Simulator', icon: SmartPhone01Icon }]
+    : []
   if (options.roomSession === true) {
-    return (options.hasRepo === true && !options.phone) || hasHelpers
-      ? [{ id: 'agents', label: options.hasRepo === true ? 'Session' : 'Agents', icon: SessionListIcon, ...busy }]
-      : []
+    return [
+      ...((options.hasRepo === true && !options.phone) || hasHelpers
+        ? [{ id: 'agents' as const, label: options.hasRepo === true ? 'Session' : 'Agents', icon: SessionListIcon, ...busy }]
+        : []),
+      ...simulator,
+    ]
   }
   const memory: RailItem[] =
     chat.kind === 'dm'
@@ -111,6 +122,7 @@ export function chatRailItems(
     ...(options.canBrowseFiles ? [{ id: 'files' as const, label: 'Files', icon: Folder01Icon }] : []),
     ...(options.hasVault && !projectThread ? [{ id: 'knowledge' as const, label: 'Knowledge', icon: BookOpen01Icon }] : []),
     ...(options.hasBrowser ? [{ id: 'browser' as const, label: 'Browser', icon: Globe02Icon }] : []),
+    ...simulator,
     ...memory,
   ]
 }

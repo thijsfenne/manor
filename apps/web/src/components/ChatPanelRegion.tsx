@@ -21,6 +21,7 @@ import { chatHasRepo, sessionHandoffKey, waitingGoal } from '../sessionRepo'
 import type { WorkResultActions } from './WorkResultBody'
 import { BrowserPanel } from './BrowserPanel'
 import { SideChatPanel } from './SideChatPanel'
+import { SimulatorPanel } from './SimulatorPanel'
 import { AgentSettingsPanel } from './agents/AgentSettingsPanel'
 import { DEFAULT_PROFILE_PHOTO } from './AccountPopover'
 import { ProjectMemoryPanel } from './ProjectMemoryPanel'
@@ -64,6 +65,9 @@ interface ChatPanelRegionProps {
   /** A tile dragged onto another, against the layout on screen. Absent where tiles stay put. */
   onMove?: (id: RightPanelId, target: RightPanelId, drop: PanelDrop, shown: PanelLayout) => void
   onFloat: (chatId: string) => void
+  /** Floats the simulator's screen over this chat, by the panel's own Float only. */
+  /** Absent in a split stage, where the floating simulator has no single chat to sit over. */
+  onFloatSimulator?: (chatId: string) => void
   /** Copies a chat page into the Browser tab set. Absent without the desktop host. */
   onSendToBrowser?: (url: string) => Promise<void>
   onOpenBrowser?: () => void
@@ -92,7 +96,7 @@ interface ChatPanelRegionProps {
 export function ChatPanelRegion({
   chat: open, manor, layout, availableWidth, overlayResizable, floating: floatAlways = false, phone, focused, ownsBrowserView, instant, browserBridge,
   selectedFile, setSelectedFiles, selectedNote, setSelectedNotes, pageContextCount, onAddPageContext,
-  onQuoteNote, onAddNoteToSideChat, onClose, onMove, onFloat, onSendToBrowser, onOpenBrowser, onOpenChat, onRevealMessage, onOpenRoutine, onOpenRoutines,
+  onQuoteNote, onAddNoteToSideChat, onClose, onMove, onFloat, onFloatSimulator, onSendToBrowser, onOpenBrowser, onOpenChat, onRevealMessage, onOpenRoutine, onOpenRoutines,
   onDialogChange, onEditGroup, diffScope, onDiffScope, onToggleDiff, onOpenFile, subagentPath, onOpenSubagent,
   noteRequest, onNoteRequestHandled, hidden = false,
 }: ChatPanelRegionProps) {
@@ -521,6 +525,25 @@ export function ChatPanelRegion({
         onClose={close}
         {...(onSendToBrowser === undefined ? {} : { onSendToBrowser })}
         {...(onOpenBrowser === undefined ? {} : { onOpenBrowser })}
+      />
+    )
+    if (id === 'simulator') return (
+      <SimulatorPanel
+        state={workspace.simulator}
+        connected={status === 'live'}
+        onAction={manor.simulatorAction}
+        width={dock.width}
+        overlay={dock.overlay}
+        revealed={dock.revealed}
+        resizing={dock.resizing}
+        resizeProps={dock.resizeProps}
+        {...(onFloatSimulator === undefined ? {} : {
+          onFloat: () => {
+            onFloatSimulator(open.id)
+            close()
+          },
+        })}
+        onClose={close}
       />
     )
     if (id === 'side') return (

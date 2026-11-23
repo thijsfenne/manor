@@ -6,6 +6,7 @@ import { ProjectSessionsOverview, SessionsOverviewDoor, SettleButton } from '../
 import { ChatPane } from '../ChatPane'
 import { ChatPanelRegion } from '../ChatPanelRegion'
 import { BrowserPreview } from '../BrowserPreview'
+import { SimulatorFloat } from '../SimulatorPanel'
 import { ExternalLinkProvider } from '../ExternalLink'
 import { ConnectCardProvider } from '../ConnectCards'
 import { chatHelperFlags } from '../../chatHelpers'
@@ -73,6 +74,7 @@ export interface StageKit {
   pageContexts: ReturnType<typeof usePageContexts>
   reveals: ReturnType<typeof useRevealRequests>
   floatingBrowser: ReturnType<typeof useFloatingBrowser>
+  floatingSimulator: ReturnType<typeof useFloatingBrowser>
   browserBridge: DesktopBrowserBridge | undefined
   /** The open chat's rail and what its region shows; each pane of a split works out its own. */
   railItems: RailItem[]
@@ -129,7 +131,7 @@ export function ChatStage({
   canStartChat: boolean
   theme: Theme
 }) {
-  const { manor, phone, open, stage, split, nav, dialogs, rightPanel, floatingBrowser, browserBridge, running, focusMode } = kit
+  const { manor, phone, open, stage, split, nav, dialogs, rightPanel, floatingBrowser, floatingSimulator, browserBridge, running, focusMode } = kit
   const { workspace, status } = manor
   const { visibleSplit, roomUp } = stage
   const { splitStage, splitRightPane, overviewShown, paneSplit } = split
@@ -323,6 +325,17 @@ export function ChatStage({
                 onDismiss={() => floatingBrowser.dismiss(open.id)}
                 onOpen={() => { floatingBrowser.land(); rightPanel.show('browser') }}
                 turns={running} onStop={manor.stopTurn}
+              />
+            </div>
+          ) : null}
+          {floatingSimulator.floatingChatId === open.id && !focusMode && !floatingSimulator.isDismissed(open.id) ? (
+            <div className="pointer-events-none absolute inset-x-4 top-4 z-[var(--z-browser-controls)] flex justify-end">
+              <SimulatorFloat
+                state={manor.workspace.simulator}
+                connected={manor.status === 'live'}
+                onAction={manor.simulatorAction}
+                onDock={() => { floatingSimulator.land(); rightPanel.show('simulator') }}
+                onClose={() => floatingSimulator.dismiss(open.id)}
               />
             </div>
           ) : null}
@@ -621,6 +634,7 @@ function StagePanel({ kit, chat, layout, availableWidth, hidden = false }: { kit
     onClose={(id, shown) => closeFor(chat.id, id, shown)}
     onMove={(id, target, drop, shown) => moveFor(chat.id, id, target, drop, shown)}
     onFloat={kit.floatingBrowser.float}
+    {...(visibleSplit === null ? { onFloatSimulator: kit.floatingSimulator.float } : {})}
     {...(kit.browserBridge === undefined ? {} : { onSendToBrowser: kit.sendToBrowser, onOpenBrowser: nav.openBrowser })}
     onOpenChat={nav.openChat}
     onRevealMessage={(eventId) => reveal(chat.id, { eventId })}
@@ -658,6 +672,7 @@ function paneRailFor({ manor, phone, hasVault, browserBridge, stage, subagentPat
     hasRepo: chatHasRepo(workspace, chat),
     projectThread: isProjectThread(workspace, chat.id),
     roomSession: stage.roomThreadOf(chat.id) !== undefined,
+    hasSimulator: workspace.houseSettings?.simulator === true,
     ...chatHelperFlags(workspace, paneThread, chat, subagentPath(chat.id)),
   })
 }

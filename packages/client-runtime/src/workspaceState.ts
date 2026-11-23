@@ -35,6 +35,7 @@ import type {
   ThreadEvent,
   UserProfile,
   HouseSettings,
+  SimulatorState,
   WorkHandoff,
   ContextFiles,
 } from '@manor/contracts'
@@ -478,6 +479,8 @@ export interface WorkspaceState {
   profile: UserProfile | null
   /** Household settings; null until the server's connect message lands. */
   houseSettings: HouseSettings | null
+  /** The Mac's one simulator view; null until a Simulator panel first asked. */
+  simulator: SimulatorState | null
   /** The standing context files as last read from disk; null before Settings asked. */
   contextFiles: ContextFiles | null
   /** What the Mac runs, for Settings' read-only pages; null before they asked. */
@@ -687,6 +690,7 @@ export const emptyWorkspace: WorkspaceState = {
   subagentPolicy: null,
   profile: null,
   houseSettings: null,
+  simulator: null,
   contextFiles: null,
   systemInfo: null,
   phoneAccess: null,
@@ -1570,6 +1574,8 @@ export function reduce(
     }
     case 'session_commits':
       return { ...state, sessionCommits: msg.commits }
+    case 'simulator_state':
+      return { ...state, simulator: msg.state }
 
     case 'side_chat':
       return {

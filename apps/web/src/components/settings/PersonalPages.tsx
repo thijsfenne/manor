@@ -14,6 +14,7 @@ import { SettingsGroup, SettingsPage, SettingsRow } from './SettingsLayout'
 import { BrowserGroup } from './BrowserSettings'
 import { FontGroup } from './FontSettings'
 import { PowerGroup } from './PowerSettings'
+import { SimulatorGroup } from './SimulatorSettings'
 import { ThemePicker } from './ThemePicker'
 
 const OFFLINE = 'Nothing was sent, the connection is down. Try again once it is back.'
@@ -49,6 +50,7 @@ export function GeneralPage({ agents, profile, account, notice, requestEvents, o
       <RoutingGroup agents={agents} requestEvents={requestEvents} onSaveAgent={onSaveAgent} onProblem={setProblem} onDismissNotice={onDismissNotice} />
       <PowerGroup settings={settings} info={info} onSaveSettings={onSaveSettings} onRequestInfo={onRequestInfo} />
       <BrowserGroup settings={settings} onSave={onSaveSettings} />
+      <SimulatorGroup settings={settings} onSave={onSaveSettings} />
       {account === undefined ? null : (
         <SettingsGroup title="This browser">
           <SettingsRow label="Forget this Mac" description="Removes this browser from Manor. Pair it again from Settings → Phone on your Mac.">

@@ -20,7 +20,7 @@ import * as lineIcons from '@hugeicons/core-free-icons'
 const ICONS = [
   'Archive02Icon', 'BookOpen01Icon', 'Brain02Icon', 'BubbleChatQuestionIcon', 'CellsIcon',
   'CheckListIcon', 'CheckmarkCircle02Icon', 'Clock01Icon', 'Files01Icon',
-  'FlashIcon', 'Folder01Icon', 'GitCompareIcon', 'Globe02Icon', 'PuzzleIcon', 'Search01Icon', 'Settings01Icon', 'StarIcon', 'UserIcon',
+  'FlashIcon', 'Folder01Icon', 'GitCompareIcon', 'Globe02Icon', 'PuzzleIcon', 'Search01Icon', 'Settings01Icon', 'SmartPhone01Icon', 'StarIcon', 'UserIcon',
 ]
 
 /** Where the rule alone gives the wrong picture. Indexes are the line icon's elements. */

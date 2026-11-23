@@ -28,7 +28,11 @@ export default defineConfig({
     port: 5173,
     // Artifact thumbnails and note pictures stay same-origin in production. Mirror those
     // paths in Vite so development needs no wider CSP and no credentials in the renderer.
-    proxy: { '/internal/mymind-thumbnail': { target: serverOrigin }, '/media/vault/': { target: serverOrigin } },
+    proxy: {
+      '/internal/mymind-thumbnail': { target: serverOrigin },
+      '/media/vault/': { target: serverOrigin },
+      '/simulator/': { target: serverOrigin, ws: true },
+    },
   },
   // Review probes run only through vitest.review.config.ts.
   test: { exclude: [...configDefaults.exclude, '**/.review/**'] },

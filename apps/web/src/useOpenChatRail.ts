@@ -117,6 +117,7 @@ export function useOpenChatRail({
   const hasProject = openProject !== undefined
   const hasRoster = rosterAgents.length > 0
   const hasBrowser = browserBridge !== undefined
+  const hasSimulator = workspace.houseSettings?.simulator === true
   const { hasHelpers, helpersRunning } = open === null ? { hasHelpers: false, helpersRunning: false } : chatHelperFlags(workspace, thread, open, subagentPath(open.id))
   const railItems: RailItem[] = useMemo(
     () => open === null
@@ -134,8 +135,9 @@ export function useOpenChatRail({
           roomSession,
           hasHelpers,
           helpersRunning,
+          hasSimulator,
         }),
-    [open, phone, hasProject, canBrowseFiles, hasVault, hasBrowser, hasRoster, hasRepo, projectThread, roomSession, hasHelpers, helpersRunning],
+    [open, phone, hasProject, canBrowseFiles, hasVault, hasBrowser, hasRoster, hasRepo, projectThread, roomSession, hasHelpers, helpersRunning, hasSimulator],
   )
   /** What this chat shows of what it remembers, see `offeredLayout`. */
   const activeLayout = offeredLayout(rightPanel.layout, offeredPanels(railItems, phone))

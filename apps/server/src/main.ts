@@ -212,6 +212,8 @@ import { openVault, type Vault } from './vault.js'
 import { createVaultMedia } from './vaultMedia.js'
 import { createSystemInfo } from './systemInfo.js'
 import { createKeepAwake } from './keepAwake.js'
+import { createSimulatorHost, liveSimulatorDeps, type SimulatorHost } from './simulator.js'
+import { createSimulatorProxy } from './simulatorProxy.js'
 import { RemindersSource, remindersBinaries } from './reminders.js'
 import { OPEN_LOOPS_LIST, OPEN_LOOPS_POLL_MS, OpenLoopsSync } from './openLoopsSync.js'
 import { WorkToolInputSchema } from './workTool.js'
@@ -789,6 +791,9 @@ async function main(): Promise<void> {
   const keepAwake = createKeepAwake()
   // A count over in-memory maps, so it runs at every moment the mode or the work may change.
   const syncKeepAwake = () => { keepAwake.sync(service.currentSettings().keepAwake, service.activeWork()) }
+  // The one simulator view, reached only through the signed proxy; see `simulatorProxy.ts`.
+  let simulator: SimulatorHost | undefined
+  const simulatorProxy = createSimulatorProxy({ hubPort: () => simulator?.hubPort(), allowedOrigins: origins.origins })
   const broadcast = (message: ServerMessage) => {
     send(message)
     // Every turn, a subagent child's included, starts and ends with a `turn_state`. A
@@ -797,6 +802,7 @@ async function main(): Promise<void> {
     // heartbeat catches what none of those announce: a hold that died, or work that
     // ended without a message.
     if (message.type === 'turn_state' || message.type === 'directory' || message.type === 'house_settings' || message.type === 'heartbeat') syncKeepAwake()
+    if (message.type === 'house_settings') simulator?.setEnabled(message.settings.simulator)
     if (!closeTerminalTurn(message, (turnId) => {
       interactions.closeTurn(turnId)
       secretRequests.closeTurn(turnId)
@@ -1155,6 +1161,12 @@ async function main(): Promise<void> {
     .catch((error: unknown) => console.error('[manor] could not recover subagents', error))
   // The saved settings are read by now, so `always` holds from the start.
   syncKeepAwake()
+  simulator = createSimulatorHost({
+    deps: liveSimulatorDeps(),
+    broadcast: (state) => broadcast({ type: 'simulator_state', state }),
+    streamBase: simulatorProxy.streamBase,
+  })
+  simulator.setEnabled(service.currentSettings().simulator)
 
   if (openLoops !== undefined) {
     console.log(`[manor] open loops: ${openLoopsLedger} is kept in step with the Reminders list ${OPEN_LOOPS_LIST}`)
@@ -1354,6 +1366,9 @@ async function main(): Promise<void> {
     tailscale: createTailscaleServe({ run: createTailscaleRunner(), port: PORT }),
     broadcast,
     dropPushToken: (token) => { void store.deletePushToken(token).catch(() => undefined) },
+    // Simulator stream paths carry no device identity, so a revoke voids them all; the
+    // clients still paired ask for fresh ones.
+    onRevoked: () => simulatorProxy.revokeAll(),
   })
   const http = createServer((request, response) => {
     if (refusesForwarded(request, { authOff: auth.config.mode === 'off', isMcp: (url) => mcpHost.handles(url) })) {
@@ -1469,6 +1484,10 @@ async function main(): Promise<void> {
       return
     }
     if (remoteImages.handle(request, response)) return
+    if (simulatorProxy.handles(request.url)) {
+      simulatorProxy.handle(request, response)
+      return
+    }
     if (vaultMedia?.handle(request, response) === true) return
     if (chatMedia.handle(request, response)) return
     if (request.url?.startsWith(MYMIND_THUMBNAIL_PREFIX) === true) {
@@ -1496,6 +1515,10 @@ async function main(): Promise<void> {
   http.on('upgrade', (request, socket, head) => {
     if (refusesForwarded(request, { authOff: auth.config.mode === 'off', isMcp: () => false })) {
       rejectUpgrade(socket, 401)
+      return
+    }
+    if (simulatorProxy.handles(request.url)) {
+      simulatorProxy.upgrade(request, socket, head)
       return
     }
     void guard({ url: request.url, headers: { origin: request.headers.origin, host: request.headers.host } })
@@ -1653,6 +1676,10 @@ async function main(): Promise<void> {
         void providerUpdates.install(message.data.provider)
         return
       }
+      if (message.data.type === 'simulator') {
+        void simulator?.handle(message.data.action, message.data.udid)
+        return
+      }
       if (message.data.type === 'check_providers') {
         void providerConnections.check()
         return
@@ -1724,6 +1751,7 @@ async function main(): Promise<void> {
     for (const client of clients) client.terminate()
     const stopped = service.stopActiveTurns()
     keepAwake.stop()
+    simulator?.stop()
     const children = await stopAllCliChildren()
     // Every CLI gets TERM now, including Codex and invisible infrastructure turns.
     if (stopped + children > 0) await new Promise((resolve) => setTimeout(resolve, 1_600))

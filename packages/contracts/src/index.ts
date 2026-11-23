@@ -3004,10 +3004,56 @@ export const HouseSettingsSchema = z.object({
   dictationLanguage: DictationLanguageSchema.default('auto'),
   /** The `deviceId` of the input dictation records from; empty is the system default. */
   dictationMicrophone: z.string().max(512).default(''),
+  /**
+   * The Simulator panel in Sessions. Off by default: until it is on, nothing is
+   * downloaded, started or listed, and the panel's door is not drawn.
+   */
+  simulator: z.boolean().default(false),
 })
 export type HouseSettings = z.infer<typeof HouseSettingsSchema>
 
 export const DEFAULT_HOUSE_SETTINGS: HouseSettings = HouseSettingsSchema.parse({})
+
+/** A simulator's id as `xcrun simctl` prints it. */
+export const SimulatorUdidSchema = z.string().regex(/^[0-9A-F]{8}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{12}$/i)
+
+/** What the Simulator panel asks the server to do with the device set. */
+export const SimulatorActionSchema = z.enum(['list', 'boot', 'watch', 'shutdown'])
+export type SimulatorAction = z.infer<typeof SimulatorActionSchema>
+
+/** One iOS simulator on the Mac, as `xcrun simctl` lists it. */
+export const SimulatorDeviceSchema = z.object({
+  udid: SimulatorUdidSchema,
+  name: z.string(),
+  /** The runtime's short name, such as "iOS 27.0". */
+  runtime: z.string(),
+  booted: z.boolean(),
+})
+export type SimulatorDevice = z.infer<typeof SimulatorDeviceSchema>
+
+/**
+ * The one simulator view the Mac offers. Every panel shows this same state, so two
+ * Sessions watch the same device, the way they share the one native browser page.
+ */
+export const SimulatorStateSchema = z.object({
+  /**
+   * `off`: the Settings toggle is off. `unavailable`: this Mac cannot run simulators,
+   * and `detail` says what is missing. `ready`: `devices` is current.
+   */
+  status: z.enum(['off', 'unavailable', 'ready']),
+  detail: z.string().optional(),
+  devices: z.array(SimulatorDeviceSchema),
+  /** A device being booted, or its screen being prepared (the helper downloads once). */
+  pending: z.object({ udid: SimulatorUdidSchema, step: z.enum(['booting', 'installing', 'starting']) }).optional(),
+  /**
+   * The device whose screen can be watched. `base` is a signed path the server proxies
+   * to the screen helper; it expires, and asking to watch again hands out a fresh one.
+   */
+  stream: z.object({ udid: SimulatorUdidSchema, base: z.string() }).optional(),
+  /** The last action that failed, in words for the panel. */
+  error: z.string().optional(),
+})
+export type SimulatorState = z.infer<typeof SimulatorStateSchema>
 
 /**
  * The standing context files Settings edits, all in the memory folder. Claude Code,
@@ -4317,6 +4363,9 @@ const ClientMessageWireSchema = z.discriminatedUnion('type', [
   // Ask every provider CLI again whether it is installed and signed in. The answer
   // is the ordinary `provider_connections` broadcast.
   z.object({ type: z.literal('check_providers') }),
+  // The Simulator panel: list the devices, boot or power off one, or watch one's screen.
+  // Refused while the Settings toggle is off. The answer is a `simulator_state` broadcast.
+  z.object({ type: z.literal('simulator'), action: SimulatorActionSchema, udid: SimulatorUdidSchema.optional() }),
   // Start, or stop waiting for, the provider's own sign-in. It opens the browser on the Mac.
   z.object({ type: z.literal('sign_in_provider'), provider: ProviderConnectionSchema.shape.provider }),
   z.object({ type: z.literal('cancel_provider_sign_in'), provider: ProviderConnectionSchema.shape.provider }),
@@ -4898,6 +4947,8 @@ export const ServerMessageSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('provider_updates'), updates: z.array(ProviderUpdateSchema) }),
   // Which provider CLIs are installed and signed in. Sent on connect and on every change.
   z.object({ type: z.literal('provider_connections'), providers: z.array(ProviderConnectionSchema) }),
+  // The simulator view, broadcast after every change; see `SimulatorStateSchema`.
+  z.object({ type: z.literal('simulator_state'), state: SimulatorStateSchema }),
   // Reply to get_usage_report, to the asking socket only. Not a broadcast: it is a
   // snapshot of a moment somebody asked about, and a second tab redrawing its Usage
   // view because a turn ended elsewhere is movement nobody asked for.

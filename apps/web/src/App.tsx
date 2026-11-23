@@ -428,6 +428,8 @@ function Workspace({
   const sessionGitToast = useSessionGitToast(workspace.sessionGitResults, workspace.sessionCommits, manor.status === 'live')
   const browserShown = railShown && layoutHas(activeLayout, 'browser') && browserBridge !== undefined
   const floatingBrowser = useFloatingBrowser({ browserShown, drafting: newChatDraft !== null, openChatId: open?.id })
+  // The simulator floats by the same rules: only by its panel's Float, gone once the panel shows again.
+  const floatingSimulator = useFloatingBrowser({ browserShown: railShown && layoutHas(activeLayout, 'simulator'), drafting: newChatDraft !== null, openChatId: open?.id })
   const pageContexts = usePageContexts()
   const { pageContextsByChat, addPageContext, consumePageContexts } = pageContexts
   const chatReplies = useChatReplies()
@@ -633,6 +635,7 @@ function Workspace({
     pageContexts,
     reveals,
     floatingBrowser,
+    floatingSimulator,
     browserBridge,
     railItems,
     activeLayout,
