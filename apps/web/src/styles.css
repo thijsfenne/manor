@@ -157,6 +157,16 @@
   --color-frame: var(--color-surface-2);
   --color-sidebar: var(--color-composer-tray);
   --color-stage: var(--color-surface);
+  /* A text field's own fill, and the select and date triggers beside it. The inset step
+     in dark; light Manor lifts it to a paler grey so a form does not read as grey blocks
+     on the white page. */
+  --color-field: var(--color-surface-2);
+
+  /* A text field's border while it has focus. Half-way `dim` laid over whatever the
+     field sits on, so it lands closer to that surface in both modes and in every theme:
+     clearly lifted from the idle hairline, without a bright outline around the box. */
+  --color-field-focus: color-mix(in srgb, var(--color-dim) 55%, transparent);
+
   /* A hovered or picked control on the frame. One step up from the frame in dark; light
      goes a step down, deep enough that a rail door's fill reads against the grey. */
   --color-frame-fill: var(--color-user-bg);
@@ -427,6 +437,8 @@
  */
 :root[data-theme='light'] .sidebar-surface {
   --color-surface-2: var(--color-side-hover);
+  /* Re-declared so it reads this side's surface-2, not the value resolved at :root. */
+  --color-field: var(--color-surface-2);
   --color-tree-hover: var(--color-side-hover);
   --color-user-bg: var(--color-side-picked);
   --color-icon-fill: var(--color-side-picked);
@@ -529,6 +541,9 @@
      names because inside `.sidebar-surface` user-bg itself moves. */
   --color-side-hover: #e9eaed;
   --color-side-picked: #e5e6e8;
+  --color-field: #f5f6f8;
+  /* Lighter than dark's 55%: on a pale field the same share reads as a dark outline. */
+  --color-field-focus: color-mix(in srgb, var(--color-dim) 35%, transparent);
   --color-menu-selected: #dcdfe4;
   --color-user-bubble: #e3e5e9;
   --color-bubble: #eff1f4;
@@ -1186,13 +1201,13 @@ pre,
 
   /*
    * Text entry is the exception. A field already draws a border, and lifting that border
-   * to `dim` on focus says the same thing from inside the shape the field already has —
+   * to `field-focus` on focus says the same thing from inside the shape the field already has —
    * where the ring drew a second rectangle around a box that was never the shape of the
    * thing it was ringing. Tickboxes, radios and the colour swatch keep the ring: nothing
    * is typed into them and they have no border of their own to lift. Ranges keep the
    * ring for the same reason. Every field that
    * carries the border on a wrapper rather than on itself lifts it with
-   * `focus-within:border-dim`.
+   * `focus-within:border-field-focus`.
    */
   input:not([type='checkbox'], [type='radio'], [type='color'], [type='range']):focus-visible,
   textarea:focus-visible,

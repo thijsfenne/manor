@@ -124,7 +124,7 @@ export function SettingsView({ section, onSection, onClose, leaving, onDiscard, 
           <div className="mt-1 flex h-10 items-center px-2.5">
             <h2 className="m-0 min-w-0 flex-1 truncate pl-3 font-display text-[16px] font-semibold tracking-[-0.01em]">Settings</h2>
           </div>
-          <div className="mx-2.5 mt-1 flex h-8 items-center gap-2 rounded-lg border border-line bg-stage px-2.5 text-muted focus-within:border-dim">
+          <div className="mx-2.5 mt-1 flex h-8 items-center gap-2 rounded-lg border border-line bg-stage px-2.5 text-muted focus-within:border-field-focus">
             <Icon icon={Search01Icon} size={16} className="flex-none" />
             <input
               value={query}

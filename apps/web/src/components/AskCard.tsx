@@ -41,7 +41,7 @@ import { SecretCard } from './SecretCard'
 
 /** Same geometry as `formInputClass`, 14px on this card only. */
 const askInputClass =
-  'w-full rounded-lg border border-line bg-stage px-2.5 py-[7px] text-card text-text outline-none placeholder:text-dim focus:border-dim'
+  'w-full rounded-lg border border-line bg-stage px-2.5 py-[7px] text-card text-text outline-none placeholder:text-dim focus:border-field-focus'
 
 /**
  * Long enough that the row you picked is on screen as picked before the card moves

@@ -303,7 +303,7 @@ export function NoteRail({
         )}
 
         <div className="flex items-center gap-1">
-          <div className={`flex min-w-0 flex-1 items-center gap-2 overflow-hidden rounded-lg border border-line bg-bg px-2.5 focus-within:border-muted ${embedded ? 'h-7' : 'h-9'}`}>
+          <div className={`flex min-w-0 flex-1 items-center gap-2 overflow-hidden rounded-lg border border-line bg-bg px-2.5 focus-within:border-field-focus ${embedded ? 'h-7' : 'h-9'}`}>
             <Icon icon={Search01Icon} size={14} className="flex-none text-dim" />
             <input
               ref={filterRef}
@@ -409,7 +409,7 @@ export function NoteRail({
           <h2 className="m-0 text-lg font-semibold text-text">{create.kind === 'file' ? 'New note' : 'New folder'}</h2>
           <p className="mt-1 mb-4 truncate text-label text-muted" title={create.parent || (vaultName ?? '')}>{create.parent === '' ? `At the top of ${vaultName ?? 'the vault'}` : `In ${create.parent}`}</p>
           <label className="grid gap-1.5 text-label text-text">Name
-            <input autoFocus value={name} disabled={pending !== null} onChange={(event) => { setName(event.target.value); setError(null) }} className="w-full rounded-md border border-line bg-bg px-3 py-2 text-text outline-none focus:border-muted" />
+            <input autoFocus value={name} disabled={pending !== null} onChange={(event) => { setName(event.target.value); setError(null) }} className="w-full rounded-md border border-line bg-bg px-3 py-2 text-text outline-none focus:border-field-focus" />
           </label>
           {error === null ? null : <p role="alert" className="text-label text-danger">{error}</p>}
           <div className="mt-5 flex justify-end gap-2">

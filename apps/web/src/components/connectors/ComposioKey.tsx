@@ -101,7 +101,7 @@ export function ComposioKeySetup({ live, pending, error, onSave }: {
                 data-bwignore
                 aria-invalid={error === null ? undefined : true}
                 onChange={(event) => setValue(event.target.value)}
-                className="h-9 w-full min-w-0 flex-1 rounded-lg border border-line bg-surface-2 px-2.5 text-[14px] text-text outline-none placeholder:text-dim focus:border-dim"
+                className="h-9 w-full min-w-0 flex-1 rounded-lg border border-line bg-field px-2.5 text-[14px] text-text outline-none placeholder:text-dim focus:border-field-focus"
               />
               <Button type="submit" variant="primary" className="flex-none" disabled={!live || pending || value.trim() === ''}>
                 {pending ? 'Checking…' : 'Save'}

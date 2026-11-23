@@ -231,7 +231,7 @@ export function ConnectorsView({
 
         {noKey ? <ComposioKeySetup live={live} pending={keyRequest.pending} error={keyError} onSave={saveKey} /> : null}
 
-        <div className="mt-7 flex h-9 w-full max-w-[560px] items-center gap-2 rounded-lg border border-line bg-stage px-2.5 text-muted focus-within:border-dim">
+        <div className="mt-7 flex h-9 w-full max-w-[560px] items-center gap-2 rounded-lg border border-line bg-stage px-2.5 text-muted focus-within:border-field-focus">
           <Icon icon={Search01Icon} size={17} className="flex-none" />
           <input
             value={query}

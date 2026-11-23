@@ -219,7 +219,7 @@ export function ArtifactsView({
               onChange={setFilter}
             />
             <form className="ml-auto flex w-[clamp(180px,24vw,340px)] min-w-0 items-center" onSubmit={submit}>
-              <div className="flex h-8 w-full items-center gap-2 rounded-lg border border-line bg-stage px-2.5 text-muted focus-within:border-dim">
+              <div className="flex h-8 w-full items-center gap-2 rounded-lg border border-line bg-stage px-2.5 text-muted focus-within:border-field-focus">
                 <Icon icon={Search01Icon} size={17} className="flex-none" />
                 <input
                   ref={searchInput}

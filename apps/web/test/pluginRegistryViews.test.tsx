@@ -229,7 +229,7 @@ describe('plugin registry layouts', () => {
     expect(html).toContain('px-2 py-2 text-left')
     expect(html).toContain('rounded-lg bg-surface text-[var(--color-skill)]')
     expect(html).toContain('hover:bg-surface-2')
-    expect(html).toContain('focus:border-dim pl-10')
+    expect(html).toContain('focus:border-field-focus pl-10')
     expect(html).toContain('aria-label="Sort skills"')
     expect(html).toContain('<option value="name" selected="">A–Z</option>')
     expect(html).toContain('>Uses<')

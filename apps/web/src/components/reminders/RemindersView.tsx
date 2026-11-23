@@ -603,7 +603,7 @@ export function RemindersView({
               value={layout}
               onChange={setLayout}
             />
-            <div className="ml-auto flex h-8 w-[clamp(160px,20vw,280px)] min-w-0 items-center gap-2 rounded-lg border border-line bg-stage px-2.5 text-muted focus-within:border-dim">
+            <div className="ml-auto flex h-8 w-[clamp(160px,20vw,280px)] min-w-0 items-center gap-2 rounded-lg border border-line bg-stage px-2.5 text-muted focus-within:border-field-focus">
               <Icon icon={Search01Icon} size={16} className="flex-none" />
               <input
                 ref={searchRef}

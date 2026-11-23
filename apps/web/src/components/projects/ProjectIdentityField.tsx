@@ -137,7 +137,7 @@ export function ProjectIdentityField({
       </label>
 
       <div ref={rootRef} onKeyDown={stepBack}>
-        <div className="flex items-stretch rounded-lg border border-line bg-surface-2 focus-within:border-dim">
+        <div className="flex items-stretch rounded-lg border border-line bg-field focus-within:border-field-focus">
           <button
             ref={triggerRef}
             type="button"

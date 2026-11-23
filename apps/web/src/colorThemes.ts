@@ -111,6 +111,7 @@ export function modeTokens(palette: Palette, mode: Mode): Record<string, string>
     bg: p.bg,
     surface: p.surface,
     'surface-2': p.surface2,
+    field: p.surface2,
     'icon-fill': dark ? p.surface2 : lightUserBg,
     'tree-hover': dark ? p.surface2 : mix(p.surface2, p.userBubble, 20),
     'user-bg': dark ? p.userBubble : lightUserBg,

@@ -34,7 +34,7 @@ export function ConnectScreen({ error }: { error: string | null }) {
         </p>
         <input
           aria-label="Paste the pairing link"
-          className="w-full rounded-lg border border-line bg-surface-2 px-2.5 py-[7px] text-[13px] text-text outline-none focus:border-dim [font:inherit]"
+          className="w-full rounded-lg border border-line bg-field px-2.5 py-[7px] text-[13px] text-text outline-none focus:border-field-focus [font:inherit]"
           placeholder="Paste the pairing link"
           autoFocus
           value={link}

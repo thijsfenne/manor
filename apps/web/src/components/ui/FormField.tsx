@@ -6,7 +6,7 @@ export const formHintClass = 'text-label text-dim'
 /** Sits at the far right of the label row, in the label's own case. */
 export const formOptionalClass = 'ml-auto text-meta text-dim'
 export const formInputClass =
-  'w-full rounded-lg border border-line bg-surface-2 px-2.5 py-[7px] text-[13px] text-text outline-none placeholder:text-dim focus:border-dim'
+  'w-full rounded-lg border border-line bg-field px-2.5 py-[7px] text-[13px] text-text outline-none placeholder:text-dim focus:border-field-focus'
 
 interface FormFieldProps {
   label: string

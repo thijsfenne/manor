@@ -180,7 +180,7 @@ their code surfaces.
 
 - **Night Canvas** (light #eef0f3 / dark #0c0d0e): The outer room.
 - **Room Surface** (light #ffffff / dark #0f1011): Holds persistent chrome and cards.
-- **Inset Charcoal** (light #f5f6f8 / dark #191a1b): Carries hover states, fields, and inset areas.
+- **Inset Charcoal** (light #eef0f3 / dark #191a1b): Carries hover states, fields, and inset areas.
 - **Raised Charcoal** (light #ffffff / dark #191a1b): Reserved for genuinely floating surfaces such as menus and popovers.
 - **Composer Fill** (light #ffffff / dark #171819): The composer card. A hair darker than Raised Charcoal in the night room.
 - **Composer Tray** (light #f3f4f6 / dark #121314): The checkout strip under the composer and the Changed files card, and the desktop sidebar in dark. A hair lighter than Room Surface in the night room, still darker than the rejected #141516 lift; one grey step below the white stage in light.
@@ -307,8 +307,8 @@ The global radius scale is 1.25. Small marks start at the extra small and small 
 
 ### Inputs / Fields
 
-- **Style:** Inset Charcoal fill, Quiet Hairline border, large radius, House Ink text, and Distant Silver placeholder copy.
-- **Focus:** Text fields lift their own border to Distant Silver. They do not add a second external focus rectangle.
+- **Style:** `field` fill (Inset Charcoal in dark and in the tinted themes, a paler #f5f6f8 in Manor light so a form does not read as grey blocks on the white page), Quiet Hairline border, large radius, House Ink text, and Distant Silver placeholder copy.
+- **Focus:** Text fields, and the select and date triggers that sit beside them, lift their own border to `field-focus`: Distant Silver over whatever the field sits on, 55% in dark and 35% in light, so it stays closer to the surface in both modes and every theme. They do not add a second external focus rectangle. The image note field keeps its mark colour.
 - **Error / Disabled:** Errors use Danger in copy or a restrained wash. Disabled controls stay visible at roughly 45% opacity and lose the pointer cursor.
 
 ### Navigation

@@ -134,7 +134,7 @@ export function ReminderDatePicker({ value, today, disabled, className = '', onP
         aria-controls={visible ? gridId : undefined}
         aria-activedescendant={visible ? cellId(active) : undefined}
         disabled={disabled}
-        className={`flex w-full cursor-pointer items-center gap-2 rounded-lg border bg-surface-2 py-[7px] pr-3 pl-2.5 text-left text-[13px] outline-none focus-visible:border-dim disabled:cursor-default disabled:opacity-45 ${
+        className={`flex w-full cursor-pointer items-center gap-2 rounded-lg border bg-field py-[7px] pr-3 pl-2.5 text-left text-[13px] outline-none focus-visible:border-field-focus disabled:cursor-default disabled:opacity-45 ${
           open ? 'border-dim' : 'border-line hover:border-dim'
         } ${value === undefined ? 'text-dim' : 'text-text'} ${className}`}
         onClick={() => (open ? hide() : show())}

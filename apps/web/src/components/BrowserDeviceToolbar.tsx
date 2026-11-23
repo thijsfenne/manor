@@ -58,7 +58,7 @@ export function BrowserDeviceToolbar({ viewport, disabled, onChange, onError }: 
           {index === 1 ? <span aria-hidden="true">×</span> : null}
           <input type="number" inputMode="numeric" min={100} max={3840} step={1}
             aria-label={`Viewport ${dimension}`} value={dimension === 'width' ? width : height} disabled={disabled}
-            className="w-16 rounded-button border border-line bg-surface-2 px-2 py-1.5 text-label text-text disabled:opacity-40"
+            className="w-16 rounded-button border border-line bg-field px-2 py-1.5 text-label text-text disabled:opacity-40"
             onChange={(event) => (dimension === 'width' ? setWidth : setHeight)(event.target.value)}
             onBlur={() => commit(dimension)} onKeyDown={(event) => {
               if (event.key === 'Enter') { event.preventDefault(); event.currentTarget.blur() }

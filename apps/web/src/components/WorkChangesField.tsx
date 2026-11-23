@@ -35,7 +35,7 @@ export function WorkChangesField({ handoffId, pending, connected, autoFocus, onC
       <div
         data-work-changes
         aria-disabled={!editable}
-        className="rounded-lg border border-line bg-surface-2 px-1 py-0.5 focus-within:border-dim aria-disabled:opacity-60 [&_[data-composer-editor]]:min-h-[4.5rem]"
+        className="rounded-lg border border-line bg-field px-1 py-0.5 focus-within:border-field-focus aria-disabled:opacity-60 [&_[data-composer-editor]]:min-h-[4.5rem]"
       >
         <ComposerEditor
           value={text}

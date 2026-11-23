@@ -148,7 +148,7 @@ export function MoveDialog({ entry, folders, move, canMove, onMove, onClose }: M
       <h2 className="m-0 text-lg font-semibold text-text">{title}</h2>
       <p className="mt-1 mb-4 truncate text-label text-muted" title={entry.path}>{`Choose a folder for “${name}”.`}</p>
       {filtering ? (
-        <div className="mb-2 flex h-9 items-center gap-2 overflow-hidden rounded-lg border border-line bg-bg px-2.5 focus-within:border-muted">
+        <div className="mb-2 flex h-9 items-center gap-2 overflow-hidden rounded-lg border border-line bg-bg px-2.5 focus-within:border-field-focus">
           <Icon icon={Search01Icon} size={14} className="flex-none text-dim" />
           <input
             ref={filter}
@@ -172,7 +172,7 @@ export function MoveDialog({ entry, folders, move, canMove, onMove, onClose }: M
         aria-label="Destination folder"
         tabIndex={filtering ? -1 : 0}
         {...active}
-        className="max-h-72 overflow-y-auto rounded-lg border border-line p-1 outline-none focus-visible:border-muted"
+        className="max-h-72 overflow-y-auto rounded-lg border border-line p-1 outline-none focus-visible:border-field-focus"
         onKeyDown={onKeys}
       >
         {shown.length === 0 ? (

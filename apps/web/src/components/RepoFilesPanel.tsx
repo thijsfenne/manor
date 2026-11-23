@@ -553,7 +553,7 @@ export function RepoFilesPanel({
           className={`${showTree ? 'grid' : 'hidden'} min-h-0 min-w-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden border-r border-line`}
         >
           <div className="grid h-11 min-w-0 grid-cols-[minmax(0,1fr)] items-center overflow-hidden border-b border-line px-2">
-            <label className="flex h-7 w-full min-w-0 max-w-full items-center gap-2 overflow-hidden rounded-lg border border-line bg-bg px-2.5 text-muted focus-within:border-dim">
+            <label className="flex h-7 w-full min-w-0 max-w-full items-center gap-2 overflow-hidden rounded-lg border border-line bg-bg px-2.5 text-muted focus-within:border-field-focus">
               <Icon icon={Search01Icon} size={14} className="flex-none text-dim" />
               <input
                 type="search"
@@ -612,7 +612,7 @@ export function RepoFilesPanel({
             {selectedPath === null && finding ? (
               <div className="grid min-h-0 min-w-0 grid-rows-[auto_minmax(0,1fr)]">
                 <div className="grid h-11 min-w-0 grid-cols-[minmax(0,1fr)] items-center border-b border-line px-3">
-                  <label className="flex h-7 w-full min-w-0 items-center gap-2 overflow-hidden rounded-lg border border-line bg-bg px-2.5 text-muted focus-within:border-dim">
+                  <label className="flex h-7 w-full min-w-0 items-center gap-2 overflow-hidden rounded-lg border border-line bg-bg px-2.5 text-muted focus-within:border-field-focus">
                     <Icon icon={Search01Icon} size={14} className="flex-none text-dim" />
                     <input
                       type="search"

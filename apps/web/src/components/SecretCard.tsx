@@ -78,7 +78,7 @@ export function SecretCard({
           data-lpignore="true"
           data-bwignore
           onChange={(event) => setValue(event.target.value)}
-          className="w-full rounded-lg border border-line bg-stage px-2.5 py-[7px] text-card text-text outline-none placeholder:text-dim focus:border-dim disabled:opacity-50"
+          className="w-full rounded-lg border border-line bg-stage px-2.5 py-[7px] text-card text-text outline-none placeholder:text-dim focus:border-field-focus disabled:opacity-50"
         />
         <div className="flex min-w-0 items-center justify-end gap-2">
           <span className="min-w-0 flex-1 text-label">
