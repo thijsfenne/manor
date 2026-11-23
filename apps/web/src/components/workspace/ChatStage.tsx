@@ -333,6 +333,7 @@ export function ChatStage({
             <div className="pointer-events-none absolute inset-x-4 top-4 z-[var(--z-browser-controls)] flex justify-end">
               <SimulatorFloat
                 state={manor.workspace.simulator}
+                selection={manor.workspace.houseSettings?.simulatorDevices ?? null}
                 connected={manor.status === 'live'}
                 onAction={manor.simulatorAction}
                 onDock={() => { floatingSimulator.land(); rightPanel.show('simulator') }}

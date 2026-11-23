@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState, type ChangeEvent } from 'react'
-import { DEFAULT_USER_PROFILE, type AgentConfig, type AgentDraft, type HouseSettings, type SystemInfo, type UserProfile } from '@manor/contracts'
+import { DEFAULT_USER_PROFILE, type AgentConfig, type AgentDraft, type HouseSettings, type SimulatorAction, type SimulatorState, type SystemInfo, type UserProfile } from '@manor/contracts'
 import { AVATAR_ACCEPT, shrinkToAvatar } from '../../avatar'
 import { DEFAULT_THEMES, type ThemePair } from '../../colorThemes'
 import { cleanDraft, cosOf, draftOf } from '../../persona'
@@ -27,7 +27,7 @@ function PageNotice({ notice, problem, onDismiss }: { notice: Notice | null; pro
   return <p className="m-0 text-label text-danger" role="status">{problem}</p>
 }
 
-export function GeneralPage({ agents, profile, account, notice, requestEvents, onSaveAgent, onSaveProfile, onDismissNotice, settings, onSaveSettings, info, onRequestInfo }: {
+export function GeneralPage({ agents, profile, account, notice, requestEvents, onSaveAgent, onSaveProfile, onDismissNotice, settings, onSaveSettings, info, onRequestInfo, simulator, connected, onSimulatorAction }: {
   agents: AgentConfig[]
   /** Null until the server's connect message lands; nothing is saved over an unread profile. */
   profile: UserProfile | null
@@ -40,9 +40,14 @@ export function GeneralPage({ agents, profile, account, notice, requestEvents, o
   onDismissNotice: () => void
   /** Null until the server has sent them; the groups that save them wait. */
   settings: HouseSettings | null
-  onSaveSettings: (settings: HouseSettings) => void
+  /** False when the socket was down and nothing left. */
+  onSaveSettings: (settings: HouseSettings) => boolean
   info: SystemInfo | null
   onRequestInfo: () => void
+  /** The device list the Simulator group picks from. */
+  simulator: SimulatorState | null
+  connected: boolean
+  onSimulatorAction: (action: SimulatorAction, udid?: string) => boolean
 }) {
   const [problem, setProblem] = useState<string | null>(null)
   return (
@@ -51,7 +56,7 @@ export function GeneralPage({ agents, profile, account, notice, requestEvents, o
       <RoutingGroup agents={agents} requestEvents={requestEvents} onSaveAgent={onSaveAgent} onProblem={setProblem} onDismissNotice={onDismissNotice} />
       <PowerGroup settings={settings} info={info} onSaveSettings={onSaveSettings} onRequestInfo={onRequestInfo} />
       <BrowserGroup settings={settings} onSave={onSaveSettings} />
-      <SimulatorGroup settings={settings} onSave={onSaveSettings} />
+      <SimulatorGroup settings={settings} simulator={simulator} connected={connected} onSave={onSaveSettings} onAction={onSimulatorAction} />
       {account === undefined ? null : (
         <SettingsGroup title="This browser">
           <SettingsRow label="Forget this Mac" description="Removes this browser from Manor. Pair it again from Settings → Phone on your Mac.">

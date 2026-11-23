@@ -119,6 +119,58 @@ describe('simulator host', () => {
     expect(commands.slice(1, 3)).toEqual([`/usr/bin/xcrun simctl boot ${OFF}`, `/usr/bin/xcrun simctl bootstatus ${OFF}`])
   })
 
+  it('puts a failed boot on the device row with the boot\'s own reason', async () => {
+    const { host, last } = setup({
+      run: async (_command, args) => {
+        if (args.includes('list')) return simctlJson()
+        if (args.includes('boot')) throw new Error('An error was encountered processing the command (code=405):\nUnable to boot: runtime is not available')
+        throw new Error('bootstatus gave up')
+      },
+    })
+    host.setEnabled(true)
+    await host.handle('list')
+    await host.handle('boot', OFF)
+    expect(last()).toMatchObject({ status: 'ready', error: 'The simulator did not start: An error was encountered processing the command (code=405): Unable to boot: runtime is not available', errorUdid: OFF })
+    expect(last()?.pending).toBeUndefined()
+  })
+
+  it('clears the boot step when the device stopped again before its screen opened', async () => {
+    let listings = 0
+    const { host, last } = setup({
+      // The first listing sees the device off, the one after the boot sees it off again.
+      run: async (_command, args) => { if (args.includes('list')) listings += 1; return args.includes('list') ? simctlJson('Shutdown') : '' },
+    })
+    host.setEnabled(true)
+    await host.handle('list')
+    await host.handle('boot', OFF)
+    expect(listings).toBe(2)
+    expect(last()).toMatchObject({ error: 'Start this simulator first.', errorUdid: OFF })
+    expect(last()?.pending).toBeUndefined()
+  })
+
+  it('puts a helper exit on the device it was showing last, not the one it started with', async () => {
+    const second = '5F3A1B2C-0000-4000-8000-000000000001'
+    let exit = () => {}
+    const { host, deps, last } = setup({
+      run: async (_command, args) => args.includes('list')
+        ? JSON.stringify({ devices: { 'com.apple.CoreSimulator.SimRuntime.iOS-27-0': [
+          { udid: BOOTED, name: 'iPhone 18 Pro', state: 'Booted', isAvailable: true },
+          { udid: second, name: 'iPhone 18', state: 'Booted', isAvailable: true },
+        ] } })
+        : '',
+      startHub: vi.fn(async (_entry: string, _udid: string, onExit: () => void) => { exit = onExit; return { port: 4100, stop: () => {} } }),
+    })
+    const dist = path.join(deps.toolsDir, 'serve-sim', '0.1.49', 'node_modules', 'serve-sim', 'dist')
+    mkdirSync(dist, { recursive: true })
+    writeFileSync(path.join(dist, 'serve-sim.js'), '')
+    host.setEnabled(true)
+    await host.handle('watch', BOOTED)
+    await host.handle('watch', second)
+    exit()
+    expect(last()).toMatchObject({ errorUdid: second })
+    expect(last()?.stream).toBeUndefined()
+  })
+
   it('refuses to boot or turn off a device the iOS listing does not hold', async () => {
     const { host, commands, last } = setup()
     host.setEnabled(true)

@@ -81,7 +81,9 @@ export interface SimulatorHost {
   stop(): void
 }
 
-const errorText = (error: unknown) => (error instanceof Error ? error.message : String(error)).trim().split('\n')[0]!.slice(0, 300)
+/** simctl puts a generic header first and the reason on the next lines, so every line is kept, on one line. */
+const errorText = (error: unknown) =>
+  (error instanceof Error ? error.message : String(error)).split('\n').map((line) => line.trim()).filter(Boolean).join(' ').slice(0, 300)
 
 /**
  * The one simulator view on this Mac. Devices are listed, booted and powered off with
@@ -109,6 +111,8 @@ export function createSimulatorHost(options: {
   const update = (patch: Partial<SimulatorState>, drop: Array<'pending' | 'error' | 'stream' | 'detail'> = []) => {
     const next = { ...state, ...patch }
     for (const key of drop) delete next[key]
+    // An error belongs to the device named with it, or to none.
+    if (drop.includes('error') || ('error' in patch && !('errorUdid' in patch))) delete next.errorUdid
     publish(next)
   }
 
@@ -178,7 +182,7 @@ export function createSimulatorHost(options: {
     const devices = await list()
     if (devices === undefined) return
     if (!devices.some((device) => device.udid === udid && device.booted)) {
-      update({ error: 'Start this simulator first.' })
+      update({ error: 'Start this simulator first.', errorUdid: udid }, ['pending'])
       return
     }
     try {
@@ -193,7 +197,9 @@ export function createSimulatorHost(options: {
         const started = await deps.startHub(entry(), udid, () => {
           if (hub !== started) return
           hub = undefined
-          update({ error: 'The simulator screen stopped. Choose the device to watch it again.' }, ['stream'])
+          // The helper may have moved on to another device since it started.
+          const watched = state.stream?.udid ?? udid
+          update({ error: 'The simulator screen stopped. Open the device to watch it again.', errorUdid: watched }, ['stream'])
         })
         if (!enabled) {
           started.stop()
@@ -204,18 +210,20 @@ export function createSimulatorHost(options: {
       await deps.attach(hub.port, udid)
       update({ stream: { udid, base: options.streamBase() } }, ['pending', 'error'])
     } catch (error) {
-      update({ error: `The simulator screen could not start: ${errorText(error)}` }, ['pending'])
+      update({ error: `The simulator screen could not start: ${errorText(error)}`, errorUdid: udid }, ['pending'])
     }
   }
 
   const boot = async (udid: string) => {
     update({ pending: { udid, step: 'booting' } }, ['error'])
+    // An already booted device makes `boot` fail, which `bootstatus` then answers for;
+    // when it does not, the boot's own words are the reason the row shows.
+    let bootError: unknown
     try {
-      // An already booted device makes `boot` fail, which `bootstatus` then answers for.
-      await deps.run('/usr/bin/xcrun', ['simctl', 'boot', udid], SIMCTL_MS).catch(() => undefined)
+      await deps.run('/usr/bin/xcrun', ['simctl', 'boot', udid], SIMCTL_MS).catch((error: unknown) => { bootError = error })
       await deps.run('/usr/bin/xcrun', ['simctl', 'bootstatus', udid], BOOT_WAIT_MS)
     } catch (error) {
-      update({ error: `The simulator did not start: ${errorText(error)}` }, ['pending'])
+      update({ error: `The simulator did not start: ${errorText(bootError ?? error)}`, errorUdid: udid }, ['pending'])
       await list()
       return
     }
@@ -226,7 +234,7 @@ export function createSimulatorHost(options: {
     try {
       await deps.run('/usr/bin/xcrun', ['simctl', 'shutdown', udid], SIMCTL_MS)
     } catch (error) {
-      update({ error: `The simulator did not power off: ${errorText(error)}` })
+      update({ error: `The simulator did not power off: ${errorText(error)}`, errorUdid: udid })
     }
     await list()
   }

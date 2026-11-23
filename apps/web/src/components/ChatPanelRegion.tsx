@@ -530,6 +530,7 @@ export function ChatPanelRegion({
     if (id === 'simulator') return (
       <SimulatorPanel
         state={workspace.simulator}
+        selection={workspace.houseSettings?.simulatorDevices ?? null}
         connected={status === 'live'}
         onAction={manor.simulatorAction}
         width={dock.width}

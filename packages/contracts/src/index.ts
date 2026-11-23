@@ -3026,6 +3026,9 @@ export type DictationLanguage = z.infer<typeof DictationLanguageSchema>
 export const ColorThemeSchema = z.enum(['manor', 'parchment', 'indigo', 'moss', 'plum'])
 export type ColorTheme = z.infer<typeof ColorThemeSchema>
 
+/** A simulator's id as `xcrun simctl` prints it. */
+export const SimulatorUdidSchema = z.string().regex(/^[0-9A-F]{8}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{12}$/i)
+
 export const HouseSettingsSchema = z.object({
   /** A project chat quiet this long is settled. Null leaves every chat where it is. */
   autoSettleDays: z.number().int().min(1).max(90).nullable().default(2),
@@ -3070,6 +3073,18 @@ export const HouseSettingsSchema = z.object({
    * downloaded, started or listed, and the panel's door is not drawn.
    */
   simulator: z.boolean().default(false),
+  /**
+   * Which simulators the panel's list shows, once the user ticked one in Settings.
+   * Null shows the devices of the newest installed iOS runtime. A device in neither
+   * list is new since the save: it shows when its runtime is at least `runtime`, the
+   * newest one the user had seen, so a new Xcode adds its devices and an old runtime
+   * installed later stays out. A running device shows whatever this says.
+   */
+  simulatorDevices: z.object({
+    shown: z.array(SimulatorUdidSchema).max(1000),
+    hidden: z.array(SimulatorUdidSchema).max(1000),
+    runtime: z.string().max(40),
+  }).nullable().default(null),
   /** The colour theme while the light mode shows, and while the dark mode shows. */
   lightTheme: ColorThemeSchema.default('manor'),
   darkTheme: ColorThemeSchema.default('manor'),
@@ -3077,9 +3092,6 @@ export const HouseSettingsSchema = z.object({
 export type HouseSettings = z.infer<typeof HouseSettingsSchema>
 
 export const DEFAULT_HOUSE_SETTINGS: HouseSettings = HouseSettingsSchema.parse({})
-
-/** A simulator's id as `xcrun simctl` prints it. */
-export const SimulatorUdidSchema = z.string().regex(/^[0-9A-F]{8}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{12}$/i)
 
 /** What the Simulator panel asks the server to do with the device set. */
 export const SimulatorActionSchema = z.enum(['list', 'boot', 'watch', 'shutdown'])
@@ -3116,6 +3128,8 @@ export const SimulatorStateSchema = z.object({
   stream: z.object({ udid: SimulatorUdidSchema, base: z.string() }).optional(),
   /** The last action that failed, in words for the panel. */
   error: z.string().optional(),
+  /** The device that failure is about, so the list shows it on that device's row. */
+  errorUdid: SimulatorUdidSchema.optional(),
 })
 export type SimulatorState = z.infer<typeof SimulatorStateSchema>
 

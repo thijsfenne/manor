@@ -69,6 +69,9 @@ export function SettingsHost({
             onSaveSettings={manor.saveHouseSettings}
             info={workspace.systemInfo}
             onRequestInfo={manor.requestSystemInfo}
+            simulator={workspace.simulator}
+            connected={manor.status === 'live'}
+            onSimulatorAction={manor.simulatorAction}
             {...common}
           />
         )
