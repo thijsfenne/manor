@@ -60,7 +60,7 @@ import { ThreadPager, ThreadSwipeArea } from '@/components/ThreadPager'
 import { GlassIconButton } from '@/components/GlassIconButton'
 import { GlassSurface } from '@/components/GlassSurface'
 import { BubbleTintContext } from '@/components/bubbleTint'
-import { Markdown, type MarkdownLinks, type RepoLinks } from '@/components/Markdown'
+import { Markdown, scrollsSideways, type MarkdownLinks, type RepoLinks } from '@/components/Markdown'
 import { AgentRuntimeSheet, RuntimeSheet, SingleRuntimeSheet } from '@/components/RuntimeSheet'
 import { ReplyContextChip } from '@/components/ReplyContextChip'
 import { NoteQuoteContextChip, QuoteBlock } from '@/components/QuoteContextChip'
@@ -2002,13 +2002,14 @@ function Bubble({ text, images, agents, files = [], documents = [], replyTo, quo
   const [openImage, setOpenImage] = useState<number | null>(null)
   const [openQuote, setOpenQuote] = useState<number | null>(null)
   const hasBubble = text !== '' || files.length > 0 || documents.length > 0 || replyTo !== undefined || quote !== undefined || noteQuote !== undefined
+  const wide = scrollsSideways(text)
   return (
     <BubbleTintContext.Provider value={tint}>
-    <View style={[styles.userMessage, dim && styles.pending]}>
+    <View style={[styles.userMessage, wide && styles.userMessageWide, dim && styles.pending]}>
       {/* Sent pictures sit above the bubble, as on desktop; a press opens the gallery. */}
       <Attachments alignEnd images={images} numbered={numbered} />
       {hasBubble ? (
-        <View style={[styles.userBubble, tint && { backgroundColor: tint.fill }]}>
+        <View style={[styles.userBubble, wide && styles.userBubbleWide, tint && { backgroundColor: tint.fill }]}>
           {sourceEventId === undefined ? null : <LandingWash eventId={sourceEventId} style={styles.userBubbleWash} />}
           {quote === undefined ? null : <QuoteBlock agents={agents} quote={quote} showAuthor={quoteAuthors} {...(onOpenQuoteSource === undefined ? {} : { onOpen: () => onOpenQuoteSource(quote.eventId) })} />}
           {noteQuote === undefined ? null : <NoteQuoteContextChip quote={noteQuote} />}
@@ -2065,6 +2066,9 @@ const styles = StyleSheet.create({
   emptyTitle: { color: colors.text, fontFamily: fonts.sans, fontSize: 20, fontWeight: '500' },
   emptyCopy: { color: colors.muted, fontFamily: fonts.sans, fontSize: 15 },
   userMessage: { maxWidth: `${SENT_BUBBLE_SHARE * 100}%`, alignSelf: 'flex-end', alignItems: 'flex-end', gap: spacing.xs + 2 },
+  // A table or fenced block in a bubble that sizes to its words breaks the layout (`scrollsSideways`).
+  userMessageWide: { width: `${SENT_BUBBLE_SHARE * 100}%` },
+  userBubbleWide: { alignSelf: 'stretch' },
   userBubble: { maxWidth: '100%', gap: spacing.sm, borderRadius: radius.composer, ...squircle, backgroundColor: colors.userBubble, paddingHorizontal: SENT_BUBBLE_PAD.x, paddingVertical: SENT_BUBBLE_PAD.y },
   userBubbleWash: { borderRadius: radius.composer, ...squircle },
   pending: { opacity: 0.55 },

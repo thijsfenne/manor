@@ -212,6 +212,16 @@ function splitRow(line: string): string[] {
     .map((cell) => cell.trim())
 }
 
+/**
+ * True when the text holds a table or a fenced block, the blocks that scroll sideways.
+ * A box that sizes to its content must not hold one: Yoga then gives that box and the
+ * boxes around it heights far beyond their text, so a sent bubble's fill runs on below
+ * its words and under the rows after it. Such a bubble takes its full width instead.
+ */
+export function scrollsSideways(text: string): boolean {
+  return parseBlocks(text).some((block) => block.kind === 'table' || block.kind === 'code')
+}
+
 function parseBlocks(source: string): MdBlock[] {
   const lines = source.replace(/\r\n?/g, '\n').split('\n')
   const blocks: MdBlock[] = []
