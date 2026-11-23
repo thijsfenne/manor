@@ -420,16 +420,16 @@
 }
 
 /*
- * Light puts that step a grey below the white stage, so the hover and picked fills drawn
- * for a white canvas go one deeper on it (1.09 and 1.15:1), the move the frame makes,
+ * Light puts that step a clear grey below the white stage, so the hover and picked fills
+ * are drawn from the sidebar itself (`side-hover`, `side-picked`) instead of the stage's,
  * and a Changed files card goes white to stay a card. Dark's side already sits under
  * its fills.
  */
 :root[data-theme='light'] .sidebar-surface {
   --color-surface-2: var(--color-side-hover);
   --color-tree-hover: var(--color-side-hover);
-  --color-user-bg: var(--color-user-bubble);
-  --color-icon-fill: var(--color-user-bubble);
+  --color-user-bg: var(--color-side-picked);
+  --color-icon-fill: var(--color-side-picked);
   --color-composer-tray: var(--color-raised);
 }
 
@@ -515,16 +515,20 @@
   --color-raised: #ffffff;
   --color-composer: #ffffff;
   --color-composer-line: rgb(0 0 0 / 18%);
-  /* The stage is white, so the tray, the Changed files card and the sidebar that shares
-     their step go one grey down from it (1.10:1). The frame a step further (1.08:1 below
-     the sidebar), so the inset's corner still reads; its fills deeper again (1.14:1). */
+  /* The stage is white, so the tray and the Changed files card go one grey down from it
+     (1.10:1), and the sidebar a clear step further (1.13:1) so it parts from the stage.
+     The frame a step below the sidebar (1.08:1), so the inset's corner still reads; its
+     fills deeper again (1.14:1). */
   --color-composer-tray: #f3f4f6;
-  --color-frame: #e9ebef;
-  --color-frame-fill: #d9dde3;
+  --color-sidebar: #f0f1f3;
+  --color-frame: #e6e8ec;
+  --color-frame-fill: #d6dae0;
   --color-user-bg: #e8eaee;
-  /* The hover fill on the sidebar's grey step, the selected fill of the white stage.
-     Its own name because inside `.sidebar-surface` user-bg itself moves. */
-  --color-side-hover: #e8eaee;
+  /* The hover (1.06:1) and picked (1.10:1) fills on the sidebar's grey step; picked
+     stays light enough that dim and status text keep 4.5:1 on a selected row. Their own
+     names because inside `.sidebar-surface` user-bg itself moves. */
+  --color-side-hover: #e9eaed;
+  --color-side-picked: #e5e6e8;
   --color-menu-selected: #dcdfe4;
   --color-user-bubble: #e3e5e9;
   --color-bubble: #eff1f4;

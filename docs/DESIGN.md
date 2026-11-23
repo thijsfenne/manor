@@ -183,7 +183,7 @@ their code surfaces.
 - **Inset Charcoal** (light #f5f6f8 / dark #191a1b): Carries hover states, fields, and inset areas.
 - **Raised Charcoal** (light #ffffff / dark #191a1b): Reserved for genuinely floating surfaces such as menus and popovers.
 - **Composer Fill** (light #ffffff / dark #171819): The composer card. A hair darker than Raised Charcoal in the night room.
-- **Composer Tray** (light #f3f4f6 / dark #121314): The checkout strip under the composer, the Changed files card and the desktop sidebar. A hair lighter than Room Surface in the night room, still darker than the rejected #141516 lift; one grey step below the white stage in light.
+- **Composer Tray** (light #f3f4f6 / dark #121314): The checkout strip under the composer and the Changed files card, and the desktop sidebar in dark. A hair lighter than Room Surface in the night room, still darker than the rejected #141516 lift; one grey step below the white stage in light.
 - **Inhabited Fill** (light #eceef2 / dark #26262b): Marks selected rows and the user's own message surface.
 - **Picked Fill** (light #d2d6dd / dark #6b6f78): Separates selected pills from idle tonal controls.
 - **Quiet Silver** (light #565b66 / dark #8a8f98): The first supporting text tier beneath House Ink.
@@ -191,7 +191,7 @@ their code surfaces.
 - **Quiet Hairline** (light rgb(0 0 0 / 11%) / dark rgb(255 255 255 / 8%)): Separates adjacent regions without becoming a visible frame.
 - **Composer Line** (light rgb(0 0 0 / 18%) / dark the Quiet Hairline): The composer's edge and the decision dock's above it. Firmer in light, where the card is white on a white stage.
 
-The desktop window is an L-frame (`--color-frame`, `--color-sidebar`, `--color-stage`). The rail and the top bar are one frame surface: Inset Charcoal's dark step in dark (#191a1b, the lightest in the dark room), its own #e9ebef in light. The sidebar sits on Composer Tray (light #f3f4f6 / dark #121314). The stage is Room Surface (light #ffffff / dark #0f1011), the darkest in the dark room. The seam between sidebar and stage is the frame's colour. On the frame, every hover, open and picked fill is `--color-frame-fill` (light #d9dde3 / dark Inhabited Fill), because `surface-2` is the frame itself. In light the sidebar's own fills go one step deeper (`.sidebar-surface`: hover #e8eaee, picked #e3e5e9), because it sits a step below the white stage.
+The desktop window is an L-frame (`--color-frame`, `--color-sidebar`, `--color-stage`). The rail and the top bar are one frame surface: Inset Charcoal's dark step in dark (#191a1b, the lightest in the dark room), its own #e6e8ec in light. The sidebar sits on Composer Tray in dark (#121314) and a clear step below it in light (#f0f1f3), so it parts from the white stage and still sits above the frame. The stage is Room Surface (light #ffffff / dark #0f1011), the darkest in the dark room. The seam between sidebar and stage is the frame's colour. On the frame, every hover, open and picked fill is `--color-frame-fill` (light #d6dae0 / dark Inhabited Fill), because `surface-2` is the frame itself. In light the sidebar's own fills are drawn from the sidebar (`.sidebar-surface`: hover #e9eaed, picked #e5e6e8), because it sits a step below the white stage; picked stays light enough for 4.5:1 text.
 
 ### Named rules
 
