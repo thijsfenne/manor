@@ -342,6 +342,7 @@ const listedChats = () =>
       archivedAt: chat.archivedAt ?? null,
       createdAt: chat.createdAt ?? chat.lastMessageAt,
       lastMessagePreview: said === undefined ? null : said.text.replace(/\s+/g, ' ').trim().slice(0, 120),
+      ...(said === undefined || (said.type === 'user_message' && said.source !== undefined) ? {} : { lastMessageFromUser: said.type === 'user_message' }),
       agentIds: chat.kind === 'project' ? spoke : chat.memberIds,
     }
   })

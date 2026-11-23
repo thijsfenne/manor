@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import type { DatabaseSync } from 'node:sqlite'
-import { planProgress, searchWords, type ConfirmRequest, type EventSync, type PlanProgress, type SearchMessageHit, type ThreadEvent } from '@manor/contracts'
+import { planProgress, saidByUser, searchWords, type ConfirmRequest, type EventSync, type PlanProgress, type SearchMessageHit, type ThreadEvent } from '@manor/contracts'
 import type { SkillBundleFile, UnresolvedOutboundSubmission } from '../store.js'
 import { previewLine } from './previewLine.js'
 import { foldUsageEvent, usageRunKey, type UsageRun } from '../usageReport.js'
@@ -11,7 +11,7 @@ import { SqliteRecords } from './sqliteDatabase.js'
  * request (`confirm`, whose steps follow Git and are counted when the row is read). One
  * replaces the other, so the row follows whichever card the transcript shows last.
  */
-type Metadata = { preview: string | null; participants: Record<string, number>; plan?: PlanProgress; confirm?: { eventId: string; request: ConfirmRequest } }
+type Metadata = { preview: string | null; fromUser?: boolean; participants: Record<string, number>; plan?: PlanProgress; confirm?: { eventId: string; request: ConfirmRequest } }
 
 /** How many rewrites of one chat stay nameable. A client further behind gets the whole thread. */
 const REWRITE_LOG = 256
@@ -77,7 +77,12 @@ export class SqliteTranscript {
     const meta = this.metadata.get(chatId) ?? { preview: null, participants: {} }
     if ('agentId' in event && event.agentId !== undefined) meta.participants[event.agentId] = Math.max(meta.participants[event.agentId] ?? 0, event.ts)
     const line = previewLine(event)
-    if (line !== undefined) meta.preview = line
+    if (line !== undefined) {
+      meta.preview = line
+      const fromUser = line === null ? undefined : saidByUser(event)
+      if (fromUser === undefined) delete meta.fromUser
+      else meta.fromUser = fromUser
+    }
     // A card with no lines draws nothing, so it leaves no count either.
     // A blank plan draws no card, so Confirm's stays the newest one that shows.
     if (event.type === 'todo_update') {
@@ -136,10 +141,11 @@ export class SqliteTranscript {
     return Object.entries(this.metadata.get(chatId)?.participants ?? {}).sort(([, a], [, b]) => b - a).map(([id]) => id)
   }
   /** What a chat's listing row says about its transcript, from one metadata read. */
-  summary(chatId: string): { preview: string | null; plan?: PlanProgress; confirm?: { eventId: string; request: ConfirmRequest } } {
+  summary(chatId: string): { preview: string | null; fromUser?: boolean; plan?: PlanProgress; confirm?: { eventId: string; request: ConfirmRequest } } {
     const meta = this.metadata.get(chatId)
     return {
       preview: meta?.preview ?? null,
+      ...(meta?.fromUser === undefined ? {} : { fromUser: meta.fromUser }),
       ...(meta?.plan === undefined ? {} : { plan: meta.plan }),
       ...(meta?.confirm === undefined ? {} : { confirm: meta.confirm }),
     }

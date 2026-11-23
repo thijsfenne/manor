@@ -63,3 +63,14 @@ export function isModelOnlyMessage(event: UserMessageParts): boolean {
   const { visible, instruction } = splitUserMessage(event)
   return instruction !== '' && visible === ''
 }
+
+/**
+ * Who said the line a message leaves in a chat listing: true for what the user typed,
+ * false for a persona's reply, undefined for a message Manor posted on someone's behalf
+ * (a routine's prompt, a relay, a handoff), which has nobody to name. Read it only for
+ * an event that set the line.
+ */
+export function saidByUser(event: { type: string; source?: unknown }): boolean | undefined {
+  if (event.type === 'agent_message') return false
+  return event.type === 'user_message' && event.source === undefined ? true : undefined
+}

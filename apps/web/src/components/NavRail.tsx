@@ -1,4 +1,4 @@
-import { memo, useEffect, type ComponentProps } from 'react'
+import { memo, useEffect, useState, type ComponentProps, type FocusEvent, type PointerEvent } from 'react'
 import { motion, useReducedMotion } from 'motion/react'
 import {
   Clock01Icon,
@@ -27,9 +27,11 @@ import { Avatar } from './Avatar'
 import { AiBotHeadLookingIcon, AiBotHeadLookingSolidIcon } from './customIcons'
 import { Icon } from './Icon'
 import { ProviderUpdateRailButton, type UpdateProviders } from './ProviderUpdates'
+import { RailPinPreview } from './RailPinPreview'
 import { UsagePanel } from './UsagePanel'
 import { SIDEBAR_NAV_MARKER, SelectionMarker } from './ui/SelectionMarker'
 import { useSplitDragGrab } from './SplitDrag'
+import { useHoverCard } from './ui/useHoverCard'
 
 /** The rail's own width, the L-frame's vertical leg. Everything to its right measures from here. */
 export const NAV_RAIL_WIDTH = 46
@@ -73,12 +75,16 @@ const DOOR_DOT: Record<Exclude<DoorAttention, null>, string> = {
   done: 'bg-ok',
 }
 
-/** A persona the user pinned, under the doors with her DM's standing. */
+/** A persona the user pinned, under the doors with her DM's standing and its sidebar line. */
 export interface RailPin {
   agent: AgentConfig
   unread: boolean
   running: boolean
   waiting: boolean
+  /** The DM row's one line, empty before anything was said. */
+  preview: string
+  fromUser: boolean | undefined
+  lastMessageAt: number | null
 }
 
 interface NavRailProps {
@@ -163,6 +169,14 @@ function NavRailDoors({
   const reduceMotion = useReducedMotion() ?? false
   // A pinned face drags onto the stage like a Sessions row, opening her DM beside it.
   const grab = useSplitDragGrab()
+  // One card for all faces, so moving to the next face swaps it without the open delay.
+  const { anchorRef: previewAnchorRef, card: previewCard, show, hide, dismiss, scheduleShow, scheduleHide } = useHoverCard<HTMLButtonElement>()
+  const [previewId, setPreviewId] = useState<string | null>(null)
+  const previewPin = pins.find((pin) => pin.agent.id === previewId)
+  const peek = (agentId: string, anchor: HTMLButtonElement) => {
+    previewAnchorRef.current = anchor
+    setPreviewId(agentId)
+  }
 
   useEffect(() => {
     // The phone has no keyboard to speak of, and its drawer rail is not always mounted.
@@ -247,8 +261,31 @@ function NavRailDoors({
                   type="button"
                   className="relative grid cursor-pointer place-items-center rounded-xl border-0 bg-transparent [font:inherit] hover:bg-surface-2"
                   style={{ width: size, height: size }}
-                  title={agent.name}
-                  onPointerDown={grab === null ? undefined : (event) => grab({ kind: 'agent', agentId: agent.id }, event)}
+                  onPointerDown={(event) => {
+                    dismiss()
+                    grab?.({ kind: 'agent', agentId: agent.id }, event)
+                  }}
+                  // The phone drawer has no hover; there the face opens her DM and nothing else.
+                  {...(mobile ? {} : {
+                    onPointerEnter: (event: PointerEvent<HTMLButtonElement>) => {
+                      // A card still fading out would show this face's line where the last face was.
+                      if (previewCard !== null && !previewCard.open) dismiss()
+                      peek(agent.id, event.currentTarget)
+                      if (previewCard?.open === true) show()
+                      else scheduleShow(event)
+                    },
+                    // The keyboard opened it on this face, so the pointer leaving does not close it.
+                    onPointerLeave: (event: PointerEvent<HTMLButtonElement>) => {
+                      if (!event.currentTarget.matches(':focus-visible')) scheduleHide()
+                    },
+                    onFocus: (event: FocusEvent<HTMLButtonElement>) => {
+                      // A click focuses the face too, and that is the pointer's card, not the keyboard's.
+                      if (!event.currentTarget.matches(':focus-visible')) return
+                      peek(agent.id, event.currentTarget)
+                      show()
+                    },
+                    onBlur: hide,
+                  })}
                   aria-label={`${agent.name}${standing}`}
                   aria-current={current ? 'true' : undefined}
                   onClick={() => onOpenPin(agent.id)}
@@ -286,6 +323,18 @@ function NavRailDoors({
               )
             })}
           </div>
+          {previewCard === null || previewPin === undefined ? null : (
+            <RailPinPreview
+              {...previewPin}
+              anchor={previewCard.anchor}
+              open={previewCard.open}
+              onClose={hide}
+              onPointerEnter={show}
+              onPointerLeave={() => {
+                if (previewAnchorRef.current?.matches(':focus-visible') !== true) scheduleHide()
+              }}
+            />
+          )}
         </>
       )}
 

@@ -3436,6 +3436,9 @@ export const ChatSchema = z.object({
   // The last thing said in this chat, one line, cut short, for the sidebar. Derived on
   // every listing rather than stored, so it cannot disagree with the transcript.
   lastMessagePreview: z.string().nullable().default(null),
+  // Who said that line: true for the user, false for a persona. Absent while there is no
+  // line, so a reader that names the speaker says nothing rather than guessing.
+  lastMessageFromUser: z.boolean().optional(),
   // The progress of the latest tasks card said in this chat, absent before one was. Derived
   // like the preview, so the Sessions overview never reads a transcript for it.
   planProgress: PlanProgressSchema.optional(),

@@ -903,6 +903,36 @@ describe('the sidebar preview', () => {
     expect(cut.chats[0]?.lastMessagePreview).toBe('Look into it')
   })
 
+  it('moves who said the line with the line, and a wake moves neither', () => {
+    const chat: Chat = {
+      id: 'dm_1', projectId: null, kind: 'dm', routineId: null, parentChatId: null,
+      memberIds: ['sage'], sideModel: null, sideEffort: null, title: 'Sage',
+      lastMessagePreview: 'Look into it', lastMessageFromUser: false, createdAt: 1, lastMessageAt: 1, settledAt: null,
+      archivedAt: null, agentIds: ['sage'], checkout: { mode: 'current', branch: null },
+    }
+    const asked = reduce({ ...emptyWorkspace, chats: [chat] }, {
+      type: 'event', chatId: 'dm_1',
+      event: { id: 'u1', ts: 2, type: 'user_message', mentions: [], text: 'Book the **ferry**' },
+    })
+    expect(asked.chats[0]).toMatchObject({ lastMessagePreview: 'Book the ferry', lastMessageFromUser: true })
+    const woken = reduce(asked, {
+      type: 'event', chatId: 'dm_1',
+      event: { id: 'w1', ts: 3, type: 'user_message', source: 'background_wake', mentions: [], text: 'Background work you started has ended.' },
+    })
+    expect(woken.chats[0]).toMatchObject({ lastMessagePreview: 'Book the ferry', lastMessageFromUser: true })
+    const answered = reduce(woken, {
+      type: 'event', chatId: 'dm_1',
+      event: { id: 'm1', ts: 4, type: 'agent_message', turnId: 't1', agentId: 'sage', messageId: 'm1', text: 'Booked.' },
+    })
+    expect(answered.chats[0]).toMatchObject({ lastMessagePreview: 'Booked.', lastMessageFromUser: false })
+    const scheduled = reduce(answered, {
+      type: 'event', chatId: 'dm_1',
+      event: { id: 'r1', ts: 5, type: 'user_message', source: 'routine', mentions: [], text: 'Morning brief' },
+    })
+    expect(scheduled.chats[0]?.lastMessagePreview).toBe('Morning brief')
+    expect(scheduled.chats[0]).not.toHaveProperty('lastMessageFromUser')
+  })
+
   it('never shows the wake prompt Manor sent a persona', () => {
     const chat: Chat = {
       id: 'dm_1', projectId: null, kind: 'dm', routineId: null, parentChatId: null,

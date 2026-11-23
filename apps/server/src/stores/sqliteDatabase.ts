@@ -2,7 +2,7 @@ import { chmodSync, closeSync, mkdirSync, openSync, readFileSync, realpathSync }
 import path from 'node:path'
 import { createRequire } from 'node:module'
 import type { DatabaseSync as SqliteDatabase } from 'node:sqlite'
-import { splitUserMessage, type ThreadEvent } from '@manor/contracts'
+import { saidByUser, splitUserMessage, type ThreadEvent } from '@manor/contracts'
 import { foldUsageEvent, usageRunKey, type UsageRun } from '../usageReport.js'
 import { snapshotBeforeMigration } from '../backupSqlite.js'
 import { previewLine } from './previewLine.js'
@@ -39,6 +39,7 @@ const MIGRATIONS: readonly Migration[] = [
   { file: '015_relink_hidden_threads.sql' },
   { file: '016_paired_devices.sql' },
   { file: '017_single_browser_sessions.sql' },
+  { file: '018_preview_speaker.sql', after: recordPreviewSpeakers },
 ]
 
 /** The `user_version` the last migration sets. */
@@ -158,6 +159,28 @@ function repairManorPreviews(db: SqliteDatabase): void {
       if (line !== undefined) preview = line
     }
     save.run(JSON.stringify({ ...meta, preview }), String(row.key))
+  }
+}
+
+/**
+ * Records who said each stored line, which metadata written before `fromUser` existed
+ * lacks. The newest event that sets a line is the one that set it, so the scan walks
+ * back from the end and stops there.
+ */
+function recordPreviewSpeakers(db: SqliteDatabase): void {
+  const rows = db.prepare(`SELECT key, value FROM records
+    WHERE collection = 'transcriptMetadata' AND json_extract(value, '$.preview') IS NOT NULL`).all()
+  const events = db.prepare('SELECT payload FROM events WHERE chat_id = ? ORDER BY seq DESC')
+  const save = db.prepare("UPDATE records SET value = ? WHERE collection = 'transcriptMetadata' AND key = ?")
+  for (const row of rows) {
+    for (const stored of events.iterate(String(row.key))) {
+      const event = JSON.parse(String(stored.payload)) as ThreadEvent
+      if (previewLine(event) === undefined) continue
+      const fromUser = saidByUser(event)
+      const meta = JSON.parse(String(row.value)) as Record<string, unknown>
+      if (fromUser !== undefined) save.run(JSON.stringify({ ...meta, fromUser }), String(row.key))
+      break
+    }
   }
 }
 

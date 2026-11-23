@@ -316,7 +316,7 @@ export function createSqliteStore(options: SqliteStoreOptions): Store & {
     }
   }
   const transcriptLine = (chatId: string, handoffsOf = handoffsByChat()) => {
-    const { preview, plan, confirm } = events.summary(chatId)
+    const { preview, fromUser, plan, confirm } = events.summary(chatId)
     // Confirm's card ticks off with Git, not with a plan event, so its count is read now,
     // by the rules the card itself draws by. Manor's own request has no turn to wait on.
     const confirmed = confirm === undefined ? undefined : planProgress(confirmTasks(
@@ -325,7 +325,11 @@ export function createSqliteStore(options: SqliteStoreOptions): Store & {
       completionFor(handoffsOf(chatId), confirm.eventId),
     ))
     const progress = confirmed ?? plan
-    return { lastMessagePreview: preview, ...(progress === undefined ? {} : { planProgress: progress }) }
+    return {
+      lastMessagePreview: preview,
+      ...(fromUser === undefined ? {} : { lastMessageFromUser: fromUser }),
+      ...(progress === undefined ? {} : { planProgress: progress }),
+    }
   }
   if (options.seed) {
     transaction(db, () => {

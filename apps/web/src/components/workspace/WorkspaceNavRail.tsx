@@ -63,7 +63,15 @@ export function WorkspaceNavRail({
     : chatInbox.unsettled.some((row) => row.unread && !row.running) ? 'done' : null
   const railFaces = railPins(workspace.agents).map((agent) => {
     const row = chatRows.find((candidate) => candidate.kind === 'dm' && candidate.agentId === agent.id)
-    return { agent, unread: row?.unread ?? false, running: row?.running ?? false, waiting: row?.waiting ?? false }
+    return {
+      agent,
+      unread: row?.unread ?? false,
+      running: row?.running ?? false,
+      waiting: row?.waiting ?? false,
+      preview: row?.preview ?? '',
+      fromUser: row?.chat?.lastMessageFromUser,
+      lastMessageAt: row?.lastMessageAt ?? null,
+    }
   })
   const routineAttention = routinesNeedAttention(workspace.routines)
   const { leaveSettingsThen } = doors

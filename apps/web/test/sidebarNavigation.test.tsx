@@ -106,7 +106,7 @@ describe('navigation rail', () => {
 
   it('puts pinned faces under Plugins, and a pinned DM on stage leaves the fill on Agents', () => {
     const jeeves = { id: 'jeeves', name: 'Jeeves', color: '#888888' } as AgentConfig
-    const pins = [{ agent: jeeves, unread: true, running: false, waiting: false }]
+    const pins = [{ agent: jeeves, unread: true, running: false, waiting: false, preview: '', fromUser: undefined, lastMessageAt: null }]
     expect(renderRail().indexOf('aria-label="Jeeves')).toBe(-1)
     const html = renderRail({ pins, stageAgentId: 'jeeves' })
     expect(html.indexOf('aria-label="Jeeves, unread messages"')).toBeGreaterThan(html.indexOf('aria-label="Plugins"'))

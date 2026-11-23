@@ -324,6 +324,31 @@ describe('persistent SQLite store', () => {
     expect((await migrated.getSessions(chat.id, sage.id)).map((held) => held.sessionId)).toEqual(['on-claude', 'on-codex'])
   })
 
+  it('says who wrote the listed line, and fills it in for lines stored before it was kept', async () => {
+    const { store, filename } = fixture()
+    const chat = (await store.listChats())[0]!
+    const listed = async (from: Store) => (await from.listChats()).find((row) => row.id === chat.id)
+    await store.appendEvent(chat.id, { type: 'user_message', text: 'Book the ferry.', mentions: [] })
+    expect(await listed(store)).toMatchObject({ lastMessagePreview: 'Book the ferry.', lastMessageFromUser: true })
+    await store.appendEvent(chat.id, { type: 'agent_message', agentId: sage.id, turnId: 'tu', text: 'Booked.' })
+    // A turn's bookkeeping sets no line, so it leaves the speaker as it was.
+    await store.appendEvent(chat.id, { type: 'turn_result', agentId: sage.id, turnId: 'tu' })
+    expect(await listed(store)).toMatchObject({ lastMessagePreview: 'Booked.', lastMessageFromUser: false })
+    // A routine's prompt is Manor speaking for a schedule, not the user.
+    await store.appendEvent(chat.id, { type: 'user_message', text: 'Morning brief', mentions: [], source: 'routine' })
+    expect((await listed(store))?.lastMessageFromUser).toBeUndefined()
+    await store.appendEvent(chat.id, { type: 'agent_message', agentId: sage.id, turnId: 'tu2', text: 'Booked.' })
+    const metadata = new SqliteRecords<Record<string, unknown>>(store.db, 'transcriptMetadata')
+    const { fromUser: _dropped, ...older } = metadata.get(chat.id)!
+    metadata.set(chat.id, older)
+    expect((await listed(store))?.lastMessageFromUser).toBeUndefined()
+    store.db.exec('PRAGMA user_version = 17')
+    store.close()
+    const migrated = createSqliteStore({ filename })
+    opened.push(migrated)
+    expect(await listed(migrated)).toMatchObject({ lastMessagePreview: 'Booked.', lastMessageFromUser: false })
+  })
+
   it('refolds usage runs from the transcript with provider and cache split', async () => {
     const { store, filename } = fixture()
     const chat = (await store.listChats())[0]!

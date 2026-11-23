@@ -39,7 +39,7 @@ import type {
   WorkHandoff,
   ContextFiles,
 } from '@manor/contracts'
-import { DEFAULT_PROJECT_COLOR, DEFAULT_PROJECT_ICON, HOME_PROJECT_ID, MAX_SESSION_DIFF_FILES, isModelOnlyMessage, planProgress, splitUserMessage, withQuoteExcerpts, type DmFile, type SessionRepo } from '@manor/contracts'
+import { DEFAULT_PROJECT_COLOR, DEFAULT_PROJECT_ICON, HOME_PROJECT_ID, MAX_SESSION_DIFF_FILES, isModelOnlyMessage, planProgress, saidByUser, splitUserMessage, withQuoteExcerpts, type DmFile, type SessionRepo } from '@manor/contracts'
 import { confirmTasks } from './confirmTasks'
 import { plainPreview } from './plainPreview'
 import { NO_REMINDERS_YET, reduceReminders, type RemindersState } from './reminders'
@@ -786,8 +786,9 @@ const withLiveChat = (chats: Chat[], chatId: string, event: ThreadEvent): Chat[]
         : [speaker, ...chat.agentIds.filter((id) => id !== speaker)]
     // An event older than what the row already records is a replay or a snapshot
     // catching up; it may not rewrite the line with something that was said earlier.
-    const lastMessagePreview =
-      spoken !== null && event.ts >= chat.lastMessageAt ? spoken : chat.lastMessagePreview
+    const said = spoken !== null && event.ts >= chat.lastMessageAt
+    const lastMessagePreview = said ? spoken : chat.lastMessagePreview
+    const lastMessageFromUser = said ? saidByUser(event) : chat.lastMessageFromUser
     // The same guard for the tasks card: a replayed older snapshot may not move the count back.
     // Confirm's commit request is a tasks card too, and starts at none of its steps done.
     const progress = event.ts < chat.lastMessageAt ? chat.planProgress
@@ -799,12 +800,14 @@ const withLiveChat = (chats: Chat[], chatId: string, event: ThreadEvent): Chat[]
       lastMessageAt === chat.lastMessageAt &&
       agentIds === chat.agentIds &&
       lastMessagePreview === chat.lastMessagePreview &&
+      lastMessageFromUser === chat.lastMessageFromUser &&
       !planMoved
     ) {
       return chat
     }
     changed = true
-    return { ...chat, lastMessageAt, agentIds, lastMessagePreview, ...(planMoved ? { planProgress: progress } : {}) }
+    const { lastMessageFromUser: _replaced, ...rest } = chat
+    return { ...rest, lastMessageAt, agentIds, lastMessagePreview, ...(lastMessageFromUser === undefined ? {} : { lastMessageFromUser }), ...(planMoved ? { planProgress: progress } : {}) }
   })
   return changed ? next : chats
 }
