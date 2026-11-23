@@ -820,7 +820,7 @@ const POP = 'cubic-bezier(0.3, 1.5, 0.5, 1)'
 const SPRING = 'cubic-bezier(0.3, 1.3, 0.5, 1)'
 const SINK = 'cubic-bezier(0.5, 0, 0.75, 0)'
 /** One round of hops, how many rounds a pass holds, and the rest before the next pass. */
-const HOP = 1.4
+export const HOP = 1.4
 const HOPS = 24
 const REST = 0.7
 /** How far toward the middle of the body an eye sinks before it is gone. */
@@ -911,7 +911,8 @@ export function dotsPlan(pulls: readonly [Pair, Pair]) {
       { t: seconds, pose: home, ease: 'linear' },
     ]
   }) as [Stop[], Stop[]]
-  return { eyes, body, blur, dots, seconds }
+  // `hops` is when the dots are out and the first round of hops begins.
+  return { eyes, body, blur, dots, seconds, hops: wave }
 }
 
 export type DotsPlan = ReturnType<typeof dotsPlan>

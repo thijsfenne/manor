@@ -3,6 +3,7 @@ import {
   DOT,
   DOTS_RATE,
   GOO,
+  HOP,
   WAKE,
   WORK,
   dotsPlan,
@@ -51,6 +52,12 @@ export interface BusyLook {
   speed: number
   /** Fixes the order of the loop. Absent, every start takes an order of its own. */
   seed?: number
+  /**
+   * Faces that share a beat play the loop on one schedule, so the same persona in the
+   * transcript and in the sidebar makes the same move at the same moment, and writes on
+   * all of them when one of them writes. Ignored with a `seed`.
+   */
+  beat?: string
 }
 
 export const BUSY_LOOK: BusyLook = { play: 'loop', speed: 1 }
@@ -149,6 +156,9 @@ function eyeBox(eye: EyeShape, lower: number) {
   }
 }
 
+/** How far into the melt a face may start to land on a beat's hops, in the plan's seconds, rather than wait a round. */
+const CATCH_UP = 0.25
+
 /**
  * The dots she writes behind. The body's shapes are wrapped so they shrink as one,
  * three dots wait beside them in the head colour, and a goo filter on the body group
@@ -156,7 +166,7 @@ function eyeBox(eye: EyeShape, lower: number) {
  * contrast follows the blur, so turning it on or off draws nothing different. The
  * working eyes sink into the middle of the body ahead of it.
  */
-function melt(body: SVGGElement, [cx, cy]: Pair, eyes: readonly SVGGElement[], pulls: [Pair, Pair], speed: number) {
+function melt(body: SVGGElement, [cx, cy]: Pair, eyes: readonly SVGGElement[], pulls: [Pair, Pair], speed: number, follow?: Animation) {
   const wrap = node('g')
   wrap.append(...body.childNodes)
   wrap.style.transformBox = 'view-box'
@@ -215,7 +225,6 @@ function melt(body: SVGGElement, [cx, cy]: Pair, eyes: readonly SVGGElement[], p
   ]
   const lead = loops[0]!
   for (const loop of loops) loop.playbackRate = speed * DOTS_RATE
-
   let frame = 0
   let timer = 0
   const halt = () => {
@@ -234,6 +243,30 @@ function melt(body: SVGGElement, [cx, cy]: Pair, eyes: readonly SVGGElement[], p
   }
   tick()
 
+  // With dots that already hop it lands on their hops: a little into the melt to catch up, or
+  // held back for the next round. Once its own dots are out it takes the other face's place in
+  // the pass, whole hops on, so the two also swell back and melt again together. It reads the
+  // other face once it runs itself, because its first frame can come late while a reply starts.
+  const seek = (t: number) => {
+    for (const loop of loops) loop.currentTime = t * 1000
+    halt()
+    tick()
+  }
+  const there = () => (follow === undefined || follow.playState === 'idle' || lead.playState === 'idle' ? undefined : Number(follow.currentTime) / 1000)
+  if (follow) {
+    void lead.ready.then(() => {
+      const t = there()
+      if (t === undefined) return
+      const lag = (((t % plan.seconds) % HOP) + HOP) % HOP
+      const from = lag <= CATCH_UP ? lag : lag - HOP
+      seek(from)
+      window.setTimeout(() => {
+        const now = there()
+        if (now !== undefined) seek(now % plan.seconds)
+      }, ((plan.hops - from) / Math.abs(lead.playbackRate || 1)) * 1000)
+    }, () => undefined)
+  }
+
   let gone = false
   let leaving: Promise<void> | undefined
   const off = () => {
@@ -247,6 +280,7 @@ function melt(body: SVGGElement, [cx, cy]: Pair, eyes: readonly SVGGElement[], p
   }
 
   return {
+    lead,
     setSpeed: (next: number) => {
       for (const loop of loops) loop.updatePlaybackRate(next * DOTS_RATE)
     },
@@ -285,6 +319,60 @@ function melt(body: SVGGElement, [cx, cy]: Pair, eyes: readonly SVGGElement[], p
 
 /** Each start without a seed of its own takes the next order, from somewhere new on every load. */
 let turns = Math.floor(Math.random() * 0x10000)
+
+/** A face on a beat: whether it was asked to write, and how to tell it the others changed. */
+interface Beater {
+  writing: boolean
+  sync: () => void
+  /** What plays the dots it shows now, if it shows them. */
+  melting: () => Animation | undefined
+}
+
+/**
+ * One schedule of the loop for the faces that share a beat. It starts with the first of
+ * them to wake and ends when the last one is home, so the next turn takes a new order.
+ */
+interface Beat {
+  /** When the schedule was at its start, on the page's clock. */
+  epoch: number
+  seed: number
+  rounds: number
+  /** The steps planned so far, each with when it starts in the schedule, in seconds. */
+  steps: Array<Step & { at: number }>
+  faces: Set<Beater>
+}
+const beats = new Map<string, Beat>()
+
+const beatOf = (key: string) => {
+  const known = beats.get(key)
+  if (known) return known
+  const beat: Beat = { epoch: performance.now(), seed: turns++, rounds: 0, steps: [], faces: new Set() }
+  beats.set(key, beat)
+  return beat
+}
+
+/** The step a beat is in `t` seconds into its schedule, and how far into that step. */
+function stepAt(beat: Beat, t: number): { step: Step; into: number } {
+  const span = (step: Step) => moveInfo(step.move).seconds + step.rest
+  const end = () => {
+    const tail = beat.steps[beat.steps.length - 1]
+    return tail === undefined ? 0 : tail.at + span(tail)
+  }
+  while (end() <= t) {
+    let at = end()
+    for (const step of loopSteps(beat.seed + beat.rounds, beat.steps[beat.steps.length - 1]?.move)) {
+      beat.steps.push({ ...step, at })
+      at += span(step)
+    }
+    beat.rounds += 1
+  }
+  // Steps long past go; a face may still ask a little behind one that looked ahead.
+  while (beat.steps.length > 1 && beat.steps[0]!.at + span(beat.steps[0]!) < t - 5) beat.steps.shift()
+  let index = beat.steps.length - 1
+  while (index > 0 && beat.steps[index]!.at > t) index -= 1
+  const { at, ...step } = beat.steps[index]!
+  return { step, into: Math.max(0, t - at) }
+}
 
 /**
  * Wakes one face into the working pose and plays `look` on it, and returns its controls,
@@ -419,7 +507,7 @@ function start(host: HTMLElement, first: BusyLook): BusyRun | undefined {
     if (lead.playState !== 'finished' && plan.top.some((key) => key.top > 0)) frame = requestAnimationFrame(follow)
   }
   /** Plays a plan from where the last one is cut off, and calls `then` when it has played out. */
-  const play = (next: LoopPlan, then?: () => void) => {
+  const play = (next: LoopPlan, then?: () => void, from = 0) => {
     const before = running
     const timing = { id: 'busy', duration: next.seconds * 1000, fill: 'forwards' as const }
     const at = (key: { t: number }) => Math.min(1, key.t / next.seconds)
@@ -430,7 +518,10 @@ function start(host: HTMLElement, first: BusyLook): BusyRun | undefined {
       eyes.animate(frames, timing),
       ...lids.flatMap((each, index) => each.rects.map(({ rect, lower }) => rect.animate(eye(next.eyes[index]!, lower), timing))),
     ]
-    for (const each of running) each.playbackRate = speed
+    for (const each of running) {
+      each.playbackRate = speed
+      if (from > 0) each.currentTime = Math.min(from, next.seconds) * 1000
+    }
     // The new ones are on before the old ones go, so no frame shows the face without either.
     for (const each of before) each.cancel()
     plan = next
@@ -441,6 +532,8 @@ function start(host: HTMLElement, first: BusyLook): BusyRun | undefined {
   }
 
   let ended = false
+  /** What this face was asked to play; `playing` is what it plays, the dots too when another face on its beat writes. */
+  let told: BusyLook['play'] = look.play
   let playing: BusyLook['play'] = look.play
   let moving: MoveId | undefined
   let queue: Step[] = []
@@ -448,11 +541,35 @@ function start(host: HTMLElement, first: BusyLook): BusyRun | undefined {
   let round = look.seed ?? turns++
   let melting: ReturnType<typeof melt> | undefined
 
+  // A face without a fixed order keeps time with the other faces on its beat.
+  const key = look.seed === undefined ? look.beat : undefined
+  const beat = key === undefined ? undefined : beatOf(key)
+  const beater: Beater = { writing: told === 'dots', sync: () => apply(wanted()), melting: () => (playing === 'dots' && melting?.lead.playState !== 'idle' ? melting?.lead : undefined) }
+  const wanted = (): BusyLook['play'] => (told === 'loop' && beat !== undefined && [...beat.faces].some((face) => face !== beater && face.writing) ? 'dots' : told)
+  const tell = (writing: boolean) => {
+    if (beat === undefined || beater.writing === writing) return
+    beater.writing = writing
+    for (const face of beat.faces) if (face !== beater) face.sync()
+  }
+  /** How far the beat's schedule is, in the seconds a plan is timed in. */
+  const clock = () => (beat === undefined ? 0 : ((performance.now() - beat.epoch) / 1000) * speed)
+  /** Where the beat's schedule will have the face `ahead` seconds from now. */
+  const due = (ahead: number) => {
+    const { step, into } = stepAt(beat!, clock() + ahead)
+    return figureAt(loopPlan(head, [step]), into)
+  }
+  const onBeat = () => beat !== undefined && playing === 'loop'
+
   let gone = false
   const off = () => {
     if (gone) return
     gone = true
     ended = true
+    if (beat !== undefined) {
+      tell(false)
+      beat.faces.delete(beater)
+      if (beat.faces.size === 0 && beats.get(key!) === beat) beats.delete(key!)
+    }
     cancelAnimationFrame(frame)
     melting?.off()
     for (const each of running) each.cancel()
@@ -486,6 +603,13 @@ function start(host: HTMLElement, first: BusyLook): BusyRun | undefined {
 
   const advance = () => {
     if (ended || playing === 'dots') return
+    if (onBeat()) {
+      const { step, into } = stepAt(beat!, clock())
+      last = step.move
+      moving = step.move
+      play(loopPlan(head, [step]), advance, into)
+      return
+    }
     if (playing === 'loop' && queue.length === 0) queue = loopSteps(round++, last)
     const step = playing === 'loop' ? queue.shift()! : { move: playing, rest: 0.5 }
     last = step.move
@@ -501,7 +625,9 @@ function start(host: HTMLElement, first: BusyLook): BusyRun | undefined {
   const write = () => {
     const pulls = work.eyes.map((eye): Pair => [middle[0] - eye.x, middle[1] - eye.y]) as [Pair, Pair]
     melting?.off()
-    melting = melt(body, middle, lids.map((each) => each.lid), pulls, speed)
+    // A face on a beat hops in step with one of its faces that already shows the dots.
+    const ahead = beat === undefined ? undefined : [...beat.faces].map((face) => (face === beater ? undefined : face.melting())).find(Boolean)
+    melting = melt(body, middle, lids.map((each) => each.lid), pulls, speed, ahead)
   }
 
   /**
@@ -514,7 +640,8 @@ function start(host: HTMLElement, first: BusyLook): BusyRun | undefined {
     const mine = ++asked
     const leaving = melting
     if (leaving === undefined) {
-      play(walk(now(), work, seconds), advance)
+      // On a beat the face walks to where the schedule will be when it gets there, and joins it.
+      play(walk(now(), onBeat() ? due(seconds) : work, seconds), advance)
       if (playing === 'dots') write()
       return
     }
@@ -525,8 +652,19 @@ function start(host: HTMLElement, first: BusyLook): BusyRun | undefined {
       if (melting === leaving) melting = undefined
       if (asked !== mine || gone) return
       if (playing === 'dots') write()
+      else if (onBeat()) play(walk(now(), due(WAKE), WAKE), advance)
       else advance()
     })
+  }
+
+  /** Hands over to what the face should play now, unless it already plays it. */
+  const apply = (next: BusyLook['play']) => {
+    if (ended || next === playing) return
+    // A move is cut short for another one in less time than a face takes to wake.
+    const short = next !== 'dots' && playing !== 'dots'
+    playing = next
+    moving = undefined
+    begin(short ? HANDOVER : WAKE)
   }
 
   const run: BusyRun = {
@@ -536,12 +674,10 @@ function start(host: HTMLElement, first: BusyLook): BusyRun | undefined {
       melting?.setSpeed(speed)
     },
     setPlay: (next) => {
-      if (ended || next === playing) return
-      // A move is cut short for another one in less time than a face takes to wake.
-      const short = next !== 'dots' && playing !== 'dots'
-      playing = next
-      moving = undefined
-      begin(short ? HANDOVER : WAKE)
+      if (ended) return
+      told = next
+      tell(next === 'dots')
+      apply(wanted())
     },
     playing: () => {
       if (ended) return undefined
@@ -554,6 +690,7 @@ function start(host: HTMLElement, first: BusyLook): BusyRun | undefined {
       if (!body.isConnected) return off()
       const once = ended
       ended = true
+      tell(false)
       // A single move that has played out is already on its way home.
       if (!once) settle(3, melting?.stop())
     },
@@ -571,14 +708,21 @@ function start(host: HTMLElement, first: BusyLook): BusyRun | undefined {
       }
       look = next
       speed = rate(next.speed)
-      playing = next.play
-      moving = undefined
+      told = next.play
       ended = false
+      tell(told === 'dots')
+      playing = wanted()
+      moving = undefined
       begin()
       return run
     },
   })
 
+  if (beat !== undefined) {
+    beat.faces.add(beater)
+    for (const face of beat.faces) if (face !== beater && beater.writing) face.sync()
+    playing = wanted()
+  }
   begin()
   return run
 }

@@ -111,7 +111,8 @@ export const Avatar = memo(function Avatar({ name, color, src, shape, tone = DEF
   // and wakes into another order of moves when it comes back. Going from the loop to
   // the dots and back is handed over on the running face.
   const drawn = JSON.stringify([name, hue, tone, shape, size])
-  useBusyFace(slot, busy && moving && onScreen, look?.eyes === 'dots' ? DOTS_LOOK : BUSY_LOOK, drawn)
+  // Her faces share a beat, so the transcript and the sidebar move together and write together.
+  useBusyFace(slot, busy && moving && onScreen, { ...(look?.eyes === 'dots' ? DOTS_LOOK : BUSY_LOOK), beat: name }, drawn)
   // The body and the added eye move rest with the loop when the face is out of sight.
   const shown = moving && onScreen ? look : undefined
   useFaceGesture(slot, shown?.gesture, drawn, shown?.passes)
