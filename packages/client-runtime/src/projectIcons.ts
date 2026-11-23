@@ -98,7 +98,7 @@ import Wallet01Icon from '@hugeicons/core-free-icons/Wallet01Icon'
 import Watch01Icon from '@hugeicons/core-free-icons/Watch01Icon'
 import Wifi01Icon from '@hugeicons/core-free-icons/Wifi01Icon'
 import Wrench01Icon from '@hugeicons/core-free-icons/Wrench01Icon'
-import { DEFAULT_PROJECT_COLOR, type ProjectIcon } from '@manor/contracts'
+import { DEFAULT_PROJECT_COLOR, type Project, type ProjectIcon, type ProjectRepoIcon } from '@manor/contracts'
 
 /**
  * The picker is deliberately broad but finite. These cover the kinds of rooms Manor
@@ -211,12 +211,42 @@ export const PROJECT_ICON_OPTIONS: readonly {
   { value: 'award', label: 'Award', icon: Award01Icon },
 ]
 
+export { markLetters, projectLetters, projectLettersField } from './projectLetters'
+
 const ICONS = Object.fromEntries(PROJECT_ICON_OPTIONS.map(({ value, icon }) => [value, icon])) as Record<
   ProjectIcon,
   typeof Folder01Icon
 >
 
 export const projectIcon = (icon: ProjectIcon) => ICONS[icon]
+
+/** Whether two repo icon references name the same file; null is the glyph. */
+export const sameRepoIcon = (one: ProjectRepoIcon | null, other: ProjectRepoIcon | null) =>
+  one?.folder === other?.folder && one?.path === other?.path
+
+/**
+ * Whether a repo icon link names a picture that fills its square, which is drawn with
+ * rounded corners; one without a background is drawn as it is. The server marks it `?tile`.
+ */
+export const isTileRepoIcon = (src: string) => /[?&]tile(?:[=&#]|$)/.test(src)
+
+
+/** What stands in for a project's glyph: its letters, a repo icon, or null for the glyph itself. */
+export type ProjectMarkChoice = ProjectRepoIcon | 'letters' | null
+
+/** A project form's choice, where a repo icon counts while its folder is still in the form. */
+export const draftMark = ({ mark, repoPaths }: { mark: ProjectMarkChoice; repoPaths: readonly string[] }): ProjectMarkChoice =>
+  mark === null || mark === 'letters' || repoPaths.includes(mark.folder) ? mark : null
+
+export const projectMark = (project: Pick<Project, 'letters' | 'repoIcon'>): ProjectMarkChoice =>
+  project.letters === true ? 'letters' : project.repoIcon ?? null
+
+export const sameMark = (one: ProjectMarkChoice, other: ProjectMarkChoice) =>
+  one === 'letters' || other === 'letters' ? one === other : sameRepoIcon(one, other)
+
+/** The `update_project` fields that send a choice: `letters`, or `repoIcon` with null for the glyph. */
+export const markFields = (mark: ProjectMarkChoice) =>
+  mark === 'letters' ? { letters: true as const } : { repoIcon: mark }
 
 export interface ProjectColorOption {
   value: string

@@ -1769,6 +1769,12 @@ const http = createServer((request, response) => {
     response.end(traced)
     return
   }
+  const repoIcon = REPO_ICONS.find((candidate) => candidate.src.split('?')[0] === icon.pathname)
+  if (repoIcon !== undefined) {
+    response.writeHead(200, { 'content-type': 'image/png', 'content-length': String(repoIcon.bytes.byteLength) })
+    response.end(repoIcon.bytes)
+    return
+  }
   const vaultPicture = vaultImageBytes.get(icon.pathname)
   if (vaultPicture !== undefined) {
     response.writeHead(200, { 'content-type': 'image/png', 'content-length': String(vaultPicture.byteLength) })
@@ -1797,6 +1803,16 @@ const VAULT_NOTES = {
 /** Pictures in the fixture vault, by vault path, as the Mac lists them with a signed link. */
 const VAULT_IMAGES = { 'Attachments/icon.png': '/media/vault/fixture/Attachments/icon.png' }
 const vaultImageBytes = new Map([['/media/vault/fixture/Attachments/icon.png', appImage('icon')]])
+// The repo icon a project with a linked folder offers, as the Mac finds it: Manor's app icon
+// fills its square (`?tile`, drawn rounded), Stilte's favicon has no background.
+const REPO_ICONS = [
+  { projectId: 'project-manor', path: 'assets/icon.png', opaque: true, src: '/media/project-icon/fixture/icon.png?tile', bytes: appImage('icon') },
+  { projectId: 'project-stilte', path: 'assets/favicon.png', src: '/media/project-icon/fixture/favicon.png', bytes: appImage('favicon') },
+]
+const repoIconOffer = (project) => {
+  const offer = project?.repoPaths[0] === undefined ? undefined : REPO_ICONS.find((candidate) => candidate.projectId === project.id)
+  return offer === undefined ? null : { folder: project.repoPaths[0], path: offer.path, ...(offer.opaque ? { opaque: true } : {}), src: offer.src }
+}
 /** Per-chat runtime pins set from the phone during this run. */
 const overrides = new Map()
 const server = new WebSocketServer({ server: http, path: '/ws' })
@@ -1876,6 +1892,11 @@ server.on('connection', (socket) => {
       })
       return
     }
+    // A project with a linked folder offers its repo icon; one without offers none.
+    if (message.type === 'find_repo_icon') {
+      send(socket, { type: 'repo_icon', projectId: message.projectId, requestId: message.requestId, icon: repoIconOffer(projects.find((candidate) => candidate.id === message.projectId)) })
+      return
+    }
     // The phone's project settings save the form whole, as the server does: rewrite, broadcast, ack.
     // A field the message leaves out keeps its stored value, as on the server.
     if (message.type === 'update_project') {
@@ -1888,7 +1909,17 @@ server.on('connection', (socket) => {
           repoPaths: message.repoPaths,
           memoryScope: message.memoryScope ?? project.memoryScope,
         })
-        console.log(`update_project ${project.id} name=${project.name} icon=${project.icon} folders=${project.repoPaths.length} memoryScope=${project.memoryScope ?? 'project'} sentMemoryScope=${message.memoryScope ?? 'none'}`)
+        // Both absent keep the choice; letters win; null drops either for the glyph; a reference sets the repo icon.
+        if (message.letters === true || message.repoIcon !== undefined) delete project.letters
+        if (message.letters === true || message.repoIcon === null) {
+          delete project.repoIcon
+          delete project.repoIconSrc
+          if (message.letters === true) project.letters = true
+        } else if (message.repoIcon !== undefined) {
+          const { src, ...offer } = repoIconOffer(project) ?? {}
+          if (src !== undefined) Object.assign(project, { repoIcon: offer, repoIconSrc: src })
+        }
+        console.log(`update_project ${project.id} name=${project.name} icon=${project.icon} repoIcon=${project.repoIcon?.path ?? 'none'} letters=${project.letters === true} folders=${project.repoPaths.length} memoryScope=${project.memoryScope ?? 'project'} sentMemoryScope=${message.memoryScope ?? 'none'}`)
         send(socket, directory)
       }
       send(socket, project === undefined

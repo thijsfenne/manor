@@ -8,6 +8,7 @@ import {
 } from '@manor/contracts'
 import type { AgentConfig, Chat, Project, ProjectIcon, SubagentSummary, ThreadEvent, UserInputAnswers, UserInputQuestion, WorkHandoff } from '@manor/contracts'
 import { IDLE, type ChatActivity } from './activityState'
+import { projectLettersField } from './projectLetters'
 import { backgroundReason, needsUser, sessionGroup, sessionStatus, type SessionLive, type SessionStatus } from './sessionStatus'
 import { emptyThread, type ThreadState } from './threadState'
 import type { WorkspaceState } from './workspaceState'
@@ -290,6 +291,10 @@ export interface InboxChat extends SidebarChat {
    */
   projectName: string
   projectIcon: ProjectIcon
+  /** The project's repo icon link, drawn in place of the glyph while it loads. */
+  projectIconSrc?: string
+  /** The project's letters, drawn in place of the glyph (`markLetters`). */
+  projectLetters?: string
   projectColor: string
   /** The Session has no project: its room is the memory system, which reads as "No project". */
   noProject?: true
@@ -418,6 +423,8 @@ export function inbox(state: ListedState, options: { hideThreadSessions?: boolea
         chat: withSessionTitle(chat),
         projectName: project?.name ?? '',
         projectIcon: project?.icon ?? DEFAULT_PROJECT_ICON,
+        ...(project?.repoIconSrc === undefined ? {} : { projectIconSrc: project.repoIconSrc }),
+        ...projectLettersField(project),
         projectColor: project?.color ?? DEFAULT_PROJECT_COLOR,
         ...(isHomeRoom(chat.projectId) ? { noProject: true as const } : {}),
         selected: selectedChatId(state) === chat.id,

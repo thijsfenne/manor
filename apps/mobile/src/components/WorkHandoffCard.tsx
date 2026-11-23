@@ -9,7 +9,7 @@ import { Pressable, ScrollView, StyleSheet, View } from 'react-native'
 import Animated, { Easing, FadeIn, FadeOut, LinearTransition, ReduceMotion, useAnimatedStyle, useReducedMotion, useSharedValue, withTiming } from 'react-native-reanimated'
 import { router } from 'expo-router'
 import { workReopenedLine, type AgentConfig, type ChatMode, type SingleRuntime } from '@manor/contracts'
-import { projectIcon } from '@manor/client-runtime/project-icons'
+import { ProjectMark } from './ProjectMark'
 import { acceptWorkProposal, updateWorkProposal, workProposalAttachmentCount, workProposalInThread, workProposalMultipleBlock, workProposalRuntimeName } from '@manor/client-runtime/work-proposals'
 import { closedWorkHandoff, forwardedLine, threadWorkCard, workCardLine, workCardStatus, workByline, workResultWaits, type Row } from '@manor/client-runtime/state'
 import { modelLabel } from '@manor/client-runtime/runtimes'
@@ -121,7 +121,7 @@ export function WorkHandoffCard({ row, agents, onReject, onReveal, inThread = fa
         onPress={threadChatId === null ? undefined : () => router.push({ pathname: '/chat/[id]', params: { id: threadChatId } })}
         style={({ pressed }) => [styles.forwardedRow, pressed && styles.pressed]}
       >
-        <HugeiconsIcon color={row.projectColor} icon={projectIcon(row.projectIcon)} size={14} strokeWidth={1.7} />
+        <ProjectMark color={row.projectColor} icon={row.projectIcon} letters={row.projectLetters} size={14} src={row.projectIconSrc} strokeWidth={1.7} />
         <Text numberOfLines={1} style={styles.forwardedTitle}>{row.title}</Text>
         <Text numberOfLines={1} style={[styles.closedLabel, styles.forwardedLine, forwarded.phase === 'ready' && styles.forwardedReady]}>{line}</Text>
       </Pressable>
@@ -207,7 +207,7 @@ export function WorkHandoffCard({ row, agents, onReject, onReveal, inThread = fa
               {/* A word joiner: the pill never breaks away from the last word onto a line of its own. */}
               {'\u2060'}
               <View style={styles.inlineBadge}>
-                <ProjectBadge name={row.projectName} icon={row.projectIcon} color={row.projectColor} />
+                <ProjectBadge name={row.projectName} icon={row.projectIcon} iconSrc={row.projectIconSrc} letters={row.projectLetters} color={row.projectColor} />
               </View>
             </Text>
           )}

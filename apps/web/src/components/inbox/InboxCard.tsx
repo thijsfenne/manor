@@ -46,6 +46,8 @@ interface InboxCardProps {
   title: string
   projectName: string
   projectIcon: ProjectIconId
+  projectIconSrc?: string | undefined
+  projectLetters?: string | undefined
   projectColor: string
   noProject?: boolean | undefined
   agentIds: string[]
@@ -80,6 +82,8 @@ export function InboxCard({
   title,
   projectName,
   projectIcon: icon,
+  projectIconSrc,
+  projectLetters,
   projectColor,
   noProject,
   agentIds,
@@ -112,7 +116,7 @@ export function InboxCard({
 
       <div className="flex flex-col gap-1.5 border-t border-line pt-2">
         <span className="flex min-w-0 items-center">
-          <ProjectBadge name={projectName} icon={icon} color={projectColor} noProject={noProject} />
+          <ProjectBadge name={projectName} icon={icon} iconSrc={projectIconSrc} letters={projectLetters} color={projectColor} noProject={noProject} />
         </span>
 
         {single === undefined ? null : <SingleRuntimeRow override={single} agents={agents} />}

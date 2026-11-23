@@ -5,8 +5,9 @@ import { CONFIRM_REQUEST_PREFIX, HOME_PROJECT_ID, HOME_PROJECT_NAME, PERSONA_TOO
 import { completionFor, confirmTasks } from '@manor/client-runtime/confirm-tasks'
 import { singleRuntime, singleRuntimeRequired } from '../singleChat.js'
 import { SqliteTranscript, SqliteBundles } from './sqliteTranscript.js'
-import { DEFAULT_PROJECT_COLOR, DEFAULT_PROJECT_ICON, DriverSchema, DEFAULT_SUBAGENT_POLICY, DEFAULT_USER_PROFILE, DEFAULT_HOUSE_SETTINGS, HouseSettingsSchema, ROUTINE_LEASE_MS, SIDE_CHAT_DEFAULTS, driverForModel, type SubagentPolicy, CURRENT_CHECKOUT, checkoutFromMapping, type AgentConfig, type AgentDraft, type Chat, type ChatOverride, type McpServerConfig, type Project, type ProjectIcon, type ProjectMemoryScope, type Routine, type SkillConfig, type ThreadEvent, type UserProfile, type WorkHandoff, isOpenRoom, } from '@manor/contracts'
+import { DEFAULT_PROJECT_COLOR, DEFAULT_PROJECT_ICON, DriverSchema, DEFAULT_SUBAGENT_POLICY, DEFAULT_USER_PROFILE, DEFAULT_HOUSE_SETTINGS, HouseSettingsSchema, ROUTINE_LEASE_MS, SIDE_CHAT_DEFAULTS, driverForModel, type SubagentPolicy, CURRENT_CHECKOUT, checkoutFromMapping, type AgentConfig, type AgentDraft, type Chat, type ChatOverride, type McpServerConfig, type Project, type ProjectIcon, type ProjectMemoryScope, type ProjectRepoIcon, type Routine, type SkillConfig, type ThreadEvent, type UserProfile, type WorkHandoff, isOpenRoom, } from '@manor/contracts'
 import { agents as seedAgents } from '../agents.js'
+import { keptRepoIcon } from '../repoIcons.js'
 import { sessionChangedFiles } from '../goalReview.js'
 import { attachmentFields } from '../handoffAttachments.js'
 import { nextRunAfter } from '../routineSchedule.js'
@@ -22,6 +23,8 @@ export interface SqliteStoreOptions {
   /** False refuses a database that needs a migration instead of applying one. Only the server migrates. */
   migrate?: boolean
 }
+const withRepoIcon = (icon: ProjectRepoIcon | undefined) =>
+  icon === undefined ? {} : { repoIcon: { folder: icon.folder, path: icon.path, ...(icon.opaque === true ? { opaque: true as const } : {}) } }
 /** The (chat, persona) key the per-pair maps share: CLI sessions and model pins. */
 const pairKey = (chatId: string, agentId: string) => `${chatId}::${agentId}`
 /** A CLI session's key: its pair plus the provider that minted it, empty when unknown. */
@@ -122,9 +125,12 @@ export function createSqliteStore(options: SqliteStoreOptions): Store & {
   let mcpCounter = 0
   let routineCounter = 0
   let handoffCounter = 0
-  const addProject = (name: string, repoPaths?: readonly string[], icon: ProjectIcon = DEFAULT_PROJECT_ICON, color = DEFAULT_PROJECT_COLOR, memoryScope: ProjectMemoryScope = 'project'): Project => {
+  const addProject = (name: string, repoPaths?: readonly string[], icon: ProjectIcon = DEFAULT_PROJECT_ICON, color = DEFAULT_PROJECT_COLOR, memoryScope: ProjectMemoryScope = 'project', letters = false): Project => {
     projectCounter += 1
-    const project = { id: options.filename === ':memory:' ? `project_${projectCounter}` : randomUUID(), name, icon, color, memoryScope, repoPaths: [...(repoPaths ?? [])] }
+    const project: Project = {
+      id: options.filename === ':memory:' ? `project_${projectCounter}` : randomUUID(), name, icon, color, memoryScope, repoPaths: [...(repoPaths ?? [])],
+      ...(letters ? { letters: true } : {}),
+    }
     projects.set(project.id, project)
     return project
   }
@@ -431,7 +437,7 @@ export function createSqliteStore(options: SqliteStoreOptions): Store & {
         ...transcriptLine(chat.id, handoffsOf),
       }))
     },
-    createProject: (name, repoPaths, icon, color, memoryScope) => addProject(name, repoPaths, icon, color, memoryScope),
+    createProject: (name, repoPaths, icon, color, memoryScope, letters) => addProject(name, repoPaths, icon, color, memoryScope, letters),
     createChat: (draft) => addChat(draft),
     pairChatFor: (firstAgentId, secondAgentId) => addChat({ kind: 'pair', memberIds: [firstAgentId, secondAgentId] }),
     sideChatOf: (parentChatId) => [...chats.values()].find((chat) => chat.kind === 'side' && chat.parentChatId === parentChatId),
@@ -590,7 +596,7 @@ export function createSqliteStore(options: SqliteStoreOptions): Store & {
       }
       return undefined
     },
-    updateProject(projectId, name, repoPaths, icon, color, memoryScope) {
+    updateProject(projectId, name, repoPaths, icon, color, memoryScope, mark) {
       const project = projects.get(projectId)
       // An update naming a project nobody holds is a no-op here the way it is one
       // row-count in the database; the service refuses it before it gets this far.
@@ -606,6 +612,8 @@ export function createSqliteStore(options: SqliteStoreOptions): Store & {
         ...(project.threadChatId === undefined ? {} : { threadChatId: project.threadChatId }),
         ...(project.unlisted === undefined ? {} : { unlisted: project.unlisted }),
         ...(project.verifySkills === undefined ? {} : { verifySkills: project.verifySkills }),
+        ...((mark === undefined ? project.letters === true : mark === 'letters') ? { letters: true as const } : {}),
+        ...withRepoIcon(mark === undefined ? keptRepoIcon(project.repoIcon, repoPaths) : mark === 'letters' ? undefined : mark ?? undefined),
       })
       return undefined
     },

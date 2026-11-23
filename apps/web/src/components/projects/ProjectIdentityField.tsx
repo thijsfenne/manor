@@ -1,8 +1,9 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent } from 'react'
 import { DEFAULT_PROJECT_COLOR, type ProjectIcon } from '@manor/contracts'
 import { safeHex } from '../../persona'
-import { PROJECT_ICON_OPTIONS, projectColorChoices, projectIcon } from '../../projectAppearance'
+import { PROJECT_ICON_OPTIONS, projectColorChoices, projectLetters } from '../../projectAppearance'
 import { Icon } from '../Icon'
+import { ProjectMark } from '../ProjectMark'
 import { Button } from '../ui/Button'
 import { useDismiss } from '../ui/useDismiss'
 import { formFieldClass, formLabelClass } from '../ui/FormField'
@@ -24,6 +25,16 @@ interface ProjectIdentityFieldProps {
   onColor: (color: string) => void
   /** Enter in the name field is the fast yes; the dialog decides whether it can be taken. */
   onEnter: () => void
+  /** Whether the project wears the letters of its name in place of `icon`. */
+  lettersPicked: boolean
+  onLetters: () => void
+  /** The picture of the icon the project's folders offer; set, the picker leads with "Repo icon". */
+  repoIconOffer?: string
+  /** Whether the offered icon is the picked one; a project may wear an older pick the offer has replaced. */
+  repoIconOfferPicked?: boolean
+  onRepoIcon?: () => void
+  /** The picture of the picked repo icon. Set, it is what the project wears instead of `icon`. */
+  repoIconSrc?: string
 }
 
 /**
@@ -41,7 +52,15 @@ export function ProjectIdentityField({
   onIcon,
   onColor,
   onEnter,
+  lettersPicked,
+  onLetters,
+  repoIconOffer,
+  repoIconOfferPicked = false,
+  onRepoIcon,
+  repoIconSrc,
 }: ProjectIdentityFieldProps) {
+  const repoPicked = repoIconSrc !== undefined
+  const letters = projectLetters(name)
   const rootRef = useRef<HTMLDivElement>(null)
   const triggerRef = useRef<HTMLButtonElement>(null)
   const panelRef = useRef<HTMLDivElement>(null)
@@ -131,9 +150,7 @@ export function ProjectIdentityField({
             title="Icon and colour"
             onClick={() => setOpen((current) => !current)}
           >
-            <span style={{ color: accent }}>
-              <Icon icon={projectIcon(icon)} size={17} />
-            </span>
+            <ProjectMark icon={icon} color={accent} src={repoIconSrc} letters={lettersPicked ? letters : undefined} size={17} />
           </button>
 
           <input
@@ -194,8 +211,48 @@ export function ProjectIdentityField({
               role="radiogroup"
               aria-label="Project icon"
             >
+              {repoIconOffer === undefined || onRepoIcon === undefined ? null : (
+                <label className={cellClass} ref={repoIconOfferPicked ? selectedIconRef : undefined} title="Repo icon">
+                  <input
+                    className="peer sr-only"
+                    type="radio"
+                    name="project-icon"
+                    value="repo"
+                    checked={repoIconOfferPicked}
+                    aria-label="Repo icon"
+                    onChange={onRepoIcon}
+                  />
+                  {/* The picture as the repo has it: no tint, the ring alone says it is picked. */}
+                  <span
+                    className={`${markClass} ${repoIconOfferPicked ? '' : 'border-transparent hover:bg-surface-2'}`}
+                    style={repoIconOfferPicked ? { borderColor: accent } : undefined}
+                  >
+                    <ProjectMark icon={icon} color={accent} src={repoIconOffer} size={20} />
+                  </span>
+                </label>
+              )}
+              {/* Drawn from the name as typed, so it waits for a name with a letter in it. */}
+              {letters === '' ? null : (
+                <label className={cellClass} ref={lettersPicked ? selectedIconRef : undefined} title="Letters">
+                  <input
+                    className="peer sr-only"
+                    type="radio"
+                    name="project-icon"
+                    value="letters"
+                    checked={lettersPicked}
+                    aria-label="Letters"
+                    onChange={onLetters}
+                  />
+                  <span
+                    className={`${markClass} ${lettersPicked ? '' : 'border-transparent hover:bg-surface-2'}`}
+                    style={lettersPicked ? { borderColor: accent } : undefined}
+                  >
+                    <ProjectMark icon={icon} color={accent} letters={letters} size={22} />
+                  </span>
+                </label>
+              )}
               {PROJECT_ICON_OPTIONS.map((option) => {
-                const selected = option.value === icon
+                const selected = !repoPicked && !lettersPicked && option.value === icon
                 return (
                   <label
                     className={cellClass}

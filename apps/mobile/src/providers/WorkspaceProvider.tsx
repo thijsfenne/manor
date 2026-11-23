@@ -8,6 +8,7 @@ import {
   type InlineQuote,
   type MessageReply,
   type Project,
+  type ProjectRepoIcon,
   type SearchMessageHit,
   type SearchNoteHit,
   type ServerMessage,
@@ -164,6 +165,8 @@ export interface WorkspaceActions {
   readRepoFile: (projectId: string, path: string, chatId?: string) => boolean
   /** Asks for one DM's file library; it lands in `workspace.dmFiles[chatId]`, newest first. */
   getDmFiles: (chatId: string) => boolean
+  /** Asks which icon a project's folders offer; it lands in `workspace.repoIcons[projectId]`. */
+  findRepoIcon: (projectId: string) => boolean
   listDirs: (path?: string) => boolean
   closeDirs: () => void
   /** Starts one routine and returns the id that correlates any refusal. */
@@ -190,7 +193,11 @@ export type AgentEdit = Pick<AgentConfig, 'name' | 'role'>
 
 /** What the project settings sheet writes: the Mac's Edit project form, field for field. */
 // Memory scope is set on the Mac only; leaving it out makes the server keep the stored value.
-export type ProjectEdit = Pick<Project, 'name' | 'icon' | 'color' | 'repoPaths'>
+/**
+ * `repoIcon` and `letters` absent keep the stored choice, `repoIcon: null` drops either for
+ * the glyph, a reference picks the offer, and `letters` picks the name's letters.
+ */
+export type ProjectEdit = Pick<Project, 'name' | 'icon' | 'color' | 'repoPaths'> & { repoIcon?: ProjectRepoIcon | null; letters?: true }
 
 type WorkspaceContextValue = WorkspaceData & WorkspaceActions & { status: ConnectionStatus }
 
@@ -707,6 +714,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   )
 
   const getDmFiles = useCallback((chatId: string) => commands().getDmFiles(chatId), [commands])
+  const findRepoIcon = useCallback((projectId: string) => commands().findRepoIcon(projectId), [commands])
 
   const readRepoFile = useCallback(
     (projectId: string, path: string, chatId?: string) => commands().readRepoFile(projectId, path, chatId),
@@ -808,6 +816,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       setChatOverride,
       listRepoFiles,
       getDmFiles,
+      findRepoIcon,
       readRepoFile,
       listDirs,
       closeDirs,
@@ -820,7 +829,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       listArtifacts,
       loadMoreArtifacts,
     }),
-    [acceptWorkHandoff, answerSecretRequest, answerUserInput, changeSessionAnswer, askCheckoutStatus, askProjectCheckout, clearCreatedChat, clearCreatedProject, closeDirs, confirmWorkGoal, acceptWorkResult, reviseWorkResult, retryWorkResult, approveMergeFix, createChat, addFolder, removeFolder, deleteProject, discardOutboundDraft, ignoreOutboundDraft, listWorkflowSuggestions, listArtifacts, getDmFiles, listDirs, listRepoFiles, listVault, loadMoreArtifacts, openChat, leaveChat, openSubagentThread, readOutboundThread, readRepoFile, readVaultFile, rejectWorkHandoff, search, restoreOutboundDraft, runRoutine, sendMessage, setChatOverride, setChatSettled, forget, snoozeOutboundDraft, stopBackground, stopSubagent, stopTurn, submitOutboundDraft, updateProject, saveAgent],
+    [acceptWorkHandoff, answerSecretRequest, answerUserInput, changeSessionAnswer, askCheckoutStatus, askProjectCheckout, clearCreatedChat, clearCreatedProject, closeDirs, confirmWorkGoal, acceptWorkResult, reviseWorkResult, retryWorkResult, approveMergeFix, createChat, addFolder, removeFolder, deleteProject, discardOutboundDraft, ignoreOutboundDraft, listWorkflowSuggestions, listArtifacts, getDmFiles, findRepoIcon, listDirs, listRepoFiles, listVault, loadMoreArtifacts, openChat, leaveChat, openSubagentThread, readOutboundThread, readRepoFile, readVaultFile, rejectWorkHandoff, search, restoreOutboundDraft, runRoutine, sendMessage, setChatOverride, setChatSettled, forget, snoozeOutboundDraft, stopBackground, stopSubagent, stopTurn, submitOutboundDraft, updateProject, saveAgent],
   )
 
   const data = useMemo<WorkspaceData>(

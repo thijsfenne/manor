@@ -1,7 +1,8 @@
 import { useState, type MouseEvent } from 'react'
 import { Delete02Icon, FolderAddIcon, PencilEdit02Icon, PlusSignIcon, ViewOffSlashIcon } from '@hugeicons/core-free-icons'
 import type { Project } from '@manor/contracts'
-import { projectIcon } from '../../projectAppearance'
+import { markLetters, projectIcon } from '../../projectAppearance'
+import { ProjectMark } from '../ProjectMark'
 import { relativeTime } from '../../relativeTime'
 import type { ProjectThreadRow } from '../../state'
 import { useMinuteClock } from '../../useMinuteClock'
@@ -53,7 +54,13 @@ export function ProjectThreadsSection({
   const [addMenu, setAddMenu] = useState<{ x: number; y: number } | null>(null)
   const [rowMenu, setRowMenu] = useState<{ x: number; y: number; row: ProjectThreadRow } | null>(null)
   const addItems: ContextMenuItem[] = [
-    ...available.map((project) => ({ label: project.name, icon: projectIcon(project.icon), onSelect: () => onCreate(project.id) })),
+    ...available.map((project) => ({
+      label: project.name,
+      ...(project.repoIconSrc === undefined && markLetters(project) === undefined
+        ? { icon: projectIcon(project.icon) }
+        : { mark: <ProjectMark icon={project.icon} color={project.color} src={project.repoIconSrc} letters={markLetters(project)} size={14} /> }),
+      onSelect: () => onCreate(project.id),
+    })),
     { label: 'New project thread…', icon: FolderAddIcon, onSelect: onNewProject },
   ]
 
@@ -95,7 +102,7 @@ export function ProjectThreadsSection({
                   data-sidebar-section="projects"
                   onClick={() => onOpen(row.chat.id)}
                 >
-                  <Icon icon={projectIcon(row.project.icon)} size={16} className="flex-none" style={{ color: row.project.color }} />
+                  <ProjectMark icon={row.project.icon} color={row.project.color} src={row.project.repoIconSrc} letters={markLetters(row.project)} size={16} />
                   {/* Sized on the span: `[font:inherit]` on the button outranks a text-size utility there. */}
                   <span className="min-w-0 flex-1 truncate text-[14px]">{row.project.name}</span>
                   {row.waiting ? (

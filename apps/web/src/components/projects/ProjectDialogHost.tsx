@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
-import { NEW_SINGLE_CHAT_DEFAULT, runtimeOn, type Project, type ProjectIcon, type ProjectMemoryScope, type SingleRuntime } from '@manor/contracts'
+import { NEW_SINGLE_CHAT_DEFAULT, runtimeOn, type Project, type ProjectIcon, type ProjectMemoryScope, type ProjectRepoIcon, type SingleRuntime } from '@manor/contracts'
 import { readOffModels, readSingleRuntime } from '../../runtimeChoices'
 import type { DirBrowse, Notice } from '../../state'
 import { useRequest, type RequestEvents } from '../../useRequest'
+import { draftMark, sameMark, type ProjectMarkChoice } from '../../projectAppearance'
 import { draftOf, emptyDraft, normaliseProjectColor, ProjectDialog, type ProjectDraft } from './ProjectDialog'
 
 /**
@@ -28,6 +29,7 @@ interface ProjectDialogHostProps {
     memoryScope: ProjectMemoryScope,
     requestId: string,
     threadRuntime: SingleRuntime,
+    letters: boolean,
   ) => boolean
   onUpdateProject: (
     projectId: string,
@@ -37,7 +39,11 @@ interface ProjectDialogHostProps {
     color: string,
     memoryScope: ProjectMemoryScope,
     requestId: string,
+    mark?: ProjectMarkChoice,
   ) => boolean
+  /** The icon each project's folders offer, as last answered (`WorkspaceState.repoIcons`). */
+  repoIcons: Record<string, (ProjectRepoIcon & { src: string }) | null>
+  onFindRepoIcon: (projectId: string) => boolean
   onListDirs: (path?: string) => void
   onCloseDirs: () => void
   onDismissNotice: () => void
@@ -59,6 +65,8 @@ export function ProjectDialogHost({
   dirs,
   onNewProject,
   onUpdateProject,
+  repoIcons,
+  onFindRepoIcon,
   onListDirs,
   onCloseDirs,
   onDismissNotice,
@@ -69,7 +77,14 @@ export function ProjectDialogHost({
   const [draft, setDraft] = useState<ProjectDraft>(() =>
     dialog.mode === 'create' || editing === undefined ? emptyDraft : draftOf(editing),
   )
+  const [openedMark] = useState(() => draftMark(draft))
   const request = useRequest(requestEvents)
+  const editingId = dialog.mode === 'edit' ? dialog.projectId : undefined
+
+  // Each opening looks at the folders again, so a favicon added since shows up.
+  useEffect(() => {
+    if (editingId !== undefined) onFindRepoIcon(editingId)
+  }, [editingId, onFindRepoIcon])
 
   const close = () => {
     request.cancel()
@@ -96,12 +111,16 @@ export function ProjectDialogHost({
     if (dialog.mode === 'create') {
       request.start(
         (requestId) => onNewProject(name, draft.repoPaths, draft.icon, normaliseProjectColor(draft.color), draft.memoryScope, requestId,
-          readSingleRuntime(draft.threadRuntime, runtimeOn(NEW_SINGLE_CHAT_DEFAULT, readOffModels()))),
+          readSingleRuntime(draft.threadRuntime, runtimeOn(NEW_SINGLE_CHAT_DEFAULT, readOffModels())), draft.mark === 'letters'),
         { onAck: finish },
       )
       return
     }
     if (editing === undefined) return
+    // Sent only when it changed since the dialog opened: an untouched icon whose file went
+    // missing must not refuse a rename, nor may it undo a choice made meanwhile on another device.
+    const mark = draftMark(draft)
+    const changed = !sameMark(mark, openedMark)
     request.start(
       (requestId) => onUpdateProject(
         dialog.projectId,
@@ -111,11 +130,13 @@ export function ProjectDialogHost({
         normaliseProjectColor(draft.color),
         draft.memoryScope,
         requestId,
+        ...(changed ? [mark] : []),
       ),
       { onAck: finish },
     )
   }
 
+  const offer = editingId === undefined ? undefined : repoIcons[editingId]
   return (
     <ProjectDialog
       mode={dialog.mode}
@@ -131,6 +152,8 @@ export function ProjectDialogHost({
       onSubmit={submitDraft}
       onCancel={close}
       onClose={close}
+      {...(offer == null ? {} : { repoIconOffer: offer })}
+      {...(editing?.repoIconSrc === undefined ? {} : { repoIconSrc: editing.repoIconSrc })}
       {...(dialog.mode === 'edit'
         ? {
             initialArmed: dialog.armDelete === true,

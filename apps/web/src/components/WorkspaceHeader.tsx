@@ -14,7 +14,8 @@ import { createPortal } from 'react-dom'
 import type { AgentConfig, Project } from '@manor/contracts'
 import type { ConnectionStatus } from '../useWorkspace'
 import { isHomeRoom } from '../state'
-import { projectIcon } from '../projectAppearance'
+import { ProjectMark } from './ProjectMark'
+import { markLetters } from '../projectAppearance'
 import { Avatar } from './Avatar'
 import { Icon } from './Icon'
 import { IconButton } from './ui/IconButton'
@@ -253,7 +254,7 @@ function Crumb({
   if (projectThread && project !== undefined && persona === undefined) {
     const mark = (
       <>
-        <Icon icon={projectIcon(project.icon)} size={compact ? 16 : 18} className="flex-none" style={{ color: project.color }} />
+        <ProjectMark icon={project.icon} color={project.color} src={project.repoIconSrc} letters={markLetters(project)} size={compact ? 16 : 18} />
         <span className={`min-w-0 truncate text-[14px] font-semibold tracking-[-0.01em] ${titleTone}`}>{project.name}</span>
       </>
     )
@@ -286,7 +287,7 @@ function Crumb({
   // runs under the panel doors.
   const withChip = project !== undefined && !noProject && persona === undefined && (pairPersonas === undefined || pairPersonas.length === 0)
   const projectBadge = project === undefined ? null : (
-    <ProjectBadge name={project.name} icon={project.icon} color={project.color} />
+    <ProjectBadge name={project.name} icon={project.icon} color={project.color} iconSrc={project.repoIconSrc} letters={markLetters(project)} />
   )
 
   return (

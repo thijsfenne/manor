@@ -16,7 +16,7 @@ export interface SwitcherItem {
   /** The invited set, on a group. Empty on a project chat. */
   agentIds: readonly string[]
   /** The room, on a project chat only. */
-  project: { name: string; icon: ProjectIcon; color: string; noProject?: true } | null
+  project: { name: string; icon: ProjectIcon; iconSrc?: string; letters?: string; color: string; noProject?: true } | null
   standing: SwitcherStanding | null
 }
 
@@ -40,7 +40,7 @@ export function buildSwitcherItems(inbox: Inbox): SwitcherItem[] {
       chatId: entry.chat.id,
       title: entry.chat.title,
       agentIds: [],
-      project: { name: entry.projectName, icon: entry.projectIcon, color: entry.projectColor, ...(entry.noProject === true ? { noProject: true as const } : {}) },
+      project: { name: entry.projectName, icon: entry.projectIcon, ...(entry.projectIconSrc === undefined ? {} : { iconSrc: entry.projectIconSrc }), ...(entry.projectLetters === undefined ? {} : { letters: entry.projectLetters }), color: entry.projectColor, ...(entry.noProject === true ? { noProject: true as const } : {}) },
       standing: standingOf(entry),
       lastMessageAt: entry.chat.lastMessageAt,
     })

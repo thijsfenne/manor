@@ -40,6 +40,7 @@ import { isCompacting } from './compacting'
 import { completionFor, confirmRequestOf, confirmTasks, confirmTitle, confirmWork, planTasks, type ConfirmProgress, type TaskLine } from './confirmTasks'
 import { plainDraftText, plainPreview } from './plainPreview'
 import { clockOf } from './usage'
+import { projectLettersField } from './projectLetters'
 import { reuseRows } from './rowReuse'
 
 export type { PlanStanding, TaskLine } from './confirmTasks'
@@ -859,6 +860,8 @@ export interface WorkHandoffRow {
   summary?: string
   projectName: string
   projectIcon: Project['icon']
+  projectIconSrc?: string
+  projectLetters?: string
   projectColor: string
   leadAgentId: string
   leadAgentName: string
@@ -1638,6 +1641,8 @@ function workHandoffRow(
     ...(handoff.summary === undefined ? {} : { summary: handoff.summary }),
     projectName: project?.name ?? handoff.projectName,
     projectIcon: project?.icon ?? DEFAULT_PROJECT_ICON,
+    ...(project?.repoIconSrc === undefined ? {} : { projectIconSrc: project.repoIconSrc }),
+    ...projectLettersField(project),
     projectColor: project?.color ?? DEFAULT_PROJECT_COLOR,
     leadAgentId: handoff.leadAgentId,
     leadAgentName: lead?.name ?? handoff.leadAgentName,

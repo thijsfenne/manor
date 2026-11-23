@@ -4,7 +4,8 @@ import AtomicPowerIcon from '@hugeicons/core-free-icons/AtomicPowerIcon'
 import CheckmarkCircle02Icon from '@hugeicons/core-free-icons/CheckmarkCircle02Icon'
 import CheckListIcon from '@hugeicons/core-free-icons/CheckListIcon'
 import Files01Icon from '@hugeicons/core-free-icons/Files01Icon'
-import { projectIcon } from '@manor/client-runtime/project-icons'
+import { ProjectMark } from './ProjectMark'
+import { markLetters } from '@manor/client-runtime/project-icons'
 import { isHomeRoom, knownAgentIds, type SessionsDot } from '@manor/client-runtime/state'
 import { HugeiconsIcon } from '@hugeicons/react-native'
 import type { AgentConfig, DriverName, Project } from '@manor/contracts'
@@ -112,7 +113,7 @@ export function ChatHeader({ title, subtitle, project, projectThread = false, dr
               style={styles.pill}
             >
               <View style={styles.projectPill}>
-                <HugeiconsIcon color={threadMark.color} icon={projectIcon(threadMark.icon)} size={18} strokeWidth={1.8} />
+                <ProjectMark color={threadMark.color} icon={threadMark.icon} letters={markLetters(threadMark)} size={18} src={threadMark.repoIconSrc} />
                 <Text numberOfLines={1} style={styles.pillName}>{threadMark.name}</Text>
               </View>
             </GlassPressable>
@@ -179,7 +180,7 @@ export function ChatHeader({ title, subtitle, project, projectThread = false, dr
             ))}
           </View>
           <View style={styles.under}>
-            {project === undefined ? null : <ProjectBadge name={project.name} icon={project.icon} color={project.color} noProject={isHomeRoom(project.id)} style={styles.projectBadge} />}
+            {project === undefined ? null : <ProjectBadge name={project.name} icon={project.icon} color={project.color} iconSrc={project.repoIconSrc} letters={markLetters(project)} noProject={isHomeRoom(project.id)} style={styles.projectBadge} />}
             {driver === undefined ? null : <ProviderMark driver={driver} size={12} />}
             <Text numberOfLines={1} style={styles.subtitle}>{subtitle}</Text>
           </View>

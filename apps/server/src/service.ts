@@ -33,6 +33,7 @@ import {
   type UserInputAnswers,
   type UserInputQuestion,
   type PreferenceSource,
+  type ProjectRepoIcon,
 } from '@manor/contracts'
 import { AgentModule } from './agentModule.js'
 import { AgentNotesWriter, type AgentNotesInput } from './agentNotes.js'
@@ -290,6 +291,8 @@ export interface ManorServiceOptions {
   vaultTrash?: string
   /** The signed link of one vault picture, so the Knowledge listing can carry them. */
   imageSrc?: (path: string) => string
+  /** The signed link of one project's repo icon, for the icon picker's offer. */
+  repoIconSrc?: (projectId: string, icon: ProjectRepoIcon) => string
   /** The one-shot helper job behind a note's AI comments and composer. */
   editNote?: EditNote
   /** Read-only mymind library. Absent means no Artifacts row on this host. */
@@ -525,6 +528,7 @@ export class ManorService {
       ...(options.worktreesRoot === undefined ? {} : { worktreesRoot: options.worktreesRoot }),
       broadcast: options.broadcast,
       isStartingHandoff: (handoffId) => this.workModule.isStarting(handoffId),
+      ...(options.repoIconSrc === undefined ? {} : { repoIconSrc: options.repoIconSrc }),
       // Creating a project in the sidebar is what gives it a thread and its setup.
       setupProject: async (projectId, threadRuntime) => {
         await this.projectThreads.create(projectId, { seed: false, broadcast: false, ...(threadRuntime === undefined ? {} : { runtime: threadRuntime }) })
@@ -1253,6 +1257,7 @@ export class ManorService {
       case 'set_chat_members':
       case 'reorder_projects':
       case 'update_project':
+      case 'find_repo_icon':
         await this.projectModule.handle(message, {
           ...(requestId === undefined ? {} : { requestId }),
           send: sendReply,

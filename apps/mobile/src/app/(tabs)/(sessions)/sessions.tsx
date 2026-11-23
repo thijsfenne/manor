@@ -12,7 +12,8 @@ import Tick02Icon from '@hugeicons/core-free-icons/Tick02Icon'
 import Undo02Icon from '@hugeicons/core-free-icons/Undo02Icon'
 import { HugeiconsIcon } from '@hugeicons/react-native'
 import type { AgentConfig } from '@manor/contracts'
-import { projectIcon } from '@manor/client-runtime/project-icons'
+import { ProjectMark } from '@/components/ProjectMark'
+import { markLetters } from '@manor/client-runtime/project-icons'
 import {
   createListedState,
   inbox,
@@ -283,12 +284,9 @@ function ActiveRow({
     >
       {/* The room first, the conversation second, as on the desktop. */}
       <View style={styles.rowMeta}>
-        <HugeiconsIcon
-          color={entry.noProject === true ? colors.muted : entry.projectColor}
-          icon={entry.noProject === true ? FolderOffIcon : projectIcon(entry.projectIcon)}
-          size={14}
-          strokeWidth={1.7}
-        />
+        {entry.noProject === true
+          ? <HugeiconsIcon color={colors.muted} icon={FolderOffIcon} size={14} strokeWidth={1.7} />
+          : <ProjectMark color={entry.projectColor} icon={entry.projectIcon} letters={entry.projectLetters} size={14} src={entry.projectIconSrc} strokeWidth={1.7} />}
         <Text numberOfLines={1} style={styles.projectName}>
           {entry.noProject === true ? 'No project' : entry.projectName || 'Project'}
           {entry.viaThread === true ? <Text style={styles.viaThread}>{' via project thread'}</Text> : null}
@@ -316,7 +314,7 @@ function ThreadRow({ row, onPress }: { row: ProjectThreadRow; onPress: () => voi
       onPress={onPress}
       style={({ pressed }) => [styles.threadRow, pressed && styles.rowPressed]}
     >
-      <HugeiconsIcon color={row.project.color} icon={projectIcon(row.project.icon)} size={16} strokeWidth={1.7} />
+      <ProjectMark color={row.project.color} icon={row.project.icon} letters={markLetters(row.project)} size={16} src={row.project.repoIconSrc} strokeWidth={1.7} />
       <Text numberOfLines={1} style={styles.threadName}>{row.project.name}</Text>
       {row.waiting ? (
         <View style={styles.waitingDot} />
@@ -348,7 +346,7 @@ function SettledRow({ entry, agents, onPress }: { entry: InboxChat; agents: Agen
       onPress={onPress}
       style={({ pressed }) => [styles.quietRow, pressed && styles.rowPressed]}
     >
-      <HugeiconsIcon color={entry.projectColor} icon={projectIcon(entry.projectIcon)} size={14} strokeWidth={1.7} />
+      <ProjectMark color={entry.projectColor} icon={entry.projectIcon} letters={entry.projectLetters} size={14} src={entry.projectIconSrc} strokeWidth={1.7} />
       <Text numberOfLines={1} style={styles.quietTitle}>{entry.chat.title}</Text>
       <SessionMark agents={agents} chat={entry.chat} />
       <Text style={styles.time}>{relativeTime(entry.chat.lastMessageAt)}</Text>

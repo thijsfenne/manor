@@ -31,6 +31,7 @@ export default defineConfig({
     proxy: {
       '/internal/mymind-thumbnail': { target: serverOrigin },
       '/media/vault/': { target: serverOrigin },
+      '/media/project-icon/': { target: serverOrigin },
       '/simulator/': { target: serverOrigin, ws: true },
     },
   },

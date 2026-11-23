@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { CheckmarkCircle02Icon, FolderOffIcon, HelpCircleIcon, Loading03Icon } from '@hugeicons/core-free-icons'
 import type { AgentConfig } from '@manor/contracts'
-import { projectIcon } from '../projectAppearance'
+import { ProjectMark } from './ProjectMark'
 import type { SwitcherItem, SwitcherStanding } from '../useChatSwitcher'
 import { Icon } from './Icon'
 import { AgentStack } from './inbox/AgentStack'
@@ -88,12 +88,10 @@ export function ChatSwitcher({
             <span className="relative grid h-11 w-11 flex-none place-items-center">
               {item.project === null ? (
                 <AgentStack agentIds={[...item.agentIds]} agents={agents} size={34} footprint={44} />
+              ) : item.project.noProject === true ? (
+                <Icon icon={FolderOffIcon} size={26} className="text-muted" />
               ) : (
-                <Icon
-                  icon={item.project.noProject === true ? FolderOffIcon : projectIcon(item.project.icon)}
-                  size={26}
-                  {...(item.project.noProject === true ? { className: 'text-muted' } : { style: { color: item.project.color } })}
-                />
+                <ProjectMark icon={item.project.icon} color={item.project.color} src={item.project.iconSrc} letters={item.project.letters} size={26} />
               )}
               {item.standing === null ? null : (
                 <Icon

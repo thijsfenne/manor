@@ -405,6 +405,8 @@ export interface WorkspaceState {
   repoFileWrites: Record<string, RepoFileWrite>
   /** A DM's file library as last listed, keyed by chat. Asked for by its Files page. */
   dmFiles: Record<string, readonly DmFile[]>
+  /** The icon each project's folders offer, keyed by project; null when none. Asked for by the icon picker. */
+  repoIcons: Record<string, Extract<ServerMessage, { type: 'repo_icon' }>['icon']>
   /** Last `checkout_status` reply per chat, asked with the composer. */
   checkoutStatus: Record<string, Extract<ServerMessage, { type: 'checkout_status' }>>
   /**
@@ -665,6 +667,7 @@ export const emptyWorkspace: WorkspaceState = {
   notice: null,
   dirs: NOT_BROWSING,
   dmFiles: {},
+  repoIcons: {},
   repoFiles: {},
   repoFilePreviews: {},
   repoFileWrites: {},
@@ -1287,6 +1290,8 @@ export function reduce(
     }
     case 'dm_files':
       return { ...state, dmFiles: { ...state.dmFiles, [msg.chatId]: msg.files } }
+    case 'repo_icon':
+      return { ...state, repoIcons: { ...state.repoIcons, [msg.projectId]: msg.icon } }
     case 'checkout_status': {
       const key = msg.chatId ?? msg.projectId
       if (key === undefined) return state

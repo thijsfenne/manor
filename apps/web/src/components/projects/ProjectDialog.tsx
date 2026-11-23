@@ -11,6 +11,7 @@ import {
   type Project,
   type ProjectIcon,
   type ProjectMemoryScope,
+  type ProjectRepoIcon,
 } from '@manor/contracts'
 import { hasModelOn, modelOptionsFor, readSingleRuntime, runtimeOn } from '../../runtimeChoices'
 import { MODELS, PROVIDERS, effortsFor, landingModel } from '../../runtimes'
@@ -25,6 +26,7 @@ import { FormField, formFieldClass, formInputClass, formLabelClass, formOptional
 import { IconButton } from '../ui/IconButton'
 import { Select } from '../ui/Select'
 import { RequestNotice } from '../ui/RequestNotice'
+import { draftMark, projectMark, sameRepoIcon, type ProjectMarkChoice } from '../../projectAppearance'
 import { ProjectIdentityField } from './ProjectIdentityField'
 
 const quietButtonClass =
@@ -37,6 +39,8 @@ const quietButtonClass =
 export interface ProjectDraft {
   name: string
   icon: ProjectIcon
+  /** What stands in for `icon`: the name's letters, a repo icon (Edit only), or null for the glyph. */
+  mark: ProjectMarkChoice
   color: string
   /** Folders in the order they will be named to a persona; empty is the ordinary case. */
   repoPaths: string[]
@@ -55,6 +59,7 @@ const THREAD_PROVIDERS = PROVIDERS.flatMap((option) => {
 export const emptyDraft: ProjectDraft = {
   name: '',
   icon: DEFAULT_PROJECT_ICON,
+  mark: null,
   color: DEFAULT_PROJECT_COLOR,
   repoPaths: [],
   memoryScope: 'project',
@@ -68,6 +73,7 @@ const folderName = (path: string) => path.split('/').filter(Boolean).pop() ?? pa
 export const draftOf = (project: Project): ProjectDraft => ({
   name: project.name,
   icon: project.icon,
+  mark: projectMark(project),
   color: project.color,
   repoPaths: [...project.repoPaths],
   memoryScope: project.memoryScope,
@@ -108,6 +114,10 @@ interface ProjectDialogProps {
   onDelete?: () => void
   /** Opens with the delete question already asked, for a menu entry that came to delete. */
   initialArmed?: boolean
+  /** The icon the project's folders offer, shown as the picker's first option. Edit only. */
+  repoIconOffer?: ProjectRepoIcon & { src: string }
+  /** The link of the repo icon the project wears now, for the field while it stays picked. */
+  repoIconSrc?: string
 }
 
 /**
@@ -137,7 +147,19 @@ export function ProjectDialog({
   onClose,
   onDelete,
   initialArmed = false,
+  repoIconOffer,
+  repoIconSrc,
 }: ProjectDialogProps) {
+  // The offer stands while its folder is in the draft. A picked icon shows the offer's
+  // picture when it is the offer, else the one the project wears now.
+  const offer = repoIconOffer !== undefined && draft.repoPaths.includes(repoIconOffer.folder) ? repoIconOffer : undefined
+  const mark = draftMark(draft)
+  const picked = mark === 'letters' ? null : mark
+  const pickedSrc = picked === null ? undefined : offer !== undefined && sameRepoIcon(picked, offer) ? offer.src : repoIconSrc
+  const repoIconProps = {
+    ...(offer === undefined ? {} : { repoIconOffer: offer.src, repoIconOfferPicked: sameRepoIcon(picked, offer), onRepoIcon: () => onDraft({ ...draft, mark: { folder: offer.folder, path: offer.path } }) }),
+    ...(pickedSrc === undefined ? {} : { repoIconSrc: pickedSrc }),
+  }
   // Whether the picker is unfolded. Deliberately not part of the draft: a
   // reopened dialog shows the folders it holds, not the walk that found them.
   const [browsing, setBrowsing] = useState(false)
@@ -218,7 +240,10 @@ export function ProjectDialog({
         icon={draft.icon}
         color={draft.color}
         onName={(name) => onDraft({ ...draft, name })}
-        onIcon={(icon) => onDraft({ ...draft, icon })}
+        onIcon={(icon) => onDraft({ ...draft, icon, mark: null })}
+        lettersPicked={mark === 'letters'}
+        onLetters={() => onDraft({ ...draft, mark: 'letters' })}
+        {...repoIconProps}
         onColor={(color) => onDraft({ ...draft, color })}
         onEnter={submit}
       />

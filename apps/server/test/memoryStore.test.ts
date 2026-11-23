@@ -276,6 +276,22 @@ describe('memoryStore', () => {
     })
   })
 
+  it('keeps letters until a repo icon or the glyph replaces them, never both at once', async () => {
+    const { store, project } = await seeded()
+    const icon = { folder: '/repos/manor', path: 'favicon.ico' }
+    await store.updateProject(project.id, project.name, ['/repos/manor'], 'rocket', undefined, undefined, icon)
+    await store.updateProject(project.id, project.name, ['/repos/manor'], 'rocket', undefined, undefined, 'letters')
+    const lettered = await store.getProject(project.id)
+    expect(lettered).toMatchObject({ letters: true, icon: 'rocket' })
+    expect(lettered?.repoIcon).toBeUndefined()
+
+    await store.updateProject(project.id, 'Renamed', ['/repos/manor'])
+    expect((await store.getProject(project.id))?.letters).toBe(true)
+    await store.updateProject(project.id, 'Renamed', ['/repos/manor'], 'rocket', undefined, undefined, icon)
+    expect(await store.getProject(project.id)).toMatchObject({ repoIcon: icon })
+    expect((await store.getProject(project.id))?.letters).toBeUndefined()
+  })
+
   it('keeps a project and its folders when its chat is deleted', async () => {
     const { store, project, chat } = await seeded()
     await store.updateProject(project.id, project.name, ['/repos/manor'])

@@ -1551,6 +1551,45 @@ describe('ManorService, editing a project', () => {
     expect((await store.getProject(projectId))?.memoryScope).toBe('knowledge')
   })
 
+  it('stores a repo icon only from the project\'s own folders, and keeps the glyph as its fallback', async () => {
+    const site = mkdtempSync(path.join(os.tmpdir(), 'manor-service-icon-'))
+    onTestFinished(() => rmSync(site, { recursive: true, force: true }))
+    writeFileSync(path.join(site, 'favicon.ico'), Buffer.from([0, 0, 1, 0, 1, 0]))
+    const store = createMemoryStore({ agents: roster })
+    const { projectId } = await seededChat(store)
+    const { manor, replies, reply } = service(store)
+    const edit = { type: 'update_project' as const, projectId, name: 'Manor', repoPaths: [site], icon: 'rocket' as const }
+
+    await manor.handle({ ...edit, repoIcon: { folder: repo, path: 'favicon.ico' } }, reply)
+    await manor.handle({ ...edit, repoIcon: { folder: site, path: 'missing.ico' } }, reply)
+    expect(replies.map((message) => message.type)).toEqual(['notice', 'notice'])
+    expect((await store.getProject(projectId))?.repoIcon).toBeUndefined()
+
+    // Whether it fills its square is the server's reading of the file, never the client's word.
+    await manor.handle({ ...edit, repoIcon: { folder: site, path: 'favicon.ico', opaque: true } }, reply)
+    expect(await store.getProject(projectId)).toMatchObject({ icon: 'rocket' })
+    expect((await store.getProject(projectId))?.repoIcon).toEqual({ folder: site, path: 'favicon.ico' })
+
+    // Letters take the repo icon's place, win when both are sent, and null hands back the glyph.
+    await manor.handle({ ...edit, letters: true, repoIcon: { folder: site, path: 'missing.ico' } }, reply)
+    expect(await store.getProject(projectId)).toMatchObject({ icon: 'rocket', letters: true })
+    expect((await store.getProject(projectId))?.repoIcon).toBeUndefined()
+    await manor.handle(edit, reply)
+    expect((await store.getProject(projectId))?.letters).toBe(true)
+    await manor.handle({ ...edit, repoIcon: null }, reply)
+    expect((await store.getProject(projectId))?.letters).toBeUndefined()
+    expect(replies.map((message) => message.type)).toEqual(['notice', 'notice'])
+  })
+
+  it('creates a project that wears its letters', async () => {
+    const store = createMemoryStore({ agents: roster })
+    const { manor, reply } = service(store)
+
+    await manor.handle({ type: 'create_project', name: 'Shot Journal', repoPaths: [], letters: true }, reply)
+
+    expect((await store.listProjects()).find((project) => project.name === 'Shot Journal')?.letters).toBe(true)
+  })
+
   it('refuses to delete or thread the home room, and keeps its Sessions', async () => {
     const store = createMemoryStore({ agents: roster })
     const session = await store.createChat({ projectId: 'home' })

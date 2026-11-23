@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
+import { projectLettersField } from '../../projectAppearance'
 import { QUIET_PAGE_SIZE, readSessionOverviewUI, subscribeSessionOverviewUI, toggleSessionOverviewSection, updateSessionOverviewUI, type SessionOverviewSection } from '@manor/client-runtime/session-overview-ui'
 import { createPortal } from 'react-dom'
 import type { IconSvgElement } from '@hugeicons/react'
@@ -33,7 +34,7 @@ interface ProjectSessionsOverviewProps {
   onSetArchived: (chatId: string, archived: boolean) => boolean
   onDeleteChat: (chatId: string) => void
   /** The thread's project, which the rows' hover card names. */
-  project: Pick<Project, 'name' | 'icon' | 'color'> | undefined
+  project: Pick<Project, 'name' | 'icon' | 'color' | 'repoIconSrc' | 'letters'> | undefined
   /** The popover's tighter gutters; the pane keeps the transcript's. */
   compact?: boolean
 }
@@ -104,7 +105,8 @@ export function ProjectSessionsOverview({ threadId, overview, agents, onOpen, on
                     // A Waiting row's detail is what it waits on (`SessionOverviewRow.line`).
                     const entry = {
                       chat: row.chat, selected: false, unread: row.unread, running: false, waiting: false,
-                      projectName: project?.name ?? '', projectIcon: project?.icon ?? DEFAULT_PROJECT_ICON, projectColor: project?.color ?? DEFAULT_PROJECT_COLOR,
+                      projectName: project?.name ?? '', projectIcon: project?.icon ?? DEFAULT_PROJECT_ICON,
+                      ...(project?.repoIconSrc === undefined ? {} : { projectIconSrc: project.repoIconSrc }), ...projectLettersField(project), projectColor: project?.color ?? DEFAULT_PROJECT_COLOR,
                     }
                     const shared = {
                       entry, agents, selected: false, now, armed, onArm: setArmed, onOpen, onDelete: onDeleteChat,
@@ -219,7 +221,7 @@ export function SessionsOverviewDoor({
   onSetSettled: (chatId: string, settled: boolean) => boolean
   onSetArchived: (chatId: string, archived: boolean) => boolean
   onDeleteChat: (chatId: string) => void
-  project: Pick<Project, 'name' | 'icon' | 'color'> | undefined
+  project: Pick<Project, 'name' | 'icon' | 'color' | 'repoIconSrc' | 'letters'> | undefined
   /** The phone header's 44px touch target. */
   size?: number
 }) {

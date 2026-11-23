@@ -2811,6 +2811,21 @@ export const ProjectIconSchema = z.enum(PROJECT_ICONS)
 export type ProjectIcon = z.infer<typeof ProjectIconSchema>
 
 export const DEFAULT_PROJECT_ICON: ProjectIcon = 'folder'
+
+/**
+ * A favicon or app icon in one of the project's linked folders, worn in place of the
+ * glyph. A reference, not a copy: `folder` is one of the project's `repoPaths` and
+ * `path` is relative to it, so a changed file in the repo shows up. The glyph in `icon`
+ * stays stored as the fallback a client draws when the file is gone.
+ */
+export const ProjectRepoIconSchema = z.object({
+  folder: z.string(),
+  path: z.string().min(1).max(512),
+  // Set by the server when the picture fills its square (its corner is not transparent), so
+  // it is drawn with rounded corners; an icon without a background is drawn as it is.
+  opaque: z.literal(true).optional(),
+})
+export type ProjectRepoIcon = z.infer<typeof ProjectRepoIconSchema>
 export const DEFAULT_PROJECT_COLOR = '#8A8F98'
 export const ProjectColorSchema = z.string().regex(/^#[0-9a-fA-F]{6}$/)
 
@@ -2859,6 +2874,16 @@ export const ProjectSchema = z.object({
   // The user's answer to the one-time offer of verify skills for a project without a
   // screenshot route (2026-11-18). After `declined` Manor never offers them there again.
   verifySkills: z.enum(['added', 'declined']).optional(),
+  // A repo icon in place of the glyph (2026-11-23). Optional, so an older phone strips it
+  // and draws the glyph in `icon`.
+  repoIcon: ProjectRepoIconSchema.optional(),
+  // The signed link to `repoIcon`, set by the server on the way out and never stored.
+  // Absent while the icon's folder is not linked; a client whose load fails draws the glyph.
+  // An opaque icon's link ends in `?tile`, which `isTileRepoIcon` reads to round its corners.
+  repoIconSrc: z.string().optional(),
+  // Two letters of the name in place of the glyph (2026-11-23), never together with
+  // `repoIcon`. Optional, so an older phone strips it and draws the glyph in `icon`.
+  letters: z.literal(true).optional(),
 })
 export type Project = z.infer<typeof ProjectSchema>
 
@@ -4370,6 +4395,8 @@ const ClientMessageWireSchema = z.discriminatedUnion('type', [
     icon: ProjectIconSchema.optional(),
     color: ProjectColorSchema.optional(),
     memoryScope: ProjectMemoryScopeSchema.optional(),
+    // Two letters of the name in place of the glyph, which stays the fallback.
+    letters: z.literal(true).optional(),
     // What the new project's thread runs on at first. Absent is the house default.
     threadRuntime: ChatOverrideSchema.optional(),
   }),
@@ -4461,6 +4488,8 @@ const ClientMessageWireSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('get_agent_notes'), agentId: z.string(), ...optionalRequestId }),
   /** Every file of one DM, newest first, for the Files page of its Agent settings. */
   z.object({ type: z.literal('get_dm_files'), chatId: z.string(), ...optionalRequestId }),
+  /** The icon the project's linked folders offer for the icon picker, answered as `repo_icon`. */
+  z.object({ type: z.literal('find_repo_icon'), projectId: z.string(), ...optionalRequestId }),
   /** Takes back one memory tool write, only while the line it wrote still reads that way. */
   z.object({ type: z.literal('undo_memory_write'), chatId: z.string(), writeId: z.string().max(200), ...optionalRequestId }),
   z.object({
@@ -4707,6 +4736,11 @@ const ClientMessageWireSchema = z.discriminatedUnion('type', [
     icon: ProjectIconSchema.optional(),
     color: ProjectColorSchema.optional(),
     memoryScope: ProjectMemoryScopeSchema.optional(),
+    // Absent keeps the stored repo icon or letters, null drops either for the glyph, a
+    // reference picks the one `find_repo_icon` offered. The server checks it against the folders.
+    repoIcon: ProjectRepoIconSchema.nullable().optional(),
+    // Picks the letters and drops a repo icon; wins over `repoIcon` when both are sent.
+    letters: z.literal(true).optional(),
   }),
   // Add a project to the sidebar with its curated thread, or hide it again (2026-10-14:
   // listed = has a thread). The ack names the thread in `workChatId`. Hiding archives
@@ -5229,6 +5263,13 @@ export const ServerMessageSchema = z.discriminatedUnion('type', [
   }),
   /** Reply to get_dm_files, to the socket that asked. Newest first. */
   z.object({ type: z.literal('dm_files'), ...optionalRequestId, chatId: z.string(), files: z.array(DmFileSchema) }),
+  /** Reply to find_repo_icon, to the socket that asked. `icon` is null when no folder holds one. */
+  z.object({
+    type: z.literal('repo_icon'),
+    ...optionalRequestId,
+    projectId: z.string(),
+    icon: ProjectRepoIconSchema.extend({ src: z.string() }).nullable(),
+  }),
   z.object({
     type: z.literal('agent_notes'),
     ...optionalRequestId,

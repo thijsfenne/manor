@@ -7,7 +7,7 @@ import { SingleRuntimeSchema, workReopenedLine, type AgentConfig } from '@manor/
 import { closedWorkHandoff, forwardedLine, threadWorkCard, workCardLine, workCardStatus, workDecisionOpen, workByline, workResultWaits, type ThreadWorkCard, type WorkHandoffRow, type WorkStatus } from '../state'
 import { modelLabel } from '../runtimes'
 import { CARD_RESHAPE, DISCLOSURE } from '../motion'
-import { projectIcon } from '../projectAppearance'
+import { ProjectMark } from './ProjectMark'
 import { useWorkProposal } from '../useWorkProposal'
 import { AgentStack } from './inbox/AgentStack'
 import { Icon } from './Icon'
@@ -131,7 +131,7 @@ export function WorkHandoffCard({
         aria-label={`${row.title}: ${forwardedLine(row)}`}
         className="mx-auto flex w-full max-w-[620px] min-w-0 cursor-pointer items-center gap-2.5 rounded-lg border border-line bg-transparent px-3.5 py-2 text-left text-[12px] text-dim enabled:hover:bg-surface-2 enabled:hover:text-muted disabled:cursor-default"
       >
-        <Icon icon={projectIcon(row.projectIcon)} size={14} className="flex-none" style={{ color: row.projectColor }} />
+        <ProjectMark icon={row.projectIcon} color={row.projectColor} src={row.projectIconSrc} letters={row.projectLetters} size={14} />
         <span className="min-w-0 flex-1 truncate text-[13px] text-text">{row.title}</span>
         <span className={`shrink-0 ${forwarded.phase === 'ready' ? 'font-medium text-warn' : ''}`}>{forwardedLine(row)}</span>
       </button>
@@ -195,7 +195,7 @@ export function WorkHandoffCard({
           {revision === null ? null : <>{' '}{revision}</>}
           {/* The badge's own max-w-full would win over a width set on it, so its box bounds it instead. */}
           <span className="ml-1.5 inline-flex max-w-[45%] align-[-1px]">
-            <ProjectBadge name={row.projectName} icon={row.projectIcon} color={row.projectColor} />
+            <ProjectBadge name={row.projectName} icon={row.projectIcon} iconSrc={row.projectIconSrc} letters={row.projectLetters} color={row.projectColor} />
           </span>
         </span>
       </>

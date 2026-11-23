@@ -235,6 +235,8 @@ export function createWorkspaceCommands(send: Send, update: Update) {
     getRoutineRuns: (routineId: string) => send({ type: 'get_routine_runs', routineId }),
     /** One DM's file library, answered as `dm_files` into `WorkspaceState.dmFiles`. */
     getDmFiles: (chatId: string) => send({ type: 'get_dm_files', chatId }),
+    /** The icon a project's folders offer, answered as `repo_icon` into `WorkspaceState.repoIcons`. */
+    findRepoIcon: (projectId: string) => send({ type: 'find_repo_icon', projectId }),
     /** Read means shown: send once a run's result is on screen. The dot goes at once. */
     markRoutineRunsRead: (routineId: string, runIds: readonly string[]) =>
       ask(

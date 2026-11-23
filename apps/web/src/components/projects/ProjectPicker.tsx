@@ -4,7 +4,8 @@ import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import { Cancel01Icon, Folder01Icon, FolderAddIcon, Search01Icon, Tick02Icon } from '@hugeicons/core-free-icons'
 import { isFolder, type Project } from '@manor/contracts'
 import { INSTANT, TEXT_SWAP, TEXT_SWAP_ABOVE, TEXT_SWAP_BELOW, TEXT_SWAP_REST } from '../../motion'
-import { projectIcon } from '../../projectAppearance'
+import { ProjectMark } from '../ProjectMark'
+import { markLetters } from '../../projectAppearance'
 import { Icon } from '../Icon'
 import { Popover } from '../ui/Popover'
 import { Tooltip } from '../ui/Tooltip'
@@ -253,7 +254,7 @@ export function ProjectPicker({
                 exit={reduce ? { opacity: 0 } : TEXT_SWAP_ABOVE}
                 transition={reduce ? INSTANT : TEXT_SWAP}
               >
-                <Icon className="flex-none" icon={projectIcon(current.icon)} size={20} style={{ color: current.color }} />
+                <ProjectMark icon={current.icon} color={current.color} src={current.repoIconSrc} letters={markLetters(current)} size={20} />
                 {current.name}
               </motion.span>
             </AnimatePresence>
@@ -268,7 +269,7 @@ export function ProjectPicker({
             stays a mark. */}
         {current === undefined ? null : general === undefined ? (
           <span className="grid h-7 w-7 flex-none place-items-center">
-            <Icon icon={projectIcon(current.icon)} size={15} style={{ color: current.color }} />
+            <ProjectMark icon={current.icon} color={current.color} src={current.repoIconSrc} letters={markLetters(current)} size={15} />
           </span>
         ) : (
           <button
@@ -279,11 +280,13 @@ export function ProjectPicker({
             {...tipOn(CLEAR_LABEL)}
             onClick={clear}
           >
-            <Icon
+            <ProjectMark
               className="col-start-1 row-start-1 transition-opacity duration-150 group-hover/chip:opacity-0 group-focus-within/chip:opacity-0"
-              icon={projectIcon(current.icon)}
+              icon={current.icon}
+              color={current.color}
+              src={current.repoIconSrc}
+              letters={markLetters(current)}
               size={15}
-              style={{ color: current.color }}
             />
             <span className="absolute grid h-4 w-4 place-items-center rounded-full bg-dim text-bg opacity-0 transition-[opacity,background-color] duration-150 group-hover/clear:bg-text group-hover/chip:opacity-100 group-focus-within/chip:opacity-100">
               <Icon icon={Cancel01Icon} size={10} />
@@ -396,7 +399,7 @@ export function ProjectPicker({
                         onMouseDown={(event) => event.preventDefault()}
                         onClick={() => choose(index)}
                       >
-                        <Icon className="flex-none" icon={projectIcon(project.icon)} size={15} style={{ color: project.color }} />
+                        <ProjectMark icon={project.icon} color={project.color} src={project.repoIconSrc} letters={markLetters(project)} size={15} />
                         <span className="min-w-0 flex-1 truncate">{project.name}</span>
                         {project.id === value ? (
                           <Icon

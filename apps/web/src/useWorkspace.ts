@@ -1,5 +1,6 @@
 import { createWorkAcceptance, createWorkspaceCommands, type WorkAcceptanceOptions } from '@manor/client-runtime/commands'
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
+import { markFields, type ProjectMarkChoice } from './projectAppearance'
 import {
   type AgentDraft,
   type ComposioAlias,
@@ -282,6 +283,8 @@ export interface Manor {
     color: string,
     memoryScope: ProjectMemoryScope,
     requestId: string,
+    threadRuntime?: ChatOverride,
+    letters?: boolean,
   ) => boolean
   /**
    * `overrides` are the model/effort pins picked on the new-chat stage, where no
@@ -385,6 +388,8 @@ export interface Manor {
   getRoutineRuns: (routineId: string) => boolean
   /** Asks for one DM's file library; the answer lands in `workspace.dmFiles`. */
   getDmFiles: (chatId: string) => boolean
+  /** Asks which icon a project's folders offer; the answer lands in `workspace.repoIcons`. */
+  findRepoIcon: (projectId: string) => boolean
   /** Read means shown: marks runs whose result is on screen. The dot goes at once. */
   markRoutineRunsRead: (routineId: string, runIds: readonly string[]) => boolean
   markAllRoutineRunsRead: () => boolean
@@ -417,6 +422,8 @@ export interface Manor {
     color: string,
     memoryScope: ProjectMemoryScope,
     requestId: string,
+    /** Absent keeps the stored letters or repo icon, null drops either for the glyph. */
+    mark?: ProjectMarkChoice,
   ) => boolean
   /** Walks the server's filesystem for the folder picker; no path means home. */
   listDirs: (path?: string) => void
@@ -1178,9 +1185,9 @@ export function useWorkspace(url: string, auth?: WorkspaceAuth): Manor {
   // Asking again clears the previous answer first, exactly like updateProject: the
   // old rejection belonged to the folder that was picked before this one.
   const createProject = useCallback(
-    (name: string, repoPaths: string[], icon: ProjectIcon, color: string, memoryScope: ProjectMemoryScope, requestId: string, threadRuntime?: ChatOverride) => {
+    (name: string, repoPaths: string[], icon: ProjectIcon, color: string, memoryScope: ProjectMemoryScope, requestId: string, threadRuntime?: ChatOverride, letters?: boolean) => {
       setWorkspace(clearNotice)
-      return send({ type: 'create_project', name, repoPaths, icon, color, memoryScope, requestId, ...(threadRuntime === undefined ? {} : { threadRuntime }) })
+      return send({ type: 'create_project', name, repoPaths, icon, color, memoryScope, requestId, ...(threadRuntime === undefined ? {} : { threadRuntime }), ...(letters === true ? { letters } : {}) })
     },
     [send],
   )
@@ -1549,9 +1556,9 @@ export function useWorkspace(url: string, auth?: WorkspaceAuth): Manor {
   // Asking again clears the previous answer first: the old error belongs to the
   // folder list that was on screen before this one.
   const updateProject = useCallback(
-    (projectId: string, name: string, repoPaths: string[], icon: ProjectIcon, color: string, memoryScope: ProjectMemoryScope, requestId: string) => {
+    (projectId: string, name: string, repoPaths: string[], icon: ProjectIcon, color: string, memoryScope: ProjectMemoryScope, requestId: string, mark?: ProjectMarkChoice) => {
       setWorkspace(clearNotice)
-      return send({ type: 'update_project', projectId, name, repoPaths, icon, color, memoryScope, requestId })
+      return send({ type: 'update_project', projectId, name, repoPaths, icon, color, memoryScope, requestId, ...(mark === undefined ? {} : markFields(mark)) })
     },
     [send],
   )
@@ -1655,6 +1662,7 @@ export function useWorkspace(url: string, auth?: WorkspaceAuth): Manor {
   // panel refreshed its history would throw away a refusal the form is still showing.
   const getRoutineRuns = useCallback((routineId: string) => commands.getRoutineRuns(routineId), [commands])
   const getDmFiles = useCallback((chatId: string) => commands.getDmFiles(chatId), [commands])
+  const findRepoIcon = useCallback((projectId: string) => commands.findRepoIcon(projectId), [commands])
   const markRoutineRunsRead = useCallback(
     (routineId: string, runIds: readonly string[]) => commands.markRoutineRunsRead(routineId, runIds),
     [commands],
@@ -1786,6 +1794,7 @@ export function useWorkspace(url: string, auth?: WorkspaceAuth): Manor {
     runRoutineNow,
     getRoutineRuns,
     getDmFiles,
+    findRepoIcon,
     markRoutineRunsRead,
     markAllRoutineRunsRead,
     listSkillCandidates,

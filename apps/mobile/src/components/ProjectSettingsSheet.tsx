@@ -7,7 +7,7 @@ import Folder01Icon from '@hugeicons/core-free-icons/Folder01Icon'
 import FolderOpenIcon from '@hugeicons/core-free-icons/FolderOpenIcon'
 import PencilEdit02Icon from '@hugeicons/core-free-icons/PencilEdit02Icon'
 import Tick02Icon from '@hugeicons/core-free-icons/Tick02Icon'
-import { PROJECT_ICON_OPTIONS, projectColorChoices, projectIcon } from '@manor/client-runtime/project-icons'
+import { PROJECT_ICON_OPTIONS, draftMark, markFields, projectColorChoices, projectLetters, projectMark, sameMark, sameRepoIcon, type ProjectMarkChoice } from '@manor/client-runtime/project-icons'
 import { HugeiconsIcon } from '@hugeicons/react-native'
 import { MAX_PROJECT_FOLDERS, type Project } from '@manor/contracts'
 import { useEffect, useRef, useState } from 'react'
@@ -17,21 +17,27 @@ import { TextInput } from '@/components/TextInput'
 import { CardButton } from '@/components/CardButton'
 import { GlassIconButton } from '@/components/GlassIconButton'
 import { GlassPressable } from '@/components/GlassPressable'
+import { ProjectMark } from '@/components/ProjectMark'
 import { Sheet } from '@/components/Sheet'
 import { Text } from '@/components/Text'
+import { serverMediaUri } from '@/lib/connection'
 import { useWorkspace, type ProjectEdit } from '@/providers/WorkspaceProvider'
 import { colors, fonts, radius, spacing, squircle } from '@/theme'
 
-const draftOf = (project: Project): ProjectEdit => ({
+type Draft = Omit<ProjectEdit, 'repoIcon' | 'letters'> & { mark: ProjectMarkChoice }
+
+const draftOf = (project: Project): Draft => ({
   name: project.name,
   icon: project.icon,
+  mark: projectMark(project),
   color: project.color,
   repoPaths: [...project.repoPaths],
 })
 
-const sameDraft = (one: ProjectEdit, other: ProjectEdit) =>
+const sameDraft = (one: Draft, other: Draft) =>
   one.name.trim() === other.name.trim() &&
   one.icon === other.icon &&
+  sameMark(draftMark(one), draftMark(other)) &&
   one.color.toLowerCase() === other.color.toLowerCase() &&
   one.repoPaths.join('\n') === other.repoPaths.join('\n')
 
@@ -53,8 +59,10 @@ export function ProjectSettingsSheet({ project, open, onClose, onFiles, onDelete
   /** Fires once the sheet is fully gone, for a sheet that opens after it. */
   onDismiss?: () => void
 }) {
-  const { workspace, status, updateProject, deleteProject, listDirs, closeDirs } = useWorkspace()
+  const { workspace, status, updateProject, deleteProject, listDirs, closeDirs, findRepoIcon } = useWorkspace()
   const [draft, setDraft] = useState(() => draftOf(project))
+  // The choice as the sheet opened, so a save sends it only when this sheet changed it.
+  const [openedMark, setOpenedMark] = useState(() => draftMark(draftOf(project)))
   const [picking, setPicking] = useState(false)
   const [browsing, setBrowsing] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -71,6 +79,7 @@ export function ProjectSettingsSheet({ project, open, onClose, onFiles, onDelete
     setShownOpen(open)
     if (open) {
       setDraft(draftOf(project))
+      setOpenedMark(draftMark(draftOf(project)))
       setPicking(false)
       setBrowsing(false)
       setError(null)
@@ -78,6 +87,18 @@ export function ProjectSettingsSheet({ project, open, onClose, onFiles, onDelete
   }
 
   const live = status === 'live'
+  // Each opening looks at the folders again, so a favicon added since shows up.
+  useEffect(() => {
+    if (open && live) findRepoIcon(project.id)
+  }, [findRepoIcon, live, open, project.id])
+  const found = workspace.repoIcons[project.id]
+  const offer = found != null && draft.repoPaths.includes(found.folder) ? found : undefined
+  const mark = draftMark(draft)
+  const picked = mark === 'letters' ? null : mark
+  const letters = projectLetters(draft.name)
+  // The offer's picture once it is the pick, else the picture the project wears now.
+  const pickedSrc = picked === null ? undefined : offer !== undefined && sameRepoIcon(picked, offer) ? offer.src : project.repoIconSrc
+  const offerUri = offer === undefined ? undefined : serverMediaUri(offer.src)
   // A folder request lost with the socket never answers; drop it so the walk offers a retry.
   const lostWalk = !live && workspace.dirs.asking
   useEffect(() => {
@@ -108,7 +129,11 @@ export function ProjectSettingsSheet({ project, open, onClose, onFiles, onDelete
     pendingSave.current = attempt
     setSaving(true)
     setError(null)
-    updateProject(project.id, draft)
+    // Sent only when it changed since the sheet opened: an untouched icon whose file went
+    // missing must not refuse a rename, nor may it undo a choice made meanwhile on the Mac.
+    const { mark: _draftMark, ...edit } = draft
+    const changed = !sameMark(mark, openedMark)
+    updateProject(project.id, changed ? { ...edit, ...markFields(mark) } : edit)
       .then(() => {
         if (pendingSave.current === attempt) close()
       })
@@ -180,7 +205,7 @@ export function ProjectSettingsSheet({ project, open, onClose, onFiles, onDelete
         <View style={styles.hero}>
           <View style={styles.markSlot}>
             <View style={[styles.mark, { backgroundColor: `${draft.color}29` }]}>
-              <HugeiconsIcon color={draft.color} icon={projectIcon(draft.icon)} size={44} strokeWidth={1.5} />
+              <ProjectMark color={draft.color} icon={draft.icon} letters={mark === 'letters' ? letters : undefined} size={44} src={pickedSrc} strokeWidth={1.5} />
             </View>
             <View style={styles.markBadge}>
               <GlassIconButton
@@ -227,15 +252,37 @@ export function ProjectSettingsSheet({ project, open, onClose, onFiles, onDelete
               })}
             </View>
             <View style={styles.icons}>
+              {offer === undefined || offerUri === undefined ? null : (
+                <Pressable
+                  accessibilityLabel="Repo icon"
+                  accessibilityRole="radio"
+                  accessibilityState={{ selected: sameRepoIcon(picked, offer) }}
+                  onPress={() => setDraft({ ...draft, mark: { folder: offer.folder, path: offer.path } })}
+                  style={({ pressed }) => [styles.iconCell, sameRepoIcon(picked, offer) && styles.iconChosen, pressed && styles.pressed]}
+                >
+                  <ProjectMark color={draft.color} icon={draft.icon} size={20} src={offer.src} />
+                </Pressable>
+              )}
+              {letters === '' ? null : (
+                <Pressable
+                  accessibilityLabel="Letters"
+                  accessibilityRole="radio"
+                  accessibilityState={{ selected: mark === 'letters' }}
+                  onPress={() => setDraft({ ...draft, mark: 'letters' })}
+                  style={({ pressed }) => [styles.iconCell, mark === 'letters' && styles.iconChosen, pressed && styles.pressed]}
+                >
+                  <ProjectMark color={draft.color} icon={draft.icon} letters={letters} size={24} />
+                </Pressable>
+              )}
               {PROJECT_ICON_OPTIONS.map((option) => {
-                const chosen = option.value === draft.icon
+                const chosen = mark === null && option.value === draft.icon
                 return (
                   <Pressable
                     accessibilityLabel={option.label}
                     accessibilityRole="radio"
                     accessibilityState={{ selected: chosen }}
                     key={option.value}
-                    onPress={() => setDraft({ ...draft, icon: option.value })}
+                    onPress={() => setDraft({ ...draft, icon: option.value, mark: null })}
                     style={({ pressed }) => [styles.iconCell, chosen && styles.iconChosen, pressed && styles.pressed]}
                   >
                     <HugeiconsIcon color={chosen ? draft.color : colors.muted} icon={option.icon} size={20} strokeWidth={1.8} />

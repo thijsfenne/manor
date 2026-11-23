@@ -11,6 +11,7 @@ import type {
   EventSync,
   ImageAttachment,
   ProjectIcon,
+  ProjectRepoIcon,
   ProjectMemoryScope,
   McpServerConfig,
   McpServerDraft,
@@ -177,14 +178,16 @@ export interface Store {
   setHomeFolders(repoPaths: readonly string[]): Promise<void>
   listChats(): Promise<Chat[]>
   /** `repoPaths` are folders already checked by `validateRepoPaths`; empty means none. */
-  createProject(name: string, repoPaths?: readonly string[], icon?: ProjectIcon, color?: string, memoryScope?: ProjectMemoryScope): Promise<Project>
+  createProject(name: string, repoPaths?: readonly string[], icon?: ProjectIcon, color?: string, memoryScope?: ProjectMemoryScope, letters?: boolean): Promise<Project>
   deleteProject(projectId: string): Promise<void>
   /** Replaces the whole sidebar order. The service has already checked the id set. */
   reorderProjects(projectIds: readonly string[]): Promise<void>
   /**
    * The project as it should now read: its name, appearance and whole folder list,
    * already checked. One write because the dialog above it is one form and a project
-   * half-updated is a state nobody asked for.
+   * half-updated is a state nobody asked for. `mark` is what stands in for the glyph:
+   * absent keeps the letters, or the repo icon while its folder stays linked; null drops
+   * either for the glyph; `letters` or a repo icon reference (already checked) replaces it.
    */
   updateProject(
     projectId: string,
@@ -193,6 +196,7 @@ export interface Store {
     icon?: ProjectIcon,
     color?: string,
     memoryScope?: ProjectMemoryScope,
+    mark?: ProjectRepoIcon | 'letters' | null,
   ): Promise<void>
   /**
    * Names the project's curated thread, or clears it with null (2026-10-10). The chat

@@ -576,7 +576,7 @@ export function LiveRow({
         <div className="flex min-w-0 items-center gap-1.5 text-[13px] text-dim">
           {detail === undefined ? (
             <>
-              <ProjectBadge name={projectName} icon={entry.projectIcon} color={projectColor} noProject={entry.noProject} />
+              <ProjectBadge name={projectName} icon={entry.projectIcon} iconSrc={entry.projectIconSrc} letters={entry.projectLetters} color={projectColor} noProject={entry.noProject} />
               {entry.viaThread === true ? <span className="min-w-0 truncate text-[12px] text-dim">via project thread</span> : null}
             </>
           ) : (
@@ -718,6 +718,8 @@ export function QuietRow({
           title={chat.title}
           projectName={entry.projectName}
           projectIcon={entry.projectIcon}
+          projectIconSrc={entry.projectIconSrc}
+          projectLetters={entry.projectLetters}
           projectColor={entry.projectColor}
           noProject={entry.noProject}
           agentIds={chat.agentIds}

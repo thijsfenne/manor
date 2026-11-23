@@ -210,6 +210,7 @@ import { sweepUnterminatedTurns } from './turnSweep.js'
 import { SubagentRefusal } from './subagents.js'
 import { openVault, type Vault } from './vault.js'
 import { createVaultMedia } from './vaultMedia.js'
+import { createRepoIconMedia } from './repoIcons.js'
 import { createSystemInfo } from './systemInfo.js'
 import { createKeepAwake } from './keepAwake.js'
 import { createSimulatorHost, liveSimulatorDeps, type SimulatorHost } from './simulator.js'
@@ -754,9 +755,10 @@ async function main(): Promise<void> {
   })
   // The mock driver's spike serves its test pictures from loopback; no real agent runs there.
   const remoteImages = createRemoteImages({ allowPrivateHosts: forceMock })
+  const repoIconMedia = createRepoIconMedia({ getProject: (projectId) => store.getProject(projectId) })
   const forClient = (message: ServerMessage) => {
     remoteImages.observe(message)
-    return chatMedia.forClient(message)
+    return chatMedia.forClient(repoIconMedia.forClient(message))
   }
   const directories = createDirectoryChannel()
   // A directory's waits are read as it goes out, not when its rows were loaded: a question
@@ -1114,6 +1116,7 @@ async function main(): Promise<void> {
       : { externalBrowser: externalLinks.browser, openExternalUrl: externalLinks.open }),
     ...(vault === undefined || vaultMedia === undefined ? {} : { vault, vaultTrash: path.join(paths.trash, 'knowledge'), imageSrc: vaultMedia.src }),
     ...(externalFiles === undefined ? {} : { externalFiles }),
+    repoIconSrc: repoIconMedia.src,
     connectCards,
     composioMarketplace,
     composioKey,
@@ -1489,6 +1492,7 @@ async function main(): Promise<void> {
       return
     }
     if (vaultMedia?.handle(request, response) === true) return
+    if (repoIconMedia.handle(request, response)) return
     if (chatMedia.handle(request, response)) return
     if (request.url?.startsWith(MYMIND_THUMBNAIL_PREFIX) === true) {
       void handleMyMindThumbnailRequest(request, response, mymind)

@@ -90,6 +90,8 @@ export function WorkspaceDialogs({
           dirs={workspace.dirs}
           onNewProject={manor.createProject}
           onUpdateProject={manor.updateProject}
+          repoIcons={workspace.repoIcons}
+          onFindRepoIcon={manor.findRepoIcon}
           onListDirs={manor.listDirs}
           onCloseDirs={manor.closeDirs}
           onDismissNotice={manor.dismissNotice}
