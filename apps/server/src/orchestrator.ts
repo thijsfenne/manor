@@ -429,6 +429,12 @@ interface QueuedTurn {
 const formatNames = (names: readonly string[]): string =>
   names.length < 2 ? (names[0] ?? '') : `${names.slice(0, -1).join(', ')} and ${names.at(-1) ?? ''}`
 
+/**
+ * A pair receiver cannot make a draft card, so the asker's return turn in its own DM does,
+ * without the user asking again.
+ */
+export const RELAY_RETURN_DRAFT_RULE = "When the reply holds a ready-to-send mail or message for the user, prepare it now with prepare_outbound_draft so the user gets the card here without asking; the other agent cannot make one. Pass the subject, the thread metadata for a reply, and for Slack the channel id and any thread ts, from your own earlier read or from their reply. If Manor cut part of the reply, ask the user instead of drafting from it. Say a card is ready only when the call returned a draftId."
+
 /** Shown once per Single Session, the first time a mention there reaches nobody. */
 export const SINGLE_MENTION_NOTE = "Single model. Mentions don't reach other agents."
 
@@ -1295,7 +1301,7 @@ export class Orchestrator {
           ts: now + 1,
           type: 'system_note',
           kind: 'info',
-          text: `The reply to your earlier message_agent consultation is now ready. Your question to ${input.target.name} was ${JSON.stringify(input.question)}. Weigh the reply and continue the user's request in your own words. Use your normal tools when the reply changes what should happen next, but do not quote it verbatim, contact another agent, or discuss this return instruction.`,
+          text: `The reply to your earlier message_agent consultation is now ready. Your question to ${input.target.name} was ${JSON.stringify(input.question)}. Weigh the reply and continue the user's request in your own words. Use your normal tools when the reply changes what should happen next, but do not quote it verbatim in your answer, contact another agent, or discuss this return instruction. ${RELAY_RETURN_DRAFT_RULE}`,
         },
       ]
       await this.turnRunner.run({

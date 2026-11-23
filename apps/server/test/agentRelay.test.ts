@@ -16,12 +16,14 @@ import {
   withRelayExchanges,
 } from '../src/agentRelay.js'
 import type { UserInputContext } from '../src/interactionCapability.js'
-import { Orchestrator } from '../src/orchestrator.js'
+import { Orchestrator, RELAY_RETURN_DRAFT_RULE } from '../src/orchestrator.js'
 import type { TurnResult } from '../src/turnRunner.js'
 import { createMemoryStore } from '../src/stores/memoryStore.js'
 import { AsyncQueue } from '../src/asyncQueue.js'
 import { contextWindowFor } from '@manor/contracts'
-import { DM_ROUTINE_PUBLISH_MARKER, renderCatchUpEvents, SESSION_CONTEXT_FRACTION } from '../src/composer.js'
+import { DM_ROUTINE_PUBLISH_MARKER, PAIR_NO_DRAFT_RULE, renderCatchUpEvents, SESSION_CONTEXT_FRACTION } from '../src/composer.js'
+import { createMockDriver } from '../src/drivers/mockDriver.js'
+import { interactionMcpAttachment } from '../src/mcp/interactionAttachment.js'
 import { closeTerminalTurn } from '../src/agentRelayLifecycle.js'
 import { createTurnContext } from '../src/turnContext.js'
 import { gated, marlow, sage, scratchFor, scripted, smith, until } from './helpers.js'
@@ -716,6 +718,9 @@ describe('agent relay orchestration', () => {
     expect(gate.forChat(pair.id)[0]?.input.catchUp[0]).toMatchObject({ source: 'agent_relay', authorAgentId: 'marlow' })
     expect(gate.forChat(pair.id)[0]?.input.manorFollowUp).toBe(true)
     expect(gate.forChat(dm.id)[0]?.input.agent.character).toContain('reachable names: Sage, Smith')
+    // Only the pair receiver hears it has no draft card; the asker in its DM keeps drafting.
+    expect(gate.forChat(pair.id)[0]?.input.agent.character).toContain(PAIR_NO_DRAFT_RULE)
+    expect(gate.forChat(dm.id)[0]?.input.agent.character).not.toContain(PAIR_NO_DRAFT_RULE)
     expect(permissions).toContainEqual({ agentId: 'sage', canApprove: false, allowRelay: true })
     expect(connectorCapabilities).toContainEqual({ agentId: 'sage', readOnly: true })
   })
@@ -727,7 +732,7 @@ describe('agent relay orchestration', () => {
     const dm = await store.createChat({ kind: 'dm', memberIds: ['marlow'], title: 'Marlow' })
     const smithDm = await store.createChat({ kind: 'dm', memberIds: ['smith'], title: 'Smith' })
     const sageDm = await store.createChat({ kind: 'dm', memberIds: ['sage'], title: 'Sage' })
-    const granted = new Map<string, { canApprove: boolean; allowRelay: boolean; relay?: RelayTurnContext }>()
+    const granted = new Map<string, { canApprove: boolean; allowRelay: boolean; allowDraft: boolean; relay?: RelayTurnContext }>()
     const readOnly = new Map<string, boolean>()
     const attachment: AttachedMcpServer = {
       server: {
@@ -749,7 +754,7 @@ describe('agent relay orchestration', () => {
       },
       interactionMcp: (_chatId, _agent, turnId, _allowAsk, permissions) => {
         if (permissions !== undefined) {
-          granted.set(turnId, { canApprove: permissions.canApprove, allowRelay: permissions.allowRelay,
+          granted.set(turnId, { canApprove: permissions.canApprove, allowRelay: permissions.allowRelay, allowDraft: permissions.allowDraft,
             ...(permissions.relay === undefined ? {} : { relay: permissions.relay }) })
         }
         return attachment
@@ -794,7 +799,8 @@ describe('agent relay orchestration', () => {
     await until(() => receiver.forChat(sageDm.id).length === 2, 'the receiver take-up turn')
     const takeUp = receiver.forChat(sageDm.id)[1]
     const takeUpTurnId = orchestrator.activeTurn(sageDm.id)?.turnId ?? ''
-    expect(granted.get(takeUpTurnId)).toMatchObject({ canApprove: false, allowRelay: false })
+    // The receiver takes it up in its own DM, where the user acts, so it may draft there.
+    expect(granted.get(takeUpTurnId)).toMatchObject({ canApprove: false, allowRelay: false, allowDraft: true })
     expect(readOnly.get(takeUpTurnId)).toBe(true)
     // One take-up reads both queued handoffs, each once.
     const notes = (takeUp?.input.catchUp ?? []).flatMap((event) => event.type === 'system_note' ? [event.text] : [])
@@ -802,6 +808,7 @@ describe('agent relay orchestration', () => {
     expect(notes.filter((text) => text.includes('Smith wrote: "The build for the portfolio site is green."'))).toHaveLength(1)
     expect(notes.some((text) => text.includes('passed you the message above from a scheduled run'))).toBe(true)
     expect(takeUp?.input.agent.character).toContain('You cannot message another agent from this turn.')
+    expect(takeUp?.input.agent.character).not.toContain(PAIR_NO_DRAFT_RULE)
     takeUp?.finish()
     await until(() => orchestrator.activeTurn(sageDm.id) === undefined, 'the receiver reply')
     await new Promise((resolve) => setTimeout(resolve, 20))
@@ -869,6 +876,7 @@ describe('agent relay orchestration', () => {
         authorAgentId: 'sage',
         text: 'The smaller fix avoids a second delivery path.',
       }),
+      expect.objectContaining({ type: 'system_note', text: expect.stringContaining(RELAY_RETURN_DRAFT_RULE) }),
     ]))
     returnTurn?.finish()
     await until(() => orchestrator.activeTurn(dm.id) === undefined, 'the visible return reply')
@@ -880,6 +888,46 @@ describe('agent relay orchestration', () => {
     expect(dmEvents.some(
       (event) => 'text' in event && event.text === 'The smaller fix avoids a second delivery path.',
     )).toBe(false)
+  })
+
+  it('shows the draft card in the originating DM, never in the pair chat, on the mock driver', async () => {
+    const asker = controlledDriver()
+    const mock = createMockDriver({ agents: () => agents, deltaDelayMs: 0 })
+    let askerTurns = 0
+    // The root turn is held so it can call message_agent; every later turn is the mock.
+    const marlowDriver: Driver = { startTurn: (input) => askerTurns++ === 0 ? asker.driver.startTurn(input) : mock.startTurn(input) }
+    const store = createMemoryStore({ agents })
+    const dm = await store.createChat({ kind: 'dm', memberIds: ['marlow'], title: 'Marlow' })
+    const orchestrator = new Orchestrator({
+      agents: () => agents,
+      store,
+      mcpServers: () => [],
+      resolveDriver: (agent) => agent.id === 'marlow' ? marlowDriver : mock,
+      ensureScratchDir: scratchFor,
+      emit: () => undefined,
+      // The real tool list with no capability, so the mock's draft is a stream event gated by that list.
+      interactionMcp: (_chatId, _agent, _turnId, allowAsk, permissions) => {
+        const { runtimeEnv: _capability, ...attachment } = interactionMcpAttachment('http://127.0.0.1:1/internal/user-input', 'unused', {
+          allowAsk, allowDraft: permissions?.allowDraft ?? true, allowRelay: permissions?.allowRelay ?? false,
+        })
+        return attachment
+      },
+    })
+
+    const root = orchestrator.submitUserMessage(dm.id, 'Ask Sage to write the reply to Sam.')
+    await until(() => asker.turns.length === 1, 'the root asker turn')
+    const rootTurn = orchestrator.activeTurn(dm.id)
+    if (rootTurn === undefined) throw new Error('the asker turn should be active')
+    await expect(orchestrator.messageAgent(rootContext(dm.id, rootTurn.turnId), 'Sage',
+      'Draft email reply to sam@example.com: Thanks, Friday at ten works.')).resolves.toContain('Messaged Sage')
+    finish(asker.turns[0], 'Asking Sage; their reply follows.')
+    await root
+    await until(() => askerTurns === 2 && orchestrator.activeTurn(dm.id) === undefined, 'the mock return turn')
+
+    const pair = (await store.listChats()).find((chat) => chat.kind === 'pair')
+    expect((await store.loadEvents(pair?.id ?? '')).some((event) => event.type === 'outbound_draft')).toBe(false)
+    expect((await store.loadEvents(dm.id)).find((event) => event.type === 'outbound_draft'))
+      .toMatchObject({ agentId: 'marlow', channel: 'gmail', to: 'sam@example.com', body: expect.stringMatching(/^Thanks, Friday at ten works\./) })
   })
 
   it('queues the consultation return behind work the user starts while the receiver is busy', async () => {

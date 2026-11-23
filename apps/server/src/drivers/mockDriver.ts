@@ -1626,7 +1626,10 @@ export function createMockDriver(options: MockDriverOptions = {}): Driver {
           }
         }
         if (stopped) return
-        const draft = parseOutboundDraftIntent(lastUserLine(input))
+        // A turn whose Manor tools leave out prepare_outbound_draft (an agent pair) gets no card.
+        const draftWithheld = input.mcpServers?.some(({ server }) =>
+          server.id === 'builtin_manor' && !server.tools.includes('prepare_outbound_draft')) === true
+        const draft = draftWithheld ? undefined : parseOutboundDraftIntent(lastUserLine(input))
         if (draft !== undefined) {
           queue.push({
             type: 'outbound_draft',
