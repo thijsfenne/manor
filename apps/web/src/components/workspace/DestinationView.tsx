@@ -117,7 +117,7 @@ export function DestinationView({
   onOpenSkills: () => void
   onOpenSuggestions: () => void
   onDialogChange: (open: boolean) => void
-  /** Back and Escape on the Usage page: to wherever it was opened from. */
+  /** Escape on the Usage page: to wherever it was opened from. */
   onLeaveUsage: () => void
 }) {
   const { workspace, status } = manor
@@ -537,7 +537,8 @@ function ArtifactsPage({
 
 /**
  * Usage as a page of its own, opened from the rings' pop-up or the account popover.
- * Back and Escape return to where it was opened from; an Escape something else claimed
+ * Its header is a plain title like the other top-level pages. Escape and the top bar's
+ * Back return to where it was opened from; an Escape something else claimed
  * first (a select, a menu, a dialog, Settings over it) is left alone.
  */
 function UsagePage({ manor, phone, escapeActive, sidebarCollapsed, sidebarToggle, onLeave }: {
@@ -567,7 +568,6 @@ function UsagePage({ manor, phone, escapeActive, sidebarCollapsed, sidebarToggle
       <WorkspaceHeader
         section="usage"
         title="Usage"
-        parent={{ label: 'Back', onClick: onLeave, back: true }}
         status={status}
         sidebarCollapsed={sidebarCollapsed}
         {...sidebarToggle}
