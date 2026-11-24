@@ -69,18 +69,14 @@ function pngOpaque(bytes: Buffer): boolean {
   let transparency: Buffer | undefined
   const data: Buffer[] = []
   let size = 0
-  for (let at = 8; at + 8 <= bytes.length && size < 1024;) {
-    const length = bytes.readUInt32BE(at)
-    const type = bytes.toString('latin1', at + 4, at + 8)
-    if (type === 'IEND') break
-    const body = bytes.subarray(at + 8, at + 8 + length)
+  for (const { type, body } of pngChunks(bytes)) {
+    if (size >= 1024) break
     if (type === 'tRNS') transparency = body
     if (type === 'IDAT') {
       // Only the start of the stream: 1 KiB inflates to 1 MiB at most, and the pixel is in it.
       data.push(body.subarray(0, 1024 - size))
       size += Math.min(body.length, 1024 - size)
     }
-    at += 12 + length
   }
   let row: Buffer
   try {
@@ -95,6 +91,180 @@ function pngOpaque(bytes: Buffer): boolean {
     : colour === 3 && transparency !== undefined && row.length > 1 ? transparency[row[1]! >> (8 - depth)]
     : undefined
   return alpha === undefined || alpha >= 128
+}
+
+/** A PNG's chunks up to its end, each as its type and body. */
+function* pngChunks(bytes: Buffer) {
+  for (let at = 8; at + 8 <= bytes.length;) {
+    const length = bytes.readUInt32BE(at)
+    const type = bytes.toString('latin1', at + 4, at + 8)
+    if (type === 'IEND') return
+    yield { type, body: bytes.subarray(at + 8, at + 8 + length) }
+    at += 12 + length
+  }
+}
+
+/** The biggest picture decoded to measure it: a 2048px RGBA icon, in bytes and in pixels. */
+const MAX_DECODED_BYTES = 16 * 1024 * 1024
+const MAX_DECODED_PIXELS = 2048 * 2048
+
+interface DecodedPng {
+  width: number
+  height: number
+  /** Whether the pixel is at least half opaque; undefined for a PNG without an alpha channel or palette transparency. */
+  solid: ((x: number, y: number) => boolean) | undefined
+  /** Whether a grey or RGB PNG names one colour as transparent, which `solid` does not read. */
+  keyed: boolean
+  /** The pixel's red, green and blue, 0 to 255. */
+  colour(x: number, y: number): [number, number, number]
+}
+
+/**
+ * Decodes a whole PNG to read its pixels, or undefined when it is interlaced, too big, cut
+ * short, or stores pixels this does not read: palettes at any depth, everything else at 8
+ * or 16 bits.
+ */
+function decodePng(bytes: Buffer): DecodedPng | undefined {
+  const width = bytes.readUInt32BE(16)
+  const height = bytes.readUInt32BE(20)
+  const depth = bytes[24]
+  const type = bytes[25]
+  const channels = type === 6 ? 4 : type === 4 ? 2 : type === 2 ? 3 : type === 3 || type === 0 ? 1 : 0
+  const depths = type === 3 ? [1, 2, 4, 8] : [8, 16]
+  if (channels === 0 || depth === undefined || !depths.includes(depth) || bytes[28] !== 0) return undefined
+  const sample = depth / 8
+  // The filters step back a whole pixel, or one byte when pixels are packed smaller.
+  const pixel = Math.max(1, channels * sample)
+  // Each row is one filter byte and then its pixels.
+  const row = Math.ceil((width * channels * depth) / 8) + 1
+  const decoded = row * height
+  if (width === 0 || height === 0 || decoded > MAX_DECODED_BYTES || width * height > MAX_DECODED_PIXELS) return undefined
+  let palette: Buffer | undefined
+  let transparency: Buffer | undefined
+  const data: Buffer[] = []
+  for (const chunk of pngChunks(bytes)) {
+    if (chunk.type === 'PLTE') palette = chunk.body
+    if (chunk.type === 'tRNS') transparency = chunk.body
+    if (chunk.type === 'IDAT') data.push(chunk.body)
+  }
+  if (type === 3 && palette === undefined) return undefined
+  let raw: Buffer
+  try {
+    // A stream that inflates past the picture's own size is refused, not decoded.
+    raw = inflateSync(Buffer.concat(data), { maxOutputLength: decoded })
+  } catch {
+    return undefined
+  }
+  if (raw.length !== decoded) return undefined
+  // Undo each row's filter in place: its left, upper and upper-left neighbours are already undone.
+  for (let y = 0; y < height; y++) {
+    const filter = raw[y * row]
+    if (filter === undefined || filter > 4) return undefined
+    for (let i = 1; i < row; i++) {
+      const at = y * row + i
+      const left = i > pixel ? raw[at - pixel]! : 0
+      const up = y > 0 ? raw[at - row]! : 0
+      let add = 0
+      if (filter === 1) add = left
+      else if (filter === 2) add = up
+      else if (filter === 3) add = (left + up) >> 1
+      else if (filter === 4) {
+        const corner = i > pixel && y > 0 ? raw[at - row - pixel]! : 0
+        const guess = left + up - corner
+        const [toLeft, toUp, toCorner] = [Math.abs(guess - left), Math.abs(guess - up), Math.abs(guess - corner)]
+        add = toLeft <= toUp && toLeft <= toCorner ? left : toUp <= toCorner ? up : corner
+      }
+      raw[at] = (raw[at]! + add) & 0xff
+    }
+  }
+  // A sample's high byte, which is all a 16-bit one needs here.
+  const channel = (x: number, y: number, index: number) => raw[y * row + 1 + x * pixel + index * sample]!
+  const paletteIndex = (x: number, y: number) => {
+    const bit = x * depth
+    return (raw[y * row + 1 + (bit >> 3)]! >> (8 - depth - (bit & 7))) & ((1 << depth) - 1)
+  }
+  return {
+    width,
+    height,
+    keyed: (type === 0 || type === 2) && transparency !== undefined,
+    solid: type === 6 || type === 4 ? (x, y) => channel(x, y, channels - 1) >= 128
+      : type === 3 && transparency !== undefined ? (x, y) => (transparency[paletteIndex(x, y)] ?? 255) >= 128
+      : undefined,
+    colour(x, y) {
+      if (type === 3) {
+        const at = paletteIndex(x, y) * 3
+        return [palette![at] ?? 0, palette![at + 1] ?? 0, palette![at + 2] ?? 0]
+      }
+      return channels >= 3 ? [channel(x, y, 0), channel(x, y, 1), channel(x, y, 2)] : [channel(x, y, 0), channel(x, y, 0), channel(x, y, 0)]
+    },
+  }
+}
+
+/**
+ * The share of each side a PNG without a background leaves empty around its picture, such
+ * as the margin a macOS app icon keeps for its shadow: the narrowest gap between an edge and
+ * the box around every pixel at least half opaque. Clients crop that much from every side,
+ * so the picture fills its square like an icon without a margin and nothing of it is cut.
+ * 0 under 2%, and when the PNG has no alpha or is not decoded.
+ */
+function pngInset(png: DecodedPng): number {
+  const { width, height, solid } = png
+  if (solid === undefined) return 0
+  let [minX, minY, maxX, maxY] = [width, height, -1, -1]
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      if (!solid(x, y)) continue
+      minX = Math.min(minX, x)
+      maxX = Math.max(maxX, x)
+      minY = Math.min(minY, y)
+      maxY = Math.max(maxY, y)
+    }
+  }
+  if (maxX < 0) return 0
+  const inset = Math.min(minX / width, (width - 1 - maxX) / width, minY / height, (height - 1 - maxY) / height)
+  return inset < 0.02 ? 0 : Math.floor(Math.min(inset, 0.25) * 1000) / 1000
+}
+
+/** The corner radius, as a share of the side, every tile gets at least. */
+const TILE_RADIUS = 0.22
+
+/**
+ * The corner radius, as a share of the side, of a square picture that draws its own rounded
+ * plate on a plain square, such as an app icon: the circle that meets each corner's diagonal
+ * where the plate starts, a hair rounder so the soft edge of the rounding falls on the plate,
+ * and never under a tile's own. Clients draw it as a plain arc, since a squircle of the same
+ * radius cuts far less deep at the diagonal. A plate with smoother corners than a circle
+ * keeps a sliver of its square near the edges, about 1% of the side, under a pixel at icon
+ * sizes. 0 when the four corners are not the same colour, when that colour also reaches the
+ * middle of an edge (the square is the picture's background, not a canvas around a plate),
+ * when the four corners disagree or are cut square, and when a colour is marked transparent.
+ */
+function pngCornerRadius(png: DecodedPng): number {
+  const { width: side, height, keyed } = png
+  if (side !== height || keyed) return 0
+  const canvas = png.colour(0, 0)
+  const near = ([r, g, b]: [number, number, number]) =>
+    Math.max(Math.abs(r - canvas[0]), Math.abs(g - canvas[1]), Math.abs(b - canvas[2])) <= 6
+  const middle = side >> 1
+  if ([png.colour(middle, 0), png.colour(middle, side - 1), png.colour(0, middle), png.colour(side - 1, middle)].some(near)) return 0
+  // How far each corner's canvas runs along its diagonal, and along its top or bottom edge.
+  const runs = [[1, 1], [-1, 1], [1, -1], [-1, -1]].map(([dx, dy]) => {
+    const at = (x: number, y: number) => png.colour(dx === 1 ? x : side - 1 - x, dy === 1 ? y : side - 1 - y)
+    let diagonal = 0
+    while (diagonal < middle && near(at(diagonal, diagonal))) diagonal++
+    let edge = 0
+    while (edge < middle && near(at(edge, 0))) edge++
+    return { diagonal, edge }
+  })
+  const diagonals = runs.map((run) => run.diagonal)
+  const longest = Math.max(...diagonals)
+  if (Math.min(...diagonals) === 0 || longest - Math.min(...diagonals) > side * 0.02) return 0
+  // A rounded corner runs along its edge well past its diagonal (3.4 times for a circle, less
+  // once a small icon rounds it to whole pixels); a square cut does not.
+  if (runs.some((run) => run.edge < run.diagonal * 1.5)) return 0
+  // A circle of radius r leaves r(1 - √½) of its corner's diagonal outside it.
+  const share = Math.ceil(Math.min(longest / (1 - Math.SQRT1_2) / side + 0.01, 0.5) * 1000) / 1000
+  return Math.max(share, TILE_RADIUS)
 }
 
 /** What the bytes say, which must match the extension: a text file called `icon.png` is no icon. */
@@ -159,9 +329,31 @@ export async function findRepoIcon(folders: readonly string[]): Promise<ProjectR
   for (const folder of folders) {
     // The root's own icon wins; only a folder without one looks into its packages.
     const best = await bestIcon(folder, ICON_DIRS) ?? await bestIcon(folder, await packageIconDirs(folder))
-    if (best !== undefined) return { folder, path: best.path, ...(best.opaque ? { opaque: true as const } : {}) }
+    if (best !== undefined) return iconRef(folder, best.path, best.icon)
   }
   return undefined
+}
+
+/**
+ * The reference stored for one icon file, with what the server reads from its pixels:
+ * whether it fills its square and how round its corner must be, or how much margin it leaves. Undefined when it is no icon.
+ */
+export async function repoIconRef(folder: string, relative: string): Promise<ProjectRepoIcon | undefined> {
+  const icon = await readRepoIcon(folder, relative)
+  return icon === undefined ? undefined : iconRef(folder, relative, icon)
+}
+
+function iconRef(folder: string, relative: string, icon: RepoIconFile): ProjectRepoIcon {
+  const png = icon.kind === 'png' ? decodePng(icon.bytes) : undefined
+  const inset = png !== undefined && !icon.opaque ? pngInset(png) : 0
+  const radius = png !== undefined && icon.opaque ? pngCornerRadius(png) : 0
+  return {
+    folder,
+    path: relative,
+    ...(icon.opaque ? { opaque: true as const } : {}),
+    ...(inset > 0 ? { inset } : {}),
+    ...(radius > 0 ? { radius } : {}),
+  }
 }
 
 /** The icon folders of every `apps/<name>` and `packages/<name>` in a linked folder, in name order. */
@@ -177,7 +369,9 @@ async function packageIconDirs(folder: string): Promise<string[]> {
 
 /** The icon to offer among `dirs`: one without a background first, then svg, png by size, ico. */
 async function bestIcon(folder: string, dirs: readonly string[]) {
-  const found: { path: string; kind: IconKind; area: number; opaque: boolean }[] = []
+  const compare = (one: RepoIconFile, other: RepoIconFile) =>
+    Number(one.opaque) - Number(other.opaque) || RANK[one.kind] - RANK[other.kind] || other.area - one.area
+  let best: { path: string; icon: RepoIconFile } | undefined
   // Listed together, since most of these folders do not exist in a given repo.
   const listings = await Promise.all(dirs.map((dir) => readdir(path.join(folder, dir), { withFileTypes: true }).catch(() => [])))
   for (const [index, dir] of dirs.entries()) {
@@ -185,11 +379,11 @@ async function bestIcon(folder: string, dirs: readonly string[]) {
       if (!entry.isFile() || !ICON_NAME.test(entry.name)) continue
       const relative = dir === '' ? entry.name : `${dir}/${entry.name}`
       const icon = await readRepoIcon(folder, relative)
-      if (icon !== undefined) found.push({ path: relative, kind: icon.kind, area: icon.area, opaque: icon.opaque })
+      // Only a strictly better icon takes over, so equal ones keep the order of `dirs`.
+      if (icon !== undefined && (best === undefined || compare(icon, best.icon) < 0)) best = { path: relative, icon }
     }
   }
-  // A stable sort, so equal icons keep the order of `dirs`.
-  return found.sort((one, other) => Number(one.opaque) - Number(other.opaque) || RANK[one.kind] - RANK[other.kind] || other.area - one.area)[0]
+  return best
 }
 
 /**
@@ -218,15 +412,16 @@ const MAX_URL_CHARS = 4_096
  * to that project and the path a known icon place inside it, so no link reads any other
  * file. An SVG goes out under a sandboxing policy and is drawn as an image, so it never
  * runs a script. `no-cache` with an ETag makes a client ask again, so a changed favicon shows.
- * An opaque icon's link ends in `?tile`, the clients' cue to round its corners; it is no
- * part of the signature and opens nothing.
+ * An opaque icon's link ends in `?tile`, the clients' cue to round its corners (`?tile=<share>`
+ * when its own plate needs a rounder corner), and one with a margin in `?inset=<share>`, their
+ * cue to crop it; neither is part of the signature and neither opens anything.
  */
 export function createRepoIconMedia(options: { getProject(projectId: string): Promise<Project | undefined>; key?: Buffer }): RepoIconMedia {
   const key = options.key ?? randomBytes(32)
   const sign = (projectId: string, folder: string, relative: string) =>
     createHmac('sha256', key).update(`${projectId}\n${folder}\n${relative}`).digest('base64url').slice(0, 32)
   const src = (projectId: string, icon: ProjectRepoIcon) =>
-    `${REPO_ICON_PREFIX}${sign(projectId, icon.folder, icon.path)}/${[projectId, icon.folder, icon.path].map(encodeURIComponent).join('/')}${icon.opaque === true ? '?tile' : ''}`
+    `${REPO_ICON_PREFIX}${sign(projectId, icon.folder, icon.path)}/${[projectId, icon.folder, icon.path].map(encodeURIComponent).join('/')}${icon.opaque === true ? `?tile${icon.radius !== undefined ? `=${icon.radius}` : ''}` : icon.inset !== undefined ? `?inset=${icon.inset}` : ''}`
 
   const withSrc = (project: Project): Project => {
     const { repoIconSrc: _stale, ...rest } = project

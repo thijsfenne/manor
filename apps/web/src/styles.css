@@ -477,6 +477,15 @@
   }
 
   /*
+   * A repo icon that draws its own rounded plate keeps the plain arc the server measured
+   * for it (`repoTileRadius`). A squircle of that radius cuts far less deep at the diagonal
+   * and leaves the plate's square showing in each corner.
+   */
+  .corner-round {
+    corner-shape: round;
+  }
+
+  /*
    * The tickbox opts out too. A ticked box has an opaque border in the colour of its
    * fill, and under an opaque border Chromium shrinks the fill by half the border width
    * and builds that inset squircle as a separate path. The scaled corner (7.5px) is wider

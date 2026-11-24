@@ -14,7 +14,7 @@ import {
 } from '@manor/contracts'
 import type { Orchestrator } from './orchestrator.js'
 import { validateRepoPaths } from './repo.js'
-import { findRepoIcon, readRepoIcon } from './repoIcons.js'
+import { findRepoIcon, keptRepoIcon, repoIconRef } from './repoIcons.js'
 import { listRepoFiles, readRepoFile, resolveInRepo, writeRepoFile } from './repoFiles.js'
 import type { ExternalFileOpener } from './externalFiles.js'
 import type { ChatWorktree, Store } from './store.js'
@@ -842,16 +842,18 @@ export class ProjectModule {
           reply({ type: 'notice', kind: 'error', text: checked.message })
           return
         }
-        // The server reads the picture itself, so whether it is opaque never comes from a client.
+        // The server reads the picture itself, so its shape never comes from a client.
         const wanted = message.letters === true ? undefined : message.repoIcon
-        const picked = wanted == null || !checked.paths.includes(wanted.folder) ? undefined : await readRepoIcon(wanted.folder, wanted.path)
+        const picked = wanted == null || !checked.paths.includes(wanted.folder) ? undefined : await repoIconRef(wanted.folder, wanted.path)
         if (wanted != null && picked === undefined) {
           reply({ type: 'notice', kind: 'error', text: 'That repo icon is no longer in the project’s folders. Pick another icon.' })
           return
         }
-        const mark = message.letters === true ? 'letters' as const : wanted == null || picked === undefined
-          ? wanted
-          : { folder: wanted.folder, path: wanted.path, ...(picked.opaque ? { opaque: true as const } : {}) }
+        // An icon left as it was is read again, so a save picks up a changed file or a shape
+        // the server learnt to read since it was picked; a file gone keeps the stored one.
+        const kept = message.letters === true || message.repoIcon !== undefined ? undefined : keptRepoIcon(current.repoIcon, checked.paths)
+        const refreshed = kept === undefined ? undefined : await repoIconRef(kept.folder, kept.path)
+        const mark = message.letters === true ? 'letters' as const : picked ?? refreshed ?? wanted
         if (!sameFolders(current.repoPaths, checked.paths)) {
           const reconciled = await this.reconcileProjectWorktrees(
             message.projectId,

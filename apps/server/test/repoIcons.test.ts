@@ -11,12 +11,8 @@ import type { Project } from '@manor/contracts'
 import { REPO_ICON_PREFIX, createRepoIconMedia, findRepoIcon, isRepoIconPath } from '../src/repoIcons.js'
 import { createMemoryStore } from '../src/stores/memoryStore.js'
 import { createSqliteStore } from '../src/stores/sqliteStore.js'
+import { chunk, framedPng, platePng } from './pngFixture.js'
 
-const chunk = (type: string, body: Buffer) => {
-  const length = Buffer.alloc(4)
-  length.writeUInt32BE(body.length)
-  return Buffer.concat([length, Buffer.from(type, 'latin1'), body, Buffer.alloc(4)])
-}
 /**
  * A PNG of the given size whose first row starts with one white pixel: RGB without
  * `corner`, else RGBA with that alpha, so 0 is an icon without a background.
@@ -113,6 +109,43 @@ describe('findRepoIcon', () => {
     expect(await findRepoIcon([solid])).toEqual({ folder: solid, path: 'packages/ui/static/favicon.ico' })
     const rooted = folder({ 'public/icon.png': png(64), 'apps/web/public/favicon.svg': SVG })
     expect(await findRepoIcon([rooted])).toEqual({ folder: rooted, path: 'public/icon.png', opaque: true })
+  })
+
+  it('measures the transparent margin of an icon without a background, so clients crop it', async () => {
+    const inset = async (icon: Buffer) => (await findRepoIcon([folder({ 'assets/icon.png': icon })]))?.inset
+    for (const filter of [0, 1, 2, 3, 4]) {
+      expect(await inset(framedPng(100, [10, 10, 10, 10], { filter })), `filter ${filter}`).toBe(0.1)
+      expect(await inset(framedPng(100, [20, 12, 15, 10], { format: 'rgba16', filter })), `filter ${filter}`).toBe(0.1)
+    }
+    expect(await inset(framedPng(100, [10, 10, 10, 10], { format: 'palette' }))).toBe(0.1)
+    expect(await inset(framedPng(99, [20, 20, 20, 19], { format: 'palette4' }))).toBe(0.191)
+    // A pixel of the picture off the middle lines still counts, so nothing of it is cropped.
+    expect(await inset(framedPng(100, [20, 20, 20, 20], { accent: [5, 30] }))).toBe(0.05)
+    // Artwork that reaches one edge, a margin under 2%, or a file cut short: nothing to crop.
+    expect(await inset(framedPng(100, [20, 0, 20, 20]))).toBeUndefined()
+    expect(await inset(framedPng(100, [1, 1, 1, 1]))).toBeUndefined()
+    expect(await inset(framedPng(100, [10, 10, 10, 10], { missing: 5 }))).toBeUndefined()
+    const link = createRepoIconMedia({ getProject: async () => undefined }).src('p1', { folder: '/repo', path: 'assets/icon.png', inset: 0.1 })
+    expect(link.endsWith('?inset=0.1')).toBe(true)
+  })
+
+  it('measures how round an opaque icon draws its own plate, so its square never shows at the corners', async () => {
+    const radius = async (icon: Buffer) => (await findRepoIcon([folder({ 'assets/icon.png': icon })]))?.radius
+    // A 30% plate: its diagonal meets the canvas at 9 pixels, plus the hair that keeps the soft edge on the plate.
+    expect(await radius(platePng(100, 30))).toBe(0.318)
+    // A plate no rounder than a tile still gets the plain arc, which cuts deeper than the tile's squircle.
+    expect(await radius(platePng(100, 15))).toBe(0.22)
+    // A logo on its own square, corners that disagree or are cut square, a picture wider than
+    // its square, or a colour marked transparent: the tile's own corner stays.
+    expect(await radius(platePng(100, 30, { margin: 10 }))).toBeUndefined()
+    expect(await radius(platePng(100, 30, { square: [2] }))).toBeUndefined()
+    expect(await radius(platePng(100, 22, { panels: true }))).toBeUndefined()
+    expect(await radius(platePng(100, 30, { below: 1 }))).toBeUndefined()
+    // A small icon whose arc rounds to whole pixels is still a plate.
+    expect(await radius(platePng(28, 5.5))).toBe(0.254)
+    expect(await radius(platePng(100, 30, { keyed: true }))).toBeUndefined()
+    const link = createRepoIconMedia({ getProject: async () => undefined }).src('p1', { folder: '/repo', path: 'assets/icon.png', opaque: true, radius: 0.318 })
+    expect(link.endsWith('?tile=0.318')).toBe(true)
   })
 
   it('accepts only the known icon places as a path', () => {
@@ -279,11 +312,11 @@ describe('stored repo icon', () => {
     const filename = path.join(folder({}), 'manor.sqlite')
     const first = createSqliteStore({ filename, seed: true })
     const { id } = await first.createProject('Site', [root])
-    await first.updateProject(id, 'Site', [root], 'code', undefined, undefined, { folder: root, path: 'favicon.ico' })
+    await first.updateProject(id, 'Site', [root], 'code', undefined, undefined, { folder: root, path: 'favicon.ico', inset: 0.098, radius: 0.3 })
     const lettered = await first.createProject('Shot Journal', [], 'code', undefined, undefined, true)
     first.close()
     const reopened = createSqliteStore({ filename })
-    expect((await reopened.getProject(id))?.repoIcon).toEqual({ folder: root, path: 'favicon.ico' })
+    expect((await reopened.getProject(id))?.repoIcon).toEqual({ folder: root, path: 'favicon.ico', inset: 0.098, radius: 0.3 })
     expect((await reopened.getProject(lettered.id))?.letters).toBe(true)
     reopened.close()
   })

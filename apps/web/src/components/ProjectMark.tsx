@@ -1,6 +1,6 @@
 import { useState, type CSSProperties } from 'react'
 import type { ProjectIcon } from '@manor/contracts'
-import { isTileRepoIcon, projectIcon, projectTileRadius } from '../projectAppearance'
+import { isTileRepoIcon, projectIcon, projectTileRadius, repoIconInset, repoTileRadius } from '../projectAppearance'
 import { Icon } from './Icon'
 
 interface ProjectMarkProps {
@@ -17,14 +17,17 @@ interface ProjectMarkProps {
 
 /**
  * A project's icon wherever one is drawn: its repo icon at the glyph's size and untinted,
- * with rounded corners only when it fills its square, its letters on a tile of its colour,
- * or its glyph in the project's colour. A file deleted from the repo answers 404, and the
- * glyph takes its place without a broken image.
+ * with rounded corners only when it fills its square (as round as its own plate when it
+ * draws one) and its empty margin cropped, its letters on a tile of its colour, or its
+ * glyph in the project's colour. A file deleted from the repo answers 404, and the glyph
+ * takes its place without a broken image.
  */
 export function ProjectMark({ icon, color, src, letters, size, className = '', style }: ProjectMarkProps) {
   const [failed, setFailed] = useState<string | null>(null)
   if (src !== undefined && failed !== src) {
     const tile = isTileRepoIcon(src)
+    const plate = repoTileRadius(src)
+    const inset = repoIconInset(src)
     return (
       <img
         src={src}
@@ -32,8 +35,15 @@ export function ProjectMark({ icon, color, src, letters, size, className = '', s
         width={size}
         height={size}
         draggable={false}
-        className={`flex-none ${tile ? 'object-cover' : 'object-contain'} ${className}`}
-        style={{ width: size, height: size, ...(tile ? { borderRadius: projectTileRadius(size) } : {}), ...style }}
+        className={`flex-none ${tile ? 'object-cover' : 'object-contain'} ${plate === undefined ? '' : 'corner-round'} ${className}`}
+        style={{
+          width: size,
+          height: size,
+          ...(tile ? { borderRadius: projectTileRadius(size, plate) } : {}),
+          // Cut the margin, shadow included, then grow what is left back to the full size.
+          ...(inset > 0 ? { clipPath: `inset(${inset * 100}%)`, transform: `scale(${1 / (1 - 2 * inset)})` } : {}),
+          ...style,
+        }}
         onError={() => setFailed(src)}
       />
     )

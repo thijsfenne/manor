@@ -1804,14 +1804,15 @@ const VAULT_NOTES = {
 const VAULT_IMAGES = { 'Attachments/icon.png': '/media/vault/fixture/Attachments/icon.png' }
 const vaultImageBytes = new Map([['/media/vault/fixture/Attachments/icon.png', appImage('icon')]])
 // The repo icon a project with a linked folder offers, as the Mac finds it: Manor's app icon
-// fills its square (`?tile`, drawn rounded), Stilte's favicon has no background.
+// fills its square (`?tile`, drawn rounded), Stilte's macOS app icon has no background but a
+// transparent margin (`?inset=`, cropped so it fills its square too).
 const REPO_ICONS = [
   { projectId: 'project-manor', path: 'assets/icon.png', opaque: true, src: '/media/project-icon/fixture/icon.png?tile', bytes: appImage('icon') },
-  { projectId: 'project-stilte', path: 'assets/favicon.png', src: '/media/project-icon/fixture/favicon.png', bytes: appImage('favicon') },
+  { projectId: 'project-stilte', path: 'assets/icon.png', inset: 0.097, src: '/media/project-icon/fixture/mac-icon.png?inset=0.097', bytes: readFileSync(new URL('../../../apps/desktop/assets/icon.png', import.meta.url)) },
 ]
 const repoIconOffer = (project) => {
   const offer = project?.repoPaths[0] === undefined ? undefined : REPO_ICONS.find((candidate) => candidate.projectId === project.id)
-  return offer === undefined ? null : { folder: project.repoPaths[0], path: offer.path, ...(offer.opaque ? { opaque: true } : {}), src: offer.src }
+  return offer === undefined ? null : { folder: project.repoPaths[0], path: offer.path, ...(offer.opaque ? { opaque: true } : {}), ...(offer.inset ? { inset: offer.inset } : {}), src: offer.src }
 }
 /** Per-chat runtime pins set from the phone during this run. */
 const overrides = new Map()

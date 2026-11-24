@@ -26,6 +26,7 @@ import { ManorService } from '../src/service.js'
 import { welcomePrompt } from '../src/projectThreads.js'
 import type { Store } from '../src/store.js'
 import { createMemoryStore } from '../src/stores/memoryStore.js'
+import { framedPng } from './pngFixture.js'
 import { openVault, type Vault } from '../src/vault.js'
 import { WorkModule } from '../src/workModule.js'
 import {
@@ -1555,6 +1556,7 @@ describe('ManorService, editing a project', () => {
     const site = mkdtempSync(path.join(os.tmpdir(), 'manor-service-icon-'))
     onTestFinished(() => rmSync(site, { recursive: true, force: true }))
     writeFileSync(path.join(site, 'favicon.ico'), Buffer.from([0, 0, 1, 0, 1, 0]))
+    writeFileSync(path.join(site, 'icon.png'), framedPng(100, [10, 10, 10, 10]))
     const store = createMemoryStore({ agents: roster })
     const { projectId } = await seededChat(store)
     const { manor, replies, reply } = service(store)
@@ -1566,9 +1568,16 @@ describe('ManorService, editing a project', () => {
     expect((await store.getProject(projectId))?.repoIcon).toBeUndefined()
 
     // Whether it fills its square is the server's reading of the file, never the client's word.
-    await manor.handle({ ...edit, repoIcon: { folder: site, path: 'favicon.ico', opaque: true } }, reply)
+    await manor.handle({ ...edit, repoIcon: { folder: site, path: 'favicon.ico', opaque: true, inset: 0.2 } }, reply)
     expect(await store.getProject(projectId)).toMatchObject({ icon: 'rocket' })
     expect((await store.getProject(projectId))?.repoIcon).toEqual({ folder: site, path: 'favicon.ico' })
+    await manor.handle({ ...edit, repoIcon: { folder: site, path: 'icon.png', inset: 0.2 } }, reply)
+    expect((await store.getProject(projectId))?.repoIcon).toEqual({ folder: site, path: 'icon.png', inset: 0.1 })
+    // A save that leaves the icon alone reads it again, so a reference stored before the
+    // server read its shape gains it.
+    await store.updateProject(projectId, 'Manor', [site], 'rocket', undefined, undefined, { folder: site, path: 'icon.png' })
+    await manor.handle(edit, reply)
+    expect((await store.getProject(projectId))?.repoIcon).toEqual({ folder: site, path: 'icon.png', inset: 0.1 })
 
     // Letters take the repo icon's place, win when both are sent, and null hands back the glyph.
     await manor.handle({ ...edit, letters: true, repoIcon: { folder: site, path: 'missing.ico' } }, reply)

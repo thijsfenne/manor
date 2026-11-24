@@ -2847,6 +2847,12 @@ export const ProjectRepoIconSchema = z.object({
   // Set by the server when the picture fills its square (its corner is not transparent), so
   // it is drawn with rounded corners; an icon without a background is drawn as it is.
   opaque: z.literal(true).optional(),
+  // Set by the server when an icon without a background leaves a transparent margin, such as
+  // a macOS app icon: the share of each side to crop, so the picture fills its square.
+  inset: z.number().min(0.02).max(0.25).optional(),
+  // Set by the server when an opaque icon draws its own rounded plate on a plain square: the
+  // corner radius, as a share of the side, of the plain arc that hides the square around it.
+  radius: z.number().min(0.22).max(0.5).optional(),
 })
 export type ProjectRepoIcon = z.infer<typeof ProjectRepoIconSchema>
 export const DEFAULT_PROJECT_COLOR = '#8A8F98'
@@ -2902,7 +2908,8 @@ export const ProjectSchema = z.object({
   repoIcon: ProjectRepoIconSchema.optional(),
   // The signed link to `repoIcon`, set by the server on the way out and never stored.
   // Absent while the icon's folder is not linked; a client whose load fails draws the glyph.
-  // An opaque icon's link ends in `?tile`, which `isTileRepoIcon` reads to round its corners.
+  // An opaque icon's link ends in `?tile` (or `?tile=<radius>`), which `isTileRepoIcon` and
+  // `repoTileRadius` read to round its corners.
   repoIconSrc: z.string().optional(),
   // Two letters of the name in place of the glyph (2026-11-23), never together with
   // `repoIcon`. Optional, so an older phone strips it and draws the glyph in `icon`.

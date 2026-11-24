@@ -231,10 +231,29 @@ export const sameRepoIcon = (one: ProjectRepoIcon | null, other: ProjectRepoIcon
 export const isTileRepoIcon = (src: string) => /[?&]tile(?:[=&#]|$)/.test(src)
 
 /**
- * The corner of a project tile (a solid repo icon or the letters) drawn `size` px wide:
- * 22% of it, but never under 3.5px, so a 12px badge reads as rounded like a 16px row.
+ * The share of each side a repo icon link marks as empty margin (`?inset=`), which a client
+ * crops so the picture fills its square; 0 without one.
  */
-export const projectTileRadius = (size: number) => Math.max(size * 0.22, 3.5)
+export const repoIconInset = (src: string) => {
+  const inset = Number(/[?&]inset=(0\.\d{1,3})(?:[&#]|$)/.exec(src)?.[1] ?? 0)
+  return inset >= 0.02 && inset <= 0.25 ? inset : 0
+}
+
+/**
+ * The corner, as a share of the side, a repo icon link asks for (`?tile=`) when the picture
+ * draws its own rounded plate, drawn as a plain arc; undefined without one.
+ */
+export const repoTileRadius = (src: string) => {
+  const share = Number(/[?&]tile=(0\.\d{1,3})(?:[&#]|$)/.exec(src)?.[1] ?? 0)
+  return share >= 0.22 && share <= 0.5 ? share : undefined
+}
+
+/**
+ * The corner of a project tile (a solid repo icon or the letters) drawn `size` px wide:
+ * 22% of it, or the `share` its repo icon asks for, but never under 3.5px, so a 12px badge
+ * reads as rounded like a 16px row.
+ */
+export const projectTileRadius = (size: number, share = 0.22) => Math.max(size * share, 3.5)
 
 
 /** What stands in for a project's glyph: its letters, a repo icon, or null for the glyph itself. */

@@ -1,6 +1,6 @@
 import { HugeiconsIcon } from '@hugeicons/react-native'
 import type { ProjectIcon } from '@manor/contracts'
-import { isTileRepoIcon, projectIcon, projectTileRadius } from '@manor/client-runtime/project-icons'
+import { isTileRepoIcon, projectIcon, projectTileRadius, repoIconInset, repoTileRadius } from '@manor/client-runtime/project-icons'
 import { Image } from 'expo-image'
 import { useState } from 'react'
 import { View } from 'react-native'
@@ -9,8 +9,8 @@ import { serverMediaUri } from '@/lib/connection'
 
 /**
  * A project's icon wherever the phone draws one: its repo icon at the glyph's size and
- * untinted, with rounded corners only when it fills its square, its letters on a tile of
- * its colour, or its glyph in the project's colour. A file deleted from the repo answers
+ * untinted, with rounded corners only when it fills its square and its empty margin cropped,
+ * its letters on a tile of its colour, or its glyph in the project's colour. A file deleted from the repo answers
  * 404 and the glyph takes its place.
  */
 export function ProjectMark({ icon, color, src, letters, size, strokeWidth = 1.8 }: {
@@ -27,7 +27,8 @@ export function ProjectMark({ icon, color, src, letters, size, strokeWidth = 1.8
   const uri = src === undefined ? undefined : serverMediaUri(src)
   if (src !== undefined && uri !== undefined && failed !== uri) {
     const tile = isTileRepoIcon(src)
-    return (
+    const inset = repoIconInset(src)
+    const image = (
       <Image
         accessibilityIgnoresInvertColors
         // The server answers `no-cache` with an ETag, so a changed favicon shows on the next load.
@@ -35,9 +36,11 @@ export function ProjectMark({ icon, color, src, letters, size, strokeWidth = 1.8
         contentFit={tile ? 'cover' : 'contain'}
         onError={() => setFailed(uri)}
         source={{ uri }}
-        style={{ width: size, height: size, borderRadius: tile ? projectTileRadius(size) : 0 }}
+        style={{ width: size, height: size, borderRadius: tile ? projectTileRadius(size, repoTileRadius(src)) : 0, ...(inset > 0 ? { transform: [{ scale: 1 / (1 - 2 * inset) }] } : {}) }}
       />
     )
+    // Grown past its box by the margin, which the box then cuts off.
+    return inset > 0 ? <View style={{ width: size, height: size, overflow: 'hidden' }}>{image}</View> : image
   }
   if (letters !== undefined && letters !== '') {
     return (

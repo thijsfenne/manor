@@ -11,6 +11,8 @@ export {
   projectLettersField,
   projectMark,
   projectTileRadius,
+  repoIconInset,
+  repoTileRadius,
   sameMark,
   sameRepoIcon,
   type ProjectMarkChoice,

@@ -24,7 +24,7 @@ export interface SqliteStoreOptions {
   migrate?: boolean
 }
 const withRepoIcon = (icon: ProjectRepoIcon | undefined) =>
-  icon === undefined ? {} : { repoIcon: { folder: icon.folder, path: icon.path, ...(icon.opaque === true ? { opaque: true as const } : {}) } }
+  icon === undefined ? {} : { repoIcon: { folder: icon.folder, path: icon.path, ...(icon.opaque === true ? { opaque: true as const } : {}), ...(icon.inset === undefined ? {} : { inset: icon.inset }), ...(icon.radius === undefined ? {} : { radius: icon.radius }) } }
 /** The (chat, persona) key the per-pair maps share: CLI sessions and model pins. */
 const pairKey = (chatId: string, agentId: string) => `${chatId}::${agentId}`
 /** A CLI session's key: its pair plus the provider that minted it, empty when unknown. */
