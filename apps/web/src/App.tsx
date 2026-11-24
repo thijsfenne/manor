@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react'
+import { AnimatePresence } from 'motion/react'
 import {
   NEW_SINGLE_CHAT_DEFAULT,
   runtimeOn,
@@ -372,6 +373,8 @@ function Workspace({
     else openPlugins()
     closeSidebarOverlay()
   }
+  // Usage has no door of its own on the rail, so leaving it is a step back, or the chats when a reload left no history.
+  const leaveUsage = () => (canBack ? goBack() : showSidebarDestination('chats'))
   const startChat = () => {
     if (freeSplit !== null && freeSplit.view === 'inbox') setSplitDraftSide(freeSplit.focus)
     beginChat()
@@ -732,6 +735,7 @@ function Workspace({
         className={phone ? 'flex h-full overflow-hidden bg-bg' : `grid h-full overflow-hidden ${focusMode ? 'bg-stage' : 'bg-frame'}`}
         style={phone ? undefined : focusMode ? FOCUS_FRAME_GRID : FRAME_GRID}
         {...(focusMode ? { 'data-focus-mode': '' } : {})}
+        {...(settingsOpen ? COVERED : {})}
       >
       {/* House news, not chat news: centred on the whole window, whatever the rail,
           sidebar and panels around the chat are doing. */}
@@ -759,7 +763,7 @@ function Workspace({
           animate={!sidebarResizing && motion !== 'instant'}
           split={splitShown ? { ratio: splitRatio, animate: !splitResizing } : null}
           status={status}
-          covered={settingsOpen || focusMode}
+          covered={focusMode}
           sidebar={{ collapsed: sidebarCollapsed, ...(sidebarHandle === undefined ? {} : { onToggle: sidebarHandle }) }}
           // Back leaves a subagent view before it leaves the chat under it.
           history={{
@@ -772,9 +776,6 @@ function Workspace({
           slotRefs={barSlotRefs}
         />
       )}
-      {/* Settings lies over this whole region while the workspace stays mounted and
-          inert underneath, which is what makes Back to app exact: same thread, same
-          scroll position, same unsent draft. */}
       <div
         ref={stageCanvas}
         className={phone
@@ -785,7 +786,6 @@ function Workspace({
       >
       <div
         className="relative grid h-full min-w-0 flex-1 grid-cols-[auto_minmax(0,1fr)] overflow-hidden bg-bg"
-        {...(settingsOpen ? COVERED : {})}
       >
       {/* The room a pinned sidebar takes up. The panel itself floats above this
           rather than filling it, so a peek slides in over the chat instead of
@@ -941,6 +941,7 @@ function Workspace({
           onOpenSkills={openSkills}
           onOpenSuggestions={openSuggestions}
           onDialogChange={setEditingSettings}
+          onLeaveUsage={leaveUsage}
         />
       ) : (
         <ChatStage
@@ -956,8 +957,13 @@ function Workspace({
       </ViewBoundary>
       </TopBarSlotContext.Provider>
       </div>
+      {/* Settings is a modal over the whole window while the workspace stays mounted and
+          inert underneath, which is what makes closing exact: same thread, same scroll
+          position, same unsent draft. */}
+      <AnimatePresence>
       {settings.location === null ? null : (
         <SettingsLayer
+          key="settings"
           location={settings.location}
           settings={settings}
           manor={manor}
@@ -968,6 +974,7 @@ function Workspace({
           onDialogChange={setEditingSettings}
         />
       )}
+      </AnimatePresence>
       </div>
       </div>
       </RepoFileLinkProvider>
@@ -983,7 +990,7 @@ function occupiedChatIdsOf(split: SplitStage | null, draftSide: 'left' | 'right'
   return new Set(stageChatId === null ? [] : [stageChatId])
 }
 
-/** The workspace under Settings: mounted, but out of reach of focus, clicks and screen readers. */
+/** The window under the Settings modal: mounted, but out of reach of focus, clicks and screen readers. */
 const COVERED = { inert: '' }
 
 /** The desktop window: the top bar across, the rail down the left, the inset in the corner they make. */

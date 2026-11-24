@@ -1,5 +1,7 @@
-import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react'
-import { ArrowLeft01Icon, Cancel01Icon, Search01Icon } from '@hugeicons/core-free-icons'
+import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
+import { motion, useReducedMotion } from 'motion/react'
+import { Cancel01Icon, Search01Icon } from '@hugeicons/core-free-icons'
 import { Icon } from '../Icon'
 import { DiscardModal } from '../DiscardModal'
 import { IconButton } from '../ui/IconButton'
@@ -7,13 +9,14 @@ import { Select } from '../ui/Select'
 import { SelectionMarker } from '../ui/SelectionMarker'
 import { filterSettingsGroups, isWorkspaceShortcut, pageAfterSearch, settingsGroups, type SettingsSection } from './sections'
 import { useHostAuto } from '../../useHostAuto'
+import { INSTANT, MODAL_CARD_AWAY, MODAL_CARD_REST, MODAL_IN, MODAL_OUT } from '../../motion'
 
 const SECTION_MARKER = 'settings-section'
 
 interface SettingsViewProps {
   section: SettingsSection
   onSection: (section: SettingsSection) => void
-  /** Back to app and Escape. Guarded one level up, so an unsaved edit is asked about first. */
+  /** The close button, Escape and a press outside. Guarded one level up, so an unsaved edit is asked about first. */
   onClose: () => void
   /** A way out was taken while a page held an unsaved edit. */
   leaving: boolean
@@ -23,9 +26,10 @@ interface SettingsViewProps {
 }
 
 /**
- * Settings over the sidebar and the stage: its pages on the left where the sidebar's
- * list was, the open page where the chat was. The workspace stays mounted underneath,
- * inert, so closing this returns to the same thread, scroll position and draft.
+ * Settings as a large modal over the whole window: its pages on the left, the open page
+ * on the right. The workspace stays mounted underneath, inert, so closing this returns to
+ * the same thread, scroll position and draft. Rendered inside `AnimatePresence`, which
+ * plays the way out.
  */
 export function SettingsView({ section, onSection, onClose, leaving, onDiscard, onKeepEditing, children }: SettingsViewProps) {
   const hostAuto = useHostAuto()
@@ -35,6 +39,7 @@ export function SettingsView({ section, onSection, onClose, leaving, onDiscard, 
   const shown = filterSettingsGroups(groups, query)
   const closeRef = useRef(onClose)
   closeRef.current = onClose
+  const reduce = useReducedMotion() ?? false
 
   // Focus arrives on the current page row, and goes back to whatever opened Settings
   // when it closes, or to the face at the rail's foot when that opener is gone.
@@ -90,6 +95,11 @@ export function SettingsView({ section, onSection, onClose, leaving, onDiscard, 
     if (page !== undefined) onSection(page)
   }
 
+  // mousedown, as in `Dialog`: a selection that starts in the card and ends outside is no press outside.
+  const pressOutside = (event: MouseEvent<HTMLDivElement>) => {
+    if (event.target === event.currentTarget) onClose()
+  }
+
   // Enter opens the first match. Escape clears a typed query and stays; on an empty
   // field it is left unclaimed, so it closes Settings as everywhere else.
   const searchKey = (event: ReactKeyboardEvent<HTMLInputElement>) => {
@@ -102,25 +112,32 @@ export function SettingsView({ section, onSection, onClose, leaving, onDiscard, 
     }
   }
 
-  return (
-    // Two boxes: a container query reads an ancestor, so the grid that folds sits inside
-    // the box whose width it reads.
-    <div ref={rootRef} className="@container absolute inset-0 z-[var(--z-settings)] bg-bg">
+  return createPortal(
+    <motion.div
+      className="fixed inset-0 z-[var(--z-settings)] grid place-items-center bg-scrim p-0 md:p-6 lg:p-10"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={reduce ? INSTANT : MODAL_IN}
+      onMouseDown={pressOutside}
+    >
+    {/* Two boxes: a container query reads an ancestor, so the grid that folds sits inside
+        the box whose width it reads. */}
+    <motion.div
+      ref={rootRef}
+      role="dialog"
+      aria-modal="true"
+      aria-label="Settings"
+      className="no-drag @container relative h-full max-h-[860px] w-full max-w-[1120px] overflow-hidden border-line bg-bg shadow-popover md:rounded-xl md:border"
+      initial={MODAL_CARD_AWAY}
+      animate={MODAL_CARD_REST}
+      exit={{ ...MODAL_CARD_AWAY, transition: reduce ? INSTANT : MODAL_OUT }}
+      transition={reduce ? INSTANT : MODAL_IN}
+    >
       <div className="grid h-full grid-cols-[240px_minmax(0,1fr)] @max-[640px]:grid-cols-1 @max-[640px]:grid-rows-[auto_minmax(0,1fr)]">
-      <nav aria-label="Settings" className="sidebar-surface flex min-h-0 flex-col border-r border-frame bg-sidebar @max-[640px]:hidden">
+      <nav aria-label="Settings pages" className="sidebar-surface flex min-h-0 flex-col border-r border-frame bg-sidebar @max-[640px]:hidden">
         <div className="flex-none">
-          <div className="flex items-center px-2.5 pt-2">
-            <button
-              type="button"
-              className="flex h-8 cursor-pointer items-center gap-2 rounded-lg border-0 bg-transparent px-2.5 text-[14px] text-muted outline-none hover:bg-surface-2 hover:text-text focus-visible:outline-2 focus-visible:outline-primary"
-              title="Back to app (Esc)"
-              onClick={onClose}
-            >
-              <Icon icon={ArrowLeft01Icon} size={16} />
-              Back to app
-            </button>
-          </div>
-          <div className="mt-1 flex h-10 items-center px-2.5">
+          <div className="flex h-12 items-center px-2.5 pt-2">
             <h2 className="m-0 min-w-0 flex-1 truncate pl-3 font-display text-[16px] font-semibold tracking-[-0.01em]">Settings</h2>
           </div>
           <div className="mx-2.5 mt-1 flex h-8 items-center gap-2 rounded-lg border border-line bg-stage px-2.5 text-muted focus-within:border-field-focus">
@@ -176,8 +193,7 @@ export function SettingsView({ section, onSection, onClose, leaving, onDiscard, 
       </nav>
 
       {/* Too narrow for a second column: the page list folds into a picker above the page. */}
-      <div className="hidden items-center gap-2 border-b border-line py-2 pr-3 pl-3 @max-[640px]:flex">
-        <IconButton icon={ArrowLeft01Icon} iconSize={16} label="Back to app" onClick={onClose} />
+      <div className="hidden items-center gap-2 border-b border-line py-2 pr-14 pl-3 @max-[640px]:flex">
         <div className="w-[220px] min-w-0">
           <Select
             label="Settings page"
@@ -193,9 +209,13 @@ export function SettingsView({ section, onSection, onClose, leaving, onDiscard, 
       </div>
       </div>
 
+      <IconButton icon={Cancel01Icon} label="Close settings (Esc)" onClick={onClose} className="absolute top-3 right-3" />
+    </motion.div>
+
       {!leaving ? null : (
         <DiscardModal onKeep={onKeepEditing} onDiscard={onDiscard}>This page has edits that are not saved yet. Leaving drops them.</DiscardModal>
       )}
-    </div>
+    </motion.div>,
+    document.body,
   )
 }

@@ -120,10 +120,9 @@ interface NavRailProps {
   /** Inside the phone drawer, where the doors need touch-sized targets. */
   mobile?: boolean
   onSelect: (destination: NavDestination) => void
+  /** The Usage page, from the rings' pop-up and from the account popover. */
   onOpenUsage: () => void
-  /** The account popover's two ways in: Settings, and its Usage page. */
   onOpenSettings: () => void
-  onOpenUsageSettings: () => void
   onOpenPin: (agentId: string) => void
 }
 
@@ -155,7 +154,6 @@ function NavRailDoors({
   onSelect,
   onOpenUsage,
   onOpenSettings,
-  onOpenUsageSettings,
   onOpenPin,
 }: NavRailProps) {
   const doors = DOORS.filter(
@@ -351,7 +349,7 @@ function NavRailDoors({
           theme={theme.choice}
           size={size}
           onTheme={theme.set}
-          onOpenUsage={onOpenUsageSettings}
+          onOpenUsage={onOpenUsage}
           onOpenSettings={onOpenSettings}
         />
       </div>

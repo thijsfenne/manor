@@ -1,4 +1,4 @@
-import { Suspense, type ReactNode } from 'react'
+import type { ReactNode } from 'react'
 import { composioBinding } from '../connectors/composioCatalogue'
 import type { ProviderUpdate } from '@manor/contracts'
 import { retryableLazy } from '../RecoveryBoundary'
@@ -11,7 +11,6 @@ import { AutoRulesPage } from './AutoRulesPage'
 import { ContextFilesPage } from './ContextFilesPage'
 import { AppearancePage, GeneralPage, KeybindingsPage } from './PersonalPages'
 import type { SettingsLocation } from './sections'
-import { SettingsView } from './SettingsView'
 import { PhonePage } from './PhonePage'
 import { PermissionsPage } from './PermissionsPage'
 import { StoragePage } from './StoragePage'
@@ -20,7 +19,6 @@ import { VoicePage } from './VoicePage'
 import { AboutPage, MemoryPage, ProvidersPage } from './SystemPages'
 import { desktopPermissions } from '../../desktopBrowser'
 
-const UsageView = retryableLazy(() => import('../usage/UsageView').then((module) => module.UsageView))
 const ConnectorsView = retryableLazy(() => import('../connectors/ConnectorsView').then((module) => module.ConnectorsView))
 const SkillsView = retryableLazy(() => import('../skills/SkillsView').then((module) => module.SkillsView))
 
@@ -39,7 +37,7 @@ interface SettingsHostProps {
   onDialogChange: (open: boolean) => void
 }
 
-/** Every Settings page, each reading and writing the setting it names. */
+/** The open Settings page, each reading and writing the setting it names. `SettingsView` is the modal around it. */
 export function SettingsHost({
   location,
   settings,
@@ -81,17 +79,6 @@ export function SettingsHost({
         return <KeybindingsPage />
       case 'voice':
         return <VoicePage settings={workspace.houseSettings} onSave={manor.saveHouseSettings} />
-      case 'usage':
-        return (
-          <UsageView
-            title="Usage & limits"
-            report={workspace.usageReport}
-            providerUsage={workspace.providerUsage}
-            status={manor.status}
-            onLoadReport={manor.loadUsageReport}
-            onRefreshLimits={manor.refreshProviderUsage}
-          />
-        )
       case 'agents':
         return (
           <AgentsPage
@@ -246,19 +233,6 @@ export function SettingsHost({
     }
   }
 
-  return (
-    <SettingsView
-      section={location.section}
-      onSection={(section) => settings.open(section)}
-      onClose={settings.close}
-      leaving={settings.leaving}
-      onDiscard={settings.discard}
-      onKeepEditing={settings.keepEditing}
-    >
-      <Suspense fallback={<p className="m-0 px-8 pt-10 text-label text-dim">Opening…</p>}>
-        {/* Keyed per page, so a page's own draft never carries into the next one. */}
-        <div key={location.section} className="h-full min-h-0">{page()}</div>
-      </Suspense>
-    </SettingsView>
-  )
+  // Keyed per page, so a page's own draft never carries into the next one.
+  return <div key={location.section} className="h-full min-h-0">{page()}</div>
 }

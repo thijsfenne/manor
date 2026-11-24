@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo } from 'react'
 import type { SettingsLocation } from '../settings/sections'
 import { isSettingsShortcut } from '../settings/sections'
 import { ViewBoundary, retryableLazy } from '../RecoveryBoundary'
+import { SettingsView } from '../settings/SettingsView'
 import type { SettingsController } from '../../useSettings'
 import { subscribeSettingsRequests } from '../../settingsIntent'
 import type { useTheme } from '../../useTheme'
@@ -10,7 +11,7 @@ import type { Manor } from '../../useWorkspace'
 const SettingsHost = retryableLazy(() => import('../settings/SettingsHost').then((module) => module.SettingsHost))
 
 /**
- * Settings, from the account popover, ⌘, or one of the doors into a page: the Auto
+ * Settings, from the account popover or ⌘, on the page shown last, or one of the doors into a page: the Auto
  * mode gear, Agent settings for an agent without a DM, and any page `openSettingsAt` names
  * (Voice, from the composer's dictation popover). Each page reads what it shows on the
  * way in, so a stale copy is never what a form saves back. New agent is not a page:
@@ -21,9 +22,8 @@ const SettingsHost = retryableLazy(() => import('../settings/SettingsHost').then
 export function useSettingsDoors(settings: SettingsController, dismissNotice: () => void, openNewAgent: () => void) {
   const openSettings = useCallback(() => {
     dismissNotice()
-    settings.open('general')
+    settings.open()
   }, [dismissNotice, settings.open])
-  const openUsageSettings = useCallback(() => settings.open('usage'), [settings.open])
   const openAutoRules = useCallback(() => {
     dismissNotice()
     settings.open('auto')
@@ -38,7 +38,8 @@ export function useSettingsDoors(settings: SettingsController, dismissNotice: ()
     const onKeyDown = (event: KeyboardEvent) => {
       if (!isSettingsShortcut(event) || event.repeat) return
       event.preventDefault()
-      if (settings.location === null) openSettings()
+      // An open dialog (Search, a form) keeps the window; Settings would cover it and leave its field focused.
+      if (settings.location === null && document.querySelector('[aria-modal="true"]') === null) openSettings()
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
@@ -59,12 +60,12 @@ export function useSettingsDoors(settings: SettingsController, dismissNotice: ()
 
   const newAgent = useMemo(() => leaveSettingsThen(openNewAgent), [leaveSettingsThen, openNewAgent])
 
-  return { openSettings, openUsageSettings, openAutoRules, editAgent, newAgent, leaveSettingsThen }
+  return { openSettings, openAutoRules, editAgent, newAgent, leaveSettingsThen }
 }
 
 /**
- * Settings lying over the workspace, which stays mounted and inert underneath: that is
- * what makes Back to app exact, the same thread, scroll position and unsent draft.
+ * Settings as a modal over the workspace, which stays mounted and inert underneath: that
+ * is what makes closing exact, the same thread, scroll position and unsent draft.
  */
 export function SettingsLayer({
   location,
@@ -86,22 +87,30 @@ export function SettingsLayer({
   onEditAgent: (agentId: string) => void
   onDialogChange: (open: boolean) => void
 }) {
+  // The modal itself is not lazy, so a page that fails to load or throws shows Try again
+  // inside a Settings that still closes, never over a workspace left inert behind it.
   return (
-    <ViewBoundary
-      resetKey={location.section}
-      loading={<div className="absolute inset-0 z-[var(--z-settings)] bg-bg" />}
+    <SettingsView
+      section={location.section}
+      onSection={(section) => settings.open(section)}
+      onClose={settings.close}
+      leaving={settings.leaving}
+      onDiscard={settings.discard}
+      onKeepEditing={settings.keepEditing}
     >
-      <SettingsHost
-        location={location}
-        settings={settings}
-        manor={manor}
-        theme={theme}
-        {...(account === undefined ? {} : { account })}
-        providerUpdates={manor.workspace.providerUpdates}
-        onNewAgent={onNewAgent}
-        onEditAgent={onEditAgent}
-        onDialogChange={onDialogChange}
-      />
-    </ViewBoundary>
+      <ViewBoundary resetKey={location.section} loading={<p className="m-0 px-8 pt-10 text-label text-dim">Opening…</p>}>
+        <SettingsHost
+          location={location}
+          settings={settings}
+          manor={manor}
+          theme={theme}
+          {...(account === undefined ? {} : { account })}
+          providerUpdates={manor.workspace.providerUpdates}
+          onNewAgent={onNewAgent}
+          onEditAgent={onEditAgent}
+          onDialogChange={onDialogChange}
+        />
+      </ViewBoundary>
+    </SettingsView>
   )
 }

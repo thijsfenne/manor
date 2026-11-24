@@ -218,3 +218,13 @@ export const TOAST_VISIBLE_MS = 3500
  */
 export const VIEWER_STEP: Transition = { duration: 0.26, ease: EASE_TRAVEL, opacity: { duration: 0.2 } }
 export const VIEWER_STEP_TRAVEL = 16
+
+/**
+ * A large modal arriving and leaving: the same rise and scale the CSS `.modal-card-in`
+ * plays, with a way out, for a modal that stays open long enough to be closed with care
+ * (Settings). The scrim fades on the opacity timing alone.
+ */
+export const MODAL_IN: Transition = { duration: 0.19, ease: EASE_OUT, opacity: { duration: 0.13 } }
+export const MODAL_OUT: Transition = { duration: 0.14, ease: 'easeIn', opacity: { duration: 0.12 } }
+export const MODAL_CARD_AWAY = { opacity: 0, y: 8, scale: 0.97 }
+export const MODAL_CARD_REST = { opacity: 1, y: 0, scale: 1 }

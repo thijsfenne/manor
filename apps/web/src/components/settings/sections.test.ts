@@ -35,7 +35,7 @@ describe('the settings nav search', () => {
     const groups = settingsGroups(true)
 
     expect(pageAfterSearch(groups, 'default agent', 'general')).toBeUndefined()
-    expect(pageAfterSearch(groups, 'cost', 'general')).toBe('usage')
+    expect(pageAfterSearch(groups, 'dictation', 'general')).toBe('voice')
     expect(pageAfterSearch(groups, 'zzzz', 'general')).toBeUndefined()
   })
 })

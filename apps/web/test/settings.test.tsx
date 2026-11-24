@@ -96,6 +96,38 @@ describe('settings guard', () => {
     reload()
     expect(controller.location).toBeNull()
   })
+
+  it('opens on the page shown last when none is named, also after a restart', () => {
+    const local = new Map<string, string>()
+    const storage = (map: Map<string, string>) => ({
+      getItem: (key: string) => map.get(key) ?? null,
+      setItem: (key: string, value: string) => { map.set(key, value) },
+      removeItem: (key: string) => { map.delete(key) },
+    })
+    vi.stubGlobal('window', { sessionStorage: storage(new Map()), localStorage: storage(local) })
+
+    act(() => { tree = create(<Harness />) })
+    act(() => controller.open())
+    expect(controller.location).toEqual({ section: 'general' })
+    act(() => controller.open('voice'))
+    act(() => controller.close())
+    act(() => controller.open())
+    expect(controller.location).toEqual({ section: 'voice' })
+
+    // A restart starts with a fresh tab: only the last page carries over.
+    act(() => controller.close())
+    vi.stubGlobal('window', { sessionStorage: storage(new Map()), localStorage: storage(local) })
+    act(() => tree?.unmount())
+    act(() => { tree = create(<Harness />) })
+    expect(controller.location).toBeNull()
+    act(() => controller.open())
+    expect(controller.location).toEqual({ section: 'voice' })
+
+    local.set('manor:settings-last-section', 'usage')
+    act(() => controller.close())
+    act(() => controller.open())
+    expect(controller.location).toEqual({ section: 'general' })
+  })
 })
 
 describe('context file drafts', () => {

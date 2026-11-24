@@ -15,8 +15,9 @@
   --z-browser-controls: 6;
   /* A dragged tile's landing preview, over the browser page it may be aimed at. */
   --z-panel-drag: 10;
-  /* Settings over the whole workspace, browser pages included; dialogs stay above it. */
-  --z-settings: 11;
+  /* The Settings modal over the whole window, browser pages included. It shares the
+     dialogs' layer; a dialog opened from a Settings page portals later and stays above it. */
+  --z-settings: 20;
 }
 
 @theme {

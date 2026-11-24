@@ -1,4 +1,4 @@
-import { useCallback, useMemo, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useRef, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { SidebarLeftIcon, SidebarRightIcon } from '@hugeicons/core-free-icons'
 import { BROWSER_HOME_SESSION_ID, DEFAULT_HOUSE_SETTINGS, NOTE_AI_DEFAULTS, type WorkflowSuggestion, type Chat, type PageContextAttachment, type Project, type Routine } from '@manor/contracts'
@@ -78,6 +78,7 @@ export function DestinationView({
   onOpenSkills,
   onOpenSuggestions,
   onDialogChange,
+  onLeaveUsage,
 }: {
   view: DestinationViewId
   manor: Manor
@@ -116,6 +117,8 @@ export function DestinationView({
   onOpenSkills: () => void
   onOpenSuggestions: () => void
   onDialogChange: (open: boolean) => void
+  /** Back and Escape on the Usage page: to wherever it was opened from. */
+  onLeaveUsage: () => void
 }) {
   const { workspace, status } = manor
   const sidebarToggle = onToggleSidebar === undefined ? {} : { onToggleSidebar }
@@ -205,25 +208,14 @@ export function DestinationView({
   }
   if (view === 'usage') {
     return (
-      // The same shell the settings sections use, so leaving is the same gesture:
-      // the sidebar keeps working and picking any chat drops straight back into it.
-      <div className={`grid min-h-0 min-w-0 ${phone ? HEADED_ROWS : BARE_ROWS}`}>
-        <WorkspaceHeader
-          section="usage"
-          title="Usage"
-          status={status}
-          sidebarCollapsed={sidebarCollapsed}
-          {...sidebarToggle}
-        />
-        <UsageView
-          title="Usage"
-          report={workspace.usageReport}
-          providerUsage={workspace.providerUsage}
-          status={status}
-          onLoadReport={manor.loadUsageReport}
-          onRefreshLimits={manor.refreshProviderUsage}
-        />
-      </div>
+      <UsagePage
+        manor={manor}
+        phone={phone}
+        escapeActive={!settingsOpen}
+        sidebarCollapsed={sidebarCollapsed}
+        sidebarToggle={sidebarToggle}
+        onLeave={onLeaveUsage}
+      />
     )
   }
 
@@ -540,5 +532,54 @@ function ArtifactsPage({
       onOpenSource={(url) => window.open(url, '_blank', 'noopener,noreferrer')}
       onAddToChat={addToChat}
     />
+  )
+}
+
+/**
+ * Usage as a page of its own, opened from the rings' pop-up or the account popover.
+ * Back and Escape return to where it was opened from; an Escape something else claimed
+ * first (a select, a menu, a dialog, Settings over it) is left alone.
+ */
+function UsagePage({ manor, phone, escapeActive, sidebarCollapsed, sidebarToggle, onLeave }: {
+  manor: Manor
+  phone: boolean
+  escapeActive: boolean
+  sidebarCollapsed: boolean
+  sidebarToggle: { onToggleSidebar?: () => void }
+  onLeave: () => void
+}) {
+  const { workspace, status } = manor
+  const leave = useRef(onLeave)
+  leave.current = onLeave
+  useEffect(() => {
+    if (!escapeActive) return
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || event.defaultPrevented) return
+      event.preventDefault()
+      leave.current()
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [escapeActive])
+
+  return (
+    <div className={`grid min-h-0 min-w-0 ${phone ? HEADED_ROWS : BARE_ROWS}`}>
+      <WorkspaceHeader
+        section="usage"
+        title="Usage"
+        parent={{ label: 'Back', onClick: onLeave, back: true }}
+        status={status}
+        sidebarCollapsed={sidebarCollapsed}
+        {...sidebarToggle}
+      />
+      <UsageView
+        title="Usage"
+        report={workspace.usageReport}
+        providerUsage={workspace.providerUsage}
+        status={status}
+        onLoadReport={manor.loadUsageReport}
+        onRefreshLimits={manor.refreshProviderUsage}
+      />
+    </div>
   )
 }

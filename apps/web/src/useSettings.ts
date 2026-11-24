@@ -2,6 +2,10 @@ import { useCallback, useRef, useState } from 'react'
 import { SETTINGS_GROUPS, type SettingsLocation, type SettingsSection } from './components/settings/sections'
 
 const RELOAD_SETTINGS_KEY = 'manor:settings-location'
+const LAST_SECTION_KEY = 'manor:settings-last-section'
+
+const knownSection = (value: unknown): SettingsSection | undefined =>
+  SETTINGS_GROUPS.flatMap((group) => group.sections).find((entry) => entry.id === value)?.id
 
 /** The page this tab had open, so a reload lands on it again; null when Settings was closed. */
 function readSettingsLocation(): SettingsLocation | null {
@@ -9,7 +13,7 @@ function readSettingsLocation(): SettingsLocation | null {
     const raw = window.sessionStorage.getItem(RELOAD_SETTINGS_KEY)
     const stored: unknown = raw === null ? null : JSON.parse(raw)
     if (typeof stored !== 'object' || stored === null || !('section' in stored)) return null
-    const section = SETTINGS_GROUPS.flatMap((group) => group.sections).find((entry) => entry.id === stored.section)?.id
+    const section = knownSection(stored.section)
     if (section === undefined) return null
     return 'agentId' in stored && typeof stored.agentId === 'string' && stored.agentId !== '' ? { section, agentId: stored.agentId } : { section }
   } catch {
@@ -17,10 +21,22 @@ function readSettingsLocation(): SettingsLocation | null {
   }
 }
 
+/** The page Settings showed last, kept across restarts, so opening it without a page lands there. */
+function readLastSection(): SettingsSection {
+  try {
+    return knownSection(window.localStorage.getItem(LAST_SECTION_KEY)) ?? 'general'
+  } catch {
+    return 'general'
+  }
+}
+
 function writeSettingsLocation(location: SettingsLocation | null): void {
   try {
     if (location === null) window.sessionStorage.removeItem(RELOAD_SETTINGS_KEY)
-    else window.sessionStorage.setItem(RELOAD_SETTINGS_KEY, JSON.stringify(location))
+    else {
+      window.sessionStorage.setItem(RELOAD_SETTINGS_KEY, JSON.stringify(location))
+      window.localStorage.setItem(LAST_SECTION_KEY, location.section)
+    }
   } catch {
     // Storage can be disabled; Settings still opens and closes in this tab.
   }
@@ -28,9 +44,10 @@ function writeSettingsLocation(location: SettingsLocation | null): void {
 
 /**
  * Where Settings is, and the one guard every way out of an unsaved edit passes:
- * Back to app, Escape, another page, another agent, a rail door. Settings sits over
+ * close, Escape, a press outside, another page, another agent. Settings sits over
  * the workspace rather than replacing it, so closing it is all "back" needs to mean.
- * The open page survives a reload of this tab, like the workspace location under it.
+ * The open page survives a reload of this tab, like the workspace location under it,
+ * and opening without a page lands on the one shown last, also after a restart.
  */
 export function useSettings(live: boolean) {
   const [location, setStoredLocation] = useState(readSettingsLocation)
@@ -54,9 +71,13 @@ export function useSettings(live: boolean) {
     setPendingLeave(() => then)
   }, [])
 
+  /** Opens `section`, or the page shown last when none is named. */
   const open = useCallback(
-    (section: SettingsSection, agentId?: string) => {
-      guard(() => setLocation(agentId === undefined ? { section } : { section, agentId }))
+    (section?: SettingsSection, agentId?: string) => {
+      guard(() => {
+        const page = section ?? readLastSection()
+        setLocation(agentId === undefined ? { section: page } : { section: page, agentId })
+      })
     },
     [guard, setLocation],
   )

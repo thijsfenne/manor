@@ -105,7 +105,6 @@ export function WorkspaceNavRail({
       onSelect={railSelect}
       onOpenUsage={railOpenUsage}
       onOpenSettings={doors.openSettings}
-      onOpenUsageSettings={doors.openUsageSettings}
       onOpenPin={railOpenPin}
     />
   )

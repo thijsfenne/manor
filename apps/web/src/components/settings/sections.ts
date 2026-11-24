@@ -4,7 +4,6 @@ import {
   BookOpen01Icon,
   ConnectIcon,
   CpuIcon,
-  DashboardSpeed02Icon,
   FileEditIcon,
   HardDriveIcon,
   HierarchySquare02Icon,
@@ -30,7 +29,6 @@ export type SettingsSection =
   | 'appearance'
   | 'keybindings'
   | 'voice'
-  | 'usage'
   | 'agents'
   | 'context'
   | 'auto'
@@ -68,7 +66,6 @@ export const SETTINGS_GROUPS: readonly { label: string; sections: readonly Secti
       { id: 'appearance', label: 'Appearance', icon: PaintBoardIcon, keywords: ['theme', 'dark', 'light', 'system', 'font', 'code font', 'typeface'] },
       { id: 'keybindings', label: 'Keybindings', icon: KeyboardIcon, keywords: ['shortcuts', 'keys', 'workspace'] },
       { id: 'voice', label: 'Voice', icon: Mic01Icon, keywords: ['dictation', 'microphone', 'speech', 'transcribe', 'whisper', 'parakeet', 'language'] },
-      { id: 'usage', label: 'Usage & limits', icon: DashboardSpeed02Icon, keywords: ['tokens', 'cost', 'api-rate equivalent', 'limits', 'period', 'breakdown', 'cost quality'] },
     ],
   },
   {

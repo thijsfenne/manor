@@ -81,7 +81,6 @@ const renderRail = (extra: Partial<ComponentProps<typeof NavRail>> = {}) =>
       onSelect={() => {}}
       onOpenUsage={() => {}}
       onOpenSettings={() => {}}
-      onOpenUsageSettings={() => {}}
       onOpenPin={() => {}}
       {...extra}
     />,
@@ -256,7 +255,6 @@ function renderRailNode() {
       onSelect={() => {}}
       onOpenUsage={() => {}}
       onOpenSettings={() => {}}
-      onOpenUsageSettings={() => {}}
       onOpenPin={() => {}}
     />
   )
