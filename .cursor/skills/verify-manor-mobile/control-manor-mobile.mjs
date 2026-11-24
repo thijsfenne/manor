@@ -38,8 +38,8 @@ const FIXTURE_ORIGIN = FIXTURE_WS.replace(/^ws/, 'http').replace(/\/ws$/, '')
 /** The one link the fixture pairs with; `fixture-server.mjs` holds the same code. */
 const FIXTURE_PAIRING_LINK = `${FIXTURE_ORIGIN}/pair#code=${'F'.repeat(43)}`
 const METRO_PORT = 8088
-// Optional. Unset, or a name this Mac does not have, picks an available iPhone instead.
-const SIMULATOR_NAME = process.env.MANOR_MOBILE_VERIFY_SIMULATOR
+// The run's own device, created when missing. A device the user booted is never adopted.
+const SIMULATOR_NAME = process.env.MANOR_MOBILE_VERIFY_SIMULATOR || 'Manor Verify'
 const SIMULATOR_DEVICES = join(homedir(), 'Library/Developer/CoreSimulator/Devices')
 // A cold Metro cache bundles in about 35s on this Mac; the budget leaves room for a slow disk.
 const BUNDLE_TIMEOUT_MS = Number(process.env.MANOR_MOBILE_VERIFY_BUNDLE_TIMEOUT_MS ?? 240_000)
@@ -160,17 +160,15 @@ function simctl(...args) {
 }
 
 /**
- * The simulator the drive commands act on: the one this run saved when it is booted, never a
- * different device. Without a saved one, `launch` may adopt any booted simulator (`adopt`).
+ * The simulator the drive commands act on: the one `launch` saved, when it is booted and still
+ * carries this run's device name. Empty otherwise, so a udid an older version saved for another
+ * device is never driven or shut down.
  */
-function bootedUdid({ adopt = false, only } = {}) {
+function bootedUdid({ only = loadState().simulatorUdid } = {}) {
+  if (!only) return ''
   try {
     const devices = JSON.parse(simctl('list', 'devices', 'booted', '-j')).devices
-    const booted = Object.values(devices).flat().filter((device) => device.state === 'Booted')
-    if (only) return booted.find((device) => device.udid === only)?.udid ?? ''
-    const saved = loadState().simulatorUdid
-    if (saved && !adopt) return booted.find((device) => device.udid === saved)?.udid ?? ''
-    return booted[0]?.udid ?? ''
+    return Object.values(devices).flat().some((device) => device.udid === only && device.name === SIMULATOR_NAME && device.state === 'Booted') ? only : ''
   } catch {
     return ''
   }
@@ -658,62 +656,53 @@ function safeReaddir(dir) {
   }
 }
 
-function availableIphones() {
-  const raw = JSON.parse(simctl('list', 'devices', 'available', '-j')).devices
-  return Object.entries(raw).flatMap(([runtime, devices]) =>
-    devices
-      .filter((device) => device.isAvailable !== false && /^iPhone/.test(device.name))
-      .map((device) => ({ ...device, runtime })),
-  )
-}
-
 /**
- * The configured name when this Mac has it, otherwise the best available iPhone. A device
- * that already carries the dev client wins, then the plain "Pro" size, so the common case
- * needs no install.
+ * This run's own device, `Manor Verify` unless `MANOR_MOBILE_VERIFY_SIMULATOR` names another.
+ * Created on the newest iOS runtime as its newest iPhone Pro when this Mac does not have it yet.
  */
-function pickSimulator() {
-  const iphones = availableIphones()
-  if (iphones.length === 0) {
-    fail('No iPhone simulator is available. Install an iOS Simulator runtime in Xcode > Settings > Components.')
-  }
-  const withApp = new Set(installedDevClients().map((client) => client.udid))
-  if (SIMULATOR_NAME) {
-    const named = iphones.filter((device) => device.name === SIMULATOR_NAME)
-    if (named.length > 0) return named.find((device) => withApp.has(device.udid)) ?? named[0]
-    console.error(`Simulator "${SIMULATOR_NAME}" does not exist on this Mac; picking an available iPhone instead.`)
-  }
-  const score = (device) => (withApp.has(device.udid) ? 100 : 0) + (/ Pro$/.test(device.name) ? 10 : 0)
-  const pick = [...iphones].sort((a, b) => score(b) - score(a) || b.runtime.localeCompare(a.runtime))[0]
-  console.error(`Using simulator ${pick.name} (${pick.udid}).`)
-  return pick
+function dedicatedSimulator() {
+  const raw = JSON.parse(simctl('list', 'devices', 'available', '-j')).devices
+  const named = Object.entries(raw).flatMap(([runtime, devices]) =>
+    devices.filter((device) => device.name === SIMULATOR_NAME && device.isAvailable !== false).map((device) => ({ ...device, runtime })),
+  )
+  const existing = named.find((device) => device.state === 'Booted') ?? named.sort((a, b) => b.runtime.localeCompare(a.runtime, undefined, { numeric: true }))[0]
+  if (existing) return existing.udid
+  const [choice] = JSON.parse(simctl('list', 'runtimes', 'available', '-j')).runtimes
+    .filter((runtime) => runtime.platform === 'iOS' && runtime.isAvailable !== false)
+    .flatMap((runtime) => (runtime.supportedDeviceTypes ?? []).map((type) => ({ runtime, type, generation: Number(/^iPhone (\d+) Pro$/.exec(type.name)?.[1]) })))
+    .filter(({ generation }) => generation)
+    .sort((a, b) => b.runtime.version.localeCompare(a.runtime.version, undefined, { numeric: true }) || b.generation - a.generation)
+  if (!choice) fail(`No installed iOS Simulator runtime offers an iPhone Pro to create "${SIMULATOR_NAME}" with. Add one in Xcode > Settings > Components.`)
+  const udid = simctl('create', SIMULATOR_NAME, choice.type.identifier, choice.runtime.identifier).trim()
+  console.error(`Created simulator ${SIMULATOR_NAME} (${choice.type.name}, iOS ${choice.runtime.version}, ${udid}).`)
+  return udid
 }
 
+/** Boots this run's own device beside whatever else is booted, which it leaves alone. */
 function bootSimulator() {
   const state = loadState()
-  const booted = bootedUdid({ adopt: true })
-  if (booted) {
+  const udid = dedicatedSimulator()
+  if (bootedUdid({ only: udid })) {
     // A second `launch` finds the simulator this run booted; it stays ours to shut down.
-    const ours = Boolean(state.claimedSimulator) && state.simulatorUdid === booted
-    saveState({ ...state, simulatorUdid: booted, claimedSimulator: ours })
-    return booted
+    const ours = Boolean(state.claimedSimulator) && state.simulatorUdid === udid
+    saveState({ ...state, simulatorUdid: udid, claimedSimulator: ours })
+    return udid
   }
-  const device = pickSimulator()
   try {
-    simctl('boot', device.udid)
+    simctl('boot', udid)
   } catch {
     // already booting; bootstatus below waits either way
   }
   try {
-    execFileSync('xcrun', ['simctl', 'bootstatus', device.udid], { stdio: 'ignore', timeout: 180_000 })
+    execFileSync('xcrun', ['simctl', 'bootstatus', udid], { stdio: 'ignore', timeout: 180_000 })
   } catch {
     // fall through to the state poll, which names the failure
   }
-  if (bootedUdid({ only: device.udid })) {
-    saveState({ ...loadState(), simulatorUdid: device.udid, claimedSimulator: true })
-    return device.udid
+  if (bootedUdid({ only: udid })) {
+    saveState({ ...loadState(), simulatorUdid: udid, claimedSimulator: true })
+    return udid
   }
-  fail(`Simulator ${device.name} (${device.udid}) did not boot.`)
+  fail(`Simulator ${SIMULATOR_NAME} (${udid}) did not boot.`)
 }
 
 // ---------------------------------------------------------------------------
@@ -945,7 +934,7 @@ async function cmdLaunch() {
       if (!pidAlive(state.fixturePid) && !pidAlive(state.metroPid)) {
         // Nothing of this run is left to need a device it booted, and the idle watch has no lease to go on: shut it down before others may adopt it.
         if (state.claimedSimulator && state.simulatorUdid) {
-          try { simctl('shutdown', state.simulatorUdid) } catch { /* not booted any more */ }
+          if (bootedUdid({ only: state.simulatorUdid })) try { simctl('shutdown', state.simulatorUdid) } catch { /* not booted any more */ }
           // The claim ends with the boot: a later retry must not shut down a device somebody else booted.
           const { claimedSimulator, simulatorUdid, ...rest } = loadState()
           saveState(rest)
@@ -1314,7 +1303,7 @@ function cmdCleanup() {
   if (!due()) return halted()
   killClaimed(state.fixturePid, state.claimedFixture, state.runId)
   if (!due()) return halted()
-  if (simulatorOurs && state.claimedSimulator && state.simulatorUdid && isDarwin() && hasXcode()) {
+  if (simulatorOurs && state.claimedSimulator && isDarwin() && hasXcode() && bootedUdid({ only: state.simulatorUdid })) {
     try {
       simctl('shutdown', state.simulatorUdid)
     } catch {

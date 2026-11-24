@@ -43,8 +43,8 @@ node .cursor/skills/verify-manor-mobile/control-manor-mobile.mjs launch
 1. Takes the phone verify lease (below), waiting in line when another run holds it.
 2. Installs missing dependencies from the lockfile, never changing it: the mobile app and its workspace packages (`pnpm install --frozen-lockfile --filter @manor/mobile...`, which also gives the fixture its `tsx`) and the skill-local `ws` (`npm ci`). Idle worktrees have every `node_modules` stripped, so this runs on the first launch there. A checkout that has them skips it.
 3. Starts the skill-local fixture on **43182**.
-4. Boots an iOS Simulator, or reuses one that is already booted. It uses `MANOR_MOBILE_VERIFY_SIMULATOR` when this Mac has a device of that name; otherwise it picks an available iPhone, preferring one that already carries the dev client, then a "Pro".
-5. Makes sure the dev client is on that simulator (see below).
+4. Boots its own simulator, `Manor Verify` (or the name in `MANOR_MOBILE_VERIFY_SIMULATOR`), by udid. When this Mac has no device of that name it creates one with `xcrun simctl create`, on the newest iOS runtime as its newest iPhone Pro. Any other booted simulator (the desktop Simulator panel, another project, one booted by hand) is never adopted, driven or shut down; `Manor Verify` boots beside it.
+5. Makes sure the dev client is on `Manor Verify` (see below); a newly created device gets it like any fresh one.
 6. Starts Metro on **8088** with fixture env (`--host lan` so the Simulator can reach `127.0.0.1`; Expo `--localhost` binds IPv6 only on this Mac) and waits until it answers.
 7. Launches `com.thijsfenne.manor`, restarting a running app (it would otherwise keep the JavaScript it loaded before and show stale client code), and **waits until the app has rendered**: Metro reports `iOS Bundled`, then Maestro sees the `Open menu` label (`Connect to your Mac` in pair mode) twice in one Maestro flow. On a fresh simulator each pass first dismisses the notification permission alert (`Allow`) and the dev client's onboarding sheet and dev menu (`Continue`, `Close`), so evidence screenshots show the Agents list. A cold bundle takes about 35s. On a timeout it exits non-zero and names the Metro log; budgets are `MANOR_MOBILE_VERIFY_BUNDLE_TIMEOUT_MS` (240000) and `MANOR_MOBILE_VERIFY_RENDER_TIMEOUT_MS` (180000).
 
@@ -84,7 +84,7 @@ The native binary is installed once per simulator, not per checkout; Metro suppl
 
 The patch is `xcrun vtool -set-build-version iossim 16.4 26.4 -replace -output …` on `Manor` and `Manor.debug.dylib`, then `codesign --force --sign -` on the dylib and the app. The copy lives in `.run/devclient` and `cleanup` removes it.
 
-Teardown is `cleanup` below. If a Simulator was already booted, launch will not claim it and cleanup will not shut it down.
+Teardown is `cleanup` below. It shuts down `Manor Verify` only when this run booted it, also after a relaunch of the same run; a `Manor Verify` that was already booted is used without being claimed.
 
 ## Doctor
 
@@ -92,7 +92,7 @@ Teardown is `cleanup` below. If a Simulator was already booted, launch will not 
 node .cursor/skills/verify-manor-mobile/control-manor-mobile.mjs doctor
 ```
 
-Must report `fixtureOpen: true` on `ws://127.0.0.1:43182/ws`, a booted Simulator UDID, and `appInstalled: true`. It also reports the dependency state, the Maestro path, the JDK it will use and `lease` (`holder`, `ours`: whether this checkout's run holds it, `waiting`: how many launches queue, `idleMinutes`: how long the holder has not been driven). Refuses 43179 and Tailscale WSS. `live43179Http: 200` is normal and is not a reason to drive that port.
+Must report `fixtureOpen: true` on `ws://127.0.0.1:43182/ws`, the booted `Manor Verify` UDID (empty before `launch`), and `appInstalled: true`. It also reports the dependency state, the Maestro path, the JDK it will use and `lease` (`holder`, `ours`: whether this checkout's run holds it, `waiting`: how many launches queue, `idleMinutes`: how long the holder has not been driven). Refuses 43179 and Tailscale WSS. `live43179Http: 200` is normal and is not a reason to drive that port.
 
 On Linux or a Mac without Xcode, doctor exits **2** and prints `blocker` with the Mac-worker reason. That is the honest proof outcome here, not a green fake.
 
@@ -128,7 +128,7 @@ Stable handles from this repo:
 | `Stuur bericht` / `Stop antwoord` | Composer |
 | `Connect to your Mac` / `Scan QR` / `Paste link` / `Paste the pairing link` / `Connect` | Connect screen (`ConnectGate.tsx`). **Must not appear** on an ordinary fixture run. To prove pairing, `cleanup` and launch with `MANOR_MOBILE_VERIFY_PAIR=on`: `launch` prints `pairingLink`; tap `Paste link`, `fill --name "Paste the pairing link" --value <link>`, tap `Connect`, and the house opens. End with `Forget this Mac` in the house menu, because the simulator's Keychain keeps the pairing for the next pair-mode run, then `cleanup` and launch again without the variable. |
 
-`tap` / `fill` / `snapshot` need **Maestro** and a JDK. The CLI finds Maestro itself (`PATH`, then `~/.maestro/bin`) and the keg-only JDK (`JAVA_HOME`, then `/opt/homebrew/opt/openjdk@21`), so nothing needs exporting in a Session shell. It pins Maestro to the booted simulator, because it refuses to guess while a phone is also connected. Screenshots use `xcrun simctl io booted screenshot` and do not go through a browser.
+`tap` / `fill` / `snapshot` need **Maestro** and a JDK. The CLI finds Maestro itself (`PATH`, then `~/.maestro/bin`) and the keg-only JDK (`JAVA_HOME`, then `/opt/homebrew/opt/openjdk@21`), so nothing needs exporting in a Session shell. It pins Maestro to the run's `Manor Verify` udid, because Maestro refuses to guess while a phone or a second simulator is also connected. Screenshots use `xcrun simctl io <udid> screenshot` and do not go through a browser.
 
 `tap`, `long-press` and `fill` hand `--name` to Maestro, which matches the accessibility label **or** the visible text as a whole-string regular expression: `--name "Smith.*"` matches `Smith, Reviewer`, and a literal `.`, `(`, `?` or `+` in a label must be escaped or wildcarded (`--name "Usage.*"`).
 
@@ -179,7 +179,7 @@ If doctor exits 2, write `evidence/<feature>/PROOF-BLOCKED.md` with the doctor J
 node .cursor/skills/verify-manor-mobile/control-manor-mobile.mjs cleanup
 ```
 
-Kills only the fixture and Metro **this run started**. Shuts down a Simulator only if this run booted it, and releases the phone verify lease. Never kill by process name. Never touch 43179. Evidence is not deleted. Always run it when the verification round is done: it frees the simulator for waiting runs at once instead of after 5 idle minutes, and the RAM instead of after 10.
+Kills only the fixture and Metro **this run started**. Shuts down `Manor Verify` only if this run booted it, never any other simulator, and releases the phone verify lease. Never kill by process name. Never touch 43179. Evidence is not deleted. Always run it when the verification round is done: it frees the simulator for waiting runs at once instead of after 5 idle minutes, and the RAM instead of after 10.
 
 After a failed iteration, run cleanup before the next launch so 43182 and Metro 8088 are not stranded. Then confirm the evidence files still exist.
 
@@ -211,7 +211,7 @@ brew install openjdk@21
 | `launch` | Wait for the phone verify lease as long as the queue moves or the run in front is used (exit 3 after 40 minutes with neither), then deps, fixture 43182, Simulator, dev client, Metro 8088, launch app and wait for first render |
 | `deps` | Install missing mobile and skill dependencies from the lockfile, nothing else |
 | `doctor` | Read-only health as JSON; exit 2 on non-Mac |
-| `home` | Relaunch the Manor bundle on the booted sim and wait for first render (same JavaScript; it does not pick up edits Fast Refresh missed) |
+| `home` | Relaunch the Manor bundle on `Manor Verify` and wait for first render (same JavaScript; it does not pick up edits Fast Refresh missed) |
 | `tap --name <label regex>` | Maestro tap by accessibility label or visible text |
 | `long-press --name <label regex>` | Maestro long-press, e.g. a bubble's action sheet |
 | `fill --name <label regex> --value <text>` | Tap the field, erase it, type the value |
@@ -229,7 +229,7 @@ Environment: set the same variables on `launch` and on every later command of th
 | Variable | Effect |
 |---|---|
 | `MANOR_MOBILE_VERIFY_PORT=43183` | A second isolated fixture socket, never 43179 (Metro stays on 8088) |
-| `MANOR_MOBILE_VERIFY_SIMULATOR=<device name>` | Simulator to prefer |
+| `MANOR_MOBILE_VERIFY_SIMULATOR=<device name>` | The run's own simulator instead of `Manor Verify`; created on the newest iOS runtime as an iPhone Pro when missing. Never the name of a device you use yourself |
 | `MANOR_MOBILE_VERIFY_PAIR=on` | No development override: the app opens on `Connect to your Mac` and pairs with the fixture's one link (printed by `launch` as `pairingLink`) |
 | `MANOR_MOBILE_VERIFY_EVIDENCE=1..5` | Screenshots on the Ready `Export a chat as Markdown` result (default 3), for the thumbnail row. The fixture reads it at start, so `cleanup` and `launch` to change it |
 | `MANOR_MOBILE_VERIFY_DATA=worst` | Same house with worst-case strings for UI stress (long, one-character, CJK, emoji, unbreakable-compound and empty names, titles, previews, paths, mail and file names) and extra rows: 30 more Manor Sessions, more changed files, a long MCP server and skill. Set on `launch`; the fixture reads it at start, so `cleanup` and `launch` to change it |
