@@ -10,7 +10,7 @@ import { buildSwitcherItems } from './useChatSwitcher'
  * delta; only `threads` changes, and no list reads it. Rebuilding them meant ~30 sidebar
  * rows and ~120 icons re-rendering forty times a second for a list that had not moved.
  */
-export function useWorkspaceLists(workspace: WorkspaceShape, phone: boolean) {
+export function useWorkspaceLists(workspace: WorkspaceShape, phone: boolean, searchOpen: boolean) {
   const chatRows = useMemo(
     () => chatList(workspace),
     [workspace.chats, workspace.agents, workspace.activity, workspace.subagents, workspace.openChatId, workspace.pendingChatId],
@@ -22,6 +22,13 @@ export function useWorkspaceLists(workspace: WorkspaceShape, phone: boolean) {
   const chatInbox = useMemo(
     () => inbox(workspace, { hideThreadSessions: !phone }),
     [workspace.chats, workspace.projects, workspace.workHandoffs, workspace.activity, workspace.subagents, workspace.backgroundWork, workspace.houseSettings, workspace.openChatId, workspace.pendingChatId, phone],
+  )
+  // The palette's query also finds the Sessions a project thread started, so it reads the
+  // list with every session in it. The phone's list already is that one, and a closed
+  // palette reads none, so the second list is only built while Search is open.
+  const searchInbox = useMemo(
+    () => (phone || !searchOpen ? chatInbox : inbox(workspace)),
+    [chatInbox, phone, searchOpen, workspace.chats, workspace.projects, workspace.workHandoffs, workspace.activity, workspace.subagents, workspace.backgroundWork, workspace.houseSettings, workspace.openChatId, workspace.pendingChatId],
   )
   const threadRows = useMemo(
     () => projectThreads(workspace),
@@ -46,5 +53,5 @@ export function useWorkspaceLists(workspace: WorkspaceShape, phone: boolean) {
   const runsByRoutine = useMemo(() => {
     return groupRunsByRoutine(workspace.chats, workspace.routines)
   }, [workspace.chats, workspace.routines])
-  return { chatRows, chatInbox, threadRows, threadlessProjects, switcherItems, runsByRoutine }
+  return { chatRows, chatInbox, searchInbox, threadRows, threadlessProjects, switcherItems, runsByRoutine }
 }

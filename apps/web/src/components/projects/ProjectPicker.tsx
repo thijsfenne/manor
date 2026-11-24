@@ -160,6 +160,11 @@ export function ProjectPicker({
     return () => window.removeEventListener('keydown', onKey)
   }, [variant])
 
+  // After the projects come the footer's rows, so the arrow keys reach every row in
+  // the popover: Add folder, then Don't work in a project when there is one to leave.
+  const canClear = current !== undefined && general !== undefined
+  const rowCount = matches.length + (canClear ? 2 : 1)
+
   const choose = (index: number) => {
     const project = matches[index]
     if (project !== undefined) onChange(project.id)
@@ -177,7 +182,7 @@ export function ProjectPicker({
   }, [open, active])
 
   const step = (delta: number) => {
-    setActive((current) => Math.max(0, Math.min(matches.length - 1, current + delta)))
+    setActive((current) => Math.max(0, Math.min(rowCount - 1, current + delta)))
   }
 
   const addFolder = () => {
@@ -190,6 +195,14 @@ export function ProjectPicker({
     // The row the keys point at stays on the list that is left.
     setActive((current) => Math.max(0, Math.min(current, matches.length - 2)))
     searchRef.current?.focus()
+  }
+
+  // Enter on the row the keys point at: a project, then Add folder, then clear.
+  const activate = () => {
+    if (active < 0) return
+    if (active < matches.length) choose(active)
+    else if (active === matches.length) addFolder()
+    else clear()
   }
 
   const onSearchKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
@@ -213,7 +226,7 @@ export function ProjectPicker({
         return
       case 'Enter':
         event.preventDefault()
-        choose(active)
+        activate()
         return
       // The keyboard's way to the remove control a folder row shows on hover.
       case 'Backspace': {
@@ -363,18 +376,19 @@ export function ProjectPicker({
                 role="combobox"
                 aria-expanded
                 aria-controls={listId}
-                aria-activedescendant={`${listId}-${active}`}
+                aria-activedescendant={active < 0 ? undefined : `${listId}-${active}`}
                 aria-label="Search projects and folders"
                 onChange={(event) => {
                   setQuery(event.target.value)
-                  // The row the keys point at belongs to the list as it now reads.
-                  setActive(0)
+                  // The row the keys point at belongs to the list as it now reads. A search
+                  // that matches nothing points at no row, so Enter cannot open Finder by accident.
+                  setActive(pickerRows(projects, general, event.target.value.trim().toLowerCase()).length === 0 ? -1 : 0)
                 }}
                 onKeyDown={onSearchKeyDown}
               />
             </div>
 
-            <div id={listId} role="listbox" aria-label="Projects" className="min-h-0 flex-1 overflow-y-auto p-1">
+            <div id={listId} role="listbox" aria-label="Projects" aria-owns={`${listId}-${matches.length}${canClear ? ` ${listId}-${matches.length + 1}` : ''}`} className="min-h-0 flex-1 overflow-y-auto p-1">
               {matches.length === 0 ? (
                 <p className="m-0 px-2 py-2 text-[12px] text-dim">{query.trim() === '' ? 'No folders yet' : 'Nothing by that name'}</p>
               ) : (
@@ -435,18 +449,30 @@ export function ProjectPicker({
 
             <div className="flex-none border-t border-line p-1">
               <button
+                id={`${listId}-${matches.length}`}
                 type="button"
-                className="flex w-full cursor-pointer items-center gap-2 rounded-md border-0 bg-transparent px-2 py-1.5 text-left text-label text-muted hover:bg-user-bg hover:text-text"
+                role="option"
+                aria-selected={false}
+                data-index={matches.length}
+                tabIndex={-1}
+                className={`flex w-full cursor-pointer items-center gap-2 rounded-md border-0 px-2 py-1.5 text-left text-label text-muted hover:text-text ${active === matches.length ? 'bg-user-bg' : 'bg-transparent'}`}
+                onMouseEnter={() => setActive(matches.length)}
                 onMouseDown={(event) => event.preventDefault()}
                 onClick={addFolder}
               >
                 <Icon className="flex-none" icon={FolderAddIcon} size={14} />
                 <span>{ADD_FOLDER}</span>
               </button>
-              {current === undefined || general === undefined ? null : (
+              {!canClear ? null : (
                 <button
+                  id={`${listId}-${matches.length + 1}`}
                   type="button"
-                  className="flex w-full cursor-pointer items-center gap-2 rounded-md border-0 bg-transparent px-2 py-1.5 text-left text-label text-muted hover:bg-user-bg hover:text-text"
+                  role="option"
+                  aria-selected={false}
+                  data-index={matches.length + 1}
+                  tabIndex={-1}
+                  className={`flex w-full cursor-pointer items-center gap-2 rounded-md border-0 px-2 py-1.5 text-left text-label text-muted hover:text-text ${active === matches.length + 1 ? 'bg-user-bg' : 'bg-transparent'}`}
+                  onMouseEnter={() => setActive(matches.length + 1)}
                   onMouseDown={(event) => event.preventDefault()}
                   onClick={clear}
                 >

@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react'
 import { motion, useReducedMotion } from 'motion/react'
 import {
   Cancel01Icon,
@@ -160,6 +160,59 @@ function readPageSize(data: unknown): PageSize | undefined {
 }
 
 /**
+ * How far a page wider than the column shrinks to fit it. Past this its text stops being
+ * readable, so the page keeps this scale and the preview scrolls sideways instead.
+ */
+const MIN_PAGE_SCALE = 0.6
+
+/** The scale a page laid out `layoutWidth` wide is drawn at in `available` pixels of column. */
+export function fitScale(available: number, layoutWidth: number): number {
+  if (available === 0 || layoutWidth === 0) return 1
+  return Math.max(MIN_PAGE_SCALE, Math.min(1, available / layoutWidth))
+}
+
+/** The least time between two links one page opens. */
+const LINK_GAP_MS = 1000
+
+/**
+ * Opens a link clicked in the page inside `frame()`, which the server's link script posts
+ * as `manor:open` instead of navigating the frame. The page is untrusted and runs
+ * scripts, so the address must be http, https or mailto, come from that frame's own
+ * page while the frame has focus and this window holds a fresh user activation (a click
+ * or key press inside the frame lends it one; browsers without the API skip that check),
+ * and at most one opens per `LINK_GAP_MS`. A page alone cannot open anything, nor
+ * open a run of links off one click. `last` is the time of the latest open.
+ */
+export function pageLinkOpener(frame: () => HTMLIFrameElement | null, last: { current: number }, open: (url: string) => void) {
+  return (event: MessageEvent) => {
+    const current = frame()
+    if (current === null || event.source === null || event.source !== wrappedPage(current)) return
+    const data: unknown = event.data
+    if (typeof data !== 'object' || data === null || !('type' in data) || data.type !== 'manor:open' || !('url' in data) || typeof data.url !== 'string') return
+    let url: URL
+    try { url = new URL(data.url) } catch { return }
+    if (url.protocol !== 'http:' && url.protocol !== 'https:' && url.protocol !== 'mailto:') return
+    if (document.activeElement !== current || navigator.userActivation?.isActive === false) return
+    if (event.timeStamp - last.current < LINK_GAP_MS) return
+    last.current = event.timeStamp
+    open(url.href)
+  }
+}
+
+/** Opens what `pageLinkOpener` lets through the way a chat link opens: Browser on the Mac, a new tab elsewhere. */
+function usePageLinks(frameRef: RefObject<HTMLIFrameElement | null>) {
+  const openWebsite = useOpenWebsite()
+  const lastOpen = useRef(-Infinity)
+  useEffect(() => {
+    const receive = pageLinkOpener(() => frameRef.current, lastOpen, (url) => {
+      if (openWebsite?.(url) !== true) window.open(url, '_blank', 'noopener,noreferrer')
+    })
+    window.addEventListener('message', receive)
+    return () => window.removeEventListener('message', receive)
+  }, [frameRef, openWebsite])
+}
+
+/**
  * A delivered HTML page drawn into the thread. A visual answer lays out at the column's
  * own width on the chat background and is as tall as its content; a mockup (`viewport`
  * desktop or phone) lays out at that screen width, scaled to fit, as a framed screen.
@@ -228,7 +281,9 @@ function DeliveredPage({ file }: { file: DeliveredFile }) {
  * The live frame, sized from what the page reports through the server's injected size
  * script (`postMessage` to this window; the sandbox and CSP stay closed). Only messages
  * from this frame's own page count, and every number is clamped, because the page is
- * untrusted. Far off screen the frame unmounts and keeps its last size.
+ * untrusted. Far off screen the frame unmounts and keeps its last size. A page that would
+ * shrink below `MIN_PAGE_SCALE` keeps that scale and scrolls sideways in its box, which
+ * then grows by the height of a classic scrollbar so the page's bottom stays in view.
  */
 function FittedFrame({ url, title, theme, pageWidth, framed }: {
   url: string
@@ -240,7 +295,9 @@ function FittedFrame({ url, title, theme, pageWidth, framed }: {
   const reduceMotion = useReducedMotion()
   const boxRef = useRef<HTMLDivElement>(null)
   const frameRef = useRef<HTMLIFrameElement>(null)
+  usePageLinks(frameRef)
   const [available, setAvailable] = useState(0)
+  const [scrollbar, setScrollbar] = useState(0)
   const [near, setNear] = useState(false)
   const [loaded, setLoaded] = useState(false)
   const [size, setSize] = useState<PageSize>()
@@ -255,7 +312,10 @@ function FittedFrame({ url, title, theme, pageWidth, framed }: {
   useLayoutEffect(() => {
     const box = boxRef.current
     if (box === null) return
-    const measure = () => setAvailable(box.clientWidth)
+    const measure = () => {
+      setAvailable(box.clientWidth)
+      setScrollbar(box.offsetHeight - box.clientHeight)
+    }
     measure()
     const resize = new ResizeObserver(measure)
     resize.observe(box)
@@ -323,18 +383,19 @@ function FittedFrame({ url, title, theme, pageWidth, framed }: {
   }, [url])
 
   const layoutWidth = pageWidth ?? fixedWidth ?? available
-  const scale = available === 0 || layoutWidth === 0 ? 1 : Math.min(1, available / layoutWidth)
+  const scale = fitScale(available, layoutWidth)
   const drawn = size === undefined ? PLACEHOLDER_HEIGHT : Math.min(MAX_DRAWN_HEIGHT, Math.max(1, size.height * scale))
   const frameHeight = drawn / scale
   const shownWidth = layoutWidth * scale
+  const scrolls = shownWidth > available + 0.5
   useEffect(() => { layoutHeight.current = frameHeight }, [frameHeight])
 
   return (
     <motion.div
       ref={boxRef}
-      className="relative min-w-0 overflow-hidden"
+      className={`relative min-w-0 ${scrolls ? 'overflow-x-auto overflow-y-hidden' : 'overflow-hidden'}`}
       initial={false}
-      animate={{ height: drawn }}
+      animate={{ height: drawn + (scrolls ? scrollbar : 0) }}
       transition={reduceMotion ? { duration: 0 } : DISCLOSURE}
     >
       {available === 0 ? null : (
@@ -378,6 +439,8 @@ function ZoomedPage({ name, url, pageWidth, theme, canSelect, onSelect, onOpen, 
 }) {
   const [step, setStep] = useState(ZOOM_STEPS.indexOf(1))
   const [loaded, setLoaded] = useState(false)
+  const frameRef = useRef<HTMLIFrameElement>(null)
+  usePageLinks(frameRef)
   const zoom = ZOOM_STEPS[step]!
   return (
     <Dialog label={`${name}, zoomed`} trapFocus onClose={onClose} inset="wide" scrimClassName="grid place-items-center" className="flex h-full max-h-[calc(100dvh-8rem)] max-w-[1400px] flex-col overflow-hidden shadow-popover">
@@ -401,6 +464,7 @@ function ZoomedPage({ name, url, pageWidth, theme, canSelect, onSelect, onOpen, 
       <div className="min-h-0 flex-1 overflow-auto overscroll-contain p-6 [container-type:size]">
         <div className="h-[100cqh] w-[100cqw]" style={{ zoom }}>
           <iframe
+            ref={frameRef}
             src={url}
             title={`Zoomed preview of ${name}`}
             sandbox="allow-scripts"

@@ -3,7 +3,7 @@ import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, symlinkSyn
 import os from 'node:os'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { readContextFiles, saveContextFile } from '../src/contextFiles.js'
+import { createContextFile, readContextFiles, saveContextFile } from '../src/contextFiles.js'
 
 const sha256 = (text: string) => createHash('sha256').update(Buffer.from(text, 'utf8')).digest('hex')
 
@@ -74,5 +74,39 @@ describe('context files', () => {
 
     expect(await saveContextFile(root, 'thinking.md', 'new', sha256(''))).toEqual({ ok: false, reason: 'missing' })
     expect(existsSync(path.join(root, 'thinking.md'))).toBe(false)
+  })
+
+  it('creates an empty file once, then refuses to touch it again', async () => {
+    const root = checkout({})
+
+    expect(await createContextFile(root, 'thinking.md')).toMatchObject({
+      ok: true,
+      file: { name: 'thinking.md', content: '', hash: sha256('') },
+    })
+    expect(readFileSync(path.join(root, 'thinking.md'), 'utf8')).toBe('')
+    expect((await readContextFiles(root)).files.map((file) => file.name)).toEqual(['thinking.md'])
+
+    writeFileSync(path.join(root, 'thinking.md'), 'typed since', 'utf8')
+    expect(await createContextFile(root, 'thinking.md')).toEqual({ ok: false, reason: 'exists' })
+    expect(readFileSync(path.join(root, 'thinking.md'), 'utf8')).toBe('typed since')
+  })
+
+  it('leaves a link alone, also when its target is gone', async () => {
+    const root = checkout({})
+    symlinkSync(path.join(root, 'gone', 'soul.md'), path.join(root, 'soul.md'))
+
+    expect(await createContextFile(root, 'soul.md')).toEqual({ ok: false, reason: 'exists' })
+    expect(lstatSync(path.join(root, 'soul.md')).isSymbolicLink()).toBe(true)
+  })
+
+  it('creates nothing for a name outside the list or without a memory folder', async () => {
+    const root = checkout({})
+
+    expect(await createContextFile(root, '../escape.md')).toEqual({ ok: false, reason: 'unknown' })
+    expect(await createContextFile(root, 'notes.md')).toEqual({ ok: false, reason: 'unknown' })
+    expect(await createContextFile(null, 'soul.md')).toEqual({ ok: false, reason: 'unavailable' })
+    expect(await createContextFile(path.join(root, 'gone'), 'soul.md')).toEqual({ ok: false, reason: 'unavailable' })
+    expect(existsSync(path.join(root, '..', 'escape.md'))).toBe(false)
+    expect(existsSync(path.join(root, 'notes.md'))).toBe(false)
   })
 })

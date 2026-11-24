@@ -114,3 +114,48 @@ describe('linking a folder', () => {
     expect(button('Add this folder')).toBeDefined()
   })
 })
+
+describe('adding a typed folder path', () => {
+  const listing = { path: '/Users/sam/Notes', parent: '/Users/sam', entries: [] }
+  const nothing = { kind: 'error' as const, text: 'There is nothing at /Users/sam/Missing.' }
+  type Dirs = { listing: typeof listing | null; asking: boolean }
+
+  // The dialog is rerendered with the server's answers, as the workspace state would.
+  function typed(path: string) {
+    vi.stubGlobal('window', {})
+    const onDraft = vi.fn()
+    const onListDirs = vi.fn()
+    const view = (dirs: Dirs, notice: typeof nothing | null) => (
+      <ProjectDialog mode="create" draft={emptyDraft} onDraft={onDraft} dirs={dirs} notice={notice} busy={false}
+        onListDirs={onListDirs} onSubmit={() => {}} onCancel={() => {}} onClose={() => {}} />
+    )
+    act(() => { tree = create(view({ listing: null, asking: false }, null)) })
+    act(() => button('Add a folder…')!.props.onClick())
+    act(() => tree!.root.findByProps({ 'aria-label': 'Paste an absolute folder path' }).props.onChange({ target: { value: path } }))
+    act(() => button('Add')!.props.onClick())
+    const answer = (dirs: Dirs, notice: typeof nothing | null) => act(() => tree!.update(view(dirs, notice)))
+    return { onDraft, onListDirs, answer }
+  }
+  const added = (onDraft: ReturnType<typeof vi.fn>) => onDraft.mock.calls.some(([draft]) => (draft as ProjectDraft).repoPaths.length > 0)
+
+  it('refuses a folder that is not there, with the server\'s message by the field', () => {
+    const { onDraft, onListDirs, answer } = typed('/Users/sam/Missing')
+    expect(onListDirs).toHaveBeenLastCalledWith('/Users/sam/Missing')
+    answer({ listing: null, asking: true }, null)
+    expect(added(onDraft)).toBe(false)
+    answer({ listing: null, asking: false }, nothing)
+
+    expect(added(onDraft)).toBe(false)
+    expect(JSON.stringify(tree!.toJSON()).split(nothing.text)).toHaveLength(2)
+    expect(button('Add')).toBeDefined()
+  })
+
+  it('adds the folder under the path the server resolved once it is there', () => {
+    const { onDraft, answer } = typed('/Users/sam/Notes/')
+    expect(added(onDraft)).toBe(false)
+    answer({ listing: null, asking: true }, null)
+    answer({ listing, asking: false }, null)
+
+    expect(onDraft).toHaveBeenLastCalledWith({ ...emptyDraft, repoPaths: ['/Users/sam/Notes'] })
+  })
+})

@@ -139,13 +139,19 @@ export function peekAfterMove({
  * for one browser, so both live in localStorage and never reach the server.
  *
  * `shortcutsActive` is off while focus mode hides the sidebar, so ⌘S cannot change it unseen.
+ * `foldForPanel` is the open panel region saying it docks only with the sidebar folded:
+ * the pinned sidebar then renders folded without its stored choice changing, and comes
+ * back as left once the panel closes or the window grows.
  */
-export function useSidebar(phoneLanding = false, shortcutsActive = true) {
+export function useSidebar(phoneLanding = false, shortcutsActive = true, foldForPanel = false) {
   const [pinnedCollapsed, setPinnedCollapsed] = useState(readCollapsed)
   const [width, setWidth] = useState(readWidth)
   const [view, setView] = useState(readView)
   const [peeking, setPeeking] = useState(false)
   const [overlayOpen, setOverlayOpen] = useState(false)
+  /** Opened by hand over a fold for a panel; that panel floats instead. Lasts as long as the fold's reason. */
+  const [reopened, setReopened] = useState(false)
+  if (reopened && !foldForPanel) setReopened(false)
   /**
    * Whether the destination on stage brings a list at all. Where it does not, the
    * panel is away whatever was pinned, and the pin is kept for the next list.
@@ -191,7 +197,8 @@ export function useSidebar(phoneLanding = false, shortcutsActive = true) {
   const [motion, setMotion] = useState<SidebarMotion>('pin')
 
   const overlay = sidebarOverlays(viewportWidth, width)
-  const collapsed = !available || (overlay ? !overlayOpen : pinnedCollapsed)
+  const foldedForPanel = foldForPanel && !reopened && available && !overlay && !pinnedCollapsed
+  const collapsed = !available || (overlay ? !overlayOpen : pinnedCollapsed) || foldedForPanel
 
   // A phone opens for triage. The effect only runs when entering this width mode,
   // so opening a thread can close the list without it immediately reopening.
@@ -267,9 +274,13 @@ export function useSidebar(phoneLanding = false, shortcutsActive = true) {
     if (!available) return
     setMotion('pin')
     if (overlay) setOverlayOpen((current) => !current)
-    else setPinnedCollapsed((current) => !current)
+    else {
+      // Over a fold for a panel the sidebar opens as it was pinned, and the panel floats.
+      if (!foldedForPanel) setPinnedCollapsed((current) => !current)
+      setReopened(true)
+    }
     setPeeking(false)
-  }, [overlay, available])
+  }, [overlay, available, foldedForPanel])
 
   const closeOverlay = useCallback(() => {
     if (overlay) setOverlayOpen(false)
@@ -431,6 +442,7 @@ export function useSidebar(phoneLanding = false, shortcutsActive = true) {
 
   return {
     collapsed,
+    foldedForPanel,
     overlay,
     width,
     view,

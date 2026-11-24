@@ -148,6 +148,35 @@ describe('plugin registry layouts', () => {
     expect(html).not.toContain('Connect Stripe')
   })
 
+  it('counts under Connected only what is set up, and leaves a not configured mymind out', () => {
+    const view = (available: boolean) => renderToStaticMarkup(
+      <ConnectorsView
+        requestEvents={requestEvents}
+        agents={[]}
+        registry={[connector('Alpha')]}
+        hostStatuses={[]}
+        mymind={{ available, env: [], problem: null, check: null }}
+        notice={null}
+        onSave={() => true}
+        onVerify={() => true}
+        onVerifyMyMind={() => true}
+        onDelete={() => true}
+        onDismissNotice={() => undefined}
+        onDialogChange={() => undefined}
+        live={false}
+        composio={noComposio}
+      />,
+    )
+    const count = (html: string) => /Connected<span[^>]*>(\d+)<\/span>/.exec(html)?.[1]
+
+    const notSetUp = view(false)
+    expect(notSetUp).toContain('Not configured')
+    expect(count(notSetUp)).toBe('1')
+    const setUp = view(true)
+    expect(setUp).toContain('Configured')
+    expect(count(setUp)).toBe('2')
+  })
+
   it('keeps an unavailable connector visible with its reason', () => {
     const unavailable = { ...connector('Composio'), unavailable: 'Composio could not connect. Try reconnecting.' }
     const html = renderToStaticMarkup(

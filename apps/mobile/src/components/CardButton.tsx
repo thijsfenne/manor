@@ -39,7 +39,10 @@ export function CardButton({
 }) {
   const scheme = useScheme()
   const settled = useGlassSettle(variant !== 'quiet')
-  const face = <Text numberOfLines={1} style={[styles.label, LABELS[variant]]}>{label}</Text>
+  // A primary that cannot be pressed drops its dark or bright fill and reads as clear glass
+  // with muted text, so it never passes for the live decision in either mode.
+  const strong = variant === 'primary' && !disabled
+  const face = <Text numberOfLines={1} style={[styles.label, variant === 'primary' && disabled ? LABELS.quiet : LABELS[variant]]}>{label}</Text>
 
   if (variant === 'quiet') {
     return (
@@ -57,7 +60,6 @@ export function CardButton({
     )
   }
 
-  const primary = variant === 'primary'
   return (
     <GlassPressable
       key={settled}
@@ -65,11 +67,11 @@ export function CardButton({
       accessibilityLabel={accessibilityLabel ?? label}
       accessibilityState={{ disabled, busy }}
       disabled={disabled}
-      fallbackColor={primary ? colors.text : colors.chip}
+      fallbackColor={strong ? colors.text : colors.chip}
       fallbackStyle={styles.flat}
       onPress={onPress}
       style={style}
-      {...(primary ? { tintColor: glassTints.primary[scheme] } : {})}
+      {...(strong ? { tintColor: glassTints.primary[scheme] } : {})}
     >
       <View style={styles.base}>{face}</View>
     </GlassPressable>

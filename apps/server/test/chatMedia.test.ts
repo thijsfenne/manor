@@ -3,6 +3,7 @@ import { createServer, type Server } from 'node:http'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import type { AddressInfo } from 'node:net'
+import { runInNewContext } from 'node:vm'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { ServerMessage, ThreadEvent } from '@manor/contracts'
 import { createChatMedia, imageSize, injectManorPrelude } from '../src/chatMedia.js'
@@ -251,6 +252,39 @@ describe('chat media', () => {
     expect(inHead).toContain('type:"manor:size",height:a,width:b,viewport:c')
     // Escape and the side arrows pressed inside the page go to the app around it.
     expect(inHead).toContain('if(!e.defaultPrevented)window.top.postMessage({type:"manor:key",key:k},"*")')
+  })
+
+  it('hands a clicked link to the app instead of navigating the frame', () => {
+    const script = /<script>(.*)<\/script>/s.exec(injectManorPrelude('<p>x</p>', 'dark'))![1]!
+    const posted: unknown[] = []
+    const listeners = new Map<string, (event: unknown) => void>()
+    const location = { hash: '' }
+    const Observer = class { observe() {} }
+    const page: Record<string, unknown> = {
+      top: { postMessage: (data: unknown) => posted.push(data) },
+      location,
+      URL,
+      ResizeObserver: Observer,
+      MutationObserver: Observer,
+      document: { documentElement: {}, addEventListener() {} },
+      addEventListener: (type: string, listener: (event: unknown) => void) => listeners.set(type, listener),
+    }
+    page.window = page
+    runInNewContext(script, page)
+    // Whether the click's own navigation was stopped.
+    const click = (href: string) => {
+      let stopped = false
+      listeners.get('click')!({ target: { closest: () => ({ getAttribute: () => href }) }, defaultPrevented: false, preventDefault: () => { stopped = true } })
+      return stopped
+    }
+    expect(click('https://example.com/a b')).toBe(true)
+    expect(click(' mailto:sam@example.com ')).toBe(true)
+    expect(click('#part')).toBe(true)
+    expect(location.hash).toBe('#part')
+    expect(click('ftp://example.com/')).toBe(true)
+    expect(click('other.html')).toBe(true)
+    expect(click('javascript:void(0)')).toBe(false)
+    expect(posted).toEqual([{ type: 'manor:open', url: 'https://example.com/a%20b' }, { type: 'manor:open', url: 'mailto:sam@example.com' }])
   })
 
   it('reads the pixel size of PNG, JPEG and WebP headers', () => {

@@ -144,22 +144,47 @@ export function cleanChatTitle(raw: string, fallback: string): string {
     .replace(/\s+/g, ' ')
     .trim()
 
-  return limitTitle(cleaned) || fallback
+  return limitTitle(cleaned).title || fallback
 }
 
+/** Words a title may not end on, English and Dutch: they open a phrase the cut took away. */
+const JOINING_WORDS = new Set([
+  'and', 'or', 'the', 'a', 'to', 'of', 'with', 'for', 'in', 'on',
+  'en', 'de', 'het', 'een', 'met', 'voor', 'van',
+])
+const TRAILING_PUNCTUATION = /[\s.,;:!?\-–—()[\]{}"'`“”‘’]+$/
+
+/**
+ * The title for a chat whose naming failed: the opening message. A message that fits
+ * is the title as written; a longer one is cut at a word, loses the punctuation and
+ * joining word it ended on, and says it goes on with "…" inside the same limit.
+ */
 export function fallbackChatTitle(openingMessage: string): string {
   const cleaned = openingMessage
     .replace(/@[\p{L}\p{N}_-]+/gu, '')
     .replace(/\s+/g, ' ')
     .trim()
-  return limitTitle(cleaned) || NEW_CHAT_TITLE
+  const whole = limitTitle(cleaned)
+  if (!whole.cut) return whole.title || NEW_CHAT_TITLE
+  const room = limitTitle(cleaned, TITLE_LIMIT - 1).title
+  return `${withoutDanglingEnd(room)}…`
 }
 
-function limitTitle(value: string): string {
-  const words = value.split(' ').filter(Boolean).slice(0, WORD_LIMIT)
-  const byWords = words.join(' ')
-  if (byWords.length <= TITLE_LIMIT) return byWords
-  const clipped = byWords.slice(0, TITLE_LIMIT + 1)
+function withoutDanglingEnd(text: string): string {
+  let words = text.replace(TRAILING_PUNCTUATION, '').split(' ')
+  while (words.length > 1 && JOINING_WORDS.has((words.at(-1) ?? '').toLowerCase())) {
+    words = words.slice(0, -1).join(' ').replace(TRAILING_PUNCTUATION, '').split(' ')
+  }
+  return words.join(' ') || text
+}
+
+/** The title cut to the word and length limits, and whether a cut took anything away. */
+function limitTitle(value: string, limit = TITLE_LIMIT): { title: string; cut: boolean } {
+  const all = value.split(' ').filter(Boolean)
+  const byWords = all.slice(0, WORD_LIMIT).join(' ')
+  const droppedWords = all.length > WORD_LIMIT
+  if (byWords.length <= limit) return { title: byWords, cut: droppedWords }
+  const clipped = byWords.slice(0, limit + 1)
   const boundary = clipped.lastIndexOf(' ')
-  return (boundary > 0 ? clipped.slice(0, boundary) : clipped.slice(0, TITLE_LIMIT)).trim()
+  return { title: (boundary > 0 ? clipped.slice(0, boundary) : clipped.slice(0, limit)).trim(), cut: true }
 }

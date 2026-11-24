@@ -534,7 +534,7 @@ describe('project thread sessions', () => {
     expect(await h.threads.forwardQuestion(session, 'wren', 'request_1', questions)).toBe(true)
     expect(await h.threads.forwardQuestion(h.looseChatId, 'smith', 'request_x', questions)).toBe(false)
     const card = (await notes(h, h.threadChatId)).find((note) => note.sessionQuestion !== undefined)
-    expect(card?.text).toContain('asks Manor:')
+    expect(card?.text).toBe('Export button asks: Square or round corners?')
     expect(card?.sessionQuestion).toMatchObject({ sessionChatId: session, requestId: 'request_1' })
     expect(h.wakes.at(-1)).toMatchObject({ chatId: h.threadChatId, origin: { reason: 'question' } })
     // A second question before that wake reads the queue joins it instead of asking for another.
@@ -1505,6 +1505,18 @@ describe('DM briefs and reports', () => {
       supportingAgentIds: [], supportingAgentNames: [],
     })
     expect((await k.store.getChat(await k.work.accept(card.id, { mode: 'house' })))?.mode).toBe('single')
+  })
+
+  it('keeps a thread\'s proposal in its own project, also when it names another one or revises to it', async () => {
+    const h = await harness()
+    const other = await h.store.createProject('Example App', [])
+    const thread = { chatId: h.threadChatId, agentId: '__single__', turnId: 'thread_elsewhere' }
+    await h.work.useTool(thread, { assignmentKey: 'elsewhere', project: other.id, title: 'Export button', task: 'Add an export button.' })
+    await h.work.useTool({ ...thread, turnId: 'thread_elsewhere_v2' }, { assignmentKey: 'elsewhere', project: 'Example App', title: 'Export button', task: 'Add an export button to the toolbar.' })
+    const cards = (await h.store.listWorkHandoffs()).filter((row) => row.sourceChatId === h.threadChatId)
+    expect(cards.map((row) => [row.revision ?? 1, row.projectId])).toEqual([[1, h.projectId], [2, h.projectId]])
+    const session = await h.work.accept(cards.find((row) => row.revision === 2)!.id, { mode: 'single' })
+    expect((await h.store.getChat(session))?.projectId).toBe(h.projectId)
   })
 
   it('starts a brief for a project without a thread directly, as Multiple when chosen', async () => {

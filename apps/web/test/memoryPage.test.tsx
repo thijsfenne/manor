@@ -112,3 +112,15 @@ it('names no writer before the providers were asked', () => {
   expect(dailyLogWriter([row('claude', 'install'), row('grok', 'attention')])?.provider).toBe('grok')
   expect(dailyLogWriter([row('claude', 'signing_in')])).toBeNull()
 })
+
+it('names the file that sets a pinned folder, with the home folder as ~, or the launch environment', async () => {
+  const { page } = await render({ info: info({ pinned: true, pinnedIn: '/Users/someone/.manor/.env' }) })
+  expect(text(page)).toContain('Set by MANOR_MEMORY_DIR in ~/.manor/.env.')
+  expect(text(page)).not.toContain('apps/server')
+  await act(async () => { page.unmount() })
+
+  // No file set it: the variable was already there when Manor started.
+  const launched = await render({ info: info({ pinned: true }) })
+  expect(text(launched.page)).toContain('Set by MANOR_MEMORY_DIR in the environment Manor started with.')
+  await act(async () => { launched.page.unmount() })
+})

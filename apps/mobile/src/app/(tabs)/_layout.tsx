@@ -56,7 +56,9 @@ export default function TabsLayout() {
           open={menuOpen}
           swipeEnabled={swipeOpens}
         >
+          {/* A room is no tab, so the bar leaves while one is on top; its menu button is the way out. */}
           <NativeTabs
+            hidden={ROOMS.has(leaf)}
             iconColor={{ default: colors.muted, selected: colors.text }}
             labelStyle={{ default: { color: colors.muted }, selected: { color: colors.text } }}
           >

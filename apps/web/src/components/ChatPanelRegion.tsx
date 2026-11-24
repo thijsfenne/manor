@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type ComponentPropsWithoutRef, type CSSProperties, type Dispatch, type RefObject, type SetStateAction } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ComponentPropsWithoutRef, type CSSProperties, type Dispatch, type RefObject, type SetStateAction } from 'react'
 import { DEFAULT_HOUSE_SETTINGS, DEFAULT_USER_PROFILE, isFolder, isOpenRoom, NOTE_AI_DEFAULTS, type Chat, type NoteQuote, type PageContextAttachment, type RepoFileApp } from '@manor/contracts'
 import type { useWorkspace } from '../useWorkspace'
 import { chatRoster } from '../chatRoster'
@@ -8,7 +8,7 @@ import { runsByRoutine as groupRunsByRoutine } from '../routines'
 import { desktopBrowser } from '../desktopBrowser'
 import { useChatSide } from '../useChatSide'
 import { BROWSER_EXPANDED_KEY, FILES_MIN_WIDTH, FILES_TREE_WIDTH, FILES_PREVIEW_MIN_WIDTH, rightPanelDefaultWidth, usePanelExpanded, useRightPanelSize } from '../useFilesPanel'
-import { AGENTS_PANEL_WIDTH, CHAT_STAGE_MIN_WIDTH, DOCK_PANEL_GAP, LIST_PANEL_WIDTH, NO_PANELS, RIGHT_PANEL_MOTION_MS, TILE_MIN_WIDTH, clampedSplit, columnSizingPanel, keepPanels, layoutCount, layoutFromKey, layoutHas, layoutKey, rightPanelOverlays, rightRegionWidth, tileCardBox, tileRowSpan, tiledColumnWidths, useLingeringPanel, useRegionSettling, useTileSizes, type PanelDrop, type PanelLayout, type RightPanelId } from '../useRightPanel'
+import { AGENTS_PANEL_WIDTH, CHAT_STAGE_MIN_WIDTH, DOCK_PANEL_GAP, LIST_PANEL_WIDTH, NO_PANELS, RIGHT_PANEL_MOTION_MS, TILE_MIN_WIDTH, clampedSplit, columnSizingPanel, keepPanels, layoutCount, layoutFromKey, layoutHas, layoutKey, panelDockWidth, rightPanelOverlays, rightRegionWidth, sidebarFoldsForPanels, tileCardBox, tileRowSpan, tiledColumnWidths, useLingeringPanel, useRegionSettling, useTileSizes, type PanelDrop, type PanelLayout, type RightPanelId } from '../useRightPanel'
 import { turnChangedFiles } from '../changedFiles'
 import { turnDiffView } from '../diffView'
 import { insertIntoDraft } from '../composerDrafts'
@@ -90,6 +90,15 @@ interface ChatPanelRegionProps {
   onOpenSubagent: (toolCallId: string) => void
   /** Out of layout, not closed: a subagent view lies over the chat and the panel waits behind it. */
   hidden?: boolean
+  /** The stage's one region only: the pinned sidebar's room, and where to say the sidebar should fold so the panels dock. */
+  sidebarRoom?: SidebarRoom
+}
+
+/** The stage width with the sidebar as the user left it, the width that sidebar holds, and the fold report. */
+export interface SidebarRoom {
+  stageWidth: number
+  width: number
+  onFold: (fold: boolean) => void
 }
 
 /** Panel lifecycle and data belong to the thread, never to workspace focus. */
@@ -98,7 +107,7 @@ export function ChatPanelRegion({
   selectedFile, setSelectedFiles, selectedNote, setSelectedNotes, pageContextCount, onAddPageContext,
   onQuoteNote, onAddNoteToSideChat, onClose, onMove, onFloat, onFloatSimulator, onSendToBrowser, onOpenBrowser, onOpenChat, onRevealMessage, onOpenRoutine, onOpenRoutines,
   onDialogChange, onEditGroup, diffScope, onDiffScope, onToggleDiff, onOpenFile, subagentPath, onOpenSubagent,
-  noteRequest, onNoteRequestHandled, hidden = false,
+  noteRequest, onNoteRequestHandled, hidden = false, sidebarRoom,
 }: ChatPanelRegionProps) {
   const { workspace, status } = manor
   const thread = threadOf(workspace, open.id)
@@ -297,6 +306,16 @@ export function ChatPanelRegion({
   const tiles = tiledColumnWidths(askedWidths(rendered), availableWidth)
   const shownTiles = tiledColumnWidths(askedWidths(shown), availableWidth)
   const tilesWidth = tiles.widths.reduce((sum, width) => sum + width, 0)
+
+  // Before paint, so a panel that docks once the sidebar folds never shows a floating frame.
+  const dockWidth = floatAlways || hidden ? 0 : panelDockWidth(layoutCount(shown) > 1 ? askedWidths(shown) : [openPanelWidth])
+  const foldsSidebar = sidebarRoom !== undefined && sidebarFoldsForPanels(dockWidth, sidebarRoom.stageWidth, sidebarRoom.width)
+  const reportFold = sidebarRoom?.onFold
+  useLayoutEffect(() => {
+    if (reportFold === undefined) return
+    reportFold(foldsSidebar)
+    return () => reportFold(false)
+  }, [reportFold, foldsSidebar])
 
   const panelOverlay = tiled ? tiles.overlay : floatAlways || rightPanelOverlays(availableWidth, 0, renderedPanelWidth)
   // A floating panel may overlap the transcript, but pinning navigation may never

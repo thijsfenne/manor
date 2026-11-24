@@ -6,7 +6,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { createMockDriver } from '../src/drivers/mockDriver.js'
 import { ManorService } from '../src/service.js'
 import { createMemoryStore } from '../src/stores/memoryStore.js'
-import { createSystemInfo } from '../src/systemInfo.js'
+import { createSystemInfo, pinState } from '../src/systemInfo.js'
 import { roster, scratchFor } from './helpers.js'
 
 describe('system info logs', () => {
@@ -21,7 +21,7 @@ describe('system info logs', () => {
       mcpServers: () => [], setMcpServers: () => {}, resolveDriver: () => createMockDriver({ deltaDelayMs: 0 }),
       ensureScratchDir: scratchFor, broadcast: () => {},
       externalFiles: { apps: ['finder'], open },
-      systemInfo: createSystemInfo({ memoryDir: null, vaultDir: null, drivers: {}, home }),
+      systemInfo: createSystemInfo({ memoryDir: null, vaultDir: null, drivers: {}, home, envFile: '/Users/someone/.manor/.env' }),
     })
     const replies: ServerMessage[] = []
     const reply = (message: ServerMessage) => replies.push(message)
@@ -29,7 +29,7 @@ describe('system info logs', () => {
     await manor.handle({ type: 'get_system_info', requestId: 'info' }, reply)
     expect(replies.at(-1)).toMatchObject({
       type: 'system_info',
-      info: { memory: { path: null }, logs: [{ label: 'Server log', path: serverLog }] },
+      info: { memory: { path: null }, logs: [{ label: 'Server log', path: serverLog }], envFile: '/Users/someone/.manor/.env' },
     })
 
     await manor.handle({ type: 'reveal_log', path: serverLog, requestId: 'listed' }, reply)
@@ -56,7 +56,7 @@ describe('system info logs', () => {
           const picked = (await store.getHouseSettings()).memoryDir
           return {
             memory: { pinned: false, pending: picked === null || picked === '/data/memory' ? null : picked },
-            knowledge: { pinned: true, pending: null },
+            knowledge: { pinned: true, pinnedIn: '/Users/someone/.manor/.env', pending: null },
           }
         },
       }),
@@ -70,7 +70,7 @@ describe('system info logs', () => {
       type: 'system_info',
       info: {
         memory: { path: '/data/memory', pinned: false, pending: '/Users/someone/Notes' },
-        vault: { path: null, pinned: true, pending: null },
+        vault: { path: null, pinned: true, pinnedIn: '/Users/someone/.manor/.env', pending: null },
       },
     })
 
@@ -83,5 +83,16 @@ describe('system info logs', () => {
     await manor.handle({ type: 'reveal_folder', folder: 'knowledge', requestId: 'none' }, reply)
     expect(open).toHaveBeenCalledTimes(1)
     expect(replies.at(-1)).toMatchObject({ type: 'notice', kind: 'error' })
+  })
+})
+
+describe('pinState', () => {
+  const files = { checkout: '/repo/apps/server/.env', data: '/Users/someone/.manor/.env' }
+
+  it('names the file that set the variable, and none for the launch environment or an unpinned folder', () => {
+    expect(pinState(true, 'checkout', files)).toEqual({ pinned: true, pinnedIn: files.checkout })
+    expect(pinState(true, undefined, files)).toEqual({ pinned: true, pinnedIn: files.data })
+    expect(pinState(true, 'environment', files)).toEqual({ pinned: true })
+    expect(pinState(false, 'checkout', files)).toEqual({ pinned: false })
   })
 })

@@ -299,14 +299,17 @@ export function AskCard({ questions, accent, connected = true, more = 0, onSubmi
               label={collapsed ? 'Show the question' : 'Fold the question away'}
               onClick={() => setCollapsed((current) => !current)}
             />
-            <IconButton
-              icon={Cancel01Icon}
-              iconSize={14}
-              size={26}
-              disabled={locked && onCancel === undefined}
-              label={onCancel === undefined ? 'Skip all of it and let the agent decide' : 'Close without changing anything'}
-              onClick={onDismiss}
-            />
+            {/* One question has nothing left to pass: Skip already lets the agent decide. */}
+            {total === 1 && onCancel === undefined ? null : (
+              <IconButton
+                icon={Cancel01Icon}
+                iconSize={14}
+                size={26}
+                disabled={locked && onCancel === undefined}
+                label={onCancel === undefined ? 'Skip all of it and let the agent decide' : 'Close without changing anything'}
+                onClick={onDismiss}
+              />
+            )}
           </span>
         )}
       </div>
@@ -555,7 +558,7 @@ export function AskDock({
           agentId: threadQuestion.agentId,
           more: threadQuestion.more,
           // The session's title heads every question, so the card says who is asking.
-          questions: threadQuestion.questions.map((question) => ({ ...question, header: `${threadQuestion.title} asks ${projectName ?? 'the project'}` })),
+          questions: threadQuestion.questions.map((question) => ({ ...question, header: `${threadQuestion.title} asks` })),
           onSubmit: (answers: UserInputAnswers) => onAnswerThread(threadQuestion.sessionChatId, threadQuestion.requestId, answers),
         }
       : subagentQuestion !== null && onAnswerThread !== undefined
@@ -631,9 +634,12 @@ const secretAsk = (question: UserInputQuestion | undefined, chatId: string | und
 export function AskAnswers({
   questions,
   answers,
+  superseded = false,
 }: {
   questions: readonly UserInputQuestion[]
   answers?: UserInputAnswers
+  /** The user wrote during the turn instead of answering, which released the turn from it. */
+  superseded?: boolean
 }) {
   return (
     <div className={`flex min-w-0 flex-col gap-3 rounded-xl px-3.5 py-3 ${SIDE_SURFACE}`}>
@@ -648,7 +654,7 @@ export function AskAnswers({
             <span className="block text-card leading-[1.5] text-dim [overflow-wrap:anywhere]">{question.question}</span>
             {given === undefined ? (
               <span className="block text-card leading-[1.5] text-warn">
-                {question.secret === undefined ? 'Never answered. The turn ended first.' : SECRET_CLOSED_TEXT}
+                {question.secret !== undefined ? SECRET_CLOSED_TEXT : superseded ? 'Not answered. You sent a message instead.' : 'Never answered. The turn ended first.'}
               </span>
             ) : (
               <span

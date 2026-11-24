@@ -4,7 +4,7 @@ import { BotIcon, Cancel01Icon } from '@hugeicons/core-free-icons'
 import { isFolder, isOpenRoom, type Chat, type DesktopBrowserBridge, type MessageQuote, type MessageReply, type NoteQuote, type PageContextAttachment } from '@manor/contracts'
 import { ProjectSessionsOverview, SessionsOverviewDoor, SettleButton } from '../inbox/ProjectSessionsOverview'
 import { ChatPane } from '../ChatPane'
-import { ChatPanelRegion } from '../ChatPanelRegion'
+import { ChatPanelRegion, type SidebarRoom } from '../ChatPanelRegion'
 import { BrowserPreview } from '../BrowserPreview'
 import { SimulatorFloat } from '../SimulatorPanel'
 import { ExternalLinkProvider } from '../ExternalLink'
@@ -83,6 +83,8 @@ export interface StageKit {
   /** The open chat's running turns. */
   running: TurnRow[]
   stageWidth: number
+  /** What the stage's one panel region needs to fold the sidebar for its panels. */
+  sidebarRoom: SidebarRoom
   hasVault: boolean
   settingsOpen: boolean
   focusMode: boolean
@@ -393,7 +395,7 @@ export function ChatStage({
       )}
       </div>
 
-      {!paneSplit && open !== null && railShown ? <StagePanel kit={kit} chat={open} layout={activeLayout} availableWidth={stageWidth} hidden={subagentChrome(kit.subagentPath(open.id)).panelHidden} /> : null}
+      {!paneSplit && open !== null && railShown ? <StagePanel kit={kit} chat={open} layout={activeLayout} availableWidth={stageWidth} hidden={subagentChrome(kit.subagentPath(open.id)).panelHidden} sidebarRoom={kit.sidebarRoom} /> : null}
     </div>
 
     </div>
@@ -593,7 +595,7 @@ export function StageChatPane({
 }
 
 /** A chat's docked panel region: beside the stage's one chat, or inside its pane of a split. */
-function StagePanel({ kit, chat, layout, availableWidth, hidden = false }: { kit: StageKit; chat: Chat; layout: PanelLayout; availableWidth: number; hidden?: boolean }) {
+function StagePanel({ kit, chat, layout, availableWidth, hidden = false, sidebarRoom }: { kit: StageKit; chat: Chat; layout: PanelLayout; availableWidth: number; hidden?: boolean; sidebarRoom?: SidebarRoom }) {
   const { manor, rightPanel, panels, nav } = kit
   const { pageContextsByChat, addPageContext } = kit.pageContexts
   const { noteRequest, clearNoteRequest, reveal } = kit.reveals
@@ -619,6 +621,7 @@ function StagePanel({ kit, chat, layout, availableWidth, hidden = false }: { kit
     focused={kit.open?.id === chat.id && !kit.settingsOpen && !kit.focusMode && !hidden}
     ownsBrowserView={kit.browserViewChatId === chat.id && !kit.focusMode && !hidden}
     hidden={hidden}
+    sidebarRoom={sidebarRoom}
     phone={kit.phone}
     instant={visibleSplit === null && kit.chatSwitched}
     browserBridge={kit.browserBridge}

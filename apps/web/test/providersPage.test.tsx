@@ -95,3 +95,24 @@ it('offers the installer where Manor can run one, and shows it running', async (
   act(() => button(running, 'Cancel')?.props.onClick())
   expect(onCancelSignIn).toHaveBeenCalledWith('claude')
 })
+
+it('says where the keys are kept from the path the server reported', async () => {
+  const render = (shown: SystemInfo) => {
+    let page!: ReactTestRenderer
+    act(() => {
+      page = create(
+        <ProvidersPage
+          info={shown} updates={[]} connections={[]} onRequest={() => undefined} onUpdate={() => true}
+          onCheck={() => true} onSignIn={() => undefined} onCancelSignIn={() => undefined} onInstall={() => undefined}
+        />,
+      )
+    })
+    return page
+  }
+  const reported = render({ ...info, envFile: '/Users/someone/.manor/.env' })
+  expect(JSON.stringify(reported.toJSON())).toContain('Kept in ~/.manor/.env on the Mac')
+  act(() => reported.unmount())
+  const older = render(info)
+  expect(JSON.stringify(older.toJSON())).toContain('Kept in the server’s .env file on the Mac')
+  act(() => older.unmount())
+})

@@ -37,7 +37,7 @@ export function RoutineRunsPanel({
 
   return (
     <aside
-      className={`${overlay ? `dock-panel-reveal ${DOCK_FLOAT} max-w-[calc(100%-8px)]` : ''} m-2 ml-0 grid min-h-0 grid-rows-[auto_auto_minmax(0,1fr)] ${DOCK_PANEL_SHELL}`}
+      className={`${overlay ? `dock-panel-reveal ${DOCK_FLOAT} max-w-[calc(100%-8px)]` : ''} m-2 ml-0 grid min-h-0 grid-cols-[minmax(0,1fr)] grid-rows-[auto_auto_minmax(0,1fr)] ${DOCK_PANEL_SHELL}`}
       data-open={overlay ? revealed : undefined}
       style={{ width: width - DOCK_PANEL_GAP }}
     >

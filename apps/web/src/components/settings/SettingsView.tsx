@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react'
 import { ArrowLeft01Icon, Cancel01Icon, Search01Icon } from '@hugeicons/core-free-icons'
 import { Icon } from '../Icon'
-import { Modal } from '../Modal'
-import { Button } from '../ui/Button'
+import { DiscardModal } from '../DiscardModal'
 import { IconButton } from '../ui/IconButton'
 import { Select } from '../ui/Select'
 import { SelectionMarker } from '../ui/SelectionMarker'
@@ -195,13 +194,7 @@ export function SettingsView({ section, onSection, onClose, leaving, onDiscard, 
       </div>
 
       {!leaving ? null : (
-        <Modal title="Discard unsaved changes?" onClose={onKeepEditing}>
-          <p className="m-0 text-[14px] text-muted">This page has edits that are not saved yet. Leaving drops them.</p>
-          <div className="flex justify-end gap-2">
-            <Button onClick={onKeepEditing}>Keep editing</Button>
-            <Button variant="danger" onClick={onDiscard}>Discard</Button>
-          </div>
-        </Modal>
+        <DiscardModal onKeep={onKeepEditing} onDiscard={onDiscard}>This page has edits that are not saved yet. Leaving drops them.</DiscardModal>
       )}
     </div>
   )

@@ -47,7 +47,7 @@ const FILE_CSP = "default-src 'none'; style-src 'unsafe-inline'; img-src data:; 
  * it has no script that could, so this holds in the chat, a browser tab and the Mac's
  * Browser panel alike. The theme prelude and size reporter `injectManorPrelude` adds to the
  * persona's document need nothing beyond this policy: the font travels as a `data:` URL
- * and the reporter only posts a message to the parent.
+ * and the reporters only post messages to the parent.
  */
 const HTML_VIEW_CSP = [
   "default-src 'none'",
@@ -439,6 +439,20 @@ const KEY_REPORTER =
   'if(k!=="Escape"&&t&&t.closest&&t.closest("input,textarea,select,[contenteditable]"))return;' +
   'setTimeout(function(){if(!e.defaultPrevented)window.top.postMessage({type:"manor:key",key:k},"*")})})})()'
 
+/**
+ * Keeps a clicked link from navigating the frame, which the policy refuses and leaves
+ * blank. An absolute http, https or mailto address goes to the app around the page as
+ * `manor:open`, which opens it the way a chat link opens (the chat preview does; a
+ * wrapper on its own has no listener, so there the click does nothing). `#id` moves
+ * within the page, and a `javascript:` link and a link the page handled itself stay the
+ * page's; anything else does nothing.
+ */
+const LINK_REPORTER =
+  '(function(){if(window.top===window)return;addEventListener("click",function(e){var t=e.target,a=t&&t.closest?t.closest("a[href],area[href]"):null;' +
+  'if(!a||e.defaultPrevented)return;var r=a.getAttribute("href").trim(),u;if(/^javascript:/i.test(r))return;e.preventDefault();' +
+  'if(r.charAt(0)==="#"){location.hash=r;return}try{u=new URL(r)}catch(x){return}' +
+  'if(/^(https?|mailto):$/.test(u.protocol))window.top.postMessage({type:"manor:open",url:u.href},"*")})})()'
+
 let geistFace: string | undefined
 
 /** Geist as an embedded `@font-face`, read once; empty when the package file is missing. */
@@ -461,11 +475,11 @@ function geistFontFace(): string {
 
 function themeStyle(theme: ViewTheme): string {
   const tokens = Object.entries(VIEW_THEMES[theme]).map(([name, value]) => `--manor-${name}:${value}`).join(';')
-  return `<style id="manor-theme">${geistFontFace()}:root{color-scheme:${theme};${tokens}}${BASE_CSS}</style><script>${SIZE_REPORTER};${KEY_REPORTER}</script>`
+  return `<style id="manor-theme">${geistFontFace()}:root{color-scheme:${theme};${tokens}}${BASE_CSS}</style><script>${SIZE_REPORTER};${KEY_REPORTER};${LINK_REPORTER}</script>`
 }
 
 /**
- * Puts Manor's theme variables, base styles and its size and key reporters into a persona's HTML before
+ * Puts Manor's theme variables, base styles and its size, key and link reporters into a persona's HTML before
  * it becomes the wrapper's `srcdoc`. They go right after `<head>`, so the page's own rules
  * come later and win; a document without one gets the nearest equivalent.
  */

@@ -27,7 +27,8 @@ const GROUPS: { id: SessionOverviewGroup; label: string; hint?: string; icon: Ic
 /**
  * A project thread's Sessions on the phone, grouped as the Mac's overview beside the
  * thread (2026-10-11), with the fold state they share. A tap opens the Session as its
- * own screen; Settled starts folded on every visit.
+ * own screen; Settled starts folded on every visit. A Session gone quiet without a result
+ * sits in Settled as Done but keeps the live title, as on the Mac (2026-11-24).
  */
 export function SessionOverviewList({ threadId, overview, agents, inset, onOpen, onRevealProposal }: {
   threadId: string
@@ -107,7 +108,7 @@ export function SessionOverviewList({ threadId, overview, agents, inset, onOpen,
           </Pressable>
           {!unfolded[id] ? null
             : overview[id].length === 0 ? (hint === undefined ? null : <Text style={styles.empty}>{hint}</Text>)
-            : (id === 'settled' ? shownSettled : overview[id]).map((entry) => row(entry, id === 'settled', id === 'working'))}
+            : (id === 'settled' ? shownSettled : overview[id]).map((entry) => row(entry, id === 'settled' && entry.status !== 'done', id === 'working'))}
           {id !== 'settled' || !unfolded[id] || moreSettled <= 0 ? null : (
             <Pressable
               accessibilityRole="button"

@@ -257,6 +257,7 @@ export function TurnActivity({
               <AskAnswers
                 questions={segment.ask.questions}
                 {...(segment.ask.answers === undefined ? {} : { answers: segment.ask.answers })}
+                superseded={segment.ask.superseded === true}
               />
             </li>
           ) : segment.kind === 'draft' ? (

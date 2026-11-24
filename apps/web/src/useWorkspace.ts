@@ -246,6 +246,8 @@ export interface Manor {
   requestContextFiles: () => void
   /** Saves one context file against the disk version it was read at; a newer one refuses it. */
   saveContextFile: (name: ContextFileName, content: string, baseHash: string, requestId?: string) => boolean
+  /** Creates one empty context file in the memory folder; the server answers with the fresh list and refuses a file already there. */
+  createContextFile: (name: ContextFileName, requestId?: string) => boolean
   /** Asks what the Mac runs, for Settings' read-only pages. */
   requestSystemInfo: () => void
   /** Asks for Tailscale HTTPS and the paired devices, into `workspace.phoneAccess`. */
@@ -1124,6 +1126,14 @@ export function useWorkspace(url: string, auth?: WorkspaceAuth): Manor {
     [send, setWorkspace],
   )
 
+  const createContextFile = useCallback(
+    (name: ContextFileName, requestId?: string) => {
+      setWorkspace(clearNotice)
+      return send({ type: 'create_context_file', name, ...(requestId === undefined ? {} : { requestId }) })
+    },
+    [send, setWorkspace],
+  )
+
   const requestSystemInfo = useCallback(() => {
     send({ type: 'get_system_info' })
   }, [send])
@@ -1740,6 +1750,7 @@ export function useWorkspace(url: string, auth?: WorkspaceAuth): Manor {
     saveHouseSettings,
     requestContextFiles,
     saveContextFile,
+    createContextFile,
     requestSystemInfo,
     requestPhoneAccess,
     setTailscaleServe,

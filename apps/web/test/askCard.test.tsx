@@ -123,6 +123,13 @@ describe('AskCard', () => {
     expect(html).toContain('Skip all of it and let the agent decide')
   })
 
+  it('offers one way to skip a single question', () => {
+    const html = card({ questions: [questions[0]!] })
+
+    expect(html).toContain('Skip')
+    expect(html).not.toContain('Skip all of it and let the agent decide')
+  })
+
   it('wears the sidebar rows own colours, borderless, with a pointer on them', () => {
     const html = card()
 
@@ -396,6 +403,26 @@ describe('AskAnswers', () => {
 
     expect(html).toContain('Never answered. The turn ended first.')
     expect(html).toContain('text-warn')
+  })
+
+  // A message sent during the turn steers it and releases the turn from the open card.
+  it('says the user sent a message instead when a steer superseded the open question', () => {
+    const asked: ThreadEvent[] = [
+      { id: 'e1', ts: 1, type: 'user_input_request', agentId: 'smith', turnId: 'turn-1', requestId: 'req_1', questions: [questions[0]!] },
+    ]
+    const steer: ThreadEvent = { id: 'e2', ts: 2, type: 'user_message', text: 'Go left anyway.', mentions: [], steersTurnId: 'turn-1' }
+    const ended: ThreadEvent = { id: 'e3', ts: 3, type: 'turn_result', agentId: 'smith', turnId: 'turn-1' }
+    const html = (events: ThreadEvent[], kind: 'dm' | 'project') => renderToStaticMarkup(
+      <Transcript rows={rowsOf({ ...emptyThread, events, hasSnapshot: true }, kind)} agents={[smith]} skills={[]} hasSnapshot bubbleReplies={kind === 'dm'} />,
+    )
+    for (const kind of ['dm', 'project'] as const) {
+      const superseded = html([...asked, steer, ended], kind)
+      expect(superseded).toContain('Not answered. You sent a message instead.')
+      expect(superseded).not.toContain('Never answered')
+      const stopped = html([...asked, ended], kind)
+      expect(stopped).toContain('Never answered. The turn ended first.')
+      expect(stopped).not.toContain('You sent a message instead')
+    }
   })
 })
 

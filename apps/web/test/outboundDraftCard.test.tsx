@@ -69,6 +69,24 @@ describe('outbound draft card', () => {
     })
   }
 
+  it('asks once before mail with no subject goes out, and sends a typed subject at once', () => {
+    const value = { ...draft, draftId: 'no-subject', subject: '   ' }
+    const onSubmit = vi.fn(() => true)
+    const tree = create(card(value, { onSubmit }))
+    act(() => button(tree, 'Send')!.props.onClick())
+    expect(onSubmit).not.toHaveBeenCalled()
+    expect(button(tree, 'Send')).toBeUndefined()
+    act(() => button(tree, 'Send without subject')!.props.onClick())
+    expect(onSubmit).toHaveBeenCalledTimes(1)
+
+    act(() => tree.root.findByProps({ 'aria-label': 'Draft subject' }).props.onChange({ target: { value: 'Hi' } }))
+    expect(button(tree, 'Send without subject')).toBeUndefined()
+    act(() => button(tree, 'Send')!.props.onClick())
+    expect(onSubmit).toHaveBeenCalledTimes(2)
+    act(() => tree.unmount())
+    forgetOutboundDraftEdit(value.draftId)
+  })
+
   it('shows a cleared Cc as gone once the mail is sent', () => {
     const tree = create(card({ ...draft, cc: 'sam@example.com', closed: { outcome: 'submitted', delivery: 'delivered', body: 'Hello', subject: 'Portfolio' } }))
     act(() => button(tree, 'Open mail card')!.props.onClick())

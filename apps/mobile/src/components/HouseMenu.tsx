@@ -129,9 +129,9 @@ export function HouseMenu({ active, onClose }: { active: HouseSection; onClose: 
 const ROOMS = new Set<HouseSection>(['artifacts', 'routines', 'plugins'])
 
 /**
- * A room opens on top of the current tab, so the tab bar stays under it; picked from
- * another room it takes that room's place, because the way out of a room is this menu
- * or the tab bar, not a trail of rooms.
+ * A room opens on top of the current tab and hides the tab bar while it is up; picked from
+ * another room it takes that room's place, because the way out of a room is this menu,
+ * not a trail of rooms.
  */
 function openRoom(href: Href, current: HouseSection) {
   if (ROOMS.has(current)) router.replace(href)

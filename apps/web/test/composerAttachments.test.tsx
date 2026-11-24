@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { Composer } from '../src/components/Composer'
 import { UserBubble } from '../src/components/Bubbles'
 import { clearDrafts, writeDraft } from '../src/composerDrafts'
-import { CHAT_ATTACH_ACCEPT, readAttachments, readChatDocument, readChatFile } from '../src/chatFiles'
+import { CHAT_ATTACH_ACCEPT, readAttachments, readChatDocument, readChatFile, refusedFilesNotice } from '../src/chatFiles'
 
 const agent = (id: string, name: string): AgentConfig =>
   ({ id, name, color: '#8b5cf6', driver: 'claude', model: 'claude-opus-5', effort: 'high', allowedTools: [] }) as unknown as AgentConfig
@@ -36,6 +36,23 @@ describe('what the composer takes', () => {
 
     expect(html).toContain(`accept="${CHAT_ATTACH_ACCEPT}"`)
     expect(html).not.toContain('Attach images')
+  })
+
+  it('gives the text box and the hidden picker a name for a screen reader', () => {
+    const html = render()
+
+    expect(html).toContain('aria-label="Attach files"')
+    expect(html).toMatch(/aria-label="Ask anything…"/)
+  })
+
+  it('names the files it refused, at most two, with a long name cut in the middle', () => {
+    expect(refusedFilesNotice(['clip.mov'])).toBe('clip.mov is not a picture, text, PDF or Word file.')
+    expect(refusedFilesNotice(['a.mov', 'b.zip'])).toBe('2 files are not pictures, text, PDF or Word files: a.mov, b.zip')
+    expect(refusedFilesNotice(['a.mov', 'b.zip', 'c.exe', 'd.dmg'])).toBe('4 files are not pictures, text, PDF or Word files: a.mov, b.zip and 2 more')
+    const long = `${'x'.repeat(100)}-final.mov`
+    const notice = refusedFilesNotice([long])
+    expect(notice).toContain('…xx-final.mov is not')
+    expect(notice.length).toBeLessThan(90)
   })
 
   // The picker is the promise; a format missing here is a file someone cannot pick

@@ -264,7 +264,7 @@ function NoteTools({ view, canSaveImage }: { view: EditorView; canSaveImage: boo
     <>
       <IconButton icon={TextIcon} size={28} label="Insert text block" disabled={disabled} onClick={() => insert('text')} />
       <IconButton icon={Image01Icon} size={28} label="Insert image" disabled={!canSaveImage || picturePickerSpot(view.state) === null} onClick={() => input.current?.click()} />
-      <input ref={input} type="file" hidden accept={noteImageAccept} multiple onChange={(event) => {
+      <input ref={input} type="file" hidden aria-label="Insert image" accept={noteImageAccept} multiple onChange={(event) => {
         insertPictures(view, event.currentTarget.files)
         event.currentTarget.value = ''
         view.focus()

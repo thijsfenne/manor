@@ -1,5 +1,6 @@
 import { DocumentUploadSchema, FileAttachmentSchema, MAX_DOCUMENT_BYTES, MAX_TEXT_FILE_BYTES, type DocumentUpload, type FileAttachment, type ImageAttachment } from '@manor/contracts'
 import { DOCUMENT_FILE_EXTENSIONS, TEXT_FILE_EXTENSIONS, documentMime, documentTooLarge, textFileMime, utf8Size } from '@manor/client-runtime/attachments'
+import { splitForMiddleCut } from './components/MiddleCut'
 import { CHAT_IMAGE_ACCEPT, shrinkChatImage } from './chatImages'
 
 /**
@@ -10,6 +11,28 @@ import { CHAT_IMAGE_ACCEPT, shrinkChatImage } from './chatImages'
  * refusal happen a beat later with a reason.
  */
 export const CHAT_ATTACH_ACCEPT = [CHAT_IMAGE_ACCEPT, ...TEXT_FILE_EXTENSIONS, ...DOCUMENT_FILE_EXTENSIONS].join(',')
+
+/** Longest a file name may be inside a notice before its middle is left out. */
+const NOTICE_NAME_MAX = 40
+const NOTICE_NAMES_SHOWN = 2
+
+/** A name cut in the middle the way `MiddleCut` cuts it, so a long one cannot flood a notice. */
+function noticeName(name: string): string {
+  const [head, tail] = splitForMiddleCut(name)
+  const characters = Array.from(head)
+  if (characters.length + Array.from(tail).length <= NOTICE_NAME_MAX) return head + tail
+  return `${characters.slice(0, NOTICE_NAME_MAX - Array.from(tail).length - 1).join('')}…${tail}`
+}
+
+/** The composer notice for files it refused, naming them (two at most, then a count). */
+export function refusedFilesNotice(names: readonly string[]): string {
+  const [first] = names
+  if (first === undefined) return ''
+  if (names.length === 1) return `${noticeName(first)} is not a picture, text, PDF or Word file.`
+  const shown = names.slice(0, NOTICE_NAMES_SHOWN).map(noticeName).join(', ')
+  const more = names.length - NOTICE_NAMES_SHOWN
+  return `${names.length} files are not pictures, text, PDF or Word files: ${shown}${more > 0 ? ` and ${more} more` : ''}`
+}
 
 export const isImageFile = (file: File) => file.type.startsWith('image/')
 

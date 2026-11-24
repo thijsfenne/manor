@@ -1,5 +1,6 @@
 import { WorkHandoffCard } from '@/components/WorkHandoffCard'
 import { Badge } from '@/components/Badge'
+import { FoldedBody } from '@/components/FoldedBody'
 import { KickoffCard } from '@/components/KickoffCard'
 import { FOOTER_GAP, KeyboardFooter, useFooterPadding } from '@/components/KeyboardFooter'
 import { WakeNotices, WakeText } from '@/components/SubagentRow'
@@ -31,7 +32,7 @@ import { dateDividers } from '@manor/client-runtime/date-dividers'
 import { historyStart, olderHistoryKey } from '@manor/client-runtime/history-window'
 import { plainDraftText } from '@manor/client-runtime/plain-preview'
 import type { LegendListRef } from '@legendapp/list/react-native'
-import { memo, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from 'react'
+import { memo, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react'
 import { Platform, Pressable, StyleSheet, View, useWindowDimensions, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native'
 import { useKeyboardState } from 'react-native-keyboard-controller'
 import Animated, { useReducedMotion, useSharedValue, type SharedValue } from 'react-native-reanimated'
@@ -76,6 +77,8 @@ import { ProjectFileWriteCard } from '@/components/ProjectFileWriteCard'
 import { ThreadBundle } from '@/components/ThreadBundle'
 import { AnswerChange, OTHER_ANSWER } from '@/components/bundleTile'
 import { takeEventReveal } from '@/lib/threadReveal'
+import { isLongMessage } from '@/lib/longMessage'
+import { readsLatest, type TranscriptScroll } from '@/lib/readsLatest'
 import { EMPTY_DRAFT, readDraft, writeDraft } from '@/lib/drafts'
 import { glassRise, glassSink } from '@/lib/glassMotion'
 import { useScreenCovered } from '@/lib/useScreenCovered'
@@ -94,8 +97,8 @@ export default function ChatScreen() {
   return <ConnectGate><ChatContent chatId={chatId} key={chatId} /></ConnectGate>
 }
 
-/** Closer to the bottom than this, in points, still counts as reading the latest. */
-const NEAR_END = 24
+/** The round "Jump to latest" button. */
+const JUMP_SIZE = 36
 
 /** A row's height before it is measured; a turn with one reply is about this tall. */
 const ESTIMATED_ROW = 120
@@ -376,9 +379,9 @@ function ChatContent({ chatId }: { chatId: string | undefined }) {
       requestId: threadQuestion.requestId,
       agentId: threadQuestion.agentId,
       more: threadQuestion.more,
-      questions: threadQuestion.questions.map((question) => ({ ...question, header: `${threadQuestion.title} asks ${project?.name ?? 'the project'}` })),
+      questions: threadQuestion.questions.map((question) => ({ ...question, header: `${threadQuestion.title} asks` })),
     },
-    [threadQuestion, project?.name],
+    [threadQuestion],
   )
   // A subagent's question waits here, at the top of its line: its own screen takes no answers.
   const subagentQuestion = useMemo(
@@ -734,18 +737,28 @@ function ChatContent({ chatId }: { chatId: string | undefined }) {
     return true
   }
 
-  const trackScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
-    const { contentOffset, contentSize, layoutMeasurement, contentInset } = event.nativeEvent
-    // The keyboard and the footer live in the bottom inset, which the offset runs into.
-    const end = contentSize.height + (contentInset?.bottom ?? 0) - layoutMeasurement.height
-    // A rubber band past the oldest message in a short chat is not scrolling away.
-    const nearEnd = end < NEAR_END || end - contentOffset.y < NEAR_END
+  const showJumpFor = (scroll: TranscriptScroll) => {
+    const nearEnd = readsLatest(scroll)
     setJumpForChat((current) => {
       const away = current === chatId
       if (nearEnd === !away) return current
       return nearEnd ? null : (chatId ?? null)
     })
+  }
+  // The last scroll, so a change in content height alone (a turn folding its steps) is judged too.
+  const lastScroll = useRef<TranscriptScroll | null>(null)
+  const trackScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const { contentOffset, contentSize, layoutMeasurement, contentInset } = event.nativeEvent
+    lastScroll.current = { offset: contentOffset.y, viewport: layoutMeasurement.height, content: contentSize.height, insetEnd: contentInset?.bottom ?? 0 }
+    showJumpFor(lastScroll.current)
     measureWorkCards()
+  }
+  // Only ever hides: content that grows at the end is followed by the list, whose scroll
+  // event judges it, and showing here first would flash the button on every streamed line.
+  const trackContentHeight = (_width: number, height: number) => {
+    if (lastScroll.current === null) return
+    lastScroll.current = { ...lastScroll.current, content: height }
+    if (readsLatest(lastScroll.current)) setJumpForChat(null)
   }
 
   const list = () => {
@@ -860,6 +873,7 @@ function ChatContent({ chatId }: { chatId: string | undefined }) {
             revealRow(rowKey)
           }}
           overview={sessionOverview}
+          {...(project === undefined ? {} : { projectName: project.name })}
           threadId={chatId}
         />
       )}
@@ -887,6 +901,7 @@ function ChatContent({ chatId }: { chatId: string | undefined }) {
         contentInsetEndAdjustment={contentInsetEndAdjustment}
         freeze={freeze}
         onScroll={trackScroll}
+        onContentSizeChange={trackContentHeight}
         onOpenAgentRelay={openAgentRelay}
         onRejectWork={rejectWork}
         onReveal={revealRowStable}
@@ -969,11 +984,11 @@ function ChatContent({ chatId }: { chatId: string | undefined }) {
         {/* The padding sits inside the measured view, so the list's bottom inset counts the
             gap above the tab bar, and outside the scrim, which keeps the screen's width. */}
         <Animated.View pointerEvents="box-none" style={footerPadding}>
-        {/* One row above the Session bar: the changes pill in its centre, the jump at its
-            right edge. The pill stands for as long as the chat has written anything, so it
-            belongs in the footer's own height, where the list's bottom inset accounts for it.
-            The jump floats, because it comes and goes with the scroll and nothing should
-            shift under a thumb when it does; without the pill it rests just above the bar. */}
+        {/* One row above the Session bar for the changes pill. The pill stands for as long as
+            the chat has written anything, so it belongs in the footer's own height, where the
+            list's bottom inset accounts for it. The jump floats centred over that row, because
+            it comes and goes with the scroll and nothing should shift under a thumb when it
+            does; card actions sit at the right, so the centre keeps it off Accept. */}
         <View pointerEvents="box-none">
           {showAggregateChanges && dockedRow === undefined ? (
             <Animated.View entering={glassRise} exiting={glassSink} style={styles.pill}>
@@ -981,12 +996,12 @@ function ChatContent({ chatId }: { chatId: string | undefined }) {
             </Animated.View>
           ) : null}
           {showJump && dockedRow === undefined ? (
-            <Animated.View entering={glassRise} exiting={glassSink} style={styles.jump}>
+            <Animated.View entering={glassRise} exiting={glassSink} pointerEvents="box-none" style={styles.jump}>
               <GlassIconButton
                 accessibilityLabel="Jump to latest"
                 icon={ArrowDown01Icon}
                 onPress={jumpToLatest}
-                size={36}
+                size={JUMP_SIZE}
               />
             </Animated.View>
           ) : null}
@@ -1341,6 +1356,7 @@ interface LiveTranscriptProps {
   contentInsetEndAdjustment: SharedValue<number>
   freeze: ReturnType<typeof useKeyboardScrollToEnd>['freeze']
   onScroll: (event: NativeSyntheticEvent<NativeScrollEvent>) => void
+  onContentSizeChange: (width: number, height: number) => void
   onOpenAgentRelay: (chatId: string) => void
   onRejectWork: (chatId: string) => void
   onReveal: (rowKey: string) => void
@@ -1369,7 +1385,7 @@ interface TranscriptArrival {
  */
 function LiveTranscript({
   chatId, listRef, sessionLive, projectThread, firstKey, onLoadOlder, openBundles, onBundleOpen, connected, covered, links, draftActions,
-  repoFiles, userBubbleTint, topInset, keyboardSink, contentInsetEndAdjustment, freeze, onScroll, onOpenAgentRelay, onRejectWork, onReveal,
+  repoFiles, userBubbleTint, topInset, keyboardSink, contentInsetEndAdjustment, freeze, onScroll, onContentSizeChange, onOpenAgentRelay, onRejectWork, onReveal,
   onOpenSubagent, onOpenQuoteSource, onReply, onQuoteSource, arrival,
 }: LiveTranscriptProps) {
   const { workspace } = useWorkspaceData()
@@ -1567,6 +1583,9 @@ function LiveTranscript({
       freeze={freeze}
       initialScrollAtEnd
       keyboardDismissMode="interactive"
+      // A sheet opened from a card sits under this list in the responder tree: without
+      // this the first tap on its Close only hides the keyboard and never reaches the button.
+      keyboardShouldPersistTaps="handled"
       keyboardLiftBehavior="always"
       keyboardOffset={keyboardSink}
       keyExtractor={listKeyOf}
@@ -1596,6 +1615,7 @@ function LiveTranscript({
           : <View style={styles.empty}><Text style={styles.emptyCopy}>Loading conversation…</Text></View>
       }
       onScroll={onScroll}
+      onContentSizeChange={onContentSizeChange}
       {...(sharedValues === undefined ? {} : { sharedValues })}
       {...(arrivalMotion === undefined ? {} : { onScrollBeginDrag: () => disarmArrival(arrivalMotion) })}
       ref={listRef}
@@ -1993,6 +2013,16 @@ function ConsultationExcerpt({ question, replyPending }: { question: string; rep
 
 const NO_INLINE_QUOTES: readonly InlineQuote[] = []
 
+/** A sent message's body in lines of the bubble's reading size (17pt on 25). */
+const BUBBLE_LINE = 25
+/** The same ten-line cut as the Mac's bubble. */
+const BUBBLE_FOLD_LINES = 10
+
+/** A long sent message folded behind Show more; a short one passes through untouched. */
+function FoldedMessage({ clamp, children }: { clamp: boolean; children: ReactNode }) {
+  return clamp ? <FoldedBody lineHeight={BUBBLE_LINE} lines={BUBBLE_FOLD_LINES}>{children}</FoldedBody> : <>{children}</>
+}
+
 /** `tint` fills a DM bubble with the face he is talking to; its chips read the same tint. A dimmed (pending) bubble stays grey so its fade cannot pull the tinted ink below AA. */
 function Bubble({ text, images, agents, files = [], documents = [], replyTo, quote, noteQuote, quotes = NO_INLINE_QUOTES, sourceEventId, onQuoteSource, onOpenQuoteSource, dim = false, tint, quoteAuthors = false, skills, repo }: { text: string; images: readonly EventImage[]; agents: readonly AgentConfig[]; files?: readonly FileAttachment[]; documents?: readonly (EventDocument | PendingDocument)[]; replyTo?: MessageReply; quote?: MessageQuote; noteQuote?: NoteQuote; quotes?: readonly InlineQuote[]; sourceEventId?: string; onQuoteSource?: (source: QuoteSelectionSource) => void; onOpenQuoteSource?: (eventId: string) => void; dim?: boolean; tint?: BubbleTint; quoteAuthors?: boolean; skills: readonly SkillConfig[]
   /** The chat's repo listing, so a file path he wrote opens in Files. */
@@ -2016,20 +2046,22 @@ function Bubble({ text, images, agents, files = [], documents = [], replyTo, quo
           {replyTo === undefined ? null : <ReplyContextChip name={agents.find((agent) => agent.id === replyTo.agentId)?.name ?? replyTo.agentId} reply={replyTo} />}
           <Attachments documents={documents} files={files} images={[]} />
           {text === '' ? null : (
-            <Markdown
-              agents={agents}
-              {...(repo === undefined ? {} : { links: { repo } })}
-              text={normalizeComposerLists(text)}
-              sent={{
-                skills,
-                ...(numbered ? { imageCount: images.length, onOpenImage: setOpenImage } : {}),
-                ...(quotes.length === 0 ? {} : { quotes, onOpenQuote: setOpenQuote }),
-                ...(sourceEventId === undefined ? {} : {
-                  accessibilityHint: 'Press and hold to quote text',
-                  ...(onQuoteSource === undefined ? {} : { onLongPress: () => onQuoteSource({ eventId: sourceEventId, text: withQuoteExcerpts(text, quotes) }) }),
-                }),
-              }}
-            />
+            <FoldedMessage clamp={isLongMessage(text)}>
+              <Markdown
+                agents={agents}
+                {...(repo === undefined ? {} : { links: { repo } })}
+                text={normalizeComposerLists(text)}
+                sent={{
+                  skills,
+                  ...(numbered ? { imageCount: images.length, onOpenImage: setOpenImage } : {}),
+                  ...(quotes.length === 0 ? {} : { quotes, onOpenQuote: setOpenQuote }),
+                  ...(sourceEventId === undefined ? {} : {
+                    accessibilityHint: 'Press and hold to quote text',
+                    ...(onQuoteSource === undefined ? {} : { onLongPress: () => onQuoteSource({ eventId: sourceEventId, text: withQuoteExcerpts(text, quotes) }) }),
+                  }),
+                }}
+              />
+            </FoldedMessage>
           )}
         </View>
       ) : null}
@@ -2097,9 +2129,9 @@ const styles = StyleSheet.create({
   relayExcerptOpen: { flexShrink: 1, textAlign: 'center' },
   error: { color: colors.danger },
   footer: { position: 'absolute', right: 0, bottom: 0, left: 0 },
-  // Bottom-anchored, so it keeps its place whether the pill beside it shows or not; 2pt
-  // under the pill's gap centres the 36pt button on the pill.
-  jump: { position: 'absolute', right: 0, bottom: spacing.sm - 2, zIndex: 1 },
+  // Hangs from the top of the pill row, so it rests above the pill or, without one, just
+  // above the Session bar; full width only to centre the button, touches pass through.
+  jump: { position: 'absolute', top: -(JUMP_SIZE + spacing.sm), right: 0, left: 0, alignItems: 'center', zIndex: 1 },
   pill: { alignItems: 'center', paddingTop: spacing.sm, paddingBottom: spacing.sm },
   // Above the floating jump: the composer's plus and `@`/`$` menus rise over it.
   footerInner: { zIndex: 2, paddingTop: spacing.md },

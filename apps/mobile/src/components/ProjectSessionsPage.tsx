@@ -16,8 +16,10 @@ import { Text } from '@/components/Text'
 import { colors, fonts, spacing } from '@/theme'
 
 /** A project thread's Sessions, the page `ThreadPager` slides in to the right of the thread. */
-export function ProjectSessionsPage({ threadId, overview, agents, onBack, onOpen, onRevealProposal }: {
+export function ProjectSessionsPage({ threadId, projectName, overview, agents, onBack, onOpen, onRevealProposal }: {
   threadId: string
+  /** Names the page's project in its title, cut with an ellipsis when long. */
+  projectName?: string
   overview: SessionOverview
   agents: AgentConfig[]
   onBack: () => void
@@ -43,7 +45,7 @@ export function ProjectSessionsPage({ threadId, overview, agents, onBack, onOpen
         <View pointerEvents="box-none" style={[styles.row, { paddingTop: insets.top + 6 }]}>
           <GlassIconButton accessibilityLabel="Back to the thread" icon={ArrowLeft01Icon} onPress={onBack} />
           <View style={styles.heading}>
-            <Text maxFontSizeMultiplier={1.35} numberOfLines={1} style={styles.title}>Sessions</Text>
+            <Text maxFontSizeMultiplier={1.35} numberOfLines={1} style={styles.title}>{projectName === undefined ? 'Sessions' : `Sessions in ${projectName}`}</Text>
           </View>
           <View style={styles.side} />
         </View>

@@ -5,6 +5,7 @@ import { ProviderMark } from '../ProviderMark'
 import { SideRuntimeMenu } from '../SideRuntimeMenu'
 import type { UpdateProviders } from '../ProviderUpdates'
 import { desktopChooseFolder } from '../../desktopBrowser'
+import { envFileLabel } from '../../envFileLabel'
 import { Button } from '../ui/Button'
 import { formInputClass } from '../ui/FormField'
 import { RequestNotice } from '../ui/RequestNotice'
@@ -139,7 +140,7 @@ export function ProvidersPage({ info, updates, connections, onRequest, onUpdate,
       <SettingsGroup title="Keys">
         <SettingsRow
           label="API keys and app passwords"
-          description="Kept in apps/server/.env on the Mac and never sent through the app. Change them there, then restart the server."
+          description={`Kept in ${envFileLabel(info?.envFile)} on the Mac and never sent through the app. Change them there, then restart the server.`}
         />
       </SettingsGroup>
     </SettingsPage>
@@ -198,7 +199,7 @@ function FolderRow({ label, description, variable, state, onChoose, onReveal }: 
       <div className="flex min-w-0 flex-col gap-0.5">
         <span className="text-[14px] font-medium text-text">{label}</span>
         <span className="text-label text-muted">
-          {state.pinned ? `${description} Set by ${variable} in apps/server/.env.` : description}
+          {state.pinned ? `${description} Set by ${variable} in ${state.pinnedIn === undefined ? 'the environment Manor started with' : envFileLabel(state.pinnedIn)}.` : description}
         </span>
       </div>
       {typing ? (

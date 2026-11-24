@@ -3183,11 +3183,13 @@ export type ContextFiles = z.infer<typeof ContextFilesSchema>
 /** What the Mac is running, for About, Providers and Memory & vault. Read-only. */
 /**
  * How a folder shown in Settings relates to its setting. `pinned` means an environment
- * variable decides it, so the app cannot change it. `pending` is the folder the next
- * start will use when that differs from the one in use now.
+ * variable decides it, so the app cannot change it. `pinnedIn` is the path of the .env
+ * file that sets that variable, absent when the launch environment sets it. `pending` is
+ * the folder the next start will use when that differs from the one in use now.
  */
 const folderState = {
   pinned: z.boolean().default(false),
+  pinnedIn: z.string().optional(),
   pending: z.string().nullable().default(null),
 }
 
@@ -3205,6 +3207,8 @@ export const SystemInfoSchema = z.object({
   logs: z.array(z.object({ label: z.string(), path: z.string() })),
   /** The server runs on macOS, so Settings offers to keep the Mac awake. */
   canKeepAwake: z.boolean().default(false),
+  /** The .env file this server reads its keys and folders from. Only the path, never its content. Absent on an older server. */
+  envFile: z.string().optional(),
 })
 export type SystemInfo = z.infer<typeof SystemInfoSchema>
 
@@ -4502,6 +4506,9 @@ const ClientMessageWireSchema = z.discriminatedUnion('type', [
     baseHash: z.string(),
     ...optionalRequestId,
   }),
+  // The one way a context file comes to exist: an empty file of that name in the memory folder.
+  // Refused when it is already there, so it never replaces anything. `save_context_file` never creates.
+  z.object({ type: z.literal('create_context_file'), name: ContextFileNameSchema, ...optionalRequestId }),
   // About, Providers and Memory & vault asking what the Mac runs; reply-only.
   z.object({ type: z.literal('get_system_info'), ...optionalRequestId }),
   // Settings → Phone: Tailscale HTTPS and the paired devices. The reply is `phone_access`.

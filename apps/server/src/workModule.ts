@@ -309,8 +309,10 @@ export class WorkModule {
     // may name any Session persona, the default one when it names nobody. It is not on the roster, so it
     // can never be resolved as a lead or a supporting member itself. A hidden project's
     // archived thread authors nothing, also from a turn still running when it was hidden.
-    const threadAuthor = context.agentId === SINGLE_CHAT_VOICE.id && source.kind === 'project' && source.projectId !== null &&
-      await liveProjectThread(store, await store.getProject(source.projectId)) === source.id
+    const sourceProject = source.kind === 'project' && source.projectId !== null ? await store.getProject(source.projectId) : undefined
+    // A project thread only creates Sessions in its own project, whatever project the call names (2026-11-24).
+    const threadProject = sourceProject !== undefined && await liveProjectThread(store, sourceProject) === source.id ? sourceProject : undefined
+    const threadAuthor = context.agentId === SINGLE_CHAT_VOICE.id && threadProject !== undefined
     const author: HandoffAuthor | undefined = threadAuthor
       ? { id: SINGLE_CHAT_VOICE.id, name: PROJECT_THREAD_WRITER, placement: 'chat' }
       : this.options.agents().find((agent) => agent.id === context.agentId)
@@ -348,7 +350,7 @@ export class WorkModule {
 
     // The home room is a destination too, by its id or its name; no list holds it.
     const home = await store.getProject(HOME_PROJECT_ID)
-    const project = this.resolveProject(input.project, [...await store.listProjects(), ...(home === undefined ? [] : [home])])
+    const project = threadProject ?? this.resolveProject(input.project, [...await store.listProjects(), ...(home === undefined ? [] : [home])])
     const chatPersonas = supporting.filter((agent) => agent.placement === 'chat')
     if (chatPersonas.length > 0) throw new Error(`Chat personas cannot join project work: ${names(chatPersonas.map((agent) => agent.name))}.`)
     const allowed = new Set(lead?.mentionAllowlist ?? [])

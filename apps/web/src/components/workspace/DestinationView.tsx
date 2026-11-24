@@ -298,6 +298,8 @@ export function DestinationView({
               onDialogChange={onDialogChange}
               live={status === 'live'}
               composio={composioBinding(manor)}
+              envFile={workspace.systemInfo?.envFile}
+              onRequestInfo={manor.requestSystemInfo}
             />
           ) : (
             <SuggestionsView

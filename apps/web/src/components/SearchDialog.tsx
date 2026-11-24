@@ -11,7 +11,7 @@ import {
   type SearchNoteHit,
 } from '@manor/contracts'
 import type { RemindersState } from '@manor/client-runtime/reminders'
-import { personaOf, type ChatListRow, type Inbox } from '../state'
+import { personaOf, type ChatListRow, type Inbox, type ProjectThreadRow } from '../state'
 import { rankSearchResults, type SearchChat, type SearchResult } from '@manor/client-runtime/search-ranking'
 import { relativeTime } from '../relativeTime'
 import type { RequestEvents } from '../useRequest'
@@ -34,6 +34,10 @@ interface SearchDialogProps {
   /** The same three lists the sidebar shows, flattened here so one field finds them all. */
   chats: ChatListRow[]
   inbox: Inbox
+  /** Every Session, the ones a project thread started included; only a query reads it. */
+  searchInbox: Inbox
+  /** Each project's thread, which a query finds by the project's name. */
+  threadRows: ProjectThreadRow[]
   runs: Record<string, Chat[]>
   agents: AgentConfig[]
   reminders: RemindersState
@@ -67,6 +71,8 @@ type ServerAnswer = { query: string; messages: SearchMessageHit[]; notes: Search
 export function SearchDialog({
   chats,
   inbox,
+  searchInbox,
+  threadRows,
   runs,
   agents,
   reminders,
@@ -91,15 +97,11 @@ export function SearchDialog({
   const listRef = useRef<HTMLDivElement>(null)
   const listId = useId()
 
-  // A query also finds archived chats, which stay openable until they expire; the
-  // resting list keeps to the threads the sidebar shows.
+  // A query finds what the phone's search finds: project threads by their project's name, and
+  // every Session, one a thread started and an archived one (still openable until it expires)
+  // included. The resting list keeps to the threads the sidebar shows.
   const threads = useMemo(() => collectThreads(chats, inbox, runs), [chats, inbox, runs])
-  const searchable = useMemo(
-    () => [...threads, ...inbox.archived
-      .filter((entry) => !threads.some((thread) => thread.chatId === entry.chat.id))
-      .map((entry) => ({ chatId: entry.chat.id, title: entry.chat.title, lastMessageAt: entry.chat.lastMessageAt, projectName: entry.noProject === true ? 'No project' : entry.projectName }))],
-    [threads, inbox.archived],
-  )
+  const searchable = useMemo(() => collectSearchable(threads, searchInbox, threadRows), [threads, searchInbox, threadRows])
   const needle = query.trim().slice(0, SEARCH_QUERY_MAX)
 
   // Reminders arrive only when something asks; the palette asks once as it opens.
@@ -431,4 +433,20 @@ function collectThreads(chats: ChatListRow[], inbox: Inbox, runs: Record<string,
     add(row.chat.id, row.title, row.lastMessageAt ?? 0)
   }
   return threads
+}
+
+/** Everything a query can match: the resting threads, each project's thread, and every Session. */
+function collectSearchable(threads: SearchChat[], searchInbox: Inbox, threadRows: ProjectThreadRow[]): SearchChat[] {
+  const seen = new Set(threads.map((thread) => thread.chatId))
+  const searchable = [...threads]
+  const add = (chatId: string, title: string, lastMessageAt: number, projectName: string) => {
+    if (seen.has(chatId)) return
+    seen.add(chatId)
+    searchable.push({ chatId, title, lastMessageAt, projectName })
+  }
+  for (const row of threadRows) add(row.chat.id, row.project.name, row.lastActivityAt, '')
+  for (const entry of [...searchInbox.unsettled, ...searchInbox.settled, ...searchInbox.archived]) {
+    add(entry.chat.id, entry.chat.title, entry.chat.lastMessageAt, entry.noProject === true ? 'No project' : entry.projectName)
+  }
+  return searchable
 }

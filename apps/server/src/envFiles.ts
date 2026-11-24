@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs'
 import { homedir } from 'node:os'
 import path from 'node:path'
 import { serverFile } from './serverRoot.js'
@@ -16,6 +17,16 @@ import { serverFile } from './serverRoot.js'
 
 /** The data folder's file. Manor itself writes it, for the Composio key the Connectors page saves. */
 export const DATA_ENV_FILE = path.join(process.env.MANOR_DATA_DIR ?? path.join(homedir(), '.manor'), '.env')
+
+/**
+ * The file Settings points the user to for keys: the checkout's file when there is one (it
+ * is read first and wins), else the data folder's, which is where the desktop app's server
+ * looks. A setting one variable decides names that variable's own file, see `pinState`.
+ */
+export const ENV_FILE = existsSync(serverFile('.env')) ? serverFile('.env') : DATA_ENV_FILE
+
+/** Both files by where `envOrigin` says a value came from. */
+export const ENV_FILES = { checkout: serverFile('.env'), data: DATA_ENV_FILE }
 
 const filled = () => new Set(Object.entries(process.env).flatMap(([name, value]) => value ? [name] : []))
 const load = (file: string) => {
@@ -40,3 +51,4 @@ export function envOrigin(name: string): 'environment' | 'checkout' | undefined 
   if (fromCheckout.has(name)) return 'checkout'
   return undefined
 }
+

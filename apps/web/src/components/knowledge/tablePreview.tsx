@@ -139,6 +139,9 @@ function Cell({ children }: ComponentPropsWithoutRef<'div'>) {
           aria-label="Edit table cell"
           rows={1}
           value={draft}
+          // A field that mounts focused starts with its caret before the text, so typing
+          // after a click on a cell went in front of what the cell held.
+          onFocus={(event) => event.currentTarget.setSelectionRange(event.currentTarget.value.length, event.currentTarget.value.length)}
           onChange={(event) => {
             const next = event.target.value.replace(/[\r\n]+/g, ' ')
             const change = tableCellChange(source, address, next)

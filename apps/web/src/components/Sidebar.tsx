@@ -2,7 +2,6 @@ import { memo, useLayoutEffect, useState, type ComponentPropsWithoutRef, type Ke
 import {
   AddTeam02Icon,
   Cancel01Icon,
-  MoreHorizontalIcon,
   PlusSignIcon,
   UserMultiple02Icon,
   Search01Icon,
@@ -13,7 +12,6 @@ import type { ChatListRow, Inbox, Notice, ProjectThreadRow, SubagentGroup } from
 import type { SidebarMotion } from '../useSidebar'
 import { ChatListView, type AgentPins } from './chats/ChatListView'
 import { AddAgentIcon } from './customIcons'
-import { ContextMenu } from './ui/ContextMenu'
 import { InboxView } from './inbox/InboxView'
 import { ProjectThreadsSection } from './inbox/ProjectThreadsSection'
 import { useSplitDragGrab } from './SplitDrag'
@@ -246,7 +244,6 @@ function SidebarNav({
   // Dragged beside the open thread, New session opens its draft in the other pane.
   const grab = useSplitDragGrab()
   const actionSize = mobile ? 44 : undefined
-  const [moreMenu, setMoreMenu] = useState<{ x: number; y: number } | null>(null)
   const newSessionAction = (
     <IconButton
       icon={PlusSignIcon}
@@ -265,27 +262,8 @@ function SidebarNav({
   )
   const actions = panel === 'work' ? (
     <>
-    <IconButton
-      icon={MoreHorizontalIcon}
-      iconSize={17}
-      size={actionSize}
-      label="More"
-      aria-haspopup="menu"
-      aria-expanded={moreMenu !== null}
-      onClick={(event) => {
-        const bounds = event.currentTarget.getBoundingClientRect()
-        setMoreMenu({ x: bounds.left, y: bounds.bottom + 4 })
-      }}
-    />
+    <IconButton icon={UserMultiple02Icon} iconSize={17} size={actionSize} label="Manage agents" onClick={onManageAgents} />
     {mobile ? newSessionAction : null}
-    {moreMenu === null ? null : (
-      <ContextMenu
-        x={moreMenu.x}
-        y={moreMenu.y}
-        items={[{ label: 'Manage agents', icon: UserMultiple02Icon, onSelect: onManageAgents }]}
-        onClose={() => setMoreMenu(null)}
-      />
-    )}
     </>
   ) : panel === 'chats' ? (
     <>

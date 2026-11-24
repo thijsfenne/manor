@@ -172,8 +172,11 @@ export function Select<T extends string>({
       case 'Tab':
         close()
         return
+      // Stopped as well as claimed: inside a dialog the card's own Escape would otherwise
+      // close the whole form along with the list.
       case 'Escape':
         event.preventDefault()
+        event.stopPropagation()
         hide()
         return
       case 'ArrowDown':

@@ -110,3 +110,41 @@ describe('the chip', () => {
     expect(onChange).toHaveBeenCalledWith('general')
   })
 })
+
+describe('the arrow keys', () => {
+  const open = (onChange = vi.fn(), onAddFolder = vi.fn()) => {
+    let tree!: ReturnType<typeof create>
+    act(() => {
+      tree = create(<ProjectPicker projects={projects} value="manor" general={general} onChange={onChange} onAddFolder={onAddFolder} />)
+    })
+    act(() => tree.root.findAllByType('button').find((button) => button.props['aria-label'] === 'Project for this chat')!.props.onClick())
+    const search = tree.root.findByProps({ 'aria-label': 'Search projects and folders' })
+    const press = (key: string, times = 1) => {
+      for (let count = 0; count < times; count += 1) act(() => search.props.onKeyDown({ key, preventDefault: () => {} }))
+    }
+    const active = () => String(search.props['aria-activedescendant']).replace(/^.*-/, '')
+    return { press, active, onChange, onAddFolder }
+  }
+
+  it('walk every row down to Add folder and Don\'t work in a project, and stop at the last', () => {
+    const { press, active } = open()
+    expect(active()).toBe('0')
+    press('ArrowDown', 2)
+    expect(active()).toBe('2')
+    press('ArrowDown', 5)
+    expect(active()).toBe('3')
+    press('ArrowUp', 5)
+    expect(active()).toBe('0')
+  })
+
+  it('activate the row they point at with Enter', () => {
+    const { press, onChange, onAddFolder } = open()
+    press('ArrowDown', 3)
+    press('Enter')
+    expect(onChange).toHaveBeenCalledWith('general')
+    const second = open(vi.fn(), onAddFolder)
+    second.press('ArrowDown', 2)
+    second.press('Enter')
+    expect(onAddFolder).toHaveBeenCalledOnce()
+  })
+})

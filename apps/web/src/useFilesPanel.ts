@@ -111,7 +111,7 @@ export function useRightPanelSize(
     minWidth: BROWSER_MIN_WIDTH,
     defaultWidth: rightPanelDefaultWidth(panel),
     maxWidth: FILES_MAX_WIDTH,
-    label: 'side panel',
+    label: 'side',
   }), [chatId, panel])
   return usePanelSize(options, viewportWidth, overlayResizable)
 }

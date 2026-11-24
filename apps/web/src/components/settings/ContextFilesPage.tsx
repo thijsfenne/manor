@@ -48,18 +48,29 @@ export function reconcileDrafts(drafts: Partial<Record<ContextFileName, Draft>>,
 
 const ESTIMATED_CHARS_PER_TOKEN = 4
 
+/** What each file is for, said on the page of a file that is not created yet. */
+const PURPOSE: Record<ContextFileName, string> = {
+  'soul.md': 'How your agents should sound and what they should care about.',
+  'rules.md': 'Standing rules for every agent.',
+  'style.md': 'How your writing should read: tone, wording and formatting.',
+  'thinking.md': 'How your agents should reason and weigh a problem.',
+  'user-core.md': 'Who you are and how you like to work.',
+}
+
 /**
  * The standing instructions every coding CLI on this Mac reads, edited where they live.
  * Nothing is copied into Manor: a save writes the file in the memory folder, and a
  * save over a file that changed on disk since it was opened is refused, never merged.
  */
-export function ContextFilesPage({ files, notice, requestEvents, onRequest, onSave, onDismissNotice, onDirtyChange }: {
+export function ContextFilesPage({ files, notice, requestEvents, onRequest, onSave, onCreate, onDismissNotice, onDirtyChange }: {
   /** Null until the first read lands. */
   files: ContextFiles | null
   notice: Notice | null
   requestEvents: RequestEvents
   onRequest: () => void
   onSave: (name: ContextFileName, content: string, baseHash: string, requestId: string) => boolean
+  /** Writes an empty file of that name in the memory folder. A save never does. */
+  onCreate: (name: ContextFileName, requestId: string) => boolean
   onDismissNotice: () => void
   onDirtyChange: (dirty: boolean) => void
 }) {
@@ -116,6 +127,14 @@ export function ContextFilesPage({ files, notice, requestEvents, onRequest, onSa
     })
   }
 
+  const create = () => {
+    setOffline(false)
+    onDismissNotice()
+    const name = selected
+    // The server answers with the fresh list; the file then shows in the editor, empty.
+    if (!request.start((requestId) => onCreate(name, requestId))) setOffline(true)
+  }
+
   const reloadTheirs = () => {
     if (disk === undefined) return
     setDrafts((current) => ({ ...current, [selected]: draftOf(disk) }))
@@ -162,7 +181,7 @@ export function ContextFilesPage({ files, notice, requestEvents, onRequest, onSa
                   onClick={() => setSelected(name)}
                 >
                   {name}
-                  {present ? null : <span className="text-dim">missing</span>}
+                  {present ? null : <span className="text-dim">not created</span>}
                   {isDirty(name) ? <span aria-label="unsaved" className="h-1.5 w-1.5 rounded-full bg-warn-fill" /> : null}
                 </button>
               )
@@ -170,7 +189,10 @@ export function ContextFilesPage({ files, notice, requestEvents, onRequest, onSa
           </div>
 
           {disk === undefined || draft === undefined ? (
-            <p className="m-0 text-[14px] text-muted">{selected} is not on disk in {files.root}.</p>
+            <div className="flex flex-col items-start gap-3">
+              <p className="m-0 text-[14px] text-muted">{PURPOSE[selected]}</p>
+              <Button variant="primary" disabled={request.pending} onClick={create}>Create {selected}</Button>
+            </div>
           ) : (
             <>
               <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 text-label text-dim">

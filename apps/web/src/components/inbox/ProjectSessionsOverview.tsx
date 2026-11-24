@@ -53,7 +53,8 @@ const GROUPS: { id: SessionOverviewSection; label: string; hint?: string; icon: 
  * A project thread's sessions (decided 2026-10-10, grouped 2026-10-11): the right pane
  * beside the thread, or the header toggle's popover where the window is too narrow to
  * split. Three folds with a count, Settled folded by default, so the thread can be read
- * without opening every session. Waiting joins them only while a Session waits on
+ * without opening every session. Settled also holds a Session gone quiet without a result,
+ * which reads Done and keeps its live row (2026-11-24). Waiting joins them only while a Session waits on
  * background work it started (2026-11-18). A project with no Session yet shows one quiet line
  * instead of folds counting zero. Each row settles or unsettles in place. Archived sits
  * folded at the foot, only while it has rows: the sidebar's list leaves a thread's
@@ -112,7 +113,8 @@ export function ProjectSessionsOverview({ threadId, overview, agents, onOpen, on
                       entry, agents, selected: false, now, armed, onArm: setArmed, onOpen, onDelete: onDeleteChat,
                       onSetSettled, onSetArchived, openLabel: openLabel(row.title),
                     }
-                    return id === 'settled' || id === 'archived'
+                    // A quiet `done` Session sits in Settled unstamped, so it keeps its live row and Settle, never Unsettle (2026-11-24).
+                    return id === 'archived' || (id === 'settled' && row.status !== 'done')
                       ? <QuietRow key={row.key} {...shared} cardSide="left" mode={id} onHoldPeek={noHold} />
                       : <LiveRow key={row.key} {...shared} motionClass="" detail={row.line} {...(id === 'working' ? { plan: row.chat.planProgress ?? null } : {})} />
                   })}

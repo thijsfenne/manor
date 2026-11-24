@@ -29,7 +29,7 @@ import { desktopComputer, desktopDictation } from '../desktopBrowser'
 import { insertDictation } from '../dictation/insert'
 import type { DictationSettings } from '../dictation/useDictation'
 import { composerEscapeStep, useReplyOnType } from '../focusMode'
-import { CHAT_ATTACH_ACCEPT, isAttachable, readAttachments } from '../chatFiles'
+import { CHAT_ATTACH_ACCEPT, isAttachable, readAttachments, refusedFilesNotice } from '../chatFiles'
 import { base64Bytes, describeBytes, utf8Size, type ComposerAttachments } from '@manor/client-runtime/attachments'
 import { scrollCaretIntoView } from '../caretScroll'
 import { COMPOSER_GROW, INSTANT, SPRING_COMPOSER } from '../motion'
@@ -780,7 +780,7 @@ export function Composer({ agents, commandContext, household, overrides = NO_OVE
   const attach = async (picked: File[]) => {
     if (!allowAttachments || picked.length === 0) return
     const usable = picked.filter(isAttachable)
-    const skipped = picked.length - usable.length
+    const skipped = picked.filter((file) => !isAttachable(file))
     const taking = usable.slice(0, Math.max(MAX_MESSAGE_ATTACHMENTS - staged.current, 0))
     // Reserved here, before anything is read, so a second drop landing mid-read
     // measures a full composer instead of the one this drop has not filled yet.
@@ -789,9 +789,7 @@ export function Composer({ agents, commandContext, household, overrides = NO_OVE
     // the draft on screen.
     const mine = era.current
     const problems: string[] = []
-    if (skipped > 0) {
-      problems.push(skipped === 1 ? 'One file is not a picture, text, PDF or Word file.' : `${skipped} files are not pictures, text, PDF or Word files.`)
-    }
+    if (skipped.length > 0) problems.push(refusedFilesNotice(skipped.map((file) => file.name)))
     if (taking.length < usable.length) problems.push(`You can attach up to ${MAX_MESSAGE_ATTACHMENTS} files.`)
     if (taking.length > 0) setReading((count) => count + 1)
     const read = await readAttachments(taking)
@@ -998,6 +996,7 @@ export function Composer({ agents, commandContext, household, overrides = NO_OVE
         ref={fileRef}
         className="sr-only"
         type="file"
+        aria-label="Attach files"
         accept={CHAT_ATTACH_ACCEPT}
         multiple
         tabIndex={-1}
@@ -1694,6 +1693,7 @@ export function Composer({ agents, commandContext, household, overrides = NO_OVE
             rows={1}
             value={value}
             placeholder={shownPlaceholder}
+            aria-label={shownPlaceholder}
             onChange={(event) => {
               const snapped = snapRefDeletion(value, event.target.value, [...imageRefSpans(value, images.length), ...quoteRefSpans(value, quotes.length)], touchSelection.current)
               if (snapped !== null) {

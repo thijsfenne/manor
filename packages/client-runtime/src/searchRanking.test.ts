@@ -58,6 +58,20 @@ describe('palette ranking', () => {
   })
 })
 
+describe('project threads in the palette', () => {
+  const chats = [{ chatId: 'thread', title: 'Küche', projectName: '', lastMessageAt: 5 }]
+
+  it('finds a project thread by its project name, accents aside', () => {
+    expect(rankSearchResults('kuche', { ...empty, chats }).map((result) => result.key)).toEqual(['chat:thread'])
+  })
+
+  it('keeps a message said in a thread, and drops one from a chat the list lacks', () => {
+    const hit = (chatId: string, eventId: string) => ({ chatId, eventId, ts: 9, snippet: 'Corners are always square', phrase: true })
+    const found = rankSearchResults('corners are', { ...empty, chats, messages: [hit('thread', 'e1'), hit('gone', 'e2')] })
+    expect(found.map((result) => result.key)).toEqual(['message:thread:e1'])
+  })
+})
+
 describe('search text matching', () => {
   it('matches word starts across case and accents, and marks them in the original text', () => {
     const words = searchWords('Cafe  PLAN')

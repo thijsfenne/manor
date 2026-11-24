@@ -13,7 +13,8 @@ const ROOTS: Record<string, string> = {
 
 /**
  * One stack per tab, so a chat, a room from the house menu or a new Session opens
- * inside the tab it was reached from and the tab bar stays under it. Tapping the
+ * inside the tab it was reached from; the tab bar stays under all but a room, which hides
+ * it (see the tabs layout). Tapping the
  * current tab again pops its stack back to the root list (the native tab bar does it).
  *
  * The provider is nested on purpose: inside a tab its bottom inset is the tab bar plus

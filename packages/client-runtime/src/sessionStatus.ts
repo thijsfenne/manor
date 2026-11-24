@@ -26,7 +26,8 @@ export const QUIET_SESSION = { running: false, background: false, asking: false 
  *   the Session. It reads Waiting, and owes the user nothing (2026-11-18).
  * - `waiting`: a question waits on the user.
  * - `ready`: a result waits for Confirm and nothing runs.
- * - `done`: nothing runs and nothing is asked; the turn ended or was stopped.
+ * - `done`: nothing runs and nothing is asked; the turn ended or was stopped. It reads Done
+ *   everywhere (2026-11-24).
  * - `confirmed`: The user confirmed the result and nothing is left to do. It counts as
  *   settled until the user unsettles it (`unsettledAt`); then it reads `done` and stays
  *   active until it is settled again (2026-10-12).
@@ -63,19 +64,24 @@ export function sessionStatus(handoff: WorkHandoff, chat: Chat | undefined, live
   return handoff.goalReport !== undefined && handoff.goalReachedAt !== undefined ? 'ready' : 'done'
 }
 
-/** The overview fold a status stands in; null for one no list shows. */
+/**
+ * The overview fold a status stands in; null for one no list shows. A quiet or reopened
+ * `done` Session reads Done and sits in Settled beside the finished ones, since it owes
+ * the user nothing (2026-11-24, not final). Settled here is the fold, not the stamp:
+ * `sitsSettled` still reads `done` as live, so its row keeps Settle.
+ */
 export function sessionGroup(status: SessionStatus) {
   switch (status) {
     case 'proposed':
     case 'waiting':
     case 'ready':
-    case 'done':
     case 'blocked':
       return 'waiting'
     case 'working':
       return 'working'
     case 'background':
       return 'background'
+    case 'done':
     case 'confirmed':
     case 'settled':
       return 'settled'
@@ -84,7 +90,7 @@ export function sessionGroup(status: SessionStatus) {
   }
 }
 
-/** Whether the user can act on this status. A quiet or reopened `done` Session stays listed but owes the user nothing. */
+/** Whether the user can act on this status. A quiet or reopened `done` Session owes the user nothing. */
 export const needsUser = (status: SessionStatus) =>
   status === 'proposed' || status === 'waiting' || status === 'ready' || status === 'blocked'
 

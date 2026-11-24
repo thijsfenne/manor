@@ -131,7 +131,7 @@ export function SkillsView({
           <div className="mt-8 rounded-xl border border-dashed border-line px-6 py-12 text-center">
             <h2 className="m-0 text-[16px] font-semibold">No skills yet</h2>
             <p className="mt-1.5 mb-5 text-[13px] text-muted">
-              Import a SKILL.md from the server’s Claude or Codex home.
+              Import a SKILL.md from ~/.claude/skills or ~/.codex/skills.
             </p>
             <Button variant="primary" onClick={openImport}>Import skill</Button>
           </div>

@@ -121,6 +121,11 @@ export function OutboundDraftBubble({ draft, connected = true, actions = {}, unf
   const shown = draftShown(draft)
   // A reply keeps its thread's subject, so only new mail can retitle itself.
   const subjectEditable = open && draft.thread === undefined
+  // New mail with no subject asks once: the first Send arms the button, the second sends.
+  // Typing a subject disarms it, so the warning never outlives the thing it was about.
+  const [subjectWarned, setSubjectWarned] = useState(false)
+  const subjectMissing = gmail && subjectEditable && subject.trim().length === 0
+  const sendLabel = subjectMissing && subjectWarned ? 'Send without subject' : 'Send'
   const shownSubject = subjectEditable ? subject : open ? (draft.subject ?? '') : shown.subject
   const shownCc = open ? cc : shown.cc
   const showHeaderStatus = !expanded || !open
@@ -150,7 +155,10 @@ export function OutboundDraftBubble({ draft, connected = true, actions = {}, unf
               maxLength={OUTBOUND_DRAFT_SUBJECT_MAX}
               multiline
               submitBehavior="blurAndSubmit"
-              onChangeText={(value) => setEdit({ subject: oneLine(value) })}
+              onChangeText={(value) => {
+                setSubjectWarned(false)
+                setEdit({ subject: oneLine(value) })
+              }}
               placeholder="Subject"
               placeholderTextColor={colors.dim}
               style={styles.subjectInput}
@@ -237,11 +245,15 @@ export function OutboundDraftBubble({ draft, connected = true, actions = {}, unf
             <CardButton variant="quiet" accessibilityLabel="Discard draft" disabled={!connected} label="Discard" onPress={() => onDiscard(draft.draftId)} />
           )}
           <CardButton
-            accessibilityLabel="Send"
+            accessibilityLabel={sendLabel}
             disabled={!canSubmit}
-            label="Send"
+            label={sendLabel}
             onPress={() => {
               if (!canSubmit || onSubmit === undefined) return
+              if (subjectMissing && !subjectWarned) {
+                setSubjectWarned(true)
+                return
+              }
               if (gmail) onSubmit(draft.draftId, body, subjectEditable ? subject : undefined, editedRichText, cc)
               else onSubmit(draft.draftId, body, undefined, editedRichText)
             }}

@@ -473,11 +473,20 @@ export function Transcript({
     [],
   )
 
-  const handleScroll = () => {
+  /** Where the last scroll left the thread, so the end moving away is told from the reader moving up. */
+  const lastScrollTop = useRef(0)
+  /** `follow` off measures the bottom without chasing it, as coming back from a subagent view does. */
+  const handleScroll = (follow = true) => {
     const scroller = scrollerRef.current
     if (!scroller) return
     const distance = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight
-    setPinned(distance <= BOTTOM_SLACK_PX)
+    // A pin's own scroll event lands a frame later, measured against a composer or a
+    // Session bar that has since grown and that the observer has not caught up with.
+    // The reader did not move up, so the thread follows instead of letting go.
+    const endMovedAway = follow && atBottomRef.current && scroller.scrollTop >= lastScrollTop.current
+    lastScrollTop.current = scroller.scrollTop
+    if (distance > BOTTOM_SLACK_PX && endMovedAway && !heldRef.current) scroller.scrollTop = scroller.scrollHeight
+    else setPinned(distance <= BOTTOM_SLACK_PX)
     // A screen ahead of the reader, so a fast scroll up finds the older page already
     // there instead of stopping dead at the top while it mounts.
     if (scroller.scrollTop < Math.max(160, scroller.clientHeight) && !atBottomRef.current) loadOlder()
@@ -490,7 +499,7 @@ export function Transcript({
   // only whether it is still the bottom is measured afresh.
   const wasHeld = useRef(held)
   useLayoutEffect(() => {
-    if (wasHeld.current && !held) handleScroll()
+    if (wasHeld.current && !held) handleScroll(false)
     wasHeld.current = held
   }, [held])
 
@@ -804,7 +813,7 @@ export function Transcript({
       <div
         className="scrollbar-hidden flex min-w-0 flex-1 flex-col overflow-x-hidden overflow-y-auto"
         ref={scrollerRef}
-        onScroll={handleScroll}
+        onScroll={() => handleScroll()}
         onPointerUp={stageSelection}
         onKeyUp={stageSelection}
         // The region a message's own popover may use. It is this and not the window
@@ -1691,6 +1700,7 @@ function StandingSegment({
       <AskAnswers
         questions={segment.ask.questions}
         {...(segment.ask.answers === undefined ? {} : { answers: segment.ask.answers })}
+        superseded={segment.ask.superseded === true}
       />
     </div>
   )

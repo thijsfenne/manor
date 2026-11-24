@@ -94,15 +94,15 @@ describe('Work handoff card verbs', () => {
     expect(markup).toContain('mockup.html')
   })
 
-  it('puts the model, View prompt, Worktree, Reject and Accept on one row, with no Options fold and no mode on a thread card', () => {
+  it('puts the model, Edit prompt, Worktree, Reject and Accept on one row, with no Options fold and no mode on a thread card', () => {
     const proposal = renderToStaticMarkup(<Transcript rows={[{ ...card('Working'), task: 'Do it.', threadAuthored: true }]} agents={[sage]} skills={[]} hasSnapshot
       onAcceptWork={() => undefined} onRejectWork={() => undefined} />)
 
     expect(proposal).not.toContain('>Options<')
     expect(proposal).not.toContain('mode-single')
     expect(proposal).not.toContain('Multiple')
-    // The model button opens the runtime picker itself, and View prompt sits right after it.
-    expect(proposal).toMatch(/aria-haspopup="menu"[^>]*aria-label="Change model and reasoning, [^"]+"[\s\S]*>View prompt<[\s\S]*<input[^>]*checked=""[^>]*>[\s\S]*Worktree[\s\S]*>Reject<[\s\S]*>Accept</)
+    // The model button opens the runtime picker itself, and Edit prompt sits right after it.
+    expect(proposal).toMatch(/aria-haspopup="menu"[^>]*aria-label="Change model and reasoning, [^"]+"[\s\S]*>Edit prompt<[\s\S]*<input[^>]*checked=""[^>]*>[\s\S]*Worktree[\s\S]*>Reject<[\s\S]*>Accept</)
     expect(proposal).not.toContain('awaits acceptance')
   })
 
@@ -327,6 +327,9 @@ describe('Work handoff card verbs', () => {
     expect(live('waiting')).not.toContain('Working')
     expect(live('done')).toContain('Done')
     expect(live('done')).not.toContain('text-busy')
+    // Done wears the Settled fold's circle check, never the dot Waiting keeps (2026-11-24).
+    expect(live('waiting')).toContain('rounded-full bg-current')
+    expect(live('done')).not.toContain('rounded-full bg-current')
 
     const settled = renderToStaticMarkup(
       <Transcript
@@ -395,10 +398,14 @@ describe('a Session card in its project thread', () => {
     expect(proposal).not.toContain('led by')
     expect(proposal).not.toContain('>Manor<')
     const accepted = { ...card('Working'), workChatId: 'work_1', acceptedAt: 2, worktreeBranch: 'manor/tabs' }
-    const waiting = render({ ...accepted, session: 'done' })
+    const waiting = render({ ...accepted, session: 'waiting' })
     expect(waiting).toContain('aria-label="Open Session Keep DM browser tabs, Needs you"')
     expect(waiting).not.toContain('>Accept<')
     expect(waiting).not.toContain('manor/tabs')
+    // Quiet without a result: Done, as the overview's Settled fold has it (2026-11-24).
+    const quiet = render({ ...accepted, session: 'done' })
+    expect(quiet).toContain('Done')
+    expect(quiet).not.toContain('Needs you')
     expect(render({ ...accepted, session: 'working' })).toContain('Open Session Keep DM browser tabs, Working')
   })
 })
@@ -528,6 +535,22 @@ describe('the two result cards (2026-10-14)', () => {
       expect(result()).toMatch(/<button(?![^>]*disabled="")[^>]*title="Commits the file\."[^>]*>Confirm</)
       writeWorkChanges('handoff_1', 'Fonts: Remove them')
       expect(result()).toMatch(/<button[^>]*disabled=""[^>]*title="Your answer asks for a change, so send it instead"[^>]*>Confirm</)
+    } finally {
+      clearWorkChanges()
+    }
+  })
+
+  it('marks each choice that still needs a pick with a red star, and drops it once picked', () => {
+    const fonts = { title: 'Fonts', question: 'Should they stay?', options: ['Keep them', 'Remove them'], noChange: 'Keep them' }
+    const theme = { title: 'Theme', options: ['injected', 'fixed'] }
+    const result = () => render({ ...base, result: 'Fonts added.', files: 1, operation: 'commit', choices: [fonts, theme] })
+    const star = '<span class="flex-none text-[13px] leading-[1.45] text-danger"><span aria-hidden="true">*</span><span class="sr-only">Answer needed</span></span>'
+    try {
+      expect(result().split(star)).toHaveLength(3)
+      expect(result()).toContain(`>Should they stay?</p>${star}`)
+      writeWorkChanges('handoff_1', 'Fonts: Keep them')
+      expect(result()).not.toContain(`>Should they stay?</p>${star}`)
+      expect(result()).toContain(`>Theme</p>${star}`)
     } finally {
       clearWorkChanges()
     }

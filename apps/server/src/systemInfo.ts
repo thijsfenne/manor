@@ -58,6 +58,8 @@ export interface SystemInfoSources {
   home: string
   /** The keep awake controller can hold this Mac awake; false off macOS. */
   canKeepAwake?: boolean
+  /** The .env file the server reads; only the path is ever sent. */
+  envFile?: string
   /**
    * How each folder relates to its setting right now. Asked on every read, because
    * the setting changes in the app while the folder in use only changes at a start.
@@ -65,13 +67,32 @@ export interface SystemInfoSources {
   folders?: () => Promise<Record<'memory' | 'knowledge', FolderState>>
 }
 
-/** `pinned`: an environment variable decides it. `pending`: what the next start will use, when that differs. */
+/**
+ * `pinned`: an environment variable decides it. `pinnedIn`: the .env file that sets that
+ * variable, absent when the launch environment does; only the path is ever sent.
+ * `pending`: what the next start will use, when that differs.
+ */
 export interface FolderState {
   pinned: boolean
+  pinnedIn?: string | undefined
   pending: string | null
 }
 
 const SETTLED: FolderState = { pinned: false, pending: null }
+
+/**
+ * Whether a variable pins a folder, and which .env file set that variable: `origin` is
+ * where its value came from at startup (`envOrigin`), undefined meaning the data folder's
+ * file. A value from the launch environment names no file, and neither does an unpinned folder.
+ */
+export function pinState(
+  pinned: boolean,
+  origin: 'environment' | 'checkout' | undefined,
+  files: { checkout: string; data: string },
+): Pick<FolderState, 'pinned' | 'pinnedIn'> {
+  if (!pinned || origin === 'environment') return { pinned }
+  return { pinned, pinnedIn: origin === 'checkout' ? files.checkout : files.data }
+}
 
 /**
  * Settings' About, Providers and Memory & vault. Versions and the commit cost a
@@ -109,6 +130,7 @@ export function createSystemInfo(sources: SystemInfoSources): () => Promise<Syst
       vault: { path: sources.vaultDir, ...folders.knowledge },
       logs: await listLogs(sources.home),
       canKeepAwake: sources.canKeepAwake === true,
+      ...(sources.envFile === undefined ? {} : { envFile: sources.envFile }),
     }
   }
 }

@@ -124,8 +124,11 @@ function Workspace({
   const phone = isPhoneLayout(viewportWidth)
   /** Focus mode as asked for; see `focusMode` below. While it is on, the hidden chrome's own keys are off. */
   const [focusRequested, setFocusRequested] = useState(false)
+  /** The stage's panel region docks only with the sidebar folded; see `sidebarFoldsForPanels`. */
+  const [panelFoldsSidebar, setPanelFoldsSidebar] = useState(false)
   const {
     collapsed: sidebarCollapsed,
+    foldedForPanel: sidebarFoldedForPanel,
     overlay: sidebarOverlay,
     width: sidebarWidth,
     view: sidebarView,
@@ -138,7 +141,7 @@ function Workspace({
     showView: showSidebarView,
     holdPeek,
     resizeProps,
-  } = useSidebar(phone, !focusRequested)
+  } = useSidebar(phone, !focusRequested, panelFoldsSidebar)
   // The server keeps one notice at a time, so exactly one place on screen may
   // show it. While a registry dialog is up, that place is the dialog.
   const [editingSettings, setEditingSettings] = useState(false)
@@ -152,8 +155,11 @@ function Workspace({
    * bare viewport measures a chat that does not exist: the sidebar and the rail are
    * already spending 330 of those pixels, and the transcript pays for both.
    */
-  const reservedWidth =
-    (sidebarCollapsed || sidebarOverlay ? 0 : sidebarWidth) + (phone ? 0 : NAV_RAIL_WIDTH + FRAME_GUTTER)
+  const chromeWidth = phone ? 0 : NAV_RAIL_WIDTH + FRAME_GUTTER
+  const reservedWidth = (sidebarCollapsed || sidebarOverlay ? 0 : sidebarWidth) + chromeWidth
+  /** The room the pinned sidebar holds as the user left it, also while it is folded for a panel. */
+  const sidebarRoomWidth = sidebarOverlay || (sidebarCollapsed && !sidebarFoldedForPanel) ? 0 : sidebarWidth
+  const pinnedStageWidth = Math.max(0, viewportWidth - chromeWidth - sidebarRoomWidth)
   /**
    * Read once per mount rather than per render: the preload bridge is installed
    * before the first paint or it never is, and this decides whether a rail item and
@@ -162,7 +168,10 @@ function Workspace({
   const [browserBridge] = useState(desktopBrowser)
   // Each split pane owns its rail and panel. Neither may take width from its neighbour.
   const stageWidth = Math.max(0, viewportWidth - reservedWidth)
-  const stage = useSplitStage(manor, phone, stageWidth, sidebarView)
+  // A split is judged on the stage as the user left the sidebar, so a fold for a panel
+  // never brings one up; it would take the room the fold was for.
+  const stage = useSplitStage(manor, phone, pinnedStageWidth, sidebarView)
+  const sidebarRoom = { stageWidth: pinnedStageWidth, width: sidebarRoomWidth, onFold: setPanelFoldsSidebar }
   const { visibleSplit, canSplit, freeSplit, roomThreadOf, splitDraftSide, setSplitDraftSide } = stage
 
   const listedOpen = chatOf(workspace, workspace.openChatId)
@@ -227,7 +236,7 @@ function Workspace({
     beginDraft, clearDraft,
   } = chatDialogs
   const { rows, running } = useOpenChatRows(manor, open?.id, thread, baseRows, bornChat)
-  const { chatRows, chatInbox, threadRows, threadlessProjects, switcherItems, runsByRoutine } = useWorkspaceLists(workspace, phone)
+  const { chatRows, chatInbox, searchInbox, threadRows, threadlessProjects, switcherItems, runsByRoutine } = useWorkspaceLists(workspace, phone, searchOpen)
 
   const hasVault = workspace.vault.status === 'ready'
   const hasArtifacts = workspace.artifacts.status === 'ready'
@@ -642,6 +651,7 @@ function Workspace({
     activeLayout,
     running,
     stageWidth,
+    sidebarRoom,
     hasVault,
     settingsOpen,
     focusMode,
@@ -866,6 +876,8 @@ function Workspace({
         manor={manor}
         chatRows={chatRows}
         chatInbox={chatInbox}
+        searchInbox={searchInbox}
+        threadRows={threadRows}
         runsByRoutine={runsByRoutine}
         open={open}
         projectDialog={projectDialog}

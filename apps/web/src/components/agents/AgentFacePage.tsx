@@ -150,7 +150,7 @@ export function AgentFacePage({ draft, onChange }: {
           {shrinking ? 'Resizing…' : picture ? 'Upload another' : 'Upload a picture'}
         </span>
       </Button>
-      <input ref={fileRef} className="hidden" type="file" accept={AVATAR_ACCEPT} tabIndex={-1} onChange={(event) => void pickFile(event)} />
+      <input ref={fileRef} className="hidden" type="file" aria-label="Choose a picture" accept={AVATAR_ACCEPT} tabIndex={-1} onChange={(event) => void pickFile(event)} />
       {problem === null ? null : <p className="m-0 text-label text-danger" role="alert">{problem}</p>}
     </div>
   )

@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
-import { AlertCircleIcon, CheckmarkCircle02Icon, Tick02Icon } from '@hugeicons/core-free-icons'
+import { AlertCircleIcon, CheckmarkCircle02Icon, CircleCheckIcon, Tick02Icon } from '@hugeicons/core-free-icons'
 import { readWorkChanges, subscribeWorkChanges, writeWorkChanges } from '@manor/client-runtime/work-changes'
 import { readWorkChangesOpen, setWorkChangesOpen, subscribeWorkProposals } from '@manor/client-runtime/work-proposals'
 import type { GoalChoice } from '@manor/contracts'
@@ -38,12 +38,14 @@ export const WORK_STATUS_TONE: Record<WorkStatus['tone'], string> = {
 }
 
 /**
- * The dot or check in front of a state word; a landed commit gets the check. Still,
+ * The dot or check in front of a state word; a landed commit gets the check, and a quiet
+ * Session's Done the Settled fold's circle check (2026-11-24). Still,
  * also while busy: the word beside it already says Working, and a loop on every card
  * would be one more thing moving for a fact nobody needs repeated.
  */
 export function WorkStatusMark({ status }: { status: WorkStatus }) {
   if (status.tone === 'ok' && status.text !== 'Settled') return <Icon icon={CheckmarkCircle02Icon} size={13} />
+  if (status.tone === 'ready' && status.text === 'Done') return <Icon icon={CircleCheckIcon} size={13} />
   if (status.tone === 'dim') return null
   return <span aria-hidden className="size-1.5 rounded-full bg-current" />
 }
@@ -109,9 +111,9 @@ function ResultLines({ result, settled }: { result: WorkResult; settled: boolean
  * The decisions a report leaves to the user, under a divider: each choice's plain question
  * on up to two lines (its title on one line for an older report) and its options as small
  * grey buttons, the picked one in a blue wash. A press writes `Title: option` into Follow up,
- * which opens, so several picks go to the Session as one message. Follow up stays closed
- * while it holds only picks of a choice's `noChange` option, and Confirm waits until every
- * choice has one (`workConfirmWait`).
+ * which opens, so several picks go to the Session as one message. A choice without a pick
+ * carries a red star. Follow up stays closed while it holds only picks of a choice's
+ * `noChange` option, and Confirm waits until every choice has one (`workConfirmWait`).
  */
 function YourCall({ result, picked, disabled, onPick }: {
   result: WorkResult
@@ -125,9 +127,12 @@ function YourCall({ result, picked, disabled, onPick }: {
     <div className="flex min-w-0 flex-col gap-2.5 border-t border-line pt-2.5">
       {choices.map((choice) => (
         <div key={choice.title} className="flex min-w-0 flex-col gap-1.5">
-          {choice.question === undefined
-            ? <p title={choice.title} className="m-0 truncate text-[13px] leading-[1.45] text-text">{choice.title}</p>
-            : <p title={choice.question} className="m-0 line-clamp-2 text-[13px] leading-[1.45] text-text [overflow-wrap:anywhere]">{choice.question}</p>}
+          <div className="flex min-w-0 items-start gap-0.5">
+            {choice.question === undefined
+              ? <p title={choice.title} className="m-0 truncate text-[13px] leading-[1.45] text-text">{choice.title}</p>
+              : <p title={choice.question} className="m-0 line-clamp-2 text-[13px] leading-[1.45] text-text [overflow-wrap:anywhere]">{choice.question}</p>}
+            {choice.options.some((option) => workChoicePicked(picked, choice.title, option)) ? null : <AnswerNeeded />}
+          </div>
           <div className="flex flex-wrap gap-1.5">
             {choice.options.map((option) => {
               const recommended = option === choice.recommended
@@ -149,6 +154,19 @@ function YourCall({ result, picked, disabled, onPick }: {
       ))}
       {more === 0 ? null : <p className="m-0 text-[12.5px] text-dim">+{more} more in the report</p>}
     </div>
+  )
+}
+
+/**
+ * The red star after a choice that still has no pick: Confirm stays off until every shown
+ * choice has one, and there is no room for a line beside it (2026-11-24).
+ */
+function AnswerNeeded() {
+  return (
+    <span className="flex-none text-[13px] leading-[1.45] text-danger">
+      <span aria-hidden>*</span>
+      <span className="sr-only">Answer needed</span>
+    </span>
   )
 }
 

@@ -14,7 +14,7 @@ vi.mock('../src/components/ui/Select', () => ({ Select: () => null }))
 const text = (node: ReactTestInstance): string =>
   node.children.map((child) => typeof child === 'string' ? child : text(child)).join('')
 
-function renderPage(binding: Partial<ComposioBinding>) {
+function renderPage(binding: Partial<ComposioBinding>, envFile?: string) {
   const listeners = new Set<(response: RequestResponse) => void>()
   const requestEvents: RequestEvents = { subscribe: (next) => { listeners.add(next); return () => { listeners.delete(next) } } }
   const composio: ComposioBinding = {
@@ -39,6 +39,7 @@ function renderPage(binding: Partial<ComposioBinding>) {
         onDialogChange={() => undefined}
         live
         composio={next}
+        envFile={envFile}
       />
   )
   act(() => { view = create(page(composio)) })
@@ -110,13 +111,18 @@ describe('the Composio key on the Connectors page', () => {
   })
 
   it('shows where an outside key is set, with no form and no way to remove it', () => {
-    const page = renderPage({ key: 'checkout' })
+    const page = renderPage({ key: 'checkout' }, '/Users/anna/.manor/.env')
     view = page.view
     const all = text(view.root)
-    expect(all).toContain('The Composio key is set outside Manor, in apps/server/.env. Change it there.')
+    expect(all).toContain('The Composio key is set outside Manor, in ~/.manor/.env. Change it there.')
     expect(view.root.findAll((node) => node.type === 'input' && node.props.type === 'password')).toHaveLength(0)
     expect(all).not.toContain('Remove key')
     expect(page.composio.list).toHaveBeenCalled()
+  })
+
+  it('falls back to a plain name when an older server does not report its env file', () => {
+    view = renderPage({ key: 'checkout' }).view
+    expect(text(view.root)).toContain('The Composio key is set outside Manor, in the server’s .env file. Change it there.')
   })
 
   it('offers Remove key for Manor\'s own key, behind a confirm that keeps the Composio accounts', () => {

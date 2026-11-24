@@ -95,7 +95,20 @@ describe('chat titles', () => {
       'Een korte, bruikbare naam',
     )
     expect(fallbackChatTitle('een twee drie vier vijf zes zeven acht negen tien')).toBe(
-      'een twee drie vier vijf zes zeven acht',
+      'een twee drie vier vijf zes zeven acht…',
     )
+  })
+
+  it('ends a cut fallback title on a whole phrase with an ellipsis, inside the limit', () => {
+    // Cut by words: the comma and the joining word go, then the ellipsis.
+    expect(fallbackChatTitle('Plan a party with guest list, cake, and balloons everywhere')).toBe('Plan a party with guest list, cake…')
+    expect(fallbackChatTitle('Maak een lijst voor gasten, taart, ballonnen en muziek erbij')).toBe('Maak een lijst voor gasten, taart, ballonnen…')
+    // Cut by length: the ellipsis counts toward the limit of 64.
+    const long = fallbackChatTitle('Extraordinarily elaborate documentation regarding interdepartmental reorganization')
+    expect(long).toBe('Extraordinarily elaborate documentation regarding…')
+    expect(fallbackChatTitle('Extraordinarilyelaboratedocumentationregardinginterdepartmentalreorganizationplans please').length).toBeLessThanOrEqual(64)
+    // What fits stays as written, with no ellipsis, a model's title included.
+    expect(fallbackChatTitle('Plan the party with the guest list and')).toBe('Plan the party with the guest list and')
+    expect(cleanChatTitle('Plan the party and', 'Fallback')).toBe('Plan the party and')
   })
 })

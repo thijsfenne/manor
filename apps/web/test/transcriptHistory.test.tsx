@@ -27,3 +27,37 @@ describe('reading transcript history', () => {
     expect(rendered()).toContain('Message 70')
   })
 })
+
+describe('staying at the bottom', () => {
+  it('follows a composer or Session bar that grew before the pin\'s own scroll event, and lets go on a scroll up', () => {
+    let top = 0
+    const scroller = {
+      scrollHeight: 1_000,
+      clientHeight: 400,
+      get scrollTop() { return top },
+      set scrollTop(next: number) { top = Math.max(0, Math.min(next, this.scrollHeight - this.clientHeight)) },
+      querySelector: () => null,
+      querySelectorAll: () => [],
+      getBoundingClientRect: () => ({ top: 0, bottom: 400 }),
+      contains: () => false,
+    }
+    vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} })
+    vi.stubGlobal('requestAnimationFrame', () => 0)
+    vi.stubGlobal('cancelAnimationFrame', () => {})
+    act(() => {
+      view = create(render(rows), { createNodeMock: (element) => (element.props.onScroll === undefined ? null : scroller) })
+    })
+    const scroll = () => act(() => view.root.find((node) => node.props.onScroll !== undefined).props.onScroll())
+    const jumpShown = () => view.root.findAll((node) => node.props['data-jump-latest'] !== undefined).length > 0
+    expect(scroller.scrollTop).toBe(600)
+    // The Session bar and the composer settle 60px taller, then the pin's scroll event arrives.
+    scroller.scrollHeight = 1_060
+    scroll()
+    expect(jumpShown()).toBe(false)
+    expect(scroller.scrollTop).toBe(660)
+    // The reader scrolls up past the slack: the thread lets go and offers the way back.
+    scroller.scrollTop = 500
+    scroll()
+    expect(jumpShown()).toBe(true)
+  })
+})

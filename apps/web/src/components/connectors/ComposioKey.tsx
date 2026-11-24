@@ -1,6 +1,7 @@
 import { useRef, useState, type FormEvent } from 'react'
 import { LinkSquare02Icon } from '@hugeicons/core-free-icons'
 import type { ComposioKeySource } from '@manor/contracts'
+import { envFileLabel } from '../../envFileLabel'
 import { Icon } from '../Icon'
 import { Modal, ModalFooter } from '../Modal'
 import { Button, buttonClass } from '../ui/Button'
@@ -135,25 +136,29 @@ function StepTitle({ step, children }: { step: number; children: string }) {
   )
 }
 
-const SOURCE_TEXT: Record<Exclude<ComposioKeySource, 'none'>, string> = {
-  manor: 'The Composio key is saved in Manor’s data folder.',
-  environment: 'The Composio key is set outside Manor, in the environment Manor starts with. Change it there.',
-  checkout: 'The Composio key is set outside Manor, in apps/server/.env. Change it there.',
+const sourceText = (source: Exclude<ComposioKeySource, 'none'>, envFile?: string): string => {
+  switch (source) {
+    case 'manor': return 'The Composio key is saved in Manor’s data folder.'
+    case 'environment': return 'The Composio key is set outside Manor, in the environment Manor starts with. Change it there.'
+    case 'checkout': return `The Composio key is set outside Manor, in ${envFileLabel(envFile)}. Change it there.`
+  }
 }
 
 /**
  * Where the key lives, under the catalogue; only Manor's own key has a way out here.
  * `notice` is the answer to a save that kept the key but could not start Composio.
  */
-export function ComposioKeyNote({ source, notice, onRemove }: {
+export function ComposioKeyNote({ source, envFile, notice, onRemove }: {
   source: Exclude<ComposioKeySource, 'none'>
+  /** The .env file the server reads, from the system info. */
+  envFile?: string | undefined
   notice: string | null
   onRemove: () => void
 }) {
   return (
     <div className="mt-6 flex flex-col gap-2 px-2">
       <div className="flex items-center gap-3">
-        <span className="min-w-0 text-label text-dim">{SOURCE_TEXT[source]}</span>
+        <span className="min-w-0 text-label text-dim">{sourceText(source, envFile)}</span>
         {source === 'manor' ? (
           <Button variant="ghost" size="compact" className="flex-none" onClick={onRemove}>Remove key</Button>
         ) : null}

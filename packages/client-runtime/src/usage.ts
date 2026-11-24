@@ -103,6 +103,9 @@ export function displayPercent(value: number): number {
   return clamped > 0 && clamped < 1 ? 1 : Math.round(clamped)
 }
 
+/** The clock the whole app prints: 24 hours, two digits each, whatever the device's region says. */
+const CLOCK = new Intl.DateTimeFormat('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false })
+
 /** "resets in 42m" while that is a useful thing to say, a clock time once it is not. */
 export function resetLabel(resetsAt: number | undefined, now: number): string {
   if (resetsAt === undefined) return ''
@@ -115,7 +118,7 @@ export function resetLabel(resetsAt: number | undefined, now: number): string {
     return rest === 0 ? `resets in ${String(hours)}h` : `resets in ${String(hours)}h ${String(rest)}m`
   }
   const when = new Date(resetsAt)
-  const time = when.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
+  const time = CLOCK.format(when)
   // Beyond half a day "in 19 hours" is arithmetic the reader has to undo, so the
   // weekly window says which day it lands on instead.
   const sameDay = new Date(now).toDateString() === when.toDateString()
@@ -125,8 +128,7 @@ export function resetLabel(resetsAt: number | undefined, now: number): string {
     : `resets ${when.toLocaleDateString('en-US', { weekday: 'short' })} ${time}`
 }
 
-export const clockOf = (at: number) =>
-  new Date(at).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
+export const clockOf = (at: number) => CLOCK.format(new Date(at))
 
 /**
  * Optional explanatory copy for provider-specific usage windows.

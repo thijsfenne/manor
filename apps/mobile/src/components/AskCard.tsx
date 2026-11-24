@@ -10,6 +10,8 @@ import { FadingScrollView } from '@/components/FadingScrollView'
 import { GlassSurface } from '@/components/GlassSurface'
 import { Text } from '@/components/Text'
 import { answerOf, draftOf, FIRST_STEP, pickAdvances, reduceAsk, type AskAction } from '@/lib/askSteps'
+import { MAC_ANSWER_WAIT_MS, MAC_SILENT_LINE, OPEN_SEND_LOCK, SENT_SEND_LOCK, settleSendLock } from '@/lib/sendWait'
+import { useWorkspaceStatus } from '@/providers/WorkspaceProvider'
 import { colors, fonts, radius, spacing, squircle, tracking } from '@/theme'
 
 /**
@@ -49,12 +51,29 @@ export function AskCard({
   // disagree for a frame.
   const [activeRequest, setActiveRequest] = useState(ask.requestId)
   // Stop and Cancel stay usable after a send, so a refused answer never strands the turn.
-  const [sent, setSent] = useState(false)
+  const [sendLock, setSendLock] = useState(OPEN_SEND_LOCK)
   if (activeRequest !== ask.requestId) {
     setActiveRequest(ask.requestId)
     setSteps(FIRST_STEP)
-    setSent(false)
+    setSendLock(OPEN_SEND_LOCK)
   }
+  // An answer lost with the connection unlocks the card once the Mac says the question still waits.
+  const live = useWorkspaceStatus() === 'live'
+  const settledLock = settleSendLock(sendLock, live, ask)
+  if (settledLock !== sendLock) setSendLock(settledLock)
+  const sent = settledLock.kind !== 'open'
+  // An answer the Mac has not recorded after a while says so. The card stays locked, since a
+  // second send would answer twice; the header's Stop or Cancel is the way out.
+  const [waitedOut, setWaitedOut] = useState(false)
+  const waiting = settledLock.kind === 'sent'
+  useEffect(() => {
+    if (!waiting) return
+    const timer = setTimeout(() => setWaitedOut(true), MAC_ANSWER_WAIT_MS)
+    return () => {
+      clearTimeout(timer)
+      setWaitedOut(false)
+    }
+  }, [waiting])
 
   const advanceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const clearAdvance = () => {
@@ -91,7 +110,7 @@ export function AskCard({
     }
     // Locked once the socket takes it: the card stays until the thread records the answer,
     // and a second tap meanwhile would answer twice.
-    if (!sent && onAnswer(result.send)) setSent(true)
+    if (!sent && onAnswer(result.send)) setSendLock(SENT_SEND_LOCK)
   }
 
   const pick = (label: string) => {
@@ -186,13 +205,14 @@ export function AskCard({
             {stepped && steps.step > 0 ? <CardButton label="Back" disabled={sent} onPress={() => act({ kind: 'back' })} style={styles.grow} variant="secondary" /> : null}
             <CardButton
               disabled={!ready}
-              label={last ? 'Send' : 'Next'}
+              label={sent ? 'Sending…' : last ? 'Send' : 'Next'}
               onPress={() => act({ kind: 'next' })}
               style={styles.grow}
               variant="primary"
             />
           </View>
           {stepped ? <CardButton label={keep ? 'Keep' : 'Skip'} disabled={sent} onPress={() => act({ kind: 'skip' })} style={styles.skip} variant="quiet" /> : null}
+          {waiting && waitedOut ? <Text style={styles.macOnly}>{MAC_SILENT_LINE}</Text> : null}
         </View>
       )}
     </GlassSurface>

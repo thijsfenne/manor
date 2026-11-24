@@ -102,6 +102,8 @@ export function ModePicker({ choice, themes, onChange }: { choice: Choice; theme
             >
               <span className="relative block aspect-[10/7] w-full overflow-hidden rounded-lg">
                 <Preview choice={option.value} themes={themes} />
+                {/* The page's own hairline over the whole card: a preview in a theme close to the page's would lose its edge, and System's clipped half has none of its own. */}
+                <span aria-hidden="true" data-preview-edge className="pointer-events-none absolute inset-0 rounded-[inherit] border border-line" />
               </span>
             </span>
             <span className={`text-[14px] leading-snug ${selected ? 'font-medium text-text' : 'text-muted group-hover:text-text'}`}>

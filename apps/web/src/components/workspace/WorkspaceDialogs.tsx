@@ -8,7 +8,7 @@ import type { RightPanelId } from '../../useRightPanel'
 import type { GroupDialogState } from '../../useChatDialogs'
 import type { useChatSwitcher } from '../../useChatSwitcher'
 import type { useRevealRequests } from '../../useRevealRequests'
-import { chatOf, type ChatListRow, type Inbox } from '../../state'
+import { chatOf, type ChatListRow, type Inbox, type ProjectThreadRow } from '../../state'
 import type { Manor } from '../../useWorkspace'
 
 // Dialogs that exist only while open, kept out of the first chunk.
@@ -24,6 +24,8 @@ export function WorkspaceDialogs({
   manor,
   chatRows,
   chatInbox,
+  searchInbox,
+  threadRows,
   runsByRoutine,
   open,
   projectDialog,
@@ -50,6 +52,8 @@ export function WorkspaceDialogs({
   manor: Manor
   chatRows: ChatListRow[]
   chatInbox: Inbox
+  searchInbox: Inbox
+  threadRows: ProjectThreadRow[]
   runsByRoutine: Record<string, Chat[]>
   /** The chat on the stage, beside which a note may open. */
   open: Chat | null
@@ -151,6 +155,8 @@ export function WorkspaceDialogs({
         <SearchDialog
           chats={chatRows}
           inbox={chatInbox}
+          searchInbox={searchInbox}
+          threadRows={threadRows}
           runs={runsByRoutine}
           agents={workspace.agents}
           reminders={workspace.reminders}

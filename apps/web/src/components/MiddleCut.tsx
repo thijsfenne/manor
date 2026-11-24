@@ -14,12 +14,15 @@ export function splitForMiddleCut(text: string): [head: string, tail: string] {
 /**
  * A one-line file name that is cut in the middle, so the extension and a version at the
  * end stay readable. Use it in place of a `truncate` span; `className` styles the line.
- * The hover tooltip comes from `overflowTitles`, which knows this mark.
+ * The hover tooltip comes from `overflowTitles`, which knows this mark. The line is one
+ * image with the full name as its label, so a screen reader says the name once instead
+ * of its two halves; the halves stay real text, so a mouse selection still copies the
+ * whole name.
  */
 export function MiddleCut({ text, className = '' }: { text: string; className?: string }) {
   const [head, tail] = splitForMiddleCut(text)
   return (
-    <span className={`flex min-w-0 ${className}`} data-middle-cut="">
+    <span className={`flex min-w-0 ${className}`} data-middle-cut="" role="img" aria-label={head + tail}>
       <span className="min-w-0 overflow-hidden text-ellipsis whitespace-pre">{head}</span>
       <span className="shrink-0 whitespace-pre">{tail}</span>
     </span>

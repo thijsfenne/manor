@@ -49,6 +49,9 @@ interface ConnectorsViewProps {
   /** The socket is live; the page asks for the catalogue again whenever it comes back. */
   live: boolean
   composio: ComposioBinding
+  /** The .env file the server reads, from the system info; named when a key comes from it. */
+  envFile?: string | undefined
+  onRequestInfo?: (() => void) | undefined
 }
 
 /** Household-wide integrations, including Manor-managed connections such as mymind. */
@@ -67,6 +70,8 @@ export function ConnectorsView({
   onDialogChange,
   live,
   composio,
+  envFile,
+  onRequestInfo,
 }: ConnectorsViewProps) {
   const [query, setQuery] = useState('')
   const deferredQuery = useDeferredValue(query.trim().toLowerCase())
@@ -83,6 +88,10 @@ export function ConnectorsView({
   const [removingKey, setRemovingKey] = useState(false)
   const { list, key: keySource } = composio
   const noKey = keySource === 'none'
+  const keyFromCheckout = keySource === 'checkout'
+  useEffect(() => {
+    if (keyFromCheckout) onRequestInfo?.()
+  }, [keyFromCheckout, onRequestInfo])
   const [mymindOpen, setMyMindOpen] = useState(false)
   const [mymindPending, setMyMindPending] = useState(false)
   const dialog = useMcpDialog({
@@ -161,7 +170,8 @@ export function ConnectorsView({
     const entry = bySlug.get(app.toolkit)
     return entry === undefined ? `${app.toolkit} ${appLabel(app.toolkit)}`.toLowerCase().includes(deferredQuery) : appMatches(entry, deferredQuery)
   })
-  const connectedCount = ownRows.length + (showMyMind ? 1 : 0) + connectedApps.length
+  // mymind counts once its keys are found; "Not configured" and "Checking…" are not connected.
+  const connectedCount = ownRows.length + (showMyMind && mymind?.available === true ? 1 : 0) + connectedApps.length
 
   const connect = (toolkit: string, alias: ComposioAlias) => {
     setPageError(null)
@@ -257,7 +267,7 @@ export function ConnectorsView({
         )}
 
         <SectionHeading title="Connected" count={connectedCount} />
-        {connectedCount > 0 ? null : <p className="m-0 px-2 text-label text-muted">Nothing connected matches that search.</p>}
+        {connectedCount > 0 || showMyMind ? null : <p className="m-0 px-2 text-label text-muted">Nothing connected matches that search.</p>}
         <div className="grid grid-cols-2 gap-x-8 gap-y-2 max-[760px]:grid-cols-1">
           {showMyMind ? <MyMindConnectorRow status={mymind} onOpen={openMyMind} /> : null}
           {ownRows.map((server) => (
@@ -343,6 +353,7 @@ export function ConnectorsView({
         {keySource === null || keySource === 'none' ? null : (
           <ComposioKeyNote
             source={keySource}
+            envFile={envFile}
             notice={removingKey ? null : keyError}
             onRemove={() => {
               setKeyError(null)

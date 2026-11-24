@@ -1,6 +1,7 @@
 import AlertCircleIcon from '@hugeicons/core-free-icons/AlertCircleIcon'
 import Cancel01Icon from '@hugeicons/core-free-icons/Cancel01Icon'
 import CheckmarkCircle02Icon from '@hugeicons/core-free-icons/CheckmarkCircle02Icon'
+import CircleCheckIcon from '@hugeicons/core-free-icons/CircleCheckIcon'
 import Tick02Icon from '@hugeicons/core-free-icons/Tick02Icon'
 import { HugeiconsIcon } from '@hugeicons/react-native'
 import { Image } from 'expo-image'
@@ -17,14 +18,16 @@ import { useWorkspaceActions, useWorkspaceStatus } from '@/providers/WorkspacePr
 import { colors, fonts, radius, spacing, squircle } from '@/theme'
 import { AttachmentThumbnail, ImageViewer } from './Attachments'
 import { CardButton } from './CardButton'
+import { ExpandableText } from './ExpandableText'
 import { MergeFixPanel } from './MergeFixPanel'
 import { Text } from './Text'
 
 export const WORK_STATUS_TONE: Record<WorkStatus['tone'], ColorValue> = { busy: colors.busy, ready: colors.text, ok: colors.ok, warn: colors.warning, waiting: colors.warning, dim: colors.dim }
 
-/** The dot or check in front of a state word; a landed commit gets the check. */
+/** The dot or check in front of a state word; a landed commit gets the check, a quiet Session's Done the Settled fold's circle check (2026-11-24). */
 export function WorkStatusMark({ status }: { status: WorkStatus }) {
   if (status.tone === 'ok' && status.text !== 'Settled') return <HugeiconsIcon color={WORK_STATUS_TONE.ok} icon={CheckmarkCircle02Icon} size={14} strokeWidth={1.8} />
+  if (status.tone === 'ready' && status.text === 'Done') return <HugeiconsIcon color={WORK_STATUS_TONE.ready} icon={CircleCheckIcon} size={14} strokeWidth={1.8} />
   if (status.tone === 'dim') return null
   return <View style={[styles.dot, { backgroundColor: WORK_STATUS_TONE[status.tone] }]} />
 }
@@ -93,7 +96,10 @@ function YourCall({ result, picked, disabled, onPick }: {
     <View style={styles.choices}>
       {choices.map((choice) => (
         <View key={choice.title} style={styles.choice}>
-          <Text numberOfLines={choice.question === undefined ? 1 : 2} style={styles.question}>{choice.question ?? choice.title}</Text>
+          <View style={styles.questionRow}>
+            <Text numberOfLines={choice.question === undefined ? 1 : 2} style={styles.question}>{choice.question ?? choice.title}</Text>
+            {choice.options.some((option) => workChoicePicked(picked, choice.title, option)) ? null : <AnswerNeeded />}
+          </View>
           <View style={styles.options}>
             {choice.options.map((option) => {
               const recommended = option === choice.recommended
@@ -119,6 +125,14 @@ function YourCall({ result, picked, disabled, onPick }: {
       {more === 0 ? null : <Text style={styles.meta}>{`+${more} more in the report`}</Text>}
     </View>
   )
+}
+
+/**
+ * The red star after a choice that still has no pick: Confirm stays off until every shown
+ * choice has one, and there is no room for a line beside it (2026-11-24).
+ */
+function AnswerNeeded() {
+  return <Text accessibilityLabel="Answer needed" style={styles.answerNeeded}>*</Text>
 }
 
 /**
@@ -358,7 +372,9 @@ export function WorkResultBody({ result, docked: inDock = false, blocked = false
       {reason === undefined ? null : (
         <View style={styles.blocked}>
           <View style={styles.shrink}>
-            <Text accessibilityRole="alert" numberOfLines={2} style={styles.limitation}>{reason}</Text>
+            <View accessibilityRole="alert">
+              <ExpandableText style={styles.limitation} tapText text={reason} />
+            </View>
             {refused === undefined ? null : <Text numberOfLines={2} style={styles.refused}>{refused}</Text>}
           </View>
           {onOpenSession === undefined ? null : (
@@ -505,7 +521,9 @@ const styles = StyleSheet.create({
   resultIcon: { height: 21, paddingTop: 4 },
   limitationIcon: { height: 18, paddingTop: 2 },
   lineText: { flex: 1 },
-  question: { color: colors.text, fontFamily: fonts.sans, fontSize: 13, lineHeight: 18 },
+  questionRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 2 },
+  question: { flexShrink: 1, color: colors.text, fontFamily: fonts.sans, fontSize: 13, lineHeight: 18 },
+  answerNeeded: { color: colors.danger, fontFamily: fonts.sans, fontSize: 13, lineHeight: 18 },
   choice: { gap: 6 },
   options: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   // A picked option wears the blue wash with plain text, like the Mac's.

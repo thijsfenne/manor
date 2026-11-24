@@ -454,7 +454,7 @@ export class ProjectThreads {
     await this.append(threadChatId, {
       type: 'system_note',
       kind: 'info',
-      text: `${handoff.title} ${permission ? 'is waiting for your approval' : `asks ${project?.name ?? 'the project'}`}: ${questions.map((question) => question.question).join('; ').slice(0, QUESTION_TEXT_MAX)}`,
+      text: `${handoff.title} ${permission ? 'is waiting for your approval' : 'asks'}: ${questions.map((question) => question.question).join('; ').slice(0, QUESTION_TEXT_MAX)}`,
       sessionQuestion: { sessionChatId, requestId, agentId, title: handoff.title.slice(0, 200), questions: [...questions] },
       ...(permission || capped ? {} : { threadPending: questionPrompt(handoff.title, asker, requestId, questions) }),
     })

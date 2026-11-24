@@ -308,7 +308,7 @@ export function WorkHandoffCard({
             ) : null}
             {proposedTask === undefined ? null : (
               <Button size="compact" variant="ghost" disabled={accepting} onClick={() => setPromptOpen(true)} className="text-muted">
-                {editedTask === undefined ? 'View prompt' : 'Edited prompt'}
+                {editedTask === undefined ? 'Edit prompt' : 'Edited prompt'}
               </Button>
             )}
             <span className="ml-auto flex items-center gap-2">

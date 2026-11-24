@@ -180,7 +180,7 @@ function ProfileGroup({ profile, requestEvents, onSave, onProblem, onDismissNoti
             Remove
           </Button>
         )}
-        <input ref={fileRef} className="hidden" type="file" accept={AVATAR_ACCEPT} tabIndex={-1} onChange={(event) => void pickFile(event)} />
+        <input ref={fileRef} className="hidden" type="file" aria-label="Choose a picture" accept={AVATAR_ACCEPT} tabIndex={-1} onChange={(event) => void pickFile(event)} />
       </SettingsRow>
       <SettingsRow label={<label htmlFor={nameId}>Name</label>} description="Agents keep calling you by your first name.">
         <input

@@ -1,5 +1,5 @@
 // First, on purpose: it reads the settings files before any other module looks at the environment.
-import { DATA_ENV_FILE, envOrigin } from './envFiles.js'
+import { DATA_ENV_FILE, ENV_FILE, ENV_FILES, envOrigin } from './envFiles.js'
 import { execFileSync } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { appendFile, mkdir } from 'node:fs/promises'
@@ -211,7 +211,7 @@ import { SubagentRefusal } from './subagents.js'
 import { openVault, type Vault } from './vault.js'
 import { createVaultMedia } from './vaultMedia.js'
 import { createRepoIconMedia } from './repoIcons.js'
-import { createSystemInfo } from './systemInfo.js'
+import { createSystemInfo, pinState } from './systemInfo.js'
 import { createKeepAwake } from './keepAwake.js'
 import { createSimulatorHost, liveSimulatorDeps, type SimulatorHost } from './simulator.js'
 import { createSimulatorProxy } from './simulatorProxy.js'
@@ -1128,15 +1128,19 @@ async function main(): Promise<void> {
       drivers: drivers.byProvider,
       home: homedir(),
       canKeepAwake: keepAwake.supported,
+      envFile: ENV_FILE,
       folders: async () => {
         const saved = await store.getHouseSettings()
         const nextMemory = memoryRoot(resolveMemoryTarget(process.env, homedir(), saved.memoryDir)) ?? null
         const nextVault = resolveVaultDir(process.env, homedir(), saved.knowledgeDir)
         const nextVaultDir = nextVault.ok ? nextVault.dir : null
         return {
-          memory: { pinned: memoryDirPinned(process.env), pending: nextMemory === (memoryFolder ?? null) ? null : nextMemory },
+          memory: {
+            ...pinState(memoryDirPinned(process.env), envOrigin('MANOR_MEMORY_DIR'), ENV_FILES),
+            pending: nextMemory === (memoryFolder ?? null) ? null : nextMemory,
+          },
           knowledge: {
-            pinned: vaultDirPinned(process.env),
+            ...pinState(vaultDirPinned(process.env), envOrigin('MANOR_VAULT_DIR'), ENV_FILES),
             pending: nextVaultDir === (vaultDir.ok ? vaultDir.dir : null) ? null : nextVaultDir,
           },
         }

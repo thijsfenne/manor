@@ -59,6 +59,7 @@ import { useWorkspace } from '@/providers/WorkspaceProvider'
 import { Text } from '@/components/Text'
 import { colors, fonts, radius, spacing, squircle } from '@/theme'
 import { useHostAuto } from '@/useHostAuto'
+import { MAC_ANSWER_WAIT_MS, sendWaitLine } from '@/lib/sendWait'
 
 type Stage = 'projects' | 'folders' | 'draft'
 
@@ -232,6 +233,15 @@ function NewChatFlow() {
     closeDirs()
   }, [clearCreatedProject, closeDirs, confirmedProjectRequest])
 
+  // The form stays locked while the Mac has not confirmed, since another Send would make a
+  // second Session; after a while the line under it says the Mac is late, not lost.
+  const [waitedOutChatRequest, setWaitedOutChatRequest] = useState<string | null>(null)
+  useEffect(() => {
+    if (pendingChatRequestId === null) return
+    const timer = setTimeout(() => setWaitedOutChatRequest(pendingChatRequestId), MAC_ANSWER_WAIT_MS)
+    return () => clearTimeout(timer)
+  }, [pendingChatRequestId])
+
   useEffect(() => {
     if (confirmedChatId === null) return
     clearCreatedChat()
@@ -384,6 +394,7 @@ function NewChatFlow() {
           skills={workspace.skills}
           status={status}
           submitting={pendingChatRequestId !== null}
+          waitLine={sendWaitLine(pendingChatRequestId, waitedOutChatRequest)}
           singleRuntime={singleRuntime}
           autoOn={autoOn}
           onAutoChange={setAuto}
@@ -688,6 +699,7 @@ function ChatDraft({
   skills,
   status,
   submitting,
+  waitLine,
   onMessageChange,
   onModeChange,
   onImagesChange,
@@ -716,6 +728,8 @@ function ChatDraft({
   skills: SkillConfig[]
   status: 'connecting' | 'live' | 'offline'
   submitting: boolean
+  /** Under the composer while the Mac has not confirmed the Session yet. */
+  waitLine: string | null
   singleRuntime: SingleRuntime
   autoOn: boolean
   onAutoChange: (checked: boolean) => void
@@ -804,6 +818,7 @@ function ChatDraft({
           placeholder={project === undefined ? 'Preparing project…' : 'Ask anything…'}
           submitting={submitting}
         />
+        {waitLine === null ? null : <Text accessibilityLiveRegion="polite" style={styles.waiting}>{waitLine}</Text>}
         {error === null ? null : <Text accessibilityRole="alert" style={styles.error}>{error}</Text>}
         {status === 'live' ? null : <Text style={styles.offline}>You can start once your Mac is connected again.</Text>}
       </View>
@@ -977,6 +992,7 @@ const styles = StyleSheet.create({
   scopeValue: { flexShrink: 1, color: colors.muted, fontFamily: fonts.sans, fontSize: 15 },
   error: { color: colors.danger, fontFamily: fonts.sans, fontSize: 13, lineHeight: 18, textAlign: 'center' },
   offline: { color: colors.muted, fontFamily: fonts.sans, fontSize: 13, lineHeight: 18, textAlign: 'center' },
+  waiting: { color: colors.muted, fontFamily: fonts.sans, fontSize: 13, lineHeight: 18, textAlign: 'center' },
   disabled: { opacity: 0.38 },
   pressed: { opacity: 0.64 },
 })

@@ -116,6 +116,40 @@ describe('Knowledge table preview', () => {
     act(() => renderer.unmount())
   })
 
+  it('puts a key typed at the end of a padded cell at its end, also when the note re-renders the table between keys', () => {
+    const padded = '| Item | Cost |\n| --- | --- |\n|   Tiles   | 1.200 |'
+    let state = EditorState.create({ doc: `Intro\n\n${padded}\n\nAfter` })
+    const start = state.doc.toString().indexOf(padded)
+    let length = padded.length
+    let renderer!: ReactTestRenderer
+    // What the note's widget does on every update: the table's text, and a change mapped into the note.
+    const element = () => <TablePreview source={state.sliceDoc(start, start + length)} onChange={(change) => {
+      state = state.update({ changes: { ...change, from: start + change.from, to: start + change.to } }).state
+      length += change.insert.length - (change.to - change.from)
+    }} />
+    act(() => { renderer = create(element()) })
+    const target = {}
+    act(() => renderer.root.findAllByProps({ className: 'cm-manor-cell' })[2]!.props.onFocus({ target, currentTarget: target }))
+    // The field mounts focused with its caret before the text; its focus moves the caret to the end.
+    const selections: number[][] = []
+    act(() => renderer.root.findByType('textarea').props.onFocus({
+      currentTarget: { value: 'Tiles', setSelectionRange: (from: number, to: number) => selections.push([from, to]) },
+    }))
+    expect(selections).toEqual([[5, 5]])
+    // The field holds the cell's text without its padding; a caret at its end types after it.
+    const typeAtEnd = (key: string) => {
+      const field = renderer.root.findByType('textarea')
+      act(() => field.props.onChange({ target: { value: `${field.props.value}${key}` } }))
+    }
+    typeAtEnd('x')
+    act(() => renderer.update(element()))
+    typeAtEnd('y')
+    act(() => renderer.update(element()))
+    expect(renderer.root.findByType('textarea').props.value).toBe('Tilesxy')
+    expect(state.doc.toString()).toBe(`Intro\n\n| Item | Cost |\n| --- | --- |\n| Tilesxy | 1.200 |\n\nAfter`)
+    act(() => renderer.unmount())
+  })
+
   it('uses the document history for cell edits', () => {
     let state = EditorState.create({ doc: table, extensions: [history(), livePreviewExtensions()] })
     const address = { from: table.lastIndexOf('\n') + 1, to: table.length, column: 0 }

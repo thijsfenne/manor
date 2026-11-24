@@ -42,7 +42,7 @@ import { ChatModule } from './chatModule.js'
 import type { GenerateChatTitle } from './chatTitle.js'
 import type { AdvanceChatSummary } from './chatSummary.js'
 import { ConnectionModule } from './connectionModule.js'
-import { readContextFiles, saveContextFile } from './contextFiles.js'
+import { createContextFile, readContextFiles, saveContextFile } from './contextFiles.js'
 import type { ExternalFileOpener } from './externalFiles.js'
 import type { ConnectCards } from './connectCards.js'
 import type { ComposioMarketplace } from './composioMarketplace.js'
@@ -1077,6 +1077,25 @@ export class ManorService {
             : saved.reason === 'missing'
               ? `${message.name} is not on disk.`
               : `${message.name} changed on disk since you opened it. Your text is still here; load the new version or overwrite it.`,
+        })
+        return
+      }
+      case 'create_context_file': {
+        const root = this.memoryDir()
+        const created = await createContextFile(root, message.name)
+        if (created.ok) {
+          reply({ type: 'context_files', ...await readContextFiles(root) })
+          ack()
+          return
+        }
+        reply({
+          type: 'notice',
+          kind: 'error',
+          text: created.reason === 'unavailable'
+            ? 'This server has no memory folder to keep context files in.'
+            : created.reason === 'exists'
+              ? `${message.name} is already on disk.`
+              : 'Manor does not keep that file.',
         })
         return
       }

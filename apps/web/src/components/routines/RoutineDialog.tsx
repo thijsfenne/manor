@@ -19,6 +19,7 @@ import {
 } from '../../routines'
 import { EFFORTS, effortsFor } from '../../runtimes'
 import { HOME_PROJECT_ID, type Notice } from '../../state'
+import { DiscardModal } from '../DiscardModal'
 import { Modal, ModalFooter } from '../Modal'
 import { Button } from '../ui/Button'
 import { Checkbox } from '../ui/Checkbox'
@@ -137,6 +138,14 @@ export function RoutineDialog({
   // Something this dialog knows and the server does not, a save that never left the
   // browser above all.
   const [problem, setProblem] = useState<string | null>(null)
+  // Escape, the close button and the backdrop ask before they drop typed text; Cancel is
+  // the explicit no and does not. A changed list is one click to redo, so it does not count;
+  // a cron line typed by hand does.
+  const [asking, setAsking] = useState(false)
+  const [cronTyped, setCronTyped] = useState(false)
+  const typed = draft.name !== initial.name || (draft.description ?? '') !== (initial.description ?? '') || draft.prompt !== initial.prompt
+    || (cronTyped && draft.cron !== initial.cron)
+  const leave = () => (typed ? setAsking(true) : onClose())
 
   const existing = initial.id !== undefined
   const busy = pending !== null
@@ -221,6 +230,8 @@ export function RoutineDialog({
       next = { ...next, at: `${epochToWallClock(Date.now() + 24 * 60 * 60 * 1000, draft.timezone).slice(0, 10)}T${next.time}` }
     }
     setShape(next)
+    // Either branch rewrites the cron line, so nothing typed by hand is left in it.
+    setCronTyped(false)
     if (next.kind !== 'once') {
       edit({ cron: writeCron(presetOf(next)), runAt: null, lateUntil: null })
       return
@@ -243,6 +254,7 @@ export function RoutineDialog({
    * never end up describing different schedules.
    */
   const editCron = (cron: string) => {
+    setCronTyped(true)
     edit({ cron })
     const preset = readPreset(cron)
     if (preset !== null) setShape(shapeOf(preset))
@@ -307,6 +319,7 @@ export function RoutineDialog({
   }
 
   return (
+    <>
     <Modal
       title={existing ? `Edit ${initial.name}` : 'New task'}
       // The destination controls are gone here and the card covers the panel that
@@ -317,7 +330,7 @@ export function RoutineDialog({
           : `Runs in your conversation with ${persona.name}.`
       }
       width="wide"
-      onClose={onClose}
+      onClose={leave}
     >
       <FormField label="Name" hint="Also the transcript line when it fires.">
         <input
@@ -462,7 +475,7 @@ export function RoutineDialog({
         <textarea
           className={`${formInputClass} min-h-[140px] resize-y leading-relaxed`}
           value={draft.prompt}
-          placeholder="Read yesterday's commits and tell me what changed."
+          placeholder="Look at tomorrow's calendar and tell me what to prepare."
           onChange={(event) => edit({ prompt: event.target.value })}
         />
       </FormField>
@@ -609,6 +622,10 @@ export function RoutineDialog({
         </div>
       </ModalFooter>
     </Modal>
+    {!asking ? null : (
+      <DiscardModal onKeep={() => setAsking(false)} onDiscard={onClose}>This task has text that is not saved yet. Leaving drops it.</DiscardModal>
+    )}
+    </>
   )
 }
 

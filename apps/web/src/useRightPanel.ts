@@ -51,6 +51,25 @@ export function rightPanelOverlays(
 ) {
   return panelWidth > 0 && viewportWidth - reservedWidth - panelWidth < CHAT_STAGE_MIN_WIDTH
 }
+
+/**
+ * The narrowest stage the open panels dock in beside the chat's floor, 0 with nothing
+ * to dock. Columns may give way down to `TILE_MIN_WIDTH`, as `tiledColumnWidths` does.
+ */
+export function panelDockWidth(widths: readonly number[]) {
+  const total = widths.reduce((sum, width) => sum + width, 0)
+  if (total <= 0) return 0
+  return CHAT_STAGE_MIN_WIDTH + (widths.length > 1 ? Math.min(total, widths.length * TILE_MIN_WIDTH) : total)
+}
+
+/**
+ * Whether the pinned sidebar folds for the open panels: they would float beside it and
+ * dock without it. `stageWidth` is the stage with the sidebar as the user left it.
+ * When even a folded sidebar leaves too little, the panels float and the sidebar stays.
+ */
+export function sidebarFoldsForPanels(dockWidth: number, stageWidth: number, sidebarWidth: number) {
+  return dockWidth > stageWidth && dockWidth <= stageWidth + sidebarWidth
+}
 /**
  * The narrowest a column may get once several share the region, below the files
  * panel's own 360 floor on purpose: at that floor two columns and the roster no longer

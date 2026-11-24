@@ -6,7 +6,7 @@ import CheckmarkCircle02Icon from '@hugeicons/core-free-icons/CheckmarkCircle02I
 import { HugeiconsIcon } from '@hugeicons/react-native'
 import { useContext, useEffect, useRef, useState } from 'react'
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native'
-import Animated, { Easing, FadeIn, FadeOut, LinearTransition, ReduceMotion, useAnimatedStyle, useReducedMotion, useSharedValue, withTiming } from 'react-native-reanimated'
+import Animated, { Easing, FadeIn, FadeOut, ReduceMotion, useAnimatedStyle, useReducedMotion, useSharedValue, withTiming } from 'react-native-reanimated'
 import { router } from 'expo-router'
 import { workReopenedLine, type AgentConfig, type ChatMode, type SingleRuntime } from '@manor/contracts'
 import { ProjectMark } from './ProjectMark'
@@ -19,6 +19,7 @@ import { colors, fonts, radius, spacing, squircle } from '@/theme'
 import { bundleTile, InBundle } from './bundleTile'
 import { CardButton } from './CardButton'
 import { Checkbox } from './Checkbox'
+import { ExpandableText } from './ExpandableText'
 import { GlassSurface } from './GlassSurface'
 import { ProviderMark } from './ProviderMark'
 import { ProjectBadge } from './ProjectBadge'
@@ -220,7 +221,7 @@ export function WorkHandoffCard({ row, agents, onReject, onReveal, inThread = fa
             {!inThread && !pending && row.worktreeBranch ? <Text numberOfLines={1} style={[styles.workMetaText, styles.shrink]}>{row.worktreeBranch}</Text> : null}
           </View>
         )}
-        {canAccept && goal !== undefined ? <ExpandableSummary text={goal} /> : null}
+        {canAccept && goal !== undefined ? <ExpandableText style={styles.workTask} text={goal} /> : null}
         {row.changedAfterReady === true
           ? <Text style={styles.reopened}>{workReopenedLine(singleMode ? undefined : row.leadAgentName)}</Text>
           : null}
@@ -333,6 +334,7 @@ export function WorkHandoffCard({ row, agents, onReject, onReveal, inThread = fa
         <WorkPromptSheet
           open={promptDraft !== null}
           title={row.title}
+          opened={editedTask ?? proposedTask}
           draft={promptDraft ?? ''}
           onChange={setPromptDraft}
           onSave={() => {
@@ -423,14 +425,14 @@ function RuntimeBlock({ open, onToggle, disabled, runtime, attachments, mode, on
           {prompt === undefined ? null : (
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel={`Prompt, ${prompt.edited ? 'Edited prompt' : 'View prompt'}${attachments === undefined ? '' : `, ${attachments}`}`}
+              accessibilityLabel={`Prompt, ${prompt.edited ? 'Edited prompt' : 'Edit prompt'}${attachments === undefined ? '' : `, ${attachments}`}`}
               disabled={disabled}
               onPress={prompt.onOpen}
               style={({ pressed }) => [styles.blockRow, pressed && styles.pressed]}
             >
               <Text style={styles.blockKey}>Prompt</Text>
               <View style={styles.blockValue}>
-                <Text numberOfLines={1} style={[styles.blockValueText, styles.shrink]}>{prompt.edited ? 'Edited prompt' : 'View prompt'}</Text>
+                <Text numberOfLines={1} style={[styles.blockValueText, styles.shrink]}>{prompt.edited ? 'Edited prompt' : 'Edit prompt'}</Text>
                 {count}
               </View>
               <HugeiconsIcon color={colors.dim} icon={ArrowRight01Icon} size={16} strokeWidth={1.7} />
@@ -439,39 +441,6 @@ function RuntimeBlock({ open, onToggle, disabled, runtime, attachments, mode, on
         </Animated.View>
       ) : null}
     </View>
-  )
-}
-
-const SUMMARY_LINES = 2
-
-/**
- * A proposal's summary, cut at the end of its second line. "Show more" appears only
- * when the text really runs past it: a copy laid out unclamped, out of sight, counts
- * the lines at this width.
- */
-function ExpandableSummary({ text }: { text: string }) {
-  const [open, setOpen] = useState(false)
-  const [truncated, setTruncated] = useState(false)
-  return (
-    <Animated.View layout={LinearTransition.duration(220).easing(Easing.out(Easing.exp)).reduceMotion(ReduceMotion.System)}>
-      <View>
-        <Text numberOfLines={open ? undefined : SUMMARY_LINES} style={styles.workTask}>{text}</Text>
-        <Text
-          accessibilityElementsHidden
-          importantForAccessibility="no-hide-descendants"
-          pointerEvents="none"
-          onTextLayout={(event) => setTruncated(event.nativeEvent.lines.length > SUMMARY_LINES)}
-          style={[styles.workTask, styles.measure]}
-        >
-          {text}
-        </Text>
-      </View>
-      {truncated ? (
-        <Pressable accessibilityRole="button" accessibilityState={{ expanded: open }} onPress={() => setOpen((value) => !value)}>
-          <Text style={styles.showMore}>{open ? 'Show less' : 'Show more'}</Text>
-        </Pressable>
-      ) : null}
-    </Animated.View>
   )
 }
 
@@ -494,9 +463,6 @@ const styles = StyleSheet.create({
   workMetaText: { color: colors.muted, fontFamily: fonts.sans, fontSize: 12 },
   shrink: { flexShrink: 1 },
   workTask: { color: colors.muted, fontFamily: fonts.sans, fontSize: 13, lineHeight: 18 },
-  // Laid out invisibly at the visible text's width, so the line count is real and not guessed.
-  measure: { position: 'absolute', left: 0, right: 0, top: 0, opacity: 0 },
-  showMore: { alignSelf: 'flex-start', marginTop: spacing.xs, color: colors.text, fontFamily: fonts.sans, fontSize: 13 },
   reopened: { color: colors.dim, fontFamily: fonts.sans, fontSize: 13, lineHeight: 18 },
   resultIndent: { marginTop: spacing.xs },
   // Bleeds by its own inset, so the header line keeps its place folded and open; the

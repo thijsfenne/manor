@@ -212,6 +212,19 @@ describe('theme picker', () => {
     expect(onChange).toHaveBeenLastCalledWith('light')
   })
 
+  it('draws the page\'s own edge over every mode card, System included', () => {
+    act(() => {
+      tree = create(<ModePicker choice="dark" themes={{ light: 'manor', dark: 'manor' }} onChange={() => {}} />, { createNodeMock: () => ({ focus: () => {} }) })
+    })
+    const cards = tree!.root.findAll((node) => node.type === 'button' && node.props.role === 'radio')
+    expect(cards).toHaveLength(3)
+    for (const card of cards) {
+      const edge = card.findAll((node) => node.type === 'span' && node.props['data-preview-edge'] !== undefined)
+      expect(edge).toHaveLength(1)
+      expect(edge[0]!.props.className).toContain('border-line')
+    }
+  })
+
   it('picks the light and the dark theme apart, from different themes', () => {
     const onChange = vi.fn()
     act(() => {

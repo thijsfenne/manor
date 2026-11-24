@@ -164,6 +164,12 @@ export function ProjectDialog({
   // reopened dialog shows the folders it holds, not the walk that found them.
   const [browsing, setBrowsing] = useState(false)
   const [typed, setTyped] = useState('')
+  // A typed path is checked by listing it, which writes nothing: the server answers with
+  // the folder's listing, or with an error notice when nothing is there. `refused` is
+  // that notice's text, so the message sits by the field it is about.
+  const [checking, setChecking] = useState(false)
+  const [refused, setRefused] = useState<string | null>(null)
+  const asked = useRef(false)
   // Stops a double-click racing the first open of the Finder dialog.
   const [choosing, setChoosing] = useState(false)
   const chooseFolder = desktopChooseFolder()
@@ -196,6 +202,31 @@ export function ProjectDialog({
     if (draft.repoPaths.includes(path)) return
     onDraft({ ...draft, repoPaths: [...draft.repoPaths, path] })
   }
+
+  // One answer at a time: a walk still on its way would end this check with its own folder.
+  const check = (path: string) => {
+    if (dirs.asking) return
+    asked.current = false
+    setRefused(null)
+    setChecking(true)
+    // Unchanged, but it drops the previous answer, so a repeated refusal reads as new.
+    onDraft(draft)
+    onListDirs(path)
+  }
+
+  // Any answer ends the server's wait: the listing is the folder being there, and a
+  // notice with no listing change is it not being there.
+  useEffect(() => {
+    if (!checking) return
+    if (dirs.asking) {
+      asked.current = true
+      return
+    }
+    if (!asked.current) return
+    setChecking(false)
+    if (notice?.kind === 'error') setRefused(notice.text)
+    else if (dirs.listing !== null) add(dirs.listing.path)
+  }, [checking, dirs, notice])
 
   // Cancel and a failed dialog both change nothing; a path goes through the same
   // add() as a pasted one, so the server still validates it on save.
@@ -299,11 +330,17 @@ export function ProjectDialog({
             dirs={dirs}
             typed={typed}
             onTyped={setTyped}
-            onWalk={onListDirs}
-            onPick={add}
-            onDone={() => setBrowsing(false)}
+            // And no walk while a typed path is being checked, for the same reason. A walk
+            // beside a walk stays allowed: its answer is what frees a wait a lost reply left behind.
+            onWalk={(path) => { if (!checking) onListDirs(path) }}
+            onPick={(path) => (path === dirs.listing?.path ? add(path) : check(path))}
+            onDone={() => {
+              setChecking(false)
+              setBrowsing(false)
+            }}
           />
         ) : null}
+        {refused !== null && notice?.text === refused ? <RequestNotice notice={notice} /> : null}
       </section>
 
       {/* A new project gets its thread at once, and that thread's first turn reads the
@@ -350,7 +387,7 @@ export function ProjectDialog({
 
       {/* The server refused, and nothing was written. The dialog stays exactly as
           it was so the name and the folders are still there to fix. */}
-      {notice === null ? null : <RequestNotice notice={notice} />}
+      {notice === null || notice.text === refused ? null : <RequestNotice notice={notice} />}
 
       <ModalFooter>
         {armed && onDelete !== undefined ? (

@@ -1,26 +1,39 @@
-import { Pressable, StyleSheet, View } from 'react-native'
+import { Alert, Pressable, StyleSheet, View } from 'react-native'
 import { TextInput } from '@/components/TextInput'
 
 import { Sheet } from '@/components/Sheet'
 import { Text } from '@/components/Text'
+import { leavePrompt } from '@/lib/promptDiscard'
 import { colors, fonts, radius, spacing, squircle } from '@/theme'
 
 /**
  * The task a session proposal will start from, read in full and edited before Accept.
- * The card owns the draft; close discards it and Save hands it back to the card.
- * Nothing reaches the server until Accept.
+ * The card owns the draft and Save hands it back to the card. Close and the back gesture
+ * ask before they drop a draft that differs from `opened`; nothing reaches the server
+ * until Accept.
  */
-export function WorkPromptSheet({ open, title, draft, onChange, onSave, onClose }: {
+export function WorkPromptSheet({ open, title, opened, draft, onChange, onSave, onClose }: {
   open: boolean
   title: string
+  /** The text the sheet opened with, to tell an edit from an untouched draft. */
+  opened: string
   draft: string
   onChange: (draft: string) => void
   onSave: () => void
   onClose: () => void
 }) {
   const empty = draft.trim().length === 0
+  const leave = () => leavePrompt({
+    draft,
+    opened,
+    close: onClose,
+    ask: (discard) => Alert.alert('Discard unsaved changes?', undefined, [
+      { text: 'Keep editing', style: 'cancel' },
+      { text: 'Discard', style: 'destructive', onPress: discard },
+    ]),
+  })
   return (
-    <Sheet open={open} title="Prompt" subtitle={title} onClose={onClose}>
+    <Sheet open={open} title="Prompt" subtitle={title} onClose={leave}>
       <View style={styles.body}>
         {/* Save sits above the field, where the keyboard cannot cover it. */}
         <View style={styles.actions}>

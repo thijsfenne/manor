@@ -660,7 +660,7 @@ function ComposerEditorInner({ value, caret, agents, skills, allowBrowser, allow
             data-composer-editor="true"
             className={`composer-editor relative block w-full whitespace-pre-wrap [overflow-wrap:break-word] border-0 bg-transparent text-text outline-none ${fill === undefined ? 'max-h-[200px] overflow-y-auto' : ''} ${restHeight} ${inset} [font-family:inherit]`}
             aria-placeholder={placeholder}
-            {...(ariaLabel === undefined ? {} : { 'aria-label': ariaLabel })}
+            aria-label={ariaLabel ?? placeholder}
             placeholder={<span />}
             onPaste={onPaste}
           />

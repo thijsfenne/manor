@@ -100,6 +100,20 @@ describe('a project thread’s remembered sessions overview', () => {
     }
   })
 
+  it('gives a quiet Session in Settled its live row with Settle, never Unsettle', () => {
+    const quiet: SessionOverviewRow = { ...row(1), key: 'quiet', title: 'Quiet', status: 'done', chat: { ...row(1).chat!, id: 'quiet', title: 'Quiet', settledAt: null } }
+    const onSetSettled = vi.fn(() => true)
+    act(() => { view = create(<ProjectSessionsOverview agents={[]} threadId="quiet-thread" overview={{ ...overview, waiting: [], settled: [quiet, row(2)] }}
+      onOpen={onOpen} onRevealProposal={() => {}} openLabel={(title) => `Open ${title}`} onSetSettled={onSetSettled} onSetArchived={() => true} onDeleteChat={() => {}} project={undefined} />) })
+    act(() => header('settled').props.onClick())
+    const labels = section('settled').findAllByType('button').map((button) => button.props['aria-label'])
+    expect(labels).toContain('Settle Quiet')
+    expect(labels).not.toContain('Unsettle Quiet')
+    expect(labels).toContain('Unsettle Session 2')
+    act(() => section('settled').findAllByType('button').find((button) => button.props['aria-label'] === 'Settle Quiet')!.props.onClick())
+    expect(onSetSettled).toHaveBeenCalledWith('quiet', true)
+  })
+
   it('reads the new thread’s state when its id changes without an unmount', () => {
     mount('switch-from')
     act(() => header('settled').props.onClick())

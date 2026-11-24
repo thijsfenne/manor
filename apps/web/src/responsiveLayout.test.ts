@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { rightPanelOverlays } from './useRightPanel'
+import { panelDockWidth, rightPanelOverlays, sidebarFoldsForPanels } from './useRightPanel'
 import { sidebarOverlays } from './useSidebar'
 import { isPhoneLayout } from './phoneLayout'
 
@@ -24,6 +24,23 @@ describe('responsive workspace layout', () => {
 
   test('floats a previously maximized panel when pinning the navigation sidebar', () => {
     expect(rightPanelOverlays(1_108, 0, 1_021)).toBe(true)
+  })
+
+  test('folds the pinned sidebar only when that alone lets the panels dock', () => {
+    // 960 wide, the sidebar at 288 and the rail with its gutter at 50: a 622 stage.
+    const stage = 960 - 50 - 288
+    // Agent settings: 428 + 375 floats beside the sidebar and docks without it.
+    expect(sidebarFoldsForPanels(panelDockWidth([428]), stage, 288)).toBe(true)
+    // A panel that docks beside the sidebar leaves it alone.
+    expect(sidebarFoldsForPanels(panelDockWidth([428]), 1_000, 288)).toBe(false)
+    // Wider than the stage even without the sidebar: it floats and the sidebar stays.
+    expect(sidebarFoldsForPanels(panelDockWidth([720]), stage, 288)).toBe(false)
+    // Two columns may give way to 300 each: 975 does not fit a 910 stage either.
+    expect(sidebarFoldsForPanels(panelDockWidth([428, 412]), stage, 288)).toBe(false)
+    expect(sidebarFoldsForPanels(panelDockWidth([428, 412]), 700, 288)).toBe(true)
+    // Nothing open, or a panel covering the stage, asks for nothing.
+    expect(sidebarFoldsForPanels(panelDockWidth([]), stage, 288)).toBe(false)
+    expect(sidebarFoldsForPanels(panelDockWidth([0]), stage, 288)).toBe(false)
   })
 
   test('enters the phone shell from width, not a device guess', () => {

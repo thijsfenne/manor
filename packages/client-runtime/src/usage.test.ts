@@ -1,6 +1,6 @@
 import type { ProviderConnection, ProviderUsage } from '@manor/contracts'
 import { describe, expect, it } from 'vitest'
-import { byCardOrder, displayPercent, elapsedShare, formatDuration, headerRings, heatOf, paceMarkPercent, paceOf, providerPeak, remainingPercent, resetLabel, resetsIn, subscriptionGraph } from './usage'
+import { byCardOrder, clockOf, displayPercent, elapsedShare, formatDuration, headerRings, heatOf, paceMarkPercent, paceOf, providerPeak, remainingPercent, resetLabel, resetsIn, subscriptionGraph } from './usage'
 
 const claude: ProviderUsage = {
   provider: 'claude',
@@ -70,6 +70,14 @@ describe('resetLabel', () => {
     const label = resetLabel(now + 58 * 60 * 60_000, now)
     expect(label.startsWith('resets ')).toBe(true)
     expect(label).not.toContain('resets in')
+  })
+
+  it('prints clock times on a 24 hour clock, in the same form as the rest of the app', () => {
+    const local = (hour: number, minute: number) => new Date(2026, 7, 13, hour, minute).getTime()
+    expect(clockOf(local(2, 37))).toBe('02:37')
+    expect(clockOf(local(14, 5))).toBe('14:05')
+    expect(resetLabel(local(23, 40), local(9, 0))).toBe('resets 23:40')
+    expect(resetLabel(local(14, 5) + 24 * 60 * 60_000, local(9, 0))).toMatch(/^resets \w{3} 14:05$/)
   })
 
   it('says nothing at all when the provider gave no reset moment', () => {

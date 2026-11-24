@@ -698,15 +698,15 @@ export function Composer({
                 />
               )}
               {mentionLabel === null ? null : (
-                <PlusRow hint="@" icon={canMentionAgents ? BotIcon : files.length > 0 ? File01Icon : Globe02Icon} label={mentionLabel} onPick={() => typeTrigger('@')} />
+                <PlusRow icon={canMentionAgents ? BotIcon : files.length > 0 ? File01Icon : Globe02Icon} label={mentionLabel} onPick={() => typeTrigger('@')} />
               )}
               {skills.length === 0 ? null : (
-                <PlusRow hint="$" icon={BoxIcon} label="Run a skill" onPick={() => typeTrigger('$')} />
+                <PlusRow icon={BoxIcon} label="Run a skill" onPick={() => typeTrigger('$')} />
               )}
               {images.length === 0 ? null : (
-                <PlusRow hint="#" icon={Image01Icon} label="Refer to an image" onPick={() => typeTrigger('#')} />
+                <PlusRow icon={Image01Icon} label="Refer to an image" onPick={() => typeTrigger('#')} />
               )}
-              <PlusRow hint="- " icon={LeftToRightListBulletIcon} label="Bulleted list" onPick={startList} />
+              <PlusRow icon={LeftToRightListBulletIcon} label="Bulleted list" onPick={startList} />
             </ScrollView>
           </GlassSurface>
         </Animated.View>
@@ -811,7 +811,9 @@ export function Composer({
             placeholderTextColor={colors.dim}
             {...(forced === null ? {} : { selection: forced })}
             selectionColor={colors.text}
-            style={[styles.input, expanded ? styles.inputOpen : styles.inputResting]}
+            // Empty, the field stands on its one-line height instead of what it last measured:
+            // cleared by a send with the keys up, it kept the height of the text that left.
+            style={[styles.input, expanded ? styles.inputOpen : styles.inputResting, draft === '' && (expanded ? styles.inputOpenEmpty : styles.inputRestingEmpty)]}
             value={draft}
           />
           {expanded ? null : <Animated.View entering={BUTTON_IN} key="send-resting">{sendButton}</Animated.View>}
@@ -959,8 +961,7 @@ function RowBody({ title, description, tint, dimmed = false }: { title: string; 
 interface PlusRowProps {
   icon: Parameters<typeof HugeiconsIcon>[0]['icon']
   label: string
-  /** The keystroke this row stands in for, or what the row is bounded by. Rows that
-      stand for neither simply carry none. */
+  /** What the row is bounded by, such as the photo limit. Rows without a bound carry none. */
   hint?: string
   disabled?: boolean
   onPick: () => void
@@ -977,7 +978,8 @@ function PlusRow({ icon, label, hint, disabled = false, onPick }: PlusRowProps) 
       style={({ pressed }) => [styles.plusRow, disabled && styles.dimmed, pressed && styles.rowPressed]}
     >
       <View style={styles.rowIcon}><HugeiconsIcon color={colors.muted} icon={icon} size={16} strokeWidth={1.7} /></View>
-      <Text numberOfLines={1} style={styles.plusLabel}>{label}</Text>
+      {/* Two lines, so the longest wording ("Mention an agent, file, browser or Sessions") is not cut. */}
+      <Text numberOfLines={2} style={styles.plusLabel}>{label}</Text>
       {hint === undefined ? null : <Text style={styles.plusHint}>{hint}</Text>}
     </Pressable>
   )
@@ -1084,6 +1086,8 @@ const styles = StyleSheet.create({
   input: { maxHeight: 140, color: colors.text, fontFamily: fonts.sans, fontSize: 17, letterSpacing: tracking.body, lineHeight: 23 },
   inputResting: { flex: 1, minHeight: 36, paddingHorizontal: spacing.xs, paddingTop: 7, paddingBottom: 6 },
   inputOpen: { minHeight: 44, paddingHorizontal: OPEN_FIELD_INSET.left, paddingTop: OPEN_FIELD_INSET.top, paddingBottom: 3 },
+  inputRestingEmpty: { height: 36 },
+  inputOpenEmpty: { height: 44 },
   actions: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingHorizontal: (PILL_HEIGHT - 36) / 2, paddingTop: spacing.xs, paddingBottom: (PILL_HEIGHT - 36) / 2 },
   plus: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center', borderRadius: 18, backgroundColor: colors.fill },
   plusOn: { backgroundColor: colors.chip },

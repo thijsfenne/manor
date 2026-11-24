@@ -319,7 +319,7 @@ export function Turn({
             {...(draftActions === undefined ? {} : { actions: draftActions })}
           />
         ) : (
-          <AskAnswers answers={segment.ask.answers} key={segment.key} questions={segment.ask.questions} />
+          <AskAnswers answers={segment.ask.answers} key={segment.key} questions={segment.ask.questions} superseded={segment.ask.superseded === true} />
         ),
       )}
       {streaming.map((message) =>
@@ -833,7 +833,7 @@ function Segment({
     case 'reply':
       return <Reply agents={agents} images={segment.images} quoteSources={segment.quoteSources} text={segment.text} />
     case 'ask':
-      return <AskAnswers answers={segment.ask.answers} questions={segment.ask.questions} />
+      return <AskAnswers answers={segment.ask.answers} questions={segment.ask.questions} superseded={segment.ask.superseded === true} />
     case 'todo':
       return <TaskCard foldKey={segment.key} tasks={segment.todos} />
     case 'draft':
@@ -1104,7 +1104,8 @@ function Thumbnails({ images }: { images: readonly StepImage[] }) {
   )
 }
 
-function AskAnswers({ questions, answers }: { questions: readonly UserInputQuestion[]; answers?: UserInputAnswers }) {
+// `superseded`: the user wrote during the turn instead of answering, which released the turn from it.
+function AskAnswers({ questions, answers, superseded }: { questions: readonly UserInputQuestion[]; answers?: UserInputAnswers; superseded: boolean }) {
   return (
     <View style={styles.card}>
       {questions.map((question) => {
@@ -1114,7 +1115,7 @@ function AskAnswers({ questions, answers }: { questions: readonly UserInputQuest
             {question.header ? <Text style={styles.askHeader}>{question.header}</Text> : null}
             <Text style={styles.askQuestion}>{question.question}</Text>
             {given === undefined ? (
-              <Text style={styles.askMissing}>{question.secret === undefined ? 'Never answered. The turn ended first.' : SECRET_CLOSED_TEXT}</Text>
+              <Text style={styles.askMissing}>{question.secret !== undefined ? SECRET_CLOSED_TEXT : superseded ? 'Not answered. You sent a message instead.' : 'Never answered. The turn ended first.'}</Text>
             ) : (
               // A passed over question says so. The answer itself is a line meant for the model.
               <Text style={isSkippedAnswer(given) ? styles.askSkipped : styles.askAnswer}>{isSkippedAnswer(given) ? 'Skipped' : userInputAnswerText(given)}</Text>

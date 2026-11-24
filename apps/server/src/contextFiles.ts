@@ -1,4 +1,4 @@
-import { realpath, stat } from 'node:fs/promises'
+import { realpath, stat, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { CONTEXT_FILE_NAMES, type ContextFile, type ContextFileName, type ContextFiles } from '@manor/contracts'
 import { readTextFile, replaceTextFile } from './fileIo.js'
@@ -65,4 +65,31 @@ export async function saveContextFile(
     case 'failed':
       throw new Error(`${name} could not be written.`)
   }
+}
+
+export type ContextFileCreate =
+  | { ok: true; file: ContextFile }
+  | { ok: false; reason: 'unavailable' | 'unknown' | 'exists' }
+
+/**
+ * Writes an empty file of one of the fixed names into the memory folder. Only the name
+ * from `CONTEXT_FILE_NAMES` is joined to the folder, and `wx` keeps anything already
+ * there (a file, or a link even when its target is gone) untouched.
+ */
+export async function createContextFile(root: string | null, name: string): Promise<ContextFileCreate> {
+  if (root === null || !(await stat(root).then((info) => info.isDirectory(), () => false))) {
+    return { ok: false, reason: 'unavailable' }
+  }
+  const known = CONTEXT_FILE_NAMES.find((candidate) => candidate === name)
+  if (known === undefined) return { ok: false, reason: 'unknown' }
+  const target = path.join(root, known)
+  try {
+    await writeFile(target, '', { flag: 'wx' })
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'EEXIST') return { ok: false, reason: 'exists' }
+    throw error
+  }
+  const file = await readContextFile(root, known)
+  if (file === undefined) throw new Error(`${known} could not be read after it was created.`)
+  return { ok: true, file }
 }

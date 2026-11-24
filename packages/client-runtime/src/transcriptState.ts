@@ -260,6 +260,11 @@ export interface AskRecord {
   requestId: string
   questions: UserInputQuestion[]
   answers?: UserInputAnswers
+  /**
+   * The user steered the turn while this was still unanswered, which released the turn
+   * from it. A question left unanswered then says the message took its place.
+   */
+  superseded?: true
 }
 
 /**
@@ -1445,10 +1450,11 @@ export function forwardedLine(row: Pick<WorkHandoffRow, 'projectName' | 'forward
   if (phase === 'confirmed') return `${report ? 'Closed' : 'Confirmed'} in project thread ${row.projectName}`
   if (row.status === 'Settled' || row.status === 'Archived') return `Settled in project thread ${row.projectName}`
   if (phase === 'ready') return report ? `Ready in project thread ${row.projectName}` : `Ready, confirm in project thread ${row.projectName}`
-  // The overview's own fold decides: a question, a result to confirm or a quiet Session is the user's move.
+  // The overview's own fold decides: a question or a result to confirm is the user's move,
+  // a Session gone quiet without a result reads Done (2026-11-24).
   if (phase === 'working') {
     const group = sessionGroup(row.session)
-    return `${group === 'waiting' ? 'Needs you in' : group === 'background' ? 'Waiting in' : 'Running via'} project thread ${row.projectName}`
+    return `${group === 'waiting' ? 'Needs you in' : group === 'background' ? 'Waiting in' : group === 'settled' ? 'Done in' : 'Running via'} project thread ${row.projectName}`
   }
   return `To project thread ${row.projectName}`
 }
@@ -2113,7 +2119,8 @@ export const THREAD_SESSION_STATUS: Record<SessionGroup, WorkStatus> = {
   working: { tone: 'busy', text: 'Working' },
   waiting: { tone: 'warn', text: 'Needs you' },
   background: { tone: 'ready', text: 'Waiting' },
-  // Muted until the user confirms it; Confirmed carries the green.
+  // Muted until the user confirms it; Confirmed carries the green. A Session gone quiet
+  // without a result reads this too (2026-11-24).
   settled: { tone: 'dim', text: 'Done' },
 }
 
@@ -2144,7 +2151,7 @@ export function threadWorkCard(row: WorkHandoffRow): ThreadWorkCard {
   if (row.report?.decision === 'open' || own?.tone === 'warn') return { shape: 'full' }
   // After Confirm the card's own word follows the commit: Committing…, then done.
   if (row.report?.decision === 'accepted' && own !== null) return { shape: 'line', status: own }
-  // Settled in the overview before this card heard of it still reads as done.
+  // Settled in the overview before this card heard of it, or gone quiet without a result, reads Done.
   if (group === 'settled') return { shape: 'done', summary: firstSentence(splitWorkOutcome(row.result ?? '').lead), status: THREAD_SESSION_STATUS.settled }
   return { shape: 'line', status: group === undefined ? own ?? THREAD_SESSION_STATUS.working : THREAD_SESSION_STATUS[group] }
 }
@@ -2767,6 +2774,7 @@ function durableRowsOf(events: ThreadEvent[], dmBeats: boolean): DurableRows {
         const steered = event.steersTurnId === undefined
           ? undefined
           : [...open.values()].reverse().find((turn) => turn.turnId === event.steersTurnId)
+        for (const ask of steered?.asks ?? []) if (ask.answers === undefined) ask.superseded = true
         if (!dmBeats && steered !== undefined) {
           // Outside a DM the steer is part of the turn it redirected, not a row above it.
           steered.timeline.push({ kind: 'user', key: row.key, row })

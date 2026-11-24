@@ -121,6 +121,7 @@ export function SettingsHost({
             requestEvents={manor.requestEvents}
             onRequest={manor.requestContextFiles}
             onSave={manor.saveContextFile}
+            onCreate={manor.createContextFile}
             onDirtyChange={settings.reportDirty}
             {...common}
           />
@@ -196,6 +197,8 @@ export function SettingsHost({
             onDialogChange={onDialogChange}
             live={manor.status === 'live'}
             composio={composioBinding(manor)}
+            envFile={workspace.systemInfo?.envFile}
+            onRequestInfo={manor.requestSystemInfo}
             {...common}
           />
         )

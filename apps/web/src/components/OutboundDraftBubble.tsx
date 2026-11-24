@@ -104,6 +104,7 @@ export function OutboundDraftBubble({
   const status = draftStatus(draft)
   const open = status === 'open'
   const routeReady = draft.channel === 'gmail' || isOutboundSlackChannelId(draft.slackChannelId)
+  const [subjectWarned, setSubjectWarned] = useState(false)
   const canAct = open && routeReady && connected && onSubmit !== undefined && body.trim().length > 0 && validFormatting
   // Later and Ignore are decisions about the thread, and only a draft that knows its
   // thread can make them stick. Anything else keeps the plain Discard.
@@ -114,6 +115,10 @@ export function OutboundDraftBubble({
   const shown = draftShown(draft)
   // A reply keeps its thread's subject, so only new mail can retitle itself.
   const subjectEditable = open && draft.thread === undefined
+  // New mail with no subject asks once: the first Send arms the button, the second sends.
+  // Typing a subject disarms it, so the warning never outlives the thing it was about.
+  const subjectMissing = draft.channel === 'gmail' && subjectEditable && subject.trim().length === 0
+  const sendLabel = subjectMissing && subjectWarned ? 'Send without subject' : 'Send'
   const shownSubject = subjectEditable ? subject : open ? (draft.subject ?? '') : shown.subject
   const shownCc = open ? cc : shown.cc
   const showHeaderStatus = !expanded || !open
@@ -171,7 +176,10 @@ export function OutboundDraftBubble({
                   maxLength={OUTBOUND_DRAFT_SUBJECT_MAX}
                   value={subject}
                   onKeyDown={keepOneLine}
-                  onChange={(event) => setEdit({ subject: oneLine(event.target.value) })}
+                  onChange={(event) => {
+                    setSubjectWarned(false)
+                    setEdit({ subject: oneLine(event.target.value) })
+                  }}
                 />
               ) : shownSubject.length > 0 ? (
                 <p className="m-0 mb-1 font-medium text-card text-text">{shownSubject}</p>
@@ -250,15 +258,19 @@ export function OutboundDraftBubble({
                   size="medium"
                   variant="primary"
                   className="ml-1 rounded-full px-5"
-                  aria-label="Send"
+                  aria-label={sendLabel}
                   disabled={!canAct}
                   onClick={() => {
                     if (!canAct || onSubmit === undefined) return
+                    if (subjectMissing && !subjectWarned) {
+                      setSubjectWarned(true)
+                      return
+                    }
                     if (draft.channel === 'gmail') onSubmit(draft.draftId, body, subjectEditable ? subject : undefined, editedRichText, cc)
                     else onSubmit(draft.draftId, body, undefined, editedRichText)
                   }}
                 >
-                  Send
+                  {sendLabel}
                 </Button>
               </div>
             ) : null}
