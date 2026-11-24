@@ -153,6 +153,7 @@ Environment, set on `launch` (a changed value restarts the server or browser on 
 | `MANOR_VERIFY_PORT=<port>` | Pin the port (43180 to 43199, never 43182) instead of the first free one; then set it on every command |
 | `MANOR_VERIFY_VAULT_DIR=/tmp/<fixture>` | Fixture vault for Knowledge and search; must live under `/tmp` |
 | `MANOR_VERIFY_INIT_SCRIPT=<abs path>` | Script injected before page load, e.g. `stubs/desktop-browser.js` |
+| `MANOR_VERIFY_SCROLLBARS=classic` | Draw scrollbars, as macOS does with "Show scroll bars: Always" or a mouse connected. Headless Chromium hides them otherwise |
 
 Headless Chromium has no real clipboard. For a picture pasted or dropped into a Knowledge note, launch with `MANOR_VERIFY_INIT_SCRIPT=$PWD/.cursor/skills/verify-manor/stubs/paste-image.js`: with the caret in a note, `press --key Control+Alt+Shift+V` pastes a generated PNG; after `hover` on a spot in the note, `press --key Control+Alt+Shift+D` drops one there. Both go through the editor's own paste and drop handlers.
 

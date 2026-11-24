@@ -276,19 +276,22 @@ const clockFile = (port) => join(runDir(port), 'clock')
 // What a running server was started from. Code is checked before every drive command;
 // settings (a launch-only `MANOR_EFFECT_MODE`, say) only decide a restart on launch.
 const serverCode = () => fingerprint(SERVER_INPUTS)
+// Read by the session daemon only, so changing one restarts the browser, never the server.
+const BROWSER_ONLY_ENV = new Set(['MANOR_VERIFY_INIT_SCRIPT', 'MANOR_VERIFY_SCROLLBARS'])
 function serverSettings(entry) {
   const env = serverEnv(entry)
-  const settings = Object.keys(env).filter((key) => key.startsWith('MANOR_') || key in blankedServerEnv()).sort().map((key) => `${key}=${env[key]}`).join('\n')
+  const settings = Object.keys(env).filter((key) => !BROWSER_ONLY_ENV.has(key) && (key.startsWith('MANOR_') || key in blankedServerEnv())).sort().map((key) => `${key}=${env[key]}`).join('\n')
   return createHash('sha1').update(settings).digest('hex')
 }
 
 const webFingerprint = () => fingerprint(WEB_INPUTS)
 
 function daemonFingerprint() {
+  const scrollbars = process.env.MANOR_VERIFY_SCROLLBARS ?? 'hidden'
   const script = process.env.MANOR_VERIFY_INIT_SCRIPT
-  if (!script) return 'none'
+  if (!script) return `${scrollbars}:none`
   const stat = existsSync(script) ? statSync(script) : undefined
-  return `${resolve(script)}:${stat?.size}:${stat?.mtimeMs}`
+  return `${scrollbars}:${resolve(script)}:${stat?.size}:${stat?.mtimeMs}`
 }
 
 // Same build as `vite build`, run in this process: no pnpm start-up, no gzip report.

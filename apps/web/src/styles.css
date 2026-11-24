@@ -876,6 +876,51 @@ pre,
 }
 
 /*
+ * Every other scroller's bar: no track, a thin rounded thumb inset from the edge, a
+ * shade stronger under the pointer and while dragged. The thumb mixes the text colour
+ * into nothing, so each theme in light and dark gets a quiet bar without its own token.
+ *
+ * Chromium, which the desktop shell runs, draws the `-webkit-` rules: a 10px bar whose
+ * thumb keeps a 2px transparent border, so 6px shows. Chromium ignores those rules on
+ * any element that sets `scrollbar-width` or `scrollbar-color`, which is why the
+ * standard pair is only for engines without the thumb pseudo-element. That same rule keeps
+ * `scrollbar-hidden` and `[scrollbar-width:none]` hidden here. Styling the bar also
+ * makes macOS draw it in place of its overlay bar, so it stays visible on a trackpad.
+ *
+ * Layered, so a component's own scrollbar utility still wins.
+ */
+@layer base {
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-track,
+  ::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    border: 2px solid transparent;
+    border-radius: 9999px;
+    background: color-mix(in srgb, var(--color-text) 16%, transparent) padding-box;
+  }
+
+  ::-webkit-scrollbar-thumb:hover,
+  ::-webkit-scrollbar-thumb:active {
+    background-color: color-mix(in srgb, var(--color-text) 30%, transparent);
+  }
+
+  @supports not selector(::-webkit-scrollbar-thumb) {
+    * {
+      scrollbar-width: thin;
+      scrollbar-color: color-mix(in srgb, var(--color-text) 16%, transparent) transparent;
+    }
+  }
+}
+
+/*
  * The runtime panel's drill-down. One view at a time, each entering from the side
  * it came from, so going into a persona and coming back read as opposite moves.
  * One shot on mount and then still: nothing here repaints after it settles.

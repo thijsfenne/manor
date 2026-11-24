@@ -18,7 +18,14 @@ if (/:(43179|5173)$/.test(ORIGIN.replace(/\/$/, ''))) {
 
 // Software compositing of the idle animations kept about eight cores busy per spike;
 // ANGLE on Metal draws the same pixels on the GPU at under one core.
-const browser = await chromium.launch({ headless: true, args: ['--use-angle=metal'] })
+// Headless Chromium hides every scrollbar unless told otherwise; `classic` draws them,
+// as macOS does with "Show scroll bars: Always" or a mouse connected.
+const classicScrollbars = process.env.MANOR_VERIFY_SCROLLBARS === 'classic'
+const browser = await chromium.launch({
+  headless: true,
+  args: ['--use-angle=metal'],
+  ...(classicScrollbars ? { ignoreDefaultArgs: ['--hide-scrollbars'] } : {}),
+})
 // Chromium runs in its own process group; the registry needs its pid to stop it.
 // Playwright's own SIGTERM handler closes the browser but leaves this server listening.
 process.once('SIGTERM', () => {

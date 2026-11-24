@@ -4,6 +4,7 @@ What changed for someone who uses Manor, newest first. A version is a tag on `ma
 
 ## Unreleased
 
+- On the Mac and the web, scrollbars are a thin rounded bar with no track, in a quiet shade of the colour theme that turns a little stronger under the pointer and while you drag it. This replaces the wide system bar with a grey track that showed when macOS shows scroll bars always or a mouse is connected. Lists that hid their bar keep it hidden.
 - On the Mac and the web, Settings opens as a large window over the app instead of replacing it. The page list and search stay on the left. Escape, the close button or a click outside closes it, and the chat underneath keeps its place and your unsent text; unsaved edits still ask first. Settings reopens on the page you looked at last, also after a restart. Usage is no longer a Settings page: Usage details in the pop-up behind the usage rings, or Usage in the account menu, opens it as its own page, and Back or Escape returns to where you were.
 - In a direct message, the face at the foot of the chat leaves the moment the reply is there, on the Mac, the web and the phone. It no longer stays a moment under the finished reply to smile and nod.
 - When an agent you message asks another agent to write a mail or message for you, the draft card now appears in your own chat with that agent, without you asking for it. The other agent hands back the full text in their shared thread and no longer says a card is waiting there.
