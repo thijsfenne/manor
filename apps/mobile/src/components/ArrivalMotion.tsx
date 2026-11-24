@@ -51,8 +51,8 @@ const FLIGHT_FLYING = 2
  * scroll offset is added to `slide`, a translation every row carries, and `slide` springs
  * back to zero, so the chat rises instead of jumping. The scroll and the counter-shift
  * meet in the same frame, because both run on the UI thread off the scroll event.
- * The working face sits in the list's footer and is not shifted: it stays where it is
- * while a reply slots in above it, and appears at its own place while the rows make room.
+ * The working face sits in the list's footer and is not shifted: it fades where it
+ * stands as her reply takes its place, and appears at its own place while the rows make room.
  */
 export interface ArrivalMotion {
   scrollOffset: SharedValue<number>

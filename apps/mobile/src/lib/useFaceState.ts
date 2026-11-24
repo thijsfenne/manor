@@ -1,6 +1,4 @@
-import { FACE_MOMENT_MS, endedWell, settleFace, type FaceMoment, type FaceState, type ShownFace } from '@manor/client-runtime/face-activity'
-import type { Row, TurnRow } from '@manor/client-runtime/state'
-import type { DmWorking } from '@manor/client-runtime/turn-trace'
+import { settleFace, type FaceMoment, type FaceState, type ShownFace } from '@manor/client-runtime/face-activity'
 import { useEffect, useRef, useState } from 'react'
 
 /**
@@ -44,26 +42,4 @@ export function useFaceState(asked: FaceState | undefined, ended: FaceMoment | u
   }, [want])
 
   return shown.state
-}
-
-/**
- * A DM's working indicator, kept a moment past a turn that ended well so her face can
- * nod under the reply before it goes (see `endedWell`). Caught while rendering, like
- * the mark above, so the indicator never leaves for a frame and comes back.
- */
-export function useDoneMoment(working: DmWorking | undefined, rows: readonly Row[]): { working: DmWorking | undefined; done: boolean } {
-  const turnId = working?.kind === 'turn' ? working.turn.turnId : undefined
-  const [seen, setSeen] = useState({ on: working !== undefined, turnId })
-  const [held, setHeld] = useState<TurnRow>()
-  if (seen.on !== (working !== undefined) || seen.turnId !== turnId) {
-    setSeen({ on: working !== undefined, turnId })
-    setHeld(working === undefined && seen.turnId !== undefined ? endedWell(rows, seen.turnId) : undefined)
-  }
-  useEffect(() => {
-    if (held === undefined) return undefined
-    const timer = setTimeout(() => setHeld(undefined), FACE_MOMENT_MS)
-    return () => clearTimeout(timer)
-  }, [held])
-  if (working !== undefined || held === undefined) return { working, done: false }
-  return { working: { kind: 'turn', turn: held }, done: true }
 }

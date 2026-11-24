@@ -13,7 +13,7 @@
 import { isCompacting } from './compacting'
 import type { EyePose } from './busyFace'
 import type { GestureId } from './faceGesture'
-import { isToolStep, liveWritten, type Row, type TurnRow } from './state'
+import { isToolStep, liveWritten, type TurnRow } from './state'
 import { activityKind, type ActivityKind } from './turnLabels'
 import { backgroundWaitLabel, isWaiting } from './turnTrace'
 
@@ -98,21 +98,6 @@ export function endFace(turn: TurnRow): FaceMoment | undefined {
   if (turn.note?.kind === 'error') return 'failed'
   if (turn.note?.kind === 'aborted') return undefined
   return 'done'
-}
-
-/**
- * The last row of a DM turn that has just stopped, when it ended well, so the working
- * indicator can stay a moment for her nod under the reply. Only a written result counts:
- * a live turn can also vanish because a reconnect found it gone. A stop, a failure or an
- * open question gets nothing: in a DM a broken turn just ends.
- */
-export function endedWell(rows: readonly Row[], turnId: string): TurnRow | undefined {
-  for (let index = rows.length - 1; index >= 0; index -= 1) {
-    const row = rows[index]!
-    if (row.kind !== 'turn' || row.turnId !== turnId) continue
-    return row.completed === true && endFace(row) === 'done' ? row : undefined
-  }
-  return undefined
 }
 
 /** How long a state holds before another may replace it, so a 200 ms tool call cannot make a face twitch. */

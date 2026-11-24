@@ -494,6 +494,27 @@ describe('the DM outer fold', () => {
     expect(html()).not.toContain('file-0.ts')
   })
 
+  it('takes her face away with the turn, also when the reply landed whole', () => {
+    // The indicator's label and face keep time through the page's timers.
+    vi.stubGlobal('window', { setTimeout, clearTimeout, addEventListener: () => {}, removeEventListener: () => {} })
+    try {
+      let view!: ReactTestRenderer
+      act(() => {
+        view = create(<Transcript rows={[live()]} agents={[smith]} skills={[]} hasSnapshot bubbleReplies />)
+      })
+      const html = () => JSON.stringify(view.toJSON())
+      expect(html()).toContain('data-dm-working')
+
+      const ended: TurnRow = { ...runTurn([read(0)]), answer: [reply], tail: [reply], completed: true, startedAt: 1_000, endedAt: 5_000 }
+      act(() => { view.update(<Transcript rows={[ended]} agents={[smith]} skills={[]} hasSnapshot bubbleReplies />) })
+      expect(html()).toContain('Klaar.')
+      expect(html()).not.toContain('data-dm-working')
+      act(() => view.unmount())
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+
   it('keeps the Worked for line of a finished turn for hover, hung below the bubbles', () => {
     const turn: TurnRow = { ...runTurn([]), segments: [], answer: [reply], tail: [reply], startedAt: 1_000, endedAt: 5_000 }
     const html = renderToStaticMarkup(<Transcript rows={[turn]} agents={[smith]} skills={[]} hasSnapshot bubbleReplies />)

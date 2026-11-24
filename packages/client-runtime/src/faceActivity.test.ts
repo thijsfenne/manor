@@ -1,6 +1,6 @@
 import type { ThreadEvent } from '@manor/contracts'
 import { describe, expect, it } from 'vitest'
-import { FACE_HOLD_MS, FACE_LOOK, FACE_MOMENT_MS, endFace, endedWell, eyeAt, settleFace, towardStops, turnFace, type FaceState } from './faceActivity'
+import { FACE_HOLD_MS, FACE_LOOK, FACE_MOMENT_MS, endFace, eyeAt, settleFace, towardStops, turnFace, type FaceState } from './faceActivity'
 import { GESTURES, type Gesture } from './faceGesture'
 import type { TurnRow } from './state'
 import { emptyThread } from './threadState'
@@ -61,21 +61,6 @@ describe('what a turn asks of its face', () => {
     expect(endFace({ ...done, note: { kind: 'error' } as TurnRow['note'] })).toBe('failed')
     // The user stopped it. A sad face over their own call would answer back.
     expect(endFace({ ...done, note: { kind: 'aborted' } as TurnRow['note'] })).toBeUndefined()
-  })
-
-  it('finds a DM turn that ended well, and nothing for one that broke or still runs', () => {
-    const reply = event({ type: 'agent_message', agentId: 'smith', turnId: 't1', messageId: 'm1', text: 'Done.' })
-    const result = event({ type: 'turn_result', agentId: 'smith', turnId: 't1' })
-    const rows = rowsOf({ ...emptyThread, events: [sent, reply, result], liveTurns: [], hasSnapshot: true }, 'dm')
-    expect(endedWell(rows, 't1')?.turnId).toBe('t1')
-    expect(endedWell(rows, 't2')).toBeUndefined()
-    const broke = rows.map((row) => (row.kind === 'turn' ? { ...row, note: { kind: 'error' } as TurnRow['note'] } : row))
-    expect(endedWell(broke, 't1')).toBeUndefined()
-    const running = rowsOf({ ...emptyThread, events: [sent, reply], liveTurns: live(), hasSnapshot: true }, 'dm')
-    expect(endedWell(running, 't1')).toBeUndefined()
-    // A reconnect that no longer finds the turn running drops it without a result: no nod over that.
-    const vanished = rowsOf({ ...emptyThread, events: [sent, reply], liveTurns: [], hasSnapshot: true }, 'dm')
-    expect(endedWell(vanished, 't1')).toBeUndefined()
   })
 })
 

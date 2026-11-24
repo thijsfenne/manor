@@ -15,13 +15,11 @@ const LABEL_HOLD_MS = 2_500
 /**
  * A DM's one sign of life: her face and a shimmering label at the foot of the chat,
  * under the last message, from the send until her reply is whole. Finished bubbles
- * carry no face; this is the only place it appears. A reply that lands whole keeps it
- * a moment longer, `done`, wordless while her face nods. A stop or a break takes it
- * away at once, without a word about why.
+ * carry no face; this is the only place it appears. It leaves with the turn, whether
+ * the reply landed whole or a stop or a break ended it, without a word about why.
  */
-export function DmWorkingIndicator({ working, done = false, persona, agents }: {
+export function DmWorkingIndicator({ working, persona, agents }: {
   working: DmWorking
-  done?: boolean
   persona: Persona
   agents: AgentConfig[]
 }) {
@@ -30,14 +28,10 @@ export function DmWorkingIndicator({ working, done = false, persona, agents }: {
   const label = working.kind === 'consult'
     ? `Waiting for ${personaOf(agents, working.peerAgentId).name}…`
     : dmWorkingLabel(working.kind === 'turn' ? working.turn : undefined, now)
-  const held = useHeldLabel(label)
-  const shown = done ? '' : held
+  const shown = useHeldLabel(label)
   // The face says what the words say: waiting on a colleague, thinking before a turn has
   // drawn anything, and otherwise whatever her turn is doing.
-  const live = useFaceState(working.kind === 'consult' ? 'waiting' : working.kind === 'turn' ? turnFace(working.turn) : 'thinking', undefined, true)
-  const face = done ? 'done' : live
-  // A nod nobody would see is a face left standing under the reply for nothing.
-  if (done && (reduce || (persona.avatar ?? '') !== '')) return null
+  const face = useFaceState(working.kind === 'consult' ? 'waiting' : working.kind === 'turn' ? turnFace(working.turn) : 'thinking', undefined, true)
   return (
     <motion.div
       data-dm-working=""
@@ -49,7 +43,7 @@ export function DmWorkingIndicator({ working, done = false, persona, agents }: {
     >
       <TurnHeader
         quiet
-        working={!done}
+        working
         face={face}
         name={persona.name}
         color={persona.color}

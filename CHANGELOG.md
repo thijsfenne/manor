@@ -4,6 +4,7 @@ What changed for someone who uses Manor, newest first. A version is a tag on `ma
 
 ## Unreleased
 
+- In a direct message, the face at the foot of the chat leaves the moment the reply is there, on the Mac, the web and the phone. It no longer stays a moment under the finished reply to smile and nod.
 - When an agent you message asks another agent to write a mail or message for you, the draft card now appears in your own chat with that agent, without you asking for it. The other agent hands back the full text in their shared thread and no longer says a card is waiting there.
 - On the Mac and the web, the border of a field you are typing in is softer when it has focus: less bright in dark mode, less dark in light mode, in every colour theme. In the Manor theme's light mode, fields and dropdowns also sit on a paler grey, so a form no longer reads as grey blocks on the white page.
 - On the Mac and the web, resting the pointer on a face pinned in the left rail shows a small card with her name and role, the last message in your direct message with her ("You:" when you wrote it), how long ago it was, and whether she is working or waiting for you. Moving to the next face swaps the card at once, keyboard focus shows it too, and a click still opens the conversation. Looking does not mark it as read.
