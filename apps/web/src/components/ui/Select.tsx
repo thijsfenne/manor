@@ -211,7 +211,7 @@ export function Select<T extends string>({
         // The focus ring is traded for a lifted border, the way every field-shaped
         // control in the house does it — see the base layer note in styles.css.
         className={`flex w-full cursor-pointer items-center gap-2 rounded-lg border bg-field py-[7px] pr-3 pl-2.5 text-left text-[13px] outline-none focus-visible:border-field-focus disabled:cursor-default disabled:opacity-45 ${
-          open ? 'border-dim' : 'border-line hover:border-dim'
+          open ? 'border-field-focus' : 'border-line hover:border-field-focus'
         } ${current === null ? 'text-dim' : 'text-text'} ${className}`}
         disabled={disabled}
         role="combobox"
