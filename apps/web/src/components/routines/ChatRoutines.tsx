@@ -28,7 +28,7 @@ import {
 } from '../../routines'
 import type { Notice } from '../../state'
 import { useRequest, type RequestEvents } from '../../useRequest'
-import { ConfirmStrip } from '../Confirm'
+import { ConfirmModal } from '../Confirm'
 import { Icon } from '../Icon'
 import { Button } from '../ui/Button'
 import { Fold, FoldChevron } from '../ui/Fold'
@@ -398,24 +398,21 @@ function RoutineDetail({
         <RunHistory history={history} />
       </Field>
 
+      <Button
+        variant="danger"
+        size="compact"
+        className="inline-flex items-center gap-1.5 self-start"
+        disabled={deletePending}
+        onClick={onAskDelete}
+      >
+        <Icon icon={Delete02Icon} size={13} />
+        {deletePending ? 'Deleting…' : 'Delete'}
+      </Button>
       {deleting ? (
-        <ConfirmStrip
-          question={`Delete “${routine.name}”? This conversation stays.`}
-          onConfirm={onConfirmDelete}
-          onCancel={onCancelDelete}
-        />
-      ) : (
-        <Button
-          variant="danger"
-          size="compact"
-          className="inline-flex items-center gap-1.5 self-start"
-          disabled={deletePending}
-          onClick={onAskDelete}
-        >
-          <Icon icon={Delete02Icon} size={13} />
-          {deletePending ? 'Deleting…' : 'Delete'}
-        </Button>
-      )}
+        <ConfirmModal title={`Delete “${routine.name}”?`} onConfirm={onConfirmDelete} onCancel={onCancelDelete}>
+          This conversation stays.
+        </ConfirmModal>
+      ) : null}
       {notice === null ? null : <RequestNotice notice={notice} />}
     </div>
   )

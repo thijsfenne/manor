@@ -154,10 +154,10 @@ describe('Reminders door writes', () => {
     const page = { reminders: [done], total: 1, nextOffset: null }
     act(() => { view = create(door({ available: true, snapshot: state, completed: page })) })
     const rows = () => view!.root.findAllByProps({ 'data-reminder-row': 'old' })
-    const deleteButton = () => view!.root.findAllByType('button').find((button) => button.children.includes('Delete'))!
+    const deleteButtons = () => view!.root.findAllByType('button').filter((button) => button.children.includes('Delete'))
     act(() => rows()[0]!.props.onClick())
-    act(() => deleteButton().props.onClick())
-    act(() => deleteButton().props.onClick())
+    act(() => deleteButtons()[0]!.props.onClick())
+    act(() => deleteButtons().at(-1)!.props.onClick())
     const requestId = onWrite.mock.calls[0]![0]
     expect(rows()).toHaveLength(0)
 

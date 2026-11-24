@@ -18,7 +18,7 @@ import { MODELS, PROVIDERS, effortsFor, landingModel } from '../../runtimes'
 import { useOffModels } from '../../useOffModels'
 import type { DirBrowse, Notice } from '../../state'
 import { desktopChooseFolder } from '../../desktopBrowser'
-import { ConfirmStrip, DeleteButton } from '../Confirm'
+import { ConfirmModal, DeleteButton } from '../Confirm'
 import { Icon } from '../Icon'
 import { Modal, ModalFooter } from '../Modal'
 import { Button } from '../ui/Button'
@@ -182,7 +182,7 @@ export function ProjectDialog({
       open.current = false
     }
   }, [])
-  // Delete asks twice, in place; armed swaps the footer for the question.
+  // Delete asks twice: armed opens the question over the form.
   const [armed, setArmed] = useState(initialArmed && onDelete !== undefined)
 
   const canSubmit = draft.name.trim() !== '' && !busy
@@ -261,146 +261,136 @@ export function ProjectDialog({
   }
 
   return (
-    <Modal
-      title={mode === 'create' ? 'New project thread' : 'Edit project thread'}
-      {...(mode === 'create' ? { subtitle: 'One ongoing chat for the project. It answers you, or starts Sessions and reports back.' } : {})}
-      onClose={onClose}
-    >
-      <ProjectIdentityField
-        name={draft.name}
-        icon={draft.icon}
-        color={draft.color}
-        onName={(name) => onDraft({ ...draft, name })}
-        onIcon={(icon) => onDraft({ ...draft, icon, mark: null })}
-        lettersPicked={mark === 'letters'}
-        onLetters={() => onDraft({ ...draft, mark: 'letters' })}
-        {...repoIconProps}
-        onColor={(color) => onDraft({ ...draft, color })}
-        onEnter={submit}
-      />
+    <>
+      <Modal
+        title={mode === 'create' ? 'New project thread' : 'Edit project thread'}
+        {...(mode === 'create' ? { subtitle: 'One ongoing chat for the project. It answers you, or starts Sessions and reports back.' } : {})}
+        onClose={onClose}
+      >
+        <ProjectIdentityField
+          name={draft.name}
+          icon={draft.icon}
+          color={draft.color}
+          onName={(name) => onDraft({ ...draft, name })}
+          onIcon={(icon) => onDraft({ ...draft, icon, mark: null })}
+          lettersPicked={mark === 'letters'}
+          onLetters={() => onDraft({ ...draft, mark: 'letters' })}
+          {...repoIconProps}
+          onColor={(color) => onDraft({ ...draft, color })}
+          onEnter={submit}
+        />
 
-      <section className={formFieldClass}>
-        <span className={formLabelClass}>
-          Folders <span className={formOptionalClass}>optional</span>
-        </span>
+        <section className={formFieldClass}>
+          <span className={formLabelClass}>
+            Folders <span className={formOptionalClass}>optional</span>
+          </span>
 
-        {/* One bordered list: each folder is a row, and the last row is the way in. An
-            empty project is just that row, so the section reads as optional. */}
-        <div
-          className="flex flex-col divide-y divide-line overflow-hidden rounded-lg border border-line bg-surface-2 data-[bare]:hidden"
-          data-bare={browsing && draft.repoPaths.length === 0 ? '' : undefined}
-        >
-          {draft.repoPaths.map((path) => (
-            <div key={path} className="flex items-center gap-3 py-2 pr-2 pl-3">
-              <Icon icon={Folder01Icon} size={16} className="flex-none text-dim" />
-              <div className="flex min-w-0 flex-1 flex-col">
-                <span className="truncate text-[14px] text-text">{folderName(path)}</span>
-                <span className="truncate font-mono text-[12px] text-dim" title={path}>
-                  {path}
-                </span>
+          {/* One bordered list: each folder is a row, and the last row is the way in. An
+              empty project is just that row, so the section reads as optional. */}
+          <div
+            className="flex flex-col divide-y divide-line overflow-hidden rounded-lg border border-line bg-surface-2 data-[bare]:hidden"
+            data-bare={browsing && draft.repoPaths.length === 0 ? '' : undefined}
+          >
+            {draft.repoPaths.map((path) => (
+              <div key={path} className="flex items-center gap-3 py-2 pr-2 pl-3">
+                <Icon icon={Folder01Icon} size={16} className="flex-none text-dim" />
+                <div className="flex min-w-0 flex-1 flex-col">
+                  <span className="truncate text-[14px] text-text">{folderName(path)}</span>
+                  <span className="truncate font-mono text-[12px] text-dim" title={path}>
+                    {path}
+                  </span>
+                </div>
+                {/* The way out of a folder, on the folder it undoes. */}
+                <IconButton
+                  className="h-6 w-6"
+                  icon={Cancel01Icon}
+                  iconSize={12}
+                  label={`Remove ${path}`}
+                  onClick={() => remove(path)}
+                />
               </div>
-              {/* The way out of a folder, on the folder it undoes. */}
-              <IconButton
-                className="h-6 w-6"
-                icon={Cancel01Icon}
-                iconSize={12}
-                label={`Remove ${path}`}
-                onClick={() => remove(path)}
-              />
-            </div>
-          ))}
-          {browsing ? null : (
-            <div className="flex items-center">
-              {/* On the desktop this opens Finder; elsewhere it unfolds the server's folder browser. */}
-              <button
-                type="button"
-                className="flex min-w-0 flex-1 cursor-pointer items-center gap-3 border-0 bg-transparent py-3 pl-3 text-left text-[14px] text-text enabled:hover:bg-user-bg disabled:cursor-default disabled:text-dim [font:inherit]"
-                disabled={full || choosing}
-                onClick={() => (chooseFolder === undefined ? openPicker() : void chooseNative())}
-              >
-                <Icon icon={FolderAddIcon} size={16} className="flex-none text-dim" />
-                {full ? `That is the most a project can link (${MAX_PROJECT_FOLDERS}).` : 'Add a folder…'}
-              </button>
-            </div>
-          )}
-        </div>
-
-        {browsing ? (
-          <Picker
-            dirs={dirs}
-            typed={typed}
-            onTyped={setTyped}
-            // And no walk while a typed path is being checked, for the same reason. A walk
-            // beside a walk stays allowed: its answer is what frees a wait a lost reply left behind.
-            onWalk={(path) => { if (!checking) onListDirs(path) }}
-            onPick={(path) => (path === dirs.listing?.path ? add(path) : check(path))}
-            onDone={() => {
-              setChecking(false)
-              setBrowsing(false)
-            }}
-          />
-        ) : null}
-        {refused !== null && notice?.text === refused ? <RequestNotice notice={notice} /> : null}
-      </section>
-
-      {/* A new project gets its thread at once, and that thread's first turn reads the
-          folders and says hello. The model for it is chosen here; the thread's own
-          picker changes it afterwards, so an existing project has no row for it. */}
-      {mode !== 'create' ? null : (
-        <FormField label="Project thread model" custom>
-          {/* Plain dropdowns, as on the Auto mode rules page: the composer's model menu is
-              taller than this dialog and would hang out of it. */}
-          <div className="flex items-center gap-2">
-            <div className="w-[132px] flex-none">
-              <Select
-                label="Provider"
-                value={thread.driver}
-                options={THREAD_PROVIDERS.filter((option) => option.value === thread.driver || hasModelOn(option.value, off))}
-                disabled={busy}
-                onChange={(driver) => {
-                  const model = MODELS[driver].some((option) => option.value === thread.model) ? thread.model : landingModel(driver, off) ?? MODELS[driver][0]?.value ?? ''
-                  setThread(driver, model, thread.effort)
-                }}
-              />
-            </div>
-            <div className="min-w-0 flex-1">
-              <Select
-                label="Model"
-                value={thread.model}
-                options={modelOptionsFor(thread.driver, off, thread.model)}
-                disabled={busy}
-                onChange={(model) => setThread(thread.driver, model, thread.effort)}
-              />
-            </div>
-            <div className="w-[116px] flex-none">
-              <Select
-                label="Reasoning"
-                value={thread.effort}
-                options={effortsFor(thread.driver, thread.model)}
-                disabled={busy}
-                onChange={(effort: Effort) => setThread(thread.driver, thread.model, effort)}
-              />
-            </div>
+            ))}
+            {browsing ? null : (
+              <div className="flex items-center">
+                {/* On the desktop this opens Finder; elsewhere it unfolds the server's folder browser. */}
+                <button
+                  type="button"
+                  className="flex min-w-0 flex-1 cursor-pointer items-center gap-3 border-0 bg-transparent py-3 pl-3 text-left text-[14px] text-text enabled:hover:bg-user-bg disabled:cursor-default disabled:text-dim [font:inherit]"
+                  disabled={full || choosing}
+                  onClick={() => (chooseFolder === undefined ? openPicker() : void chooseNative())}
+                >
+                  <Icon icon={FolderAddIcon} size={16} className="flex-none text-dim" />
+                  {full ? `That is the most a project can link (${MAX_PROJECT_FOLDERS}).` : 'Add a folder…'}
+                </button>
+              </div>
+            )}
           </div>
-        </FormField>
-      )}
 
-      {/* The server refused, and nothing was written. The dialog stays exactly as
-          it was so the name and the folders are still there to fix. */}
-      {notice === null || notice.text === refused ? null : <RequestNotice notice={notice} />}
+          {browsing ? (
+            <Picker
+              dirs={dirs}
+              typed={typed}
+              onTyped={setTyped}
+              // And no walk while a typed path is being checked, for the same reason. A walk
+              // beside a walk stays allowed: its answer is what frees a wait a lost reply left behind.
+              onWalk={(path) => { if (!checking) onListDirs(path) }}
+              onPick={(path) => (path === dirs.listing?.path ? add(path) : check(path))}
+              onDone={() => {
+                setChecking(false)
+                setBrowsing(false)
+              }}
+            />
+          ) : null}
+          {refused !== null && notice?.text === refused ? <RequestNotice notice={notice} /> : null}
+        </section>
 
-      <ModalFooter>
-        {armed && onDelete !== undefined ? (
-          <ConfirmStrip
-            question={`Delete “${draft.name.trim() || 'this project'}”, with its thread, Sessions and chats?`}
-            wrap
-            onConfirm={() => {
-              setArmed(false)
-              onDelete()
-            }}
-            onCancel={() => setArmed(false)}
-          />
-        ) : (
+        {/* A new project gets its thread at once, and that thread's first turn reads the
+            folders and says hello. The model for it is chosen here; the thread's own
+            picker changes it afterwards, so an existing project has no row for it. */}
+        {mode !== 'create' ? null : (
+          <FormField label="Project thread model" custom>
+            {/* Plain dropdowns, as on the Auto mode rules page: the composer's model menu is
+                taller than this dialog and would hang out of it. */}
+            <div className="flex items-center gap-2">
+              <div className="w-[132px] flex-none">
+                <Select
+                  label="Provider"
+                  value={thread.driver}
+                  options={THREAD_PROVIDERS.filter((option) => option.value === thread.driver || hasModelOn(option.value, off))}
+                  disabled={busy}
+                  onChange={(driver) => {
+                    const model = MODELS[driver].some((option) => option.value === thread.model) ? thread.model : landingModel(driver, off) ?? MODELS[driver][0]?.value ?? ''
+                    setThread(driver, model, thread.effort)
+                  }}
+                />
+              </div>
+              <div className="min-w-0 flex-1">
+                <Select
+                  label="Model"
+                  value={thread.model}
+                  options={modelOptionsFor(thread.driver, off, thread.model)}
+                  disabled={busy}
+                  onChange={(model) => setThread(thread.driver, model, thread.effort)}
+                />
+              </div>
+              <div className="w-[116px] flex-none">
+                <Select
+                  label="Reasoning"
+                  value={thread.effort}
+                  options={effortsFor(thread.driver, thread.model)}
+                  disabled={busy}
+                  onChange={(effort: Effort) => setThread(thread.driver, thread.model, effort)}
+                />
+              </div>
+            </div>
+          </FormField>
+        )}
+
+        {/* The server refused, and nothing was written. The dialog stays exactly as
+            it was so the name and the folders are still there to fix. */}
+        {notice === null || notice.text === refused ? null : <RequestNotice notice={notice} />}
+
+        <ModalFooter>
           <div className="flex items-center gap-2 pt-0.5">
             {mode === 'edit' && onDelete !== undefined ? (
               <DeleteButton label="Delete project thread" onArm={() => setArmed(true)} />
@@ -418,9 +408,22 @@ export function ProjectDialog({
               </Button>
             </div>
           </div>
-        )}
-      </ModalFooter>
-    </Modal>
+        </ModalFooter>
+      </Modal>
+      {/* Beside the form rather than in it, so its Escape and Tab stay its own. */}
+      {armed && onDelete !== undefined ? (
+        <ConfirmModal
+          title={`Delete “${draft.name.trim() || 'this project'}”?`}
+          onConfirm={() => {
+            setArmed(false)
+            onDelete()
+          }}
+          onCancel={() => setArmed(false)}
+        >
+          Its thread, Sessions and chats go with it.
+        </ConfirmModal>
+      ) : null}
+    </>
   )
 }
 

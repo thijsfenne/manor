@@ -7,6 +7,7 @@ import { AlertCircleIcon, Archive02Icon, CheckListIcon, CheckmarkCircle02Icon, C
 import { DEFAULT_PROJECT_COLOR, DEFAULT_PROJECT_ICON, type AgentConfig, type Project } from '@manor/contracts'
 import { isArchiveExpired, type SessionOverview, type SessionOverviewRow } from '../../state'
 import { useMinuteClock } from '../../useMinuteClock'
+import { DeleteChatConfirm } from '../Confirm'
 import { Icon } from '../Icon'
 import { Fold, FoldChevron } from '../ui/Fold'
 import { IconButton } from '../ui/IconButton'
@@ -37,6 +38,11 @@ interface ProjectSessionsOverviewProps {
   project: Pick<Project, 'name' | 'icon' | 'color' | 'repoIconSrc' | 'letters'> | undefined
   /** The popover's tighter gutters; the pane keeps the transcript's. */
   compact?: boolean
+  /**
+   * Asks about a delete outside the overview. The popover sets it: a modal cannot sit
+   * above the popover, so the popover closes and its door asks instead.
+   */
+  onAskDelete?: (chat: { id: string; title: string }) => void
 }
 
 // Each fold leads with its state's mark: only the two live states carry colour, and a fold
@@ -60,12 +66,13 @@ const GROUPS: { id: SessionOverviewSection; label: string; hint?: string; icon: 
  * folded at the foot, only while it has rows: the sidebar's list leaves a thread's
  * sessions out, so this is where one archived by mistake comes back.
  */
-export function ProjectSessionsOverview({ threadId, overview, agents, onOpen, onRevealProposal, openLabel, onSetSettled, onSetArchived, onDeleteChat, project, compact = false }: ProjectSessionsOverviewProps) {
+export function ProjectSessionsOverview({ threadId, overview, agents, onOpen, onRevealProposal, openLabel, onSetSettled, onSetArchived, onDeleteChat, project, compact = false, onAskDelete }: ProjectSessionsOverviewProps) {
   const read = () => readSessionOverviewUI(threadId)
   const { open, visibleSettled, visibleArchived } = useSyncExternalStore(subscribeSessionOverviewUI, read, read)
   const now = useMinuteClock()
-  // The delete confirm replaces its row, as it does in the sidebar.
-  const [armed, setArmed] = useState<string | null>(null)
+  // The chat whose delete question is up, as in the sidebar.
+  const [armed, setArmed] = useState<{ id: string; title: string } | null>(null)
+  const askDelete = onAskDelete ?? setArmed
   const gutter = compact ? 'px-1.5' : 'px-1'
   // Past its restore window a row is as good as gone, and the hourly sweep deletes it.
   const archived = overview.archived.filter((row) => row.chat?.archivedAt != null && !isArchiveExpired(row.chat.archivedAt, now, overview.archiveKeepMs))
@@ -109,8 +116,9 @@ export function ProjectSessionsOverview({ threadId, overview, agents, onOpen, on
                       projectName: project?.name ?? '', projectIcon: project?.icon ?? DEFAULT_PROJECT_ICON,
                       ...(project?.repoIconSrc === undefined ? {} : { projectIconSrc: project.repoIconSrc }), ...projectLettersField(project), projectColor: project?.color ?? DEFAULT_PROJECT_COLOR,
                     }
+                    const chat = row.chat
                     const shared = {
-                      entry, agents, selected: false, now, armed, onArm: setArmed, onOpen, onDelete: onDeleteChat,
+                      entry, agents, selected: false, now, onArm: () => askDelete({ id: chat.id, title: chat.title }), onOpen,
                       onSetSettled, onSetArchived, openLabel: openLabel(row.title),
                     }
                     // A quiet `done` Session sits in Settled unstamped, so it keeps its live row and Settle, never Unsettle (2026-11-24).
@@ -133,6 +141,16 @@ export function ProjectSessionsOverview({ threadId, overview, agents, onOpen, on
           </section>
         )
       })}
+      {armed === null ? null : (
+        <DeleteChatConfirm
+          title={armed.title}
+          onConfirm={() => {
+            setArmed(null)
+            onDeleteChat(armed.id)
+          }}
+          onCancel={() => setArmed(null)}
+        />
+      )}
     </div>
   )
 }
@@ -230,6 +248,7 @@ export function SessionsOverviewDoor({
   const trigger = useRef<HTMLButtonElement>(null)
   const popup = useRef<HTMLDivElement>(null)
   const [open, setOpen] = useState(false)
+  const [asking, setAsking] = useState<{ id: string; title: string } | null>(null)
   // A peek follows the pointer; a pin (a click in popover mode) stays until dismissed.
   const [pinned, setPinned] = useState(false)
   const peekTimer = useRef<ReturnType<typeof setTimeout>>(undefined)
@@ -339,9 +358,23 @@ export function SessionsOverviewDoor({
               close(false)
               onRevealProposal(rowKey)
             }}
+            onAskDelete={(chat) => {
+              close()
+              setAsking(chat)
+            }}
           />
         </Popover>,
         document.body,
+      )}
+      {asking === null ? null : (
+        <DeleteChatConfirm
+          title={asking.title}
+          onConfirm={() => {
+            setAsking(null)
+            onDeleteChat(asking.id)
+          }}
+          onCancel={() => setAsking(null)}
+        />
       )}
     </>
   )

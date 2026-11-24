@@ -1,9 +1,16 @@
 import { CURRENT_CHECKOUT, type AgentConfig, type Chat } from '@manor/contracts'
+import type { ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { ChatListView } from '../src/components/chats/ChatListView'
 import { GroupDialogContent } from '../src/components/chats/GroupDialog'
 import { chatList, emptyWorkspace, type WorkspaceState } from '../src/state'
+
+// No DOM here to portal into: the modal renders its title and body in place.
+vi.mock('../src/components/Modal', async (original) => ({
+  ...(await original<typeof import('../src/components/Modal')>()),
+  Modal: ({ title, children }: { title: string; children: ReactNode }) => <div role="dialog">{title}{children}</div>,
+}))
 
 const agent = (id: string, name: string, color: string): AgentConfig =>
   ({ id, name, color, allowedTools: [] }) as unknown as AgentConfig
@@ -218,7 +225,7 @@ describe('the chat list on screen', () => {
 
   // Her place above the list is a layout, not a smaller set of acts: the delete a
   // row offers has to survive being lifted out of that list.
-  it('keeps the chief’s own delete confirm where a row’s would be', () => {
+  it('asks before deleting the chief’s own thread, and keeps her card while it asks', () => {
     const chief = { ...agent('jeeves', 'Jeeves', '#8b5cf6'), isCos: true, pinned: true }
     const html = render(
       [chief],
@@ -228,9 +235,9 @@ describe('the chat list on screen', () => {
       'dm:jeeves',
     )
 
-    expect(html).toContain('and all messages?')
-    // The hero is gone while the question stands, exactly as a row disappears.
-    expect(faces(html)).toBe(0)
+    expect(html).toContain('role="dialog">Delete “Jeeves”?')
+    expect(html).toContain('All its messages go with it.')
+    expect(faces(html)).toBe(1)
   })
 
   it('lifts only pinned personas, at most two and chief first', () => {
@@ -308,7 +315,7 @@ describe('the group dialog', () => {
         members={['sage', 'smith']}
         title="Release crew"
         onSubmit={() => true}
-        onDelete={() => {}}
+        onAskDelete={() => {}}
         onClose={() => {}}
       />,
     )

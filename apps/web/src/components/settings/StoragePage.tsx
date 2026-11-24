@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { DEFAULT_HOUSE_SETTINGS, daysToMs, type HouseSettings } from '@manor/contracts'
 import type { Notice } from '../../state'
 import { useRequest, type RequestEvents } from '../../useRequest'
-import { ConfirmStrip } from '../Confirm'
+import { ConfirmModal } from '../Confirm'
 import { RequestNotice } from '../ui/RequestNotice'
 import { Select } from '../ui/Select'
 import { SettingsGroup, SettingsPage, SettingsRow } from './SettingsLayout'
@@ -99,22 +99,21 @@ export function StoragePage({ settings, archivedAt, notice, requestEvents, onSav
         <SettingsRow label="Settle quiet Sessions" description="A Session with no new messages for this long moves to Settled.">
           {control('autoSettleDays', 'Settle quiet Sessions', 'Never')}
         </SettingsRow>
-        {pending === null ? (
-          <SettingsRow label="Delete archived chats" description="An archived chat can be restored until then. After that it is deleted with its worktrees.">
-            {control('archiveRetentionDays', 'Delete archived chats')}
-          </SettingsRow>
-        ) : (
-          <div className="flex min-h-14 items-center py-3">
-            <ConfirmStrip
-              question={`${pending.count === 1 ? '1 archived chat is' : `${pending.count} archived chats are`} older than ${dayLabel(pending.next.archiveRetentionDays)} and will be deleted within the hour.`}
-              confirmLabel="Shorten"
-              onConfirm={() => {
-                setPending(null)
-                save(pending.next)
-              }}
-              onCancel={() => setPending(null)}
-            />
-          </div>
+        <SettingsRow label="Delete archived chats" description="An archived chat can be restored until then. After that it is deleted with its worktrees.">
+          {control('archiveRetentionDays', 'Delete archived chats')}
+        </SettingsRow>
+        {pending === null ? null : (
+          <ConfirmModal
+            title="Shorten how long archived chats stay?"
+            confirmLabel="Shorten"
+            onConfirm={() => {
+              setPending(null)
+              save(pending.next)
+            }}
+            onCancel={() => setPending(null)}
+          >
+            {`${pending.count === 1 ? '1 archived chat is' : `${pending.count} archived chats are`} older than ${dayLabel(pending.next.archiveRetentionDays)} and will be deleted within the hour.`}
+          </ConfirmModal>
         )}
       </SettingsGroup>
       <SettingsGroup title="Files" {...restore(['attachmentRetentionDays', 'backupRetentionDays'])}>

@@ -19,7 +19,7 @@ import {
 } from '../../routines'
 import { isHomeRoom, type Notice } from '../../state'
 import { useRequest, type RequestEvents } from '../../useRequest'
-import { ConfirmStrip } from '../Confirm'
+import { ConfirmModal } from '../Confirm'
 import { Icon } from '../Icon'
 import { Markdown } from '../Markdown'
 import { Button } from '../ui/Button'
@@ -272,31 +272,30 @@ export function RoutineDetail({
       </section>
 
       <div className="mt-6">
+        <Button
+          variant="danger"
+          size="compact"
+          className="inline-flex items-center gap-1.5"
+          disabled={deletion.pending}
+          onClick={() => setDeleting(true)}
+        >
+          <Icon icon={Delete02Icon} size={13} />
+          {deletion.pending ? 'Deleting…' : 'Delete'}
+        </Button>
         {deleting ? (
-          <ConfirmStrip
-            question={
-              routine.chatId === null
-                ? `Delete “${routine.name}” and its ${runs.length === 1 ? 'run' : 'runs'}?`
-                : `Delete “${routine.name}”? Its direct-message conversation stays.`
-            }
+          <ConfirmModal
+            title={`Delete “${routine.name}”?`}
             onConfirm={() => {
               setDeleting(false)
               deletion.start((requestId) => onDelete(routine.id, requestId), { onAck: onDeleted })
             }}
             onCancel={() => setDeleting(false)}
-          />
-        ) : (
-          <Button
-            variant="danger"
-            size="compact"
-            className="inline-flex items-center gap-1.5"
-            disabled={deletion.pending}
-            onClick={() => setDeleting(true)}
           >
-            <Icon icon={Delete02Icon} size={13} />
-            {deletion.pending ? 'Deleting…' : 'Delete'}
-          </Button>
-        )}
+            {routine.chatId === null
+              ? `Its ${runs.length === 1 ? 'run goes' : 'runs go'} with it.`
+              : 'Its direct-message conversation stays.'}
+          </ConfirmModal>
+        ) : null}
         {notice === null ? null : <div className="mt-3"><RequestNotice notice={notice} /></div>}
       </div>
     </>

@@ -63,7 +63,7 @@ import { browserActorLabel, type BrowserActivity } from '../desktopBrowser'
 import { EASE_TRAVEL, ICON_SWAP, ICON_SWAP_GONE, ICON_SWAP_REST, INSTANT } from '../motion'
 import { useBrowserSlot } from '../useBrowserSlot'
 export { isPersistentBrowserProfileFailure } from '../useBrowserSlot'
-import { ConfirmStrip } from './Confirm'
+import { ConfirmModal } from './Confirm'
 import { Icon } from './Icon'
 import { DOCK_PANEL_SHELL, STAGE_PANEL_SHELL, dockPanelLayoutClass } from './ui/dockPanel'
 import { Button } from './ui/Button'
@@ -469,6 +469,7 @@ export function BrowserPanel({
         void bridge.browserImportStatus?.().then(setImportStatus, () => undefined)
       },
       (reason: unknown) => {
+        setClearArmed(false)
         setClearing(false)
         fail(reason)
       },
@@ -671,8 +672,8 @@ export function BrowserPanel({
         </div>
 
         {!clearArmed ? null : (
-          <ConfirmStrip
-            question="Clear history, browser data, and sign out everywhere?"
+          <ConfirmModal
+            title="Clear history, browser data, and sign out everywhere?"
             confirmLabel={clearing ? 'Clearing…' : 'Clear'}
             onConfirm={clearBrowserData}
             onCancel={() => setClearArmed(false)}

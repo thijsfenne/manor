@@ -4,7 +4,7 @@ import type { BrowserBookmark, BrowserSessionState, BrowserShortcut, DesktopBrow
 import { BrowserDeviceToolbar } from '../src/components/BrowserDeviceToolbar'
 import { BrowserFindBar } from '../src/components/BrowserFindBar'
 import { BrowserPanel } from '../src/components/BrowserPanel'
-import { ConfirmStrip } from '../src/components/Confirm'
+import { ConfirmModal } from '../src/components/Confirm'
 import { Switch } from '../src/components/ui/Switch'
 import { BrowserMenu } from '../src/components/BrowserMenu'
 import { BrowserBookmarksMenu } from '../src/components/BrowserBookmarksMenu'
@@ -427,12 +427,12 @@ describe('browser panel menu integration', () => {
     expect(tree!.root.findAllByType(Switch)).toHaveLength(0)
     await click('Browser menu'); await click('Clear browser data')
     expect(bridge.clearData).not.toHaveBeenCalled()
-    act(() => tree!.root.findByType(ConfirmStrip).props.onCancel())
-    expect(tree!.root.findAllByType(ConfirmStrip)).toHaveLength(0)
+    act(() => tree!.root.findByType(ConfirmModal).props.onCancel())
+    expect(tree!.root.findAllByType(ConfirmModal)).toHaveLength(0)
     await click('Browser menu'); await click('Clear browser data')
-    await act(async () => tree!.root.findByType(ConfirmStrip).props.onConfirm())
+    await act(async () => tree!.root.findByType(ConfirmModal).props.onConfirm())
     expect(bridge.clearData).toHaveBeenCalledOnce()
-    expect(tree!.root.findAllByType(ConfirmStrip)).toHaveLength(0)
+    expect(tree!.root.findAllByType(ConfirmModal)).toHaveLength(0)
   })
 
   it('shows recent history on address focus and navigates a chosen result', async () => {

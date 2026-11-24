@@ -7,7 +7,7 @@ import { rowsOf, type TurnRow } from '../state'
 import { AskDock } from './AskCard'
 import type { DictationSettings } from '../dictation/useDictation'
 import { Composer } from './Composer'
-import { ConfirmStrip } from './Confirm'
+import { ConfirmModal } from './Confirm'
 import { SideRuntimeMenu } from './SideRuntimeMenu'
 import { Transcript } from './Transcript'
 import { Button } from './ui/Button'
@@ -178,29 +178,26 @@ export function SideChatPanel({
           rather than someone, and what it runs on is a control, so it lives in the
           composer with every other chat's runtime instead of being stated up here. */}
       <div className="flex h-11 min-w-0 items-center justify-between border-b border-line px-3.5 pr-2">
-        {confirmingClear ? (
-          <ConfirmStrip
-            question="Clear this side chat's history?"
-            confirmLabel="Clear"
-            onConfirm={() => {
-              setConfirmingClear(false)
-              onClear()
-            }}
-            onCancel={() => setConfirmingClear(false)}
-          />
-        ) : (
-          <>
-            <h2 className="m-0 text-label font-medium text-muted">Side chat</h2>
-            <div className="flex items-center">
-              {/* Only once there is something to clear, and never mid-open. */}
-              {ready && rows.length > 0 && (
-                <IconButton icon={Delete02Icon} label="Clear side chat" disabled={!connected} onClick={() => setConfirmingClear(true)} />
-              )}
-              <IconButton icon={Cancel01Icon} label="Hide side chat" onClick={onClose} />
-            </div>
-          </>
-        )}
+        <h2 className="m-0 text-label font-medium text-muted">Side chat</h2>
+        <div className="flex items-center">
+          {/* Only once there is something to clear, and never mid-open. */}
+          {ready && rows.length > 0 && (
+            <IconButton icon={Delete02Icon} label="Clear side chat" disabled={!connected} onClick={() => setConfirmingClear(true)} />
+          )}
+          <IconButton icon={Cancel01Icon} label="Hide side chat" onClick={onClose} />
+        </div>
       </div>
+      {confirmingClear ? (
+        <ConfirmModal
+          title="Clear this side chat's history?"
+          confirmLabel="Clear"
+          onConfirm={() => {
+            setConfirmingClear(false)
+            onClear()
+          }}
+          onCancel={() => setConfirmingClear(false)}
+        />
+      ) : null}
 
       {gaveUp && rows.length === 0 ? (
         // The one path that can hang: the server refused to open the thread and said

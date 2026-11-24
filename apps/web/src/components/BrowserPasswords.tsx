@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Cancel01Icon, Delete02Icon, Key01Icon, Settings01Icon, UserIcon } from '@hugeicons/core-free-icons'
 import type { BrowserPasswordOfferChoice, BrowserSavedPasswords as BrowserSavedPasswordList, BrowserTabPasswords, DesktopBrowserBridge } from '@manor/contracts'
 import { Icon } from './Icon'
-import { ConfirmStrip } from './Confirm'
+import { ConfirmModal } from './Confirm'
 import { Button } from './ui/Button'
 import { IconButton } from './ui/IconButton'
 import { Menu, MenuItem, useMenu } from './ui/Menu'
@@ -113,7 +113,7 @@ export function BrowserSavedPasswords({ bridge }: { bridge: DesktopBrowserBridge
         )}
       </div>
       {!clearArmed ? null : (
-        <ConfirmStrip question="Remove every saved password and never-save site?" confirmLabel={busy ? 'Removing…' : 'Remove all'}
+        <ConfirmModal title="Remove every saved password and never-save site?" confirmLabel={busy ? 'Removing…' : 'Remove all'}
           onConfirm={() => remove()} onCancel={() => setClearArmed(false)} />
       )}
       {error === null ? null : (

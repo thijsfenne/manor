@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { describe, expect, it, vi } from 'vitest'
 import { DEFAULT_HOUSE_SETTINGS, daysToMs } from '@manor/contracts'
@@ -10,6 +11,11 @@ vi.mock('motion/react', () => ({
 }))
 // The real Select portals its menu into document.body, which this renderer has none of.
 vi.mock('../src/components/ui/Select', () => ({ Select: () => null }))
+// No DOM here to portal into: the modal renders its title and body in place.
+vi.mock('../src/components/Modal', async (original) => ({
+  ...(await original<typeof import('../src/components/Modal')>()),
+  Modal: ({ title, children }: { title: string; children: ReactNode }) => <div role="dialog">{title}{children}</div>,
+}))
 
 describe('the Storage page', () => {
   it('asks before Restore defaults shortens the archive window past an archived chat', () => {

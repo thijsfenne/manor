@@ -3,6 +3,7 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ProjectThreadRow } from '../src/state'
 import { ProjectThreadsSection } from '../src/components/inbox/ProjectThreadsSection'
+import { ConfirmModal } from '../src/components/Confirm'
 import { ProjectDialog, emptyDraft } from '../src/components/projects/ProjectDialog'
 
 // The test renderer has no DOM: the menu renders in place and layout animation stays off.
@@ -113,7 +114,8 @@ describe('the project dialog opened to delete', () => {
         />,
       )
     })
-    const strip = tree.root.findByProps({ role: 'group' })
-    expect(strip.props['aria-label']).toBe('Delete “Manor”, with its thread, Sessions and chats?')
+    const confirm = tree.root.findByType(ConfirmModal)
+    expect(confirm.props.title).toBe('Delete “Manor”?')
+    expect(confirm.props.children).toBe('Its thread, Sessions and chats go with it.')
   })
 })

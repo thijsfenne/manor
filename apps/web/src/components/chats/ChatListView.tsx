@@ -4,7 +4,7 @@ import type { AgentConfig } from '@manor/contracts'
 import { CHAT_LIST_PIN_LIMIT, chatListPins, personaOf, type ChatListRow, type SubagentGroup } from '../../state'
 import { useMinuteClock } from '../../useMinuteClock'
 import { Avatar } from '../Avatar'
-import { ConfirmStrip } from '../Confirm'
+import { DeleteChatConfirm } from '../Confirm'
 import { AgentStack } from '../inbox/AgentStack'
 import { Standing } from '../inbox/Standing'
 import { ContextMenu, type ContextMenuItem } from '../ui/ContextMenu'
@@ -140,8 +140,8 @@ export function ChatListView({
   })
   const headKeys = new Set(heads.map((head) => head.row.key))
   const listRows = shown.filter((row) => !headKeys.has(row.key))
-  // A narrow card has no room for the delete confirm, so the armed one takes the row alone.
-  const armedHead = heads.find((head) => head.row.chat !== null && head.row.key === armed)
+  const armedRow = shown.find((row) => row.key === armed)
+  const armedChatId = armedRow?.chat?.id
   const childrenOf = (row: ChatListRow, indent?: number) => {
     const chat = row.chat
     const group = chat === null ? undefined : subagentGroups?.[chat.id]
@@ -166,12 +166,10 @@ export function ChatListView({
       selected={row.key === markedKey}
       occupied={filled(row)}
       onGrab={dragOf(row)}
-      armed={armed}
       onArm={onArm}
       onOpen={() => (row.chat !== null ? onOpenChat(row.chat.id) : onOpenDm(agent.id))}
       pinItems={pinMenuItems(agent, agents, onSetPins)}
       onEditAgent={() => onEditAgent(agent.id)}
-      onDeleteChat={onDeleteChat}
     />
   )
 
@@ -185,16 +183,14 @@ export function ChatListView({
         <p className="m-0 px-2.5 py-2 text-[12px] text-dim">No conversations yet</p>
       ) : (
         <>
-          {armedHead !== undefined ? (
-            renderHead(armedHead)
-          ) : heads.length === 1 ? (
+          {heads.length === 1 ? (
             renderHead(heads[0]!)
           ) : heads.length > 1 ? (
             <div className="my-2 flex gap-1">{heads.map(renderHead)}</div>
           ) : null}
           {/* A pinned card has no text column to indent from, so its children sit at
               the list's own first level, below the card or the pair of them. */}
-          {armedHead === undefined ? heads.map((head) => <Fragment key={head.row.key}>{childrenOf(head.row)}</Fragment>) : null}
+          {heads.map((head) => <Fragment key={head.row.key}>{childrenOf(head.row)}</Fragment>)}
           {listRows.length === 0 ? null : (
             <ul className="m-0 flex list-none flex-col gap-[2px] p-0">
               {listRows.map((row) => (
@@ -209,13 +205,11 @@ export function ChatListView({
                   occupied={filled(row)}
                   onGrab={dragOf(row)}
                   now={now}
-                  armed={armed}
                   onArm={onArm}
                   onOpenChat={onOpenChat}
                   onOpenDm={onOpenDm}
                   onEditAgent={onEditAgent}
                   onEditGroup={onEditGroup}
-                  onDeleteChat={onDeleteChat}
                   onSetPins={onSetPins}
                 />
                 {row.chat !== null && subagentGroups?.[row.chat.id] !== undefined ? (
@@ -226,6 +220,17 @@ export function ChatListView({
             </ul>
           )}
         </>
+      )}
+      {/* Beside the list rather than in a row, so the row's drag and menu never see it. */}
+      {armedRow === undefined || armedChatId === undefined ? null : (
+        <DeleteChatConfirm
+          title={armedRow.title}
+          onConfirm={() => {
+            onArm(null)
+            onDeleteChat(armedChatId)
+          }}
+          onCancel={() => onArm(null)}
+        />
       )}
     </div>
   )
@@ -252,12 +257,10 @@ function HeadCard({
   selected,
   occupied,
   onGrab,
-  armed,
   onArm,
   onOpen,
   pinItems,
   onEditAgent,
-  onDeleteChat,
 }: {
   row: ChatListRow
   agent: AgentConfig
@@ -266,30 +269,14 @@ function HeadCard({
   selected: boolean
   occupied: boolean
   onGrab: ((event: PointerEvent<HTMLElement>) => void) | undefined
-  armed: string | null
   onArm: (key: string | null) => void
   onOpen: () => void
   pinItems: ContextMenuItem[]
   onEditAgent: () => void
-  onDeleteChat: (chatId: string) => void
 }) {
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null)
   const { chat } = row
 
-  if (chat !== null && armed === row.key) {
-    return (
-      <div className="mb-2 flex items-center gap-0.5 rounded-lg pr-1">
-        <ConfirmStrip
-          question={`Delete “${row.title}” and all messages?`}
-          onConfirm={() => {
-            onArm(null)
-            onDeleteChat(chat.id)
-          }}
-          onCancel={() => onArm(null)}
-        />
-      </div>
-    )
-  }
 
   return (
     <div
@@ -352,13 +339,11 @@ interface ChatRowProps {
   onGrab: ((event: PointerEvent<HTMLElement>) => void) | undefined
   /** The clock the age is read against, held above so every row reads the same one. */
   now: number
-  armed: string | null
   onArm: (key: string | null) => void
   onOpenChat: (chatId: string) => void
   onOpenDm: (agentId: string) => void
   onEditAgent: (agentId: string) => void
   onEditGroup: (chatId: string) => void
-  onDeleteChat: (chatId: string) => void
   onSetPins: (agentId: string, pins: AgentPins) => void
 }
 
@@ -375,32 +360,16 @@ function ChatRow({
   occupied,
   onGrab,
   now,
-  armed,
   onArm,
   onOpenChat,
   onOpenDm,
   onEditAgent,
   onEditGroup,
-  onDeleteChat,
   onSetPins,
 }: ChatRowProps) {
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null)
   const { chat } = row
 
-  if (chat !== null && armed === row.key) {
-    return (
-      <li className="flex items-center gap-0.5 rounded-lg pr-1">
-        <ConfirmStrip
-          question={`Delete “${row.title}” and all messages?`}
-          onConfirm={() => {
-            onArm(null)
-            onDeleteChat(chat.id)
-          }}
-          onCancel={() => onArm(null)}
-        />
-      </li>
-    )
-  }
 
   const open = () => {
     if (chat !== null) onOpenChat(chat.id)

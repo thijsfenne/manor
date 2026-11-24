@@ -24,7 +24,7 @@ import { useRequest, type RequestEvents } from '../../useRequest'
 import type { ConnectionStatus } from '../../useWorkspace'
 import { AgentMemoryView, type AgentMemoryTab, type AgentNotesLoad } from '../AgentMemory'
 import { Avatar } from '../Avatar'
-import { ConfirmStrip } from '../Confirm'
+import { ConfirmModal } from '../Confirm'
 import { Icon } from '../Icon'
 import type { ChatRoutinesProps } from '../routines/ChatRoutines'
 import { formHintClass, formInputClass, formLabelClass } from '../ui/FormField'
@@ -464,18 +464,14 @@ function RootPage({ draft, agent, registry, notes, taskCount, hasFiles, pin, onP
       </Group>
 
       <div className="mt-1.5 flex flex-col gap-1.5">
+        <Group>
+          <Row icon={Delete02Icon} label={pending ? 'Deleting…' : `Delete ${name}`} danger disabled={pending} onClick={() => setArmed(true)} />
+        </Group>
         {armed ? (
-          <ConfirmStrip
-            wrap
-            question={`Delete ${name}? Past messages stay, labelled by id.`}
-            onConfirm={remove}
-            onCancel={() => setArmed(false)}
-          />
-        ) : (
-          <Group>
-            <Row icon={Delete02Icon} label={pending ? 'Deleting…' : `Delete ${name}`} danger disabled={pending} onClick={() => setArmed(true)} />
-          </Group>
-        )}
+          <ConfirmModal title={`Delete ${name}?`} onConfirm={remove} onCancel={() => setArmed(false)}>
+            Past messages stay, labelled by id.
+          </ConfirmModal>
+        ) : null}
         {problem === null ? null : <p role="alert" className="m-0 px-0.5 text-label text-danger">{problem}</p>}
       </div>
     </>

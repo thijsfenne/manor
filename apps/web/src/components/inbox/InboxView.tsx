@@ -14,7 +14,7 @@ import { isArchiveExpired, type Inbox, type InboxChat, type SubagentGroup } from
 import { ProjectBadge } from '../ProjectBadge'
 import { relativeTime } from '../../relativeTime'
 import { useMinuteClock } from '../../useMinuteClock'
-import { ConfirmStrip } from '../Confirm'
+import { DeleteChatConfirm } from '../Confirm'
 import { Icon } from '../Icon'
 import { ContextMenu, type ContextMenuItem } from '../ui/ContextMenu'
 import { SETTLED_LIST_VARIANTS } from '../../motion'
@@ -205,6 +205,7 @@ export function InboxView({
   const settledOpen = quietSection === 'settled' && settled.length > 0
   const archivedOpen = quietSection === 'archived' && archived.length > 0
   const quietOpen = settledOpen || archivedOpen
+  const armedChat = [...unsettled, ...settled, ...archived].find((entry) => `chat:${entry.chat.id}` === armed)?.chat
 
   return (
     <div className={`flex h-full flex-col ${mobile ? 'pt-2' : ''}`}>
@@ -234,12 +235,10 @@ export function InboxView({
               })}
               motionClass={inboxRowMotionClass(rowMotion, entry.chat.id)}
               now={now}
-              armed={armed}
               onArm={onArm}
               onOpen={onOpenChat}
               onOpenRight={onOpenRight}
               occupied={occupiedChatIds?.has(entry.chat.id) === true}
-              onDelete={onDeleteChat}
               onSetSettled={moveRow}
               onSetArchived={onSetArchived}
             />
@@ -277,12 +276,10 @@ export function InboxView({
               selected={lit(entry)}
               marked={entry.chat.id === markedChatId}
               now={now}
-              armed={armed}
               onArm={onArm}
               onOpen={onOpenChat}
               onOpenRight={onOpenRight}
               occupied={occupiedChatIds?.has(entry.chat.id) === true}
-              onDelete={onDeleteChat}
               onSetSettled={moveRow}
               onSetArchived={onSetArchived}
               onHoldPeek={onHoldPeek}
@@ -312,10 +309,8 @@ export function InboxView({
               agents={agents}
               selected={showChatSelection && entry.selected && activeSubagents?.[entry.chat.id] === undefined}
               now={now}
-              armed={armed}
               onArm={onArm}
               onOpen={onOpenChat}
-              onDelete={onDeleteChat}
               onSetSettled={moveRow}
               onSetArchived={onSetArchived}
               onHoldPeek={onHoldPeek}
@@ -328,6 +323,17 @@ export function InboxView({
             onClick={() => setVisibleArchived((count) => count + QUIET_PAGE_SIZE)}
           />
         </QuietSection>
+      )}
+      {/* Beside the list rather than in a row, so the row's drag and menu never see it. */}
+      {armedChat === undefined ? null : (
+        <DeleteChatConfirm
+          title={armedChat.title}
+          onConfirm={() => {
+            onArm(null)
+            onDeleteChat(armedChat.id)
+          }}
+          onCancel={() => onArm(null)}
+        />
       )}
     </div>
   )
@@ -399,12 +405,10 @@ interface RowProps {
   motionClass: string
   /** The clock the age is read against, held above so every row reads the same one. */
   now: number
-  armed: string | null
   onArm: (key: string | null) => void
   onOpen: (chatId: string) => void
   onOpenRight?: (chatId: string) => void
   occupied?: boolean
-  onDelete: (chatId: string) => void
   onSetSettled: (chatId: string, settled: boolean) => boolean
   onSetArchived: (chatId: string, archived: boolean) => boolean
   /** The line under the title in place of the project badge, for a list already inside one project. */
@@ -422,14 +426,6 @@ interface RowProps {
   disclosure?: ReactNode
 }
 
-/** The confirm replaces the row it belongs to, exactly as it does in a project. */
-function ArmedRow({ title, onConfirm, onCancel }: { title: string; onConfirm: () => void; onCancel: () => void }) {
-  return (
-    <li className="flex items-center gap-0.5 rounded-lg pr-1">
-      <ConfirmStrip question={`Delete “${title}” and all messages?`} onConfirm={onConfirm} onCancel={onCancel} />
-    </li>
-  )
-}
 
 /** Right-click is the only way into a row's menu. The hover card yields at once. */
 function openChatMenu(
@@ -470,12 +466,10 @@ export function LiveRow({
   marked = false,
   motionClass,
   now,
-  armed,
   onArm,
   onOpen,
   onOpenRight,
   occupied = false,
-  onDelete,
   onSetSettled,
   onSetArchived,
   detail,
@@ -490,18 +484,6 @@ export function LiveRow({
   const grab = useSplitDragGrab()
   const canDrag = grab !== null && onOpenRight !== undefined && !occupied
 
-  if (armed === key) {
-    return (
-      <ArmedRow
-        title={chat.title}
-        onConfirm={() => {
-          onArm(null)
-          onDelete(chat.id)
-        }}
-        onCancel={() => onArm(null)}
-      />
-    )
-  }
 
   return (
     <li
@@ -618,12 +600,10 @@ export function QuietRow({
   selected,
   marked = false,
   now,
-  armed,
   onArm,
   onOpen,
   onOpenRight,
   occupied = false,
-  onDelete,
   onSetSettled,
   onSetArchived,
   onHoldPeek,
@@ -648,18 +628,6 @@ export function QuietRow({
   const key = `chat:${chat.id}`
   const archived = mode === 'archived'
 
-  if (armed === key) {
-    return (
-      <ArmedRow
-        title={chat.title}
-        onConfirm={() => {
-          onArm(null)
-          onDelete(chat.id)
-        }}
-        onCancel={() => onArm(null)}
-      />
-    )
-  }
 
   return (
     <FoldItem

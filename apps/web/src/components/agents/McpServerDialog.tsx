@@ -3,7 +3,7 @@ import { Cancel01Icon, PlusSignIcon } from '@hugeicons/core-free-icons'
 import type { McpHostStatus, McpServerConfig, McpServerDraft } from '@manor/contracts'
 import { connectorCost, formatTokens } from '../../mcp'
 import { parseMcpPaste, pasteNote } from '../../mcpPaste'
-import { ConfirmStrip } from '../Confirm'
+import { ConfirmModal } from '../Confirm'
 import { Modal, ModalFooter } from '../Modal'
 import type { Notice } from '../../state'
 import { Button } from '../ui/Button'
@@ -146,241 +146,232 @@ export function McpServerDialog({
   }
 
   return (
-    <Modal title={existing ? `Edit ${initial.name}` : 'New MCP server'} width="wide" onClose={onClose}>
-      {existing ? null : (
-        <FormField
-          label="Paste a config"
-          optional
-          hint="The JSON block from the server’s README. Env values keep only their names, and a credential in an argument is flagged."
-        >
-          <textarea
-            className={`${formInputClass} min-h-[76px] resize-y font-mono text-[12px] leading-relaxed`}
-            value={paste}
-            placeholder={'{"mcpServers": {"context7": {"command": "npx", "args": ["-y", "@upstash/context7-mcp"]}}}'}
-            onChange={(event) => editPaste(event.target.value)}
-          />
-        </FormField>
-      )}
+    <>
+      <Modal title={existing ? `Edit ${initial.name}` : 'New MCP server'} width="wide" onClose={onClose}>
+        {existing ? null : (
+          <FormField
+            label="Paste a config"
+            optional
+            hint="The JSON block from the server’s README. Env values keep only their names, and a credential in an argument is flagged."
+          >
+            <textarea
+              className={`${formInputClass} min-h-[76px] resize-y font-mono text-[12px] leading-relaxed`}
+              value={paste}
+              placeholder={'{"mcpServers": {"context7": {"command": "npx", "args": ["-y", "@upstash/context7-mcp"]}}}'}
+              onChange={(event) => editPaste(event.target.value)}
+            />
+          </FormField>
+        )}
 
-      {pasteProblem !== null || pasteNoted !== null ? (
-        <p
-          className={`m-0 -mt-1 px-0.5 text-label ${pasteProblem === null ? 'text-muted' : 'text-danger'}`}
-          role="status"
-        >
-          <span className="[overflow-wrap:anywhere]">{pasteProblem ?? pasteNoted}</span>
-        </p>
-      ) : null}
-
-      {saved !== undefined ? (
-        <section className="rounded-xl border border-line bg-surface-2 px-3.5 py-3">
-          <p className="m-0 text-[13px] font-medium text-text">
-            {saved.tools.length} {saved.tools.length === 1 ? 'tool' : 'tools'}, about{' '}
-            {formatTokens(connectorCost(saved).listedTokens)} tokens per turn as listed names (none on Codex), up to{' '}
-            {formatTokens(connectorCost(saved).loadedTokens)} once every schema is loaded,{' '}
-            {holders.length === 0 ? 'attached to nobody' : `attached to ${holders.join(', ')}`}
+        {pasteProblem !== null || pasteNoted !== null ? (
+          <p
+            className={`m-0 -mt-1 px-0.5 text-label ${pasteProblem === null ? 'text-muted' : 'text-danger'}`}
+            role="status"
+          >
+            <span className="[overflow-wrap:anywhere]">{pasteProblem ?? pasteNoted}</span>
           </p>
-          {saved.tools.length === 0 ? null : (
-            <details className="mt-1.5 text-label text-dim">
-              <summary className="w-fit cursor-pointer text-muted hover:text-text">
-                Show tool names
-              </summary>
-              <p className="mt-2 mb-0 [overflow-wrap:anywhere]">{saved.tools.join(', ')}</p>
-            </details>
-          )}
-        </section>
-      ) : null}
+        ) : null}
 
-      <div className="flex gap-3">
+        {saved !== undefined ? (
+          <section className="rounded-xl border border-line bg-surface-2 px-3.5 py-3">
+            <p className="m-0 text-[13px] font-medium text-text">
+              {saved.tools.length} {saved.tools.length === 1 ? 'tool' : 'tools'}, about{' '}
+              {formatTokens(connectorCost(saved).listedTokens)} tokens per turn as listed names (none on Codex), up to{' '}
+              {formatTokens(connectorCost(saved).loadedTokens)} once every schema is loaded,{' '}
+              {holders.length === 0 ? 'attached to nobody' : `attached to ${holders.join(', ')}`}
+            </p>
+            {saved.tools.length === 0 ? null : (
+              <details className="mt-1.5 text-label text-dim">
+                <summary className="w-fit cursor-pointer text-muted hover:text-text">
+                  Show tool names
+                </summary>
+                <p className="mt-2 mb-0 [overflow-wrap:anywhere]">{saved.tools.join(', ')}</p>
+              </details>
+            )}
+          </section>
+        ) : null}
+
+        <div className="flex gap-3">
+          <FormField
+            label="Name"
+            className="w-[200px] flex-none"
+            hint="Becomes the mcp__<name>__ prefix."
+          >
+            <input
+              className={`${formInputClass} font-mono`}
+              autoFocus
+              value={draft.name}
+              placeholder="supabase"
+              onChange={(event) => edit({ name: event.target.value })}
+            />
+          </FormField>
+          <FormField label="Description" optional className="min-w-0 flex-1">
+            <input
+              className={formInputClass}
+              value={draft.description}
+              placeholder="Database, migrations and logs."
+              onChange={(event) => edit({ description: event.target.value })}
+            />
+          </FormField>
+        </div>
+
         <FormField
-          label="Name"
-          className="w-[200px] flex-none"
-          hint="Becomes the mcp__<name>__ prefix."
+          label="Command"
+          hint="The executable Manor starts. Leave empty for an HTTP server. An absolute path is safest."
         >
           <input
             className={`${formInputClass} font-mono`}
-            autoFocus
-            value={draft.name}
-            placeholder="supabase"
-            onChange={(event) => edit({ name: event.target.value })}
+            value={draft.command}
+            placeholder="/usr/local/bin/mcp-server-supabase"
+            onChange={(event) => edit({ command: event.target.value })}
           />
         </FormField>
-        <FormField label="Description" optional className="min-w-0 flex-1">
+
+        <FormField
+          label="URL"
+          optional
+          hint="Streamable HTTP endpoint. When set, Manor does not start a process."
+        >
           <input
-            className={formInputClass}
-            value={draft.description}
-            placeholder="Database, migrations and logs."
-            onChange={(event) => edit({ description: event.target.value })}
+            className={`${formInputClass} font-mono`}
+            value={draft.url ?? ''}
+            placeholder="http://127.0.0.1:3845/mcp"
+            onChange={(event) => edit({ url: event.target.value })}
           />
         </FormField>
-      </div>
 
-      <FormField
-        label="Command"
-        hint="The executable Manor starts. Leave empty for an HTTP server. An absolute path is safest."
-      >
-        <input
-          className={`${formInputClass} font-mono`}
-          value={draft.command}
-          placeholder="/usr/local/bin/mcp-server-supabase"
-          onChange={(event) => edit({ command: event.target.value })}
-        />
-      </FormField>
-
-      <FormField
-        label="URL"
-        optional
-        hint="Streamable HTTP endpoint. When set, Manor does not start a process."
-      >
-        <input
-          className={`${formInputClass} font-mono`}
-          value={draft.url ?? ''}
-          placeholder="http://127.0.0.1:3845/mcp"
-          onChange={(event) => edit({ url: event.target.value })}
-        />
-      </FormField>
-
-      <FormField label="Arguments" optional hint="Separated by spaces.">
-        <input
-          className={`${formInputClass} font-mono`}
-          value={args}
-          placeholder="--read-only"
-          onChange={(event) => {
-            setArgs(event.target.value)
-            setProblem(null)
-            onDismissNotice()
-          }}
-        />
-      </FormField>
-
-      <FormField
-        label="Environment keys"
-        optional
-        custom
-      >
-        {envKeys.length === 0 ? null : (
-          <ul className="m-0 flex list-none flex-col gap-1.5 p-0">
-            {envKeys.map((key, index) => {
-              const trimmed = key.trim()
-              const known = hostStatus?.env.find((entry) => entry.key === trimmed)
-              return (
-                <li key={index} className="flex items-center gap-2 rounded-lg border border-line bg-surface-2 p-1">
-                  <input
-                    aria-label={`Environment key ${index + 1}`}
-                    className="min-w-0 flex-1 border-0 bg-transparent px-1.5 py-1 font-mono text-[13px] text-text outline-none placeholder:text-dim"
-                    value={key}
-                    placeholder="SUPABASE_ACCESS_TOKEN"
-                    onChange={(event) => {
-                      setEnvKeys((current) => current.map((value, at) => (at === index ? event.target.value : value)))
-                      setProblem(null)
-                      onDismissNotice()
-                    }}
-                  />
-                  {trimmed.length === 0 ? null : (
-                    <span className={`flex-none text-[12px] ${known?.present ? 'text-text' : 'text-dim'}`}>
-                      {known === undefined ? 'checked on save' : known.present ? 'found on this machine' : 'not set'}
-                    </span>
-                  )}
-                  <IconButton
-                    className="h-7 w-7"
-                    icon={Cancel01Icon}
-                    iconSize={12}
-                    label={`Remove environment key ${index + 1}`}
-                    onClick={() => setEnvKeys((current) => current.filter((_, at) => at !== index))}
-                  />
-                </li>
-              )
-            })}
-          </ul>
-        )}
-        <Button
-          size="small"
-          className="mt-0.5 inline-flex w-fit items-center gap-1.5"
-          onClick={() => setEnvKeys((current) => [...current, ''])}
-        >
-          <Icon icon={PlusSignIcon} size={12} />
-          Add key
-        </Button>
-      </FormField>
-
-      {existing ? (
-        <section className="flex flex-col gap-2">
-          {saved?.unavailable === undefined ? null : (
-            <div className="flex flex-col gap-0.5 px-0.5" role="status">
-              <span className="text-[13px] font-medium text-danger">Unavailable</span>
-              <span className="text-label text-muted [overflow-wrap:anywhere]">{saved.unavailable}</span>
-            </div>
-          )}
-          <div className="flex items-center gap-3 rounded-xl border border-line px-3.5 py-2.5">
-            <Button
-              disabled={busy}
-              onClick={() => {
-                verificationStarted.current = true
-                if (!onVerify()) {
-                  verificationStarted.current = false
-                  setProblem(OFFLINE)
-                }
-              }}
-            >
-              {pending === 'verify'
-                ? saved?.unavailable === undefined ? 'Testing…' : 'Reconnecting…'
-                : saved?.unavailable === undefined ? 'Test connection' : 'Reconnect'}
-            </Button>
-            <span className="min-w-0 text-[12px] text-muted">{hostCheckLabel(hostStatus?.check ?? null)}</span>
-          </div>
-        </section>
-      ) : null}
-
-      <label className="flex cursor-pointer items-start gap-2.5">
-        <Checkbox
-          className="mt-[3px]"
-          checked={draft.writes}
-          onChange={(writes) => edit({ writes })}
-        />
-        <span className="flex min-w-0 flex-col gap-0.5">
-          <span className="text-[13px] text-text">This server can change things</span>
-          <span className={formHintClass}>
-            Shows a warning wherever it is attached. It does not sandbox the server.
-          </span>
-        </span>
-      </label>
-
-      <label className="flex cursor-pointer items-start gap-2.5">
-        <Checkbox
-          className="mt-[3px]"
-          checked={draft.effectPolicy === 'trusted'}
-          onChange={(trusted) => edit({ effectPolicy: trusted ? 'trusted' : 'confirm_writes' })}
-        />
-        <span className="flex min-w-0 flex-col gap-0.5">
-          <span className="text-[13px] text-text">Trust this connector’s writes</span>
-          <span className={formHintClass}>
-            Trusted connectors act without asking. Leave this off for mail, publishing, accounts, and anything
-            else that acts outward on your behalf.
-          </span>
-        </span>
-      </label>
-
-      {notice !== null || problem !== null ? (
-        <p
-          className={`m-0 px-0.5 pt-1 text-label ${
-            notice !== null && notice.kind !== 'error' ? 'text-muted' : 'text-danger'
-          }`}
-          role="status"
-        >
-          <span className="[overflow-wrap:anywhere]">{notice?.text ?? problem}</span>
-        </p>
-      ) : null}
-
-      <ModalFooter>
-        {armed ? (
-          <ConfirmStrip
-            question={`Delete ${initial.name}? Every agent using it loses it.`}
-            onConfirm={() => {
-              setArmed(false)
-              if (!onDelete()) setProblem(OFFLINE)
+        <FormField label="Arguments" optional hint="Separated by spaces.">
+          <input
+            className={`${formInputClass} font-mono`}
+            value={args}
+            placeholder="--read-only"
+            onChange={(event) => {
+              setArgs(event.target.value)
+              setProblem(null)
+              onDismissNotice()
             }}
-            onCancel={() => setArmed(false)}
           />
-        ) : (
+        </FormField>
+
+        <FormField
+          label="Environment keys"
+          optional
+          custom
+        >
+          {envKeys.length === 0 ? null : (
+            <ul className="m-0 flex list-none flex-col gap-1.5 p-0">
+              {envKeys.map((key, index) => {
+                const trimmed = key.trim()
+                const known = hostStatus?.env.find((entry) => entry.key === trimmed)
+                return (
+                  <li key={index} className="flex items-center gap-2 rounded-lg border border-line bg-surface-2 p-1">
+                    <input
+                      aria-label={`Environment key ${index + 1}`}
+                      className="min-w-0 flex-1 border-0 bg-transparent px-1.5 py-1 font-mono text-[13px] text-text outline-none placeholder:text-dim"
+                      value={key}
+                      placeholder="SUPABASE_ACCESS_TOKEN"
+                      onChange={(event) => {
+                        setEnvKeys((current) => current.map((value, at) => (at === index ? event.target.value : value)))
+                        setProblem(null)
+                        onDismissNotice()
+                      }}
+                    />
+                    {trimmed.length === 0 ? null : (
+                      <span className={`flex-none text-[12px] ${known?.present ? 'text-text' : 'text-dim'}`}>
+                        {known === undefined ? 'checked on save' : known.present ? 'found on this machine' : 'not set'}
+                      </span>
+                    )}
+                    <IconButton
+                      className="h-7 w-7"
+                      icon={Cancel01Icon}
+                      iconSize={12}
+                      label={`Remove environment key ${index + 1}`}
+                      onClick={() => setEnvKeys((current) => current.filter((_, at) => at !== index))}
+                    />
+                  </li>
+                )
+              })}
+            </ul>
+          )}
+          <Button
+            size="small"
+            className="mt-0.5 inline-flex w-fit items-center gap-1.5"
+            onClick={() => setEnvKeys((current) => [...current, ''])}
+          >
+            <Icon icon={PlusSignIcon} size={12} />
+            Add key
+          </Button>
+        </FormField>
+
+        {existing ? (
+          <section className="flex flex-col gap-2">
+            {saved?.unavailable === undefined ? null : (
+              <div className="flex flex-col gap-0.5 px-0.5" role="status">
+                <span className="text-[13px] font-medium text-danger">Unavailable</span>
+                <span className="text-label text-muted [overflow-wrap:anywhere]">{saved.unavailable}</span>
+              </div>
+            )}
+            <div className="flex items-center gap-3 rounded-xl border border-line px-3.5 py-2.5">
+              <Button
+                disabled={busy}
+                onClick={() => {
+                  verificationStarted.current = true
+                  if (!onVerify()) {
+                    verificationStarted.current = false
+                    setProblem(OFFLINE)
+                  }
+                }}
+              >
+                {pending === 'verify'
+                  ? saved?.unavailable === undefined ? 'Testing…' : 'Reconnecting…'
+                  : saved?.unavailable === undefined ? 'Test connection' : 'Reconnect'}
+              </Button>
+              <span className="min-w-0 text-[12px] text-muted">{hostCheckLabel(hostStatus?.check ?? null)}</span>
+            </div>
+          </section>
+        ) : null}
+
+        <label className="flex cursor-pointer items-start gap-2.5">
+          <Checkbox
+            className="mt-[3px]"
+            checked={draft.writes}
+            onChange={(writes) => edit({ writes })}
+          />
+          <span className="flex min-w-0 flex-col gap-0.5">
+            <span className="text-[13px] text-text">This server can change things</span>
+            <span className={formHintClass}>
+              Shows a warning wherever it is attached. It does not sandbox the server.
+            </span>
+          </span>
+        </label>
+
+        <label className="flex cursor-pointer items-start gap-2.5">
+          <Checkbox
+            className="mt-[3px]"
+            checked={draft.effectPolicy === 'trusted'}
+            onChange={(trusted) => edit({ effectPolicy: trusted ? 'trusted' : 'confirm_writes' })}
+          />
+          <span className="flex min-w-0 flex-col gap-0.5">
+            <span className="text-[13px] text-text">Trust this connector’s writes</span>
+            <span className={formHintClass}>
+              Trusted connectors act without asking. Leave this off for mail, publishing, accounts, and anything
+              else that acts outward on your behalf.
+            </span>
+          </span>
+        </label>
+
+        {notice !== null || problem !== null ? (
+          <p
+            className={`m-0 px-0.5 pt-1 text-label ${
+              notice !== null && notice.kind !== 'error' ? 'text-muted' : 'text-danger'
+            }`}
+            role="status"
+          >
+            <span className="[overflow-wrap:anywhere]">{notice?.text ?? problem}</span>
+          </p>
+        ) : null}
+
+        <ModalFooter>
           <div className="flex items-center gap-2 pt-0.5">
             {existing ? (
               <Button variant="danger" disabled={busy} onClick={() => setArmed(true)}>
@@ -396,9 +387,22 @@ export function McpServerDialog({
               </Button>
             </div>
           </div>
-        )}
-      </ModalFooter>
-    </Modal>
+        </ModalFooter>
+      </Modal>
+      {/* Beside the form rather than in it, so its Escape and Tab stay its own. */}
+      {armed ? (
+        <ConfirmModal
+          title={`Delete ${initial.name}?`}
+          onConfirm={() => {
+            setArmed(false)
+            if (!onDelete()) setProblem(OFFLINE)
+          }}
+          onCancel={() => setArmed(false)}
+        >
+          Every agent using it loses it.
+        </ConfirmModal>
+      ) : null}
+    </>
   )
 }
 

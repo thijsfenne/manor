@@ -1,5 +1,4 @@
-import { Modal } from './Modal'
-import { Button } from './ui/Button'
+import { ConfirmModal } from './Confirm'
 
 /**
  * The question before unsaved text is dropped; `children` says in one line what would go.
@@ -8,12 +7,8 @@ import { Button } from './ui/Button'
  */
 export function DiscardModal({ children, onKeep, onDiscard }: { children: string; onKeep: () => void; onDiscard: () => void }) {
   return (
-    <Modal title="Discard unsaved changes?" onClose={onKeep}>
-      <p className="m-0 text-[14px] text-muted">{children}</p>
-      <div className="flex justify-end gap-2">
-        <Button onClick={onKeep}>Keep editing</Button>
-        <Button variant="danger" onClick={onDiscard}>Discard</Button>
-      </div>
-    </Modal>
+    <ConfirmModal title="Discard unsaved changes?" confirmLabel="Discard" cancelLabel="Keep editing" onConfirm={onDiscard} onCancel={onKeep}>
+      {children}
+    </ConfirmModal>
   )
 }

@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
 import { Cancel01Icon, Delete02Icon, Link01Icon } from '@hugeicons/core-free-icons'
 import type { Reminder, ReminderChanges, ReminderList, ReminderPriority, ReminderRepeat } from '@manor/contracts'
+import { ConfirmModal } from '../Confirm'
 import { ExternalLink } from '../ExternalLink'
 import { Icon } from '../Icon'
 import { Button } from '../ui/Button'
@@ -542,56 +543,30 @@ export function ReminderDetails({
       </div>
 
       <div className="flex min-h-11 items-center border-t border-line px-2">
+        <span className="min-w-0 flex-1 truncate px-2 text-meta text-dim">
+          {reminder.createdAt === undefined ? '' : `Created ${dayLabel(reminder.createdAt.slice(0, 10), now.day)}`}
+        </span>
+        <Button
+          variant="ghost"
+          size="compact"
+          disabled={!canWrite || pending}
+          className="flex items-center gap-1.5 hover:text-danger"
+          onClick={() => setConfirming(true)}
+        >
+          <Icon icon={Delete02Icon} size={14} />
+          Delete
+        </Button>
         {confirming ? (
-          <DeleteConfirm
+          <ConfirmModal
+            title="Delete this reminder?"
             onConfirm={() => {
               setConfirming(false)
               onDelete()
             }}
             onCancel={() => setConfirming(false)}
           />
-        ) : (
-          <>
-            <span className="min-w-0 flex-1 truncate px-2 text-meta text-dim">
-              {reminder.createdAt === undefined ? '' : `Created ${dayLabel(reminder.createdAt.slice(0, 10), now.day)}`}
-            </span>
-            <Button
-              variant="ghost"
-              size="compact"
-              disabled={!canWrite || pending}
-              className="flex items-center gap-1.5 hover:text-danger"
-              onClick={() => setConfirming(true)}
-            >
-              <Icon icon={Delete02Icon} size={14} />
-              Delete
-            </Button>
-          </>
-        )}
+        ) : null}
       </div>
     </aside>
-  )
-}
-
-/**
- * The details footer's delete confirm. Short on purpose: the panel is 344px, and a
- * question that named the list pushed Cancel out of it. Focus starts on Cancel so a
- * stray Enter is harmless; Escape backs out of the confirm, not the panel.
- */
-function DeleteConfirm({ onConfirm, onCancel }: { onConfirm: () => void; onCancel: () => void }) {
-  return (
-    <div
-      role="group"
-      aria-label="Delete this reminder?"
-      className="flex min-w-0 flex-1 items-center gap-1.5 pl-2"
-      onKeyDown={(event: KeyboardEvent<HTMLDivElement>) => {
-        if (event.key !== 'Escape') return
-        event.preventDefault()
-        onCancel()
-      }}
-    >
-      <span className="min-w-0 flex-1 truncate text-meta text-muted">Are you sure?</span>
-      <Button autoFocus variant="ghost" size="compact" onClick={onCancel}>Cancel</Button>
-      <Button variant="danger" size="compact" onClick={onConfirm}>Delete</Button>
-    </div>
   )
 }

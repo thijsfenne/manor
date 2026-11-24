@@ -3,7 +3,7 @@ import { BoxIcon, Download04Icon, Search01Icon } from '@hugeicons/core-free-icon
 import type { AgentConfig, SkillCandidate, SkillConfig } from '@manor/contracts'
 import type { Notice } from '../../state'
 import { useRequest, type RequestEvents } from '../../useRequest'
-import { ConfirmStrip } from '../Confirm'
+import { ConfirmModal } from '../Confirm'
 import { Icon } from '../Icon'
 import { Markdown } from '../Markdown'
 import { Modal, ModalFooter } from '../Modal'
@@ -344,37 +344,41 @@ export function SkillDialog({
   const [armed, setArmed] = useState(false)
 
   return (
-    <Modal title={skill.name} width="wide" onClose={onClose}>
-      <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1 text-meta text-dim">
-        <span className="font-mono">${skill.id}</span>
-        <span>
-          {sourceLabel(skill.sources)}, {bundleLabel(skill.fileCount, skill.bundleBytes)},{' '}
-          {holders.length === 0 ? 'attached to nobody' : `attached to ${holders.join(', ')}`}
-        </span>
-      </div>
-      {skill.description ? <p className="m-0 text-[12px] text-muted">{skill.description}</p> : null}
-      <div className="max-h-[480px] overflow-y-auto rounded-lg border border-line bg-bg px-4 py-3 text-[13px] leading-relaxed">
-        <Markdown text={skill.instructions} variant="document" />
-      </div>
-      {notice === null ? null : <p className="m-0 text-label text-danger">{notice.text}</p>}
-      <ModalFooter>
-        {armed ? (
-          <ConfirmStrip
-            question={`Delete $${skill.id}? It will also be detached from every agent.`}
-            onConfirm={() => {
-              setArmed(false)
-              onDelete()
-            }}
-            onCancel={() => setArmed(false)}
-          />
-        ) : (
+    <>
+      <Modal title={skill.name} width="wide" onClose={onClose}>
+        <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1 text-meta text-dim">
+          <span className="font-mono">${skill.id}</span>
+          <span>
+            {sourceLabel(skill.sources)}, {bundleLabel(skill.fileCount, skill.bundleBytes)},{' '}
+            {holders.length === 0 ? 'attached to nobody' : `attached to ${holders.join(', ')}`}
+          </span>
+        </div>
+        {skill.description ? <p className="m-0 text-[12px] text-muted">{skill.description}</p> : null}
+        <div className="max-h-[480px] overflow-y-auto rounded-lg border border-line bg-bg px-4 py-3 text-[13px] leading-relaxed">
+          <Markdown text={skill.instructions} variant="document" />
+        </div>
+        {notice === null ? null : <p className="m-0 text-label text-danger">{notice.text}</p>}
+        <ModalFooter>
           <div className="flex justify-between gap-2">
             <Button variant="danger" disabled={pending} onClick={() => setArmed(true)}>{pending ? 'Deleting…' : 'Delete'}</Button>
             <Button variant="primary" onClick={onClose}>Done</Button>
           </div>
-        )}
-      </ModalFooter>
-    </Modal>
+        </ModalFooter>
+      </Modal>
+      {/* Beside the form rather than in it, so its Escape and Tab stay its own. */}
+      {armed ? (
+        <ConfirmModal
+          title={`Delete $${skill.id}?`}
+          onConfirm={() => {
+            setArmed(false)
+            onDelete()
+          }}
+          onCancel={() => setArmed(false)}
+        >
+          It will also be detached from every agent.
+        </ConfirmModal>
+      ) : null}
+    </>
   )
 }
 

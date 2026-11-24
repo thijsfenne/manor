@@ -4,7 +4,7 @@ import type { AgentConfig } from '@manor/contracts'
 import type { Notice } from '../../state'
 import { useRequest, type RequestEvents } from '../../useRequest'
 import { Avatar } from '../Avatar'
-import { ConfirmStrip } from '../Confirm'
+import { ConfirmModal } from '../Confirm'
 import { Icon } from '../Icon'
 import { Modal, ModalFooter } from '../Modal'
 import { Button } from '../ui/Button'
@@ -40,28 +40,48 @@ interface GroupDialogProps {
 const NO_REQUEST_EVENTS: RequestEvents = { subscribe: () => () => undefined }
 
 export function GroupDialog({ mode, agents, members, title, notice = null, requestEvents = NO_REQUEST_EVENTS, onSubmit, onDelete, onClose }: GroupDialogProps) {
+  const [armed, setArmed] = useState(false)
   return (
-    <Modal title={mode === 'create' ? 'New group' : `Members of ${title ?? 'this group'}`} onClose={onClose}>
-      <GroupDialogContent
-        mode={mode}
-        agents={agents}
-        members={members}
-        title={title}
-        notice={notice}
-        requestEvents={requestEvents}
-        onSubmit={onSubmit}
-        onDelete={onDelete}
-        onClose={onClose}
-      />
-    </Modal>
+    <>
+      <Modal title={mode === 'create' ? 'New group' : `Members of ${title ?? 'this group'}`} onClose={onClose}>
+        <GroupDialogContent
+          mode={mode}
+          agents={agents}
+          members={members}
+          title={title}
+          notice={notice}
+          requestEvents={requestEvents}
+          onSubmit={onSubmit}
+          {...(onDelete === undefined ? {} : { onAskDelete: () => setArmed(true) })}
+          onClose={onClose}
+        />
+      </Modal>
+      {/* Beside the form rather than in it, so its Escape and Tab stay its own. */}
+      {armed && onDelete !== undefined ? (
+        <ConfirmModal
+          title={`Delete “${title ?? 'this group'}”?`}
+          onConfirm={() => {
+            setArmed(false)
+            onDelete()
+          }}
+          onCancel={() => setArmed(false)}
+        >
+          Its messages go with it.
+        </ConfirmModal>
+      ) : null}
+    </>
   )
 }
 
+type GroupDialogContentProps = Omit<GroupDialogProps, 'onDelete'> & {
+  /** Edit only. Opens the delete question, which the dialog itself owns. */
+  onAskDelete?: () => void
+}
+
 /** The form inside the portal, separate so its destructive footer is testable without a DOM. */
-export function GroupDialogContent({ mode, agents, members, title, notice = null, requestEvents = NO_REQUEST_EVENTS, onSubmit, onDelete, onClose }: GroupDialogProps) {
+export function GroupDialogContent({ mode, agents, members, title, notice = null, requestEvents = NO_REQUEST_EVENTS, onSubmit, onAskDelete, onClose }: GroupDialogContentProps) {
   const [picked, setPicked] = useState<string[]>(members)
   const [name, setName] = useState('')
-  const [armed, setArmed] = useState(false)
   const request = useRequest(requestEvents)
   const selectableAgents = agents.filter((agent) =>
     agent.placement !== 'session' || members.includes(agent.id))
@@ -174,30 +194,19 @@ export function GroupDialogContent({ mode, agents, members, title, notice = null
       {notice === null ? null : <RequestNotice notice={notice} />}
 
       <ModalFooter>
-        {armed && onDelete !== undefined ? (
-          <ConfirmStrip
-            question={`Delete “${title ?? 'this group'}” and its messages?`}
-            onConfirm={() => {
-              setArmed(false)
-              onDelete()
-            }}
-            onCancel={() => setArmed(false)}
-          />
-        ) : (
-          <div className="flex items-center gap-2 pt-0.5">
-            {mode === 'edit' && onDelete !== undefined ? (
-              <Button variant="danger" onClick={() => setArmed(true)}>
-                Delete group
-              </Button>
-            ) : null}
-            <div className="flex flex-1 justify-end gap-2">
-              <Button onClick={onClose}>Cancel</Button>
-              <Button variant="primary" onClick={submit} disabled={!canSubmit || request.pending}>
-                {mode === 'create' && request.pending ? 'Creating…' : mode === 'create' ? 'Create group' : 'Save members'}
-              </Button>
-            </div>
+        <div className="flex items-center gap-2 pt-0.5">
+          {mode === 'edit' && onAskDelete !== undefined ? (
+            <Button variant="danger" onClick={onAskDelete}>
+              Delete group
+            </Button>
+          ) : null}
+          <div className="flex flex-1 justify-end gap-2">
+            <Button onClick={onClose}>Cancel</Button>
+            <Button variant="primary" onClick={submit} disabled={!canSubmit || request.pending}>
+              {mode === 'create' && request.pending ? 'Creating…' : mode === 'create' ? 'Create group' : 'Save members'}
+            </Button>
           </div>
-        )}
+        </div>
       </ModalFooter>
     </>
   )
