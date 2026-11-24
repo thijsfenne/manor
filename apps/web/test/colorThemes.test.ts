@@ -21,12 +21,15 @@ const contrast = (a: string, b: string) => {
 const mixHex = (a: string, b: string, share: number) =>
   `#${[1, 3, 5].map((at) => Math.round((Number.parseInt(a.slice(at, at + 2), 16) * (100 - share) + Number.parseInt(b.slice(at, at + 2), 16) * share) / 100).toString(16).padStart(2, '0')).join('')}`
 
-/** The light `side-picked` fill: Manor's stylesheet value, or the mix a theme's sheet writes. */
-const sidePicked = (theme: ColorTheme) => {
-  if (theme === 'manor') return styles.match(/--color-side-picked: (#[0-9a-f]{6});/i)?.[1] ?? ''
-  const [, a = '', keep = '', b = ''] = modeTokens(COLOR_THEMES[theme].light, 'light')['side-picked']?.match(/^color-mix\(in srgb, (#[0-9a-f]{6}) (\d+)%, (#[0-9a-f]{6})\)$/i) ?? []
+/** A light token the theme's sheet writes as a two-colour mix, resolved to hex. */
+const lightMix = (theme: ColorTheme, token: string) => {
+  const [, a = '', keep = '', b = ''] = modeTokens(COLOR_THEMES[theme].light, 'light')[token]?.match(/^color-mix\(in srgb, (#[0-9a-f]{6}) ([\d.]+)%, (#[0-9a-f]{6})\)$/i) ?? []
   return mixHex(a, b, 100 - Number(keep))
 }
+
+/** A light sidebar fill: Manor's stylesheet value, or the mix a theme's sheet writes. */
+const sideFill = (theme: ColorTheme, token: 'side-hover' | 'side-picked') =>
+  theme === 'manor' ? (styles.match(new RegExp(`--color-${token}: (#[0-9a-f]{6});`, 'i'))?.[1] ?? '') : lightMix(theme, token)
 
 /** Foreground role, background role, the floor it has to clear. */
 const PAIRS: ReadonlyArray<readonly [keyof Palette, keyof Palette, number]> = [
@@ -61,9 +64,27 @@ describe('colour themes', () => {
       expect(luminance(p.tray)).toBeLessThanOrEqual(luminance(p.surface))
       expect(contrast(p.surface, p.sidebar)).toBeGreaterThanOrEqual(1.12)
       // A selected sidebar row, on the fill the page really gets.
-      const picked = sidePicked(theme)
+      const picked = sideFill(theme, 'side-picked')
       const misses = (['muted', 'dim', 'ok', 'warn', 'danger', 'busy'] as const).filter((role) => !(contrast(p[role], picked) >= 4.5))
       expect(misses).toEqual([])
+      // Hover, and the active tab of a side panel, read at least as clearly as in Manor.
+      const hover = sideFill(theme, 'side-hover')
+      expect(contrast(hover, p.sidebar)).toBeGreaterThanOrEqual(contrast(sideFill('manor', 'side-hover'), COLOR_THEMES.manor.light.sidebar) - 0.002)
+      expect(luminance(picked)).toBeLessThan(luminance(hover))
+    })
+
+    it(`${theme} light keeps its stage fills a visible step below the stage, selection below hover`, () => {
+      const p = COLOR_THEMES[theme].light
+      const selected = lightMix(theme, 'user-bg')
+      const manor = COLOR_THEMES.manor.light
+      expect(contrast(p.surface, p.surface2)).toBeGreaterThanOrEqual(1.12)
+      // The overview's group header is surface-2 at half strength; it should read as it does in Manor.
+      expect(Math.abs(contrast(p.surface, mixHex(p.surface, p.surface2, 50)) - contrast(manor.surface, mixHex(manor.surface, manor.surface2, 50)))).toBeLessThanOrEqual(0.01)
+      expect(luminance(selected)).toBeLessThan(luminance(p.surface2))
+      expect(luminance(lightMix(theme, 'menu-selected'))).toBeLessThan(luminance(selected))
+      // Group headers and picked rows carry dim labels on these fills.
+      expect(contrast(p.dim, p.surface2)).toBeGreaterThanOrEqual(4.5)
+      expect(contrast(p.dim, selected)).toBeGreaterThanOrEqual(4.5)
     })
   }
 
