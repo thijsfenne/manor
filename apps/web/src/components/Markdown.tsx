@@ -171,7 +171,7 @@ const LINK = 'text-[var(--accent-fg)] underline underline-offset-2 hover:no-unde
  * an ellipsis, and the link keeps the whole title as its name.
  */
 const SOURCE_PILL =
-  'inline-flex max-w-full items-center gap-[0.3em] rounded-full bg-[color-mix(in_srgb,var(--color-text)_7%,transparent)] px-[0.5em] py-[0.08em] align-[-0.18em] text-[0.88em] leading-[1.3] text-muted no-underline transition-colors hover:bg-[color-mix(in_srgb,var(--color-text)_12%,transparent)] hover:text-text'
+  'inline-flex max-w-full items-center gap-[0.3em] rounded-full bg-[color-mix(in_srgb,var(--color-text)_7%,transparent)] px-[0.5em] py-[0.08em] align-[-0.1em] text-[0.88em] leading-[1.3] text-muted no-underline transition-colors hover:bg-[color-mix(in_srgb,var(--color-text)_12%,transparent)] hover:text-text'
 
 /**
  * Where a written link goes. A path a linked folder holds opens in the files panel,

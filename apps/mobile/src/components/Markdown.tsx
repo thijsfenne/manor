@@ -1041,7 +1041,7 @@ const styles = StyleSheet.create({
   link: { color: colors.busy, textDecorationLine: 'underline' },
   deadLink: { color: colors.dim, textDecorationLine: 'underline' },
   mention: { fontWeight: '500' },
-  // Sized and nudged like `sourcePill`, so it sits on the type without pushing lines apart.
+  // Sized like `sourcePill`, so it sits on the type without pushing lines apart.
   pill: {
     flexDirection: 'row', alignItems: 'center', height: 19, maxWidth: 220, paddingHorizontal: 7,
     borderRadius: radius.round, ...squircle, transform: [{ translateY: 2 }],
@@ -1070,7 +1070,7 @@ const styles = StyleSheet.create({
   // Shorter than the paragraph's fixed line height, so a pill never pushes lines apart.
   sourcePill: {
     flexDirection: 'row', alignItems: 'center', gap: 4, height: 19, maxWidth: 220, paddingHorizontal: 7,
-    borderRadius: radius.round, backgroundColor: colors.chip, transform: [{ translateY: 2 }],
+    borderRadius: radius.round, backgroundColor: colors.chip, transform: [{ translateY: 1 }],
   },
   sourcePillPressed: { opacity: 0.6 },
   sourcePillText: { flexShrink: 1, color: colors.muted, fontFamily: fonts.sans, fontSize: 14, lineHeight: 17 },
