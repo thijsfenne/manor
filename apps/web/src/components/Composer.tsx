@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ClipboardEvent, type KeyboardEvent as ReactKeyboardEvent, type MutableRefObject, type ReactNode } from 'react'
 import { ArrowUp01Icon, Attachment01Icon, BotIcon, BoxIcon, ComputerIcon, File01Icon, Globe02Icon, Image01Icon, MessageMultiple01Icon, PlusSignIcon } from '@hugeicons/core-free-icons'
-import { DEFAULT_HOUSE_SETTINGS, MAX_MESSAGE_ATTACHMENTS, MAX_MESSAGE_QUOTES, MAX_PAGE_CONTEXT_ATTACHMENTS, addsAgentMention, compactQuoteRefs, formatImageRef, imageRefSpans, numberedMarks, quoteRefSpans, renumberImageRefs, snapRefDeletion } from '@manor/contracts'
+import { DEFAULT_HOUSE_SETTINGS, MAX_MESSAGE_ATTACHMENTS, MAX_MESSAGE_QUOTES, MAX_PAGE_CONTEXT_ATTACHMENTS, addsAgentMention, compactQuoteRefs, formatImageRef, imageRefSpans, quoteRefSpans, renumberImageRefs, snapRefDeletion } from '@manor/contracts'
 import { insertQuote } from '@manor/client-runtime/message-quotes'
 import type { AgentConfig, ChatCommandContext, ChatOverride, ImageAttachment, InlineQuote, MessageReply, PageContextAttachment, SkillConfig } from '@manor/contracts'
 import { AnimatePresence, animate, motion, useMotionValue, useReducedMotion } from 'motion/react'
@@ -34,7 +34,7 @@ import { base64Bytes, describeBytes, utf8Size, type ComposerAttachments } from '
 import { scrollCaretIntoView } from '../caretScroll'
 import { COMPOSER_GROW, INSTANT, SPRING_COMPOSER } from '../motion'
 import { EMPTY_DRAFT, appendedText, readDraft, subscribeDraftInsert, writeDraft } from '../composerDrafts'
-import { NO_MARKS, burnMarks, fitsWire, hasMarks, imageSlots, stagedImageSlots, wireImages, type DraftImage, type ImageMarks } from '../imageMarks'
+import { NO_MARKS, burnMarks, hasMarks, marksOf, wireImages, type DraftImage, type ImageMarks } from '../imageMarks'
 import { ImageAnnotator } from './ImageAnnotator'
 import { continueComposerList, normalizeComposerLists, startComposerList } from '@manor/client-runtime/composer-formatting'
 import { effectiveDriver, isAutoPending, runtimeParts } from '../runtimeChoices'
@@ -45,7 +45,7 @@ import type { ContextMeter } from '@manor/client-runtime/context-meter'
 import { chatCommandRows, commandDraft, draftCommandRefusal, type ChatCommandRow } from '@manor/client-runtime/chat-commands'
 import { ComposerDictation } from './ComposerDictation'
 import { ComposerEditor, IMAGE_REF_DRAG_TYPE, type ComposerEditorHandle } from './ComposerEditor'
-import { ImageNumberBadge } from './MentionText'
+import { ImageNumberBadge, MarkCountBadge } from './MentionText'
 import { COMPOSER_CARD_HEIGHTS, useComposerCardHeight, useComposerRow, type ComposerCardHeights } from './useComposerCardHeight'
 import { Icon } from './Icon'
 import { ProviderMark } from './ProviderMark'
@@ -102,22 +102,6 @@ export function plusMentionLabel(
 }
 
 type AnnotatingPicture = { index: number | null; image: ImageAttachment; marks: ImageMarks }
-
-/** How many numbered marks a staged picture carries: its pins and the shapes with a comment. */
-function MarkCountBadge({ image }: { image: DraftImage }) {
-  const count = image.annotation === undefined ? 0 : numberedMarks(image.annotation).length
-  if (count === 0) return null
-  return (
-    <span
-      role="img"
-      data-mark-count={count}
-      aria-label={`${count} numbered ${count === 1 ? 'mark' : 'marks'}`}
-      className="pointer-events-none absolute right-1 bottom-1 grid h-[19px] min-w-[19px] place-items-center rounded-full bg-mark px-1 text-[12px] leading-none font-medium text-on-media"
-    >
-      {count}
-    </span>
-  )
-}
 
 /** One autocomplete row. Every kind shares the list and its keyboard behaviour. */
 type MentionRow =
@@ -462,7 +446,7 @@ export function Composer({ agents, commandContext, household, overrides = NO_OVE
    * whole message in silence, so this is counted synchronously and reserved before
    * the first `await` rather than checked twice against stale state.
    */
-  const staged = useRef(stagedImageSlots(images) + textFiles.length + documents.length)
+  const staged = useRef(images.length + textFiles.length + documents.length)
   /**
    * Which draft the reads in flight belong to. Sending and switching chats empty this
    * composer, and a read that was still running when that happened has nothing left to
@@ -624,7 +608,7 @@ export function Composer({ agents, commandContext, household, overrides = NO_OVE
     setDocuments(next.documents ?? [])
     setQuotes(next.quotes ?? NO_QUOTES)
     caretHeld.current = false
-    staged.current = stagedImageSlots(next.images) + next.files.length + (next.documents?.length ?? 0)
+    staged.current = next.images.length + next.files.length + (next.documents?.length ?? 0)
     setAnnotating(null)
     // Whatever was still being read belonged to the chat we just left, so it is
     // cancelled here rather than allowed to land in this one.
@@ -1187,8 +1171,7 @@ export function Composer({ agents, commandContext, household, overrides = NO_OVE
    * references follow: its own go, later ones count down with the thumbnails.
    */
   const removeImage = (index: number) => {
-    const removed = images[index]
-    staged.current -= removed === undefined ? 1 : imageSlots(removed)
+    staged.current -= 1
     setAnnotating(null)
     const next = renumberImageRefs(value, index + 1, images.length)
     if (next !== value) {
@@ -1205,30 +1188,26 @@ export function Composer({ agents, commandContext, household, overrides = NO_OVE
     setAnnotating({
       index,
       image: { name: image.name, dataUrl: image.original ?? image.dataUrl },
-      marks: image.annotation === undefined ? NO_MARKS : { pins: image.annotation.pins, shapes: image.annotation.shapes },
+      marks: marksOf(image.annotation),
     })
   }
 
   /**
    * The editor's Done: the picture takes its marks burned in and keeps its original
-   * beside them, or goes back to the plain picture when every mark was removed. A
-   * marked picture sends two, so it has to fit beside everything else staged.
+   * beside them, or goes back to the plain picture when every mark was removed. The
+   * original rides along without a slot, so only a picture new to the tray needs room.
    */
   const finishAnnotating = async (marks: ImageMarks) => {
     const open = annotatingNow.current
     if (open === null || burning.current === open) return
-    const current = open.index === null ? undefined : images[open.index]
-    const before = current === undefined ? 0 : imageSlots(current)
+    const added = open.index === null ? 1 : 0
     const marked = hasMarks(marks)
-    const after = marked ? 2 : 1
-    if (!fitsWire(staged.current - before + after)) {
-      setAnnotateNote(marked
-        ? `A marked picture sends its original too. Remove an attachment first; a message holds ${MAX_MESSAGE_ATTACHMENTS}.`
-        : `A message holds up to ${MAX_MESSAGE_ATTACHMENTS} attachments.`)
+    if (staged.current + added > MAX_MESSAGE_ATTACHMENTS) {
+      setAnnotateNote(`A message holds up to ${MAX_MESSAGE_ATTACHMENTS} attachments.`)
       return
     }
     // Held now, so a file dropped while the marks are drawn cannot take the same slot.
-    staged.current += after - before
+    staged.current += added
     burning.current = open
     const mine = era.current
     let next: DraftImage = { name: open.image.name, dataUrl: open.image.dataUrl }
@@ -1244,7 +1223,7 @@ export function Composer({ agents, commandContext, household, overrides = NO_OVE
     // Sent or switched away while the marks were drawn: the count was reset with the draft.
     if (era.current !== mine) return
     if (failed !== null || annotatingNow.current !== open) {
-      staged.current -= after - before
+      staged.current -= added
       if (failed !== null && annotatingNow.current === open) setAnnotateNote(failed)
       return
     }
@@ -1279,7 +1258,7 @@ export function Composer({ agents, commandContext, household, overrides = NO_OVE
         <img src={image.dataUrl} alt={image.name} className="block h-15 w-15 rounded-lg object-cover" />
       </button>
       <ImageNumberBadge number={index + 1} />
-      <MarkCountBadge image={image} />
+      <MarkCountBadge annotation={image.annotation} />
       <button type="button" aria-label={`Remove ${image.name}`} className="absolute top-1 right-1 h-6 w-6 cursor-pointer rounded-full border-0 bg-media-scrim text-on-media" onClick={() => removeImage(index)}>×</button>
     </div>
   ))

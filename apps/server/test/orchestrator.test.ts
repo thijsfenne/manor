@@ -36,6 +36,7 @@ import {
   LIVE_COMPACT_STOPPED,
 } from '../src/drivers/sessionCompact.js'
 import { createClaudeDriver } from '../src/drivers/claudeDriver.js'
+import { buildCodexTurnRequest } from '../src/drivers/codexDriver.js'
 import { createMockDriver } from '../src/drivers/mockDriver.js'
 import type { GenerateMemoryTrace } from '../src/memoryTrace.js'
 import type { MemoryTarget } from '../src/memoryTarget.js'
@@ -2790,6 +2791,44 @@ describe('Orchestrator', () => {
     expect(prompt).toContain('3 Circle (x 40% to 60%, y 5% to 15%): logo too small')
     expect(prompt).not.toContain('3 Frame')
     expect(prompt).toContain('Answer or act per number.')
+  })
+
+  it('hands the drivers eight marked pictures with their originals and freehand lines', async () => {
+    const scratchDir = mkdtempSync(path.join(os.tmpdir(), 'manor-annotated-eight-'))
+    const seen: TurnInput[] = []
+    const { orchestrator, chatId } = await harness(
+      scripted(() => [{ type: 'message', messageId: 'answer', text: 'Seen.' }, { type: 'result', text: 'Seen.' }], seen),
+      { scratchDir },
+    )
+    const strokes: [number, number][][] = [[[0.1, 0.1], [0.4, 0.2]], [[0.5, 0.5]]]
+    const png = (text: string) => `data:image/png;base64,${Buffer.from(text).toString('base64')}`
+    const images = [
+      ...Array.from({ length: 8 }, (_, index) => ({
+        name: `shot-${index}.png`,
+        dataUrl: png(`marked ${index}`),
+        annotation: { original: 8 + index, pins: [{ x: 0.5, y: 0.5, comment: `fix ${index}` }], shapes: [], strokes },
+      })),
+      ...Array.from({ length: 8 }, (_, index) => ({ name: `shot-${index} (original)`, dataUrl: png(`original ${index}`) })),
+    ]
+
+    await orchestrator.submitUserMessage(chatId, '@Sage look at all of these', images)
+
+    const input = seen[0]
+    if (input === undefined) throw new Error('expected a turn')
+    const paths = input.imagePaths ?? []
+    expect(paths).toHaveLength(16)
+    expect(await readFile(paths[3]!, 'utf8')).toBe('marked 3')
+    expect(await readFile(paths[11]!, 'utf8')).toBe('original 3')
+    // Claude Code, Grok and Cursor read the pictures from the paths their prompt lists.
+    const prompt = composeCatchUp({ events: input.catchUp, agents: [], isFullCatchUp: true, imagePaths: paths })
+    for (const each of paths) expect(prompt).toContain(each)
+    expect(prompt).toContain('[16 attached images supplied separately: Image #1')
+    expect(prompt).toContain("[Image #4 carries the user's marks: numbered pins and outlined areas drawn on the picture. It has 2 freehand lines drawn on it; see the picture for where. Image #12 is the same picture without marks.")
+    expect(prompt).toContain('1 (x 50%, y 50%): fix 3')
+    expect(prompt).not.toContain('0.4')
+    // Codex takes them as structured inputs on the turn.
+    const codex = buildCodexTurnRequest(input, '/work', prompt, 'thread-1').params as { input: { type: string; path?: string }[] }
+    expect(codex.input.filter((item) => item.type === 'localImage').map((item) => item.path)).toEqual(paths)
   })
 
   it('advances the per-agent cursor and accumulates usage across turns', async () => {

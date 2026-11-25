@@ -1,5 +1,5 @@
 import { BoxIcon, BubbleChatIcon, ComputerIcon, File01Icon, Globe02Icon, Image01Icon, MessageMultiple01Icon } from '@hugeicons/core-free-icons'
-import { quoteExcerpt, quoteText, type AgentConfig, type InlineQuote, type SkillConfig } from '@manor/contracts'
+import { numberedMarks, quoteExcerpt, quoteText, type AgentConfig, type ImageAnnotation, type InlineQuote, type SkillConfig } from '@manor/contracts'
 import { quoteAuthorName } from '@manor/client-runtime/message-quotes'
 import { accentStyle } from '../accent'
 import { useRef, useState, type ReactNode } from 'react'
@@ -209,6 +209,25 @@ export function ImageNumberBadge({ number }: { number: number }) {
   return (
     <span aria-hidden="true" className="pointer-events-none absolute bottom-1 left-1 rounded-full bg-media-scrim px-1.5 py-px text-[12px] leading-4 font-medium text-on-media">
       #{number}
+    </span>
+  )
+}
+
+/**
+ * How many numbered marks a picture carries, its pins and the shapes with a comment, on
+ * its thumbnail in the composer tray and in a sent message.
+ */
+export function MarkCountBadge({ annotation }: { annotation: ImageAnnotation | undefined }) {
+  const count = annotation === undefined ? 0 : numberedMarks(annotation).length
+  if (count === 0) return null
+  return (
+    <span
+      role="img"
+      data-mark-count={count}
+      aria-label={`${count} numbered ${count === 1 ? 'mark' : 'marks'}`}
+      className="pointer-events-none absolute right-1 bottom-1 grid h-[19px] min-w-[19px] place-items-center rounded-full bg-mark px-1 text-[12px] leading-none font-medium text-on-media"
+    >
+      {count}
     </span>
   )
 }

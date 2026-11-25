@@ -735,6 +735,15 @@ const snapshots = {
       ...read('ti-r7', ts - 37_000, 'turn-ti2', picture(1)),
       { id: 'ti-n4', ts: ts - 36_000, type: 'agent_message', turnId: 'turn-ti2', agentId, messageId: 'ti-m4', text: 'Jouw scherm en het werkscherm komen overeen.' },
       { id: 'ti-e2', ts: ts - 35_999, type: 'turn_result', turnId: 'turn-ti2', agentId },
+      // Two marked pictures from the Mac; their unmarked originals ride at the end and the bubble hides them.
+      { id: 'ti-u3', ts: ts - 30_000, type: 'user_message', text: 'Kijk naar [Image #1] en [Image #2].', mentions: [], images: [
+        { name: 'werk.png', src: '/media/trace/1/fixture', width: 1024, height: 1024, annotation: { original: 2, pins: [{ x: 0.5, y: 0.4, comment: 'Te druk' }], shapes: [] } },
+        { name: 'klaar.png', src: '/media/trace/2/fixture', width: 1024, height: 1024, annotation: { original: 3, pins: [], shapes: [], strokes: [[[0.2, 0.2], [0.8, 0.6]]] } },
+        { name: 'werk.png', src: '/media/trace/3/fixture', width: 1024, height: 1024 },
+        { name: 'klaar.png', src: '/media/trace/4/fixture', width: 1024, height: 1024 },
+      ] },
+      { id: 'ti-n5', ts: ts - 29_000, type: 'agent_message', turnId: 'turn-ti3', agentId, messageId: 'ti-m5', text: 'Gezien.' },
+      { id: 'ti-e3', ts: ts - 28_999, type: 'turn_result', turnId: 'turn-ti3', agentId },
     ]
   })(),
   // Three mail cards in three turns: an open draft with a Cc line, Sent with the

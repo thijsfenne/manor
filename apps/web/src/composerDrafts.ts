@@ -1,6 +1,6 @@
 import { MAX_MESSAGE_ATTACHMENTS, type DocumentUpload, type FileAttachment, type ImageAttachment, type InlineQuote } from '@manor/contracts'
 import { insertQuote } from '@manor/client-runtime/message-quotes'
-import { stagedImageSlots, type DraftImage } from './imageMarks'
+import type { DraftImage } from './imageMarks'
 
 export interface ComposerDraft {
   text: string
@@ -108,7 +108,7 @@ export function insertQuoteIntoDraft(key: string, quote: InlineQuote): void {
 export function annotateIntoDraft(key: string, image: ImageAttachment): void {
   if (deliverInsert(key, { kind: 'annotate', image })) return
   const draft = readDraft(key)
-  if (stagedImageSlots(draft.images) + draft.files.length + (draft.documents?.length ?? 0) >= MAX_MESSAGE_ATTACHMENTS) return
+  if (draft.images.length + draft.files.length + (draft.documents?.length ?? 0) >= MAX_MESSAGE_ATTACHMENTS) return
   writeDraft(key, { ...draft, images: [...draft.images, image] })
 }
 

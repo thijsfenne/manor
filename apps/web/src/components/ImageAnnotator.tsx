@@ -1,5 +1,5 @@
-import { Cancel01Icon, CircleIcon, PinLocation01Icon, SquareIcon, Undo02Icon } from '@hugeicons/core-free-icons'
-import { MAX_IMAGE_COMMENT_CHARS, MAX_IMAGE_PINS, numberedMarks } from '@manor/contracts'
+import { Cancel01Icon, CircleIcon, Pen01Icon, PinLocation01Icon, SquareIcon, Undo02Icon } from '@hugeicons/core-free-icons'
+import { MAX_IMAGE_COMMENT_CHARS, MAX_IMAGE_PINS, MAX_IMAGE_STROKES, MAX_STROKE_POINTS, numberedMarks } from '@manor/contracts'
 import { motion, useReducedMotion } from 'motion/react'
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type PointerEvent as ReactPointerEvent, type RefObject } from 'react'
 import { markAnchor, type ImageMarks, type ImageShape } from '../imageMarks'
@@ -7,7 +7,7 @@ import { INSTANT, POPOVER_IN, POPOVER_OUT, POPOVER_PRE_SCALE } from '../motion'
 import { Icon } from './Icon'
 import { Button } from './ui/Button'
 
-type Tool = 'pin' | 'frame' | 'circle'
+type Tool = 'pin' | 'frame' | 'circle' | 'pen'
 type Selection = { kind: 'pin' | 'shape'; index: number } | null
 /** A comment row, named by its mark: `pin:0`, `shape:2`. */
 type RowKey = `${'pin' | 'shape'}:${number}`
@@ -17,12 +17,17 @@ const TOOLS: readonly { tool: Tool; label: string; icon: typeof PinLocation01Ico
   { tool: 'pin', label: 'Pin', icon: PinLocation01Icon },
   { tool: 'frame', label: 'Frame', icon: SquareIcon },
   { tool: 'circle', label: 'Circle', icon: CircleIcon },
+  { tool: 'pen', label: 'Pen', icon: Pen01Icon },
 ]
 
 /** What a click with a shape tool draws when it is not dragged open. */
 const DEFAULT_SHAPE = { w: 0.24, h: 0.14 }
 /** A drag smaller than this is a click. */
 const MIN_SHAPE = 0.015
+/** The pen keeps a point only once the pointer has moved this far, as a share of the picture. */
+const MIN_STROKE_STEP = 0.003
+/** Four decimals place a point within a pixel on any picture Manor sends, at a third of the bytes. */
+const share = (value: number) => Math.round(value * 10_000) / 10_000
 /** What the window keeps above the editor: the top bar and a margin. */
 const TOP_CLEARANCE = 56
 /** Room above the composer the editor needs before it stands there instead of over it. */
@@ -93,10 +98,11 @@ type Drag =
   | { kind: 'pin'; index: number; dx: number; dy: number; before: ImageMarks; moved: boolean }
   | { kind: 'shape'; index: number; dx: number; dy: number; before: ImageMarks; moved: boolean }
   | { kind: 'create'; index: number; ax: number; ay: number; before: ImageMarks; moved: boolean }
+  | { kind: 'stroke'; index: number; before: ImageMarks; moved: boolean }
 
 /**
  * The editor over the composer where the user points at a picture: numbered pins with
- * a comment each, and frames or circles around an area. Positions are shares of the
+ * a comment each, frames or circles around an area, and freehand lines. Positions are shares of the
  * picture, so they mean the same at any size it is drawn or read at. It holds the marks
  * until Done hands them back; Cancel drops every change.
  */
@@ -185,6 +191,13 @@ export function ImageAnnotator({ src, name, initial, onCancel, onDone, note }: {
     event.preventDefault()
     const { x, y } = pointAt(event)
     stageRef.current?.setPointerCapture(event.pointerId)
+    if (tool === 'pen') {
+      if (marks.strokes.length >= MAX_IMAGE_STROKES) return
+      drag.current = { kind: 'stroke', index: marks.strokes.length, before: marks, moved: false }
+      setMarks({ ...marks, strokes: [...marks.strokes, [[share(x), share(y)]]] })
+      setSelected(null)
+      return
+    }
     if (tool === 'pin') {
       if (marks.pins.length >= MAX_IMAGE_PINS) return
       const index = marks.pins.length
@@ -201,7 +214,8 @@ export function ImageAnnotator({ src, name, initial, onCancel, onDone, note }: {
   }
 
   const startOnMark = (event: ReactPointerEvent<HTMLElement>, kind: 'pin' | 'shape', index: number) => {
-    if (event.button !== 0) return
+    // The pen draws over every mark; only the other tools pick one up.
+    if (event.button !== 0 || tool === 'pen') return
     // Only a shape's outline takes hold of it; inside it the stage places and draws as usual.
     if (kind === 'shape' && !onOutline(event, marks.shapes[index]?.kind ?? 'frame')) return
     event.preventDefault()
@@ -219,7 +233,17 @@ export function ImageAnnotator({ src, name, initial, onCancel, onDone, note }: {
     if (current === null) return
     const { x, y } = pointAt(event)
     current.moved = true
-    if (current.kind === 'pin') {
+    if (current.kind === 'stroke') {
+      setMarks((value) => ({
+        ...value,
+        strokes: value.strokes.map((stroke, at) => {
+          const last = stroke.at(-1)
+          if (at !== current.index || stroke.length >= MAX_STROKE_POINTS) return stroke
+          if (last !== undefined && Math.hypot(x - last[0], y - last[1]) < MIN_STROKE_STEP) return stroke
+          return [...stroke, [share(x), share(y)]]
+        }),
+      }))
+    } else if (current.kind === 'pin') {
       setMarks((value) => ({ ...value, pins: value.pins.map((pin, at) => (at === current.index ? { ...pin, x: clamp(x - current.dx), y: clamp(y - current.dy) } : pin)) }))
     } else if (current.kind === 'shape') {
       setMarks((value) => ({
@@ -240,6 +264,11 @@ export function ImageAnnotator({ src, name, initial, onCancel, onDone, note }: {
     const current = drag.current
     drag.current = null
     if (current === null) return
+    if (current.kind === 'stroke') {
+      typedRow.current = null
+      setHistory((past) => [...past, current.before])
+      return
+    }
     if (current.kind === 'create') {
       // A click without a drag draws the default size around the point.
       setMarks((value) => ({
@@ -334,13 +363,29 @@ export function ImageAnnotator({ src, name, initial, onCancel, onDone, note }: {
             <div
               ref={stageRef}
               data-annotator-stage=""
-              className={`relative inline-block touch-none select-none ${tool === 'pin' ? 'cursor-crosshair' : 'cursor-cell'}`}
+              className={`relative inline-block touch-none select-none ${tool === 'pin' || tool === 'pen' ? 'cursor-crosshair' : 'cursor-cell'}`}
               onPointerDown={startOnStage}
               onPointerMove={move}
               onPointerUp={end}
               onPointerCancel={end}
             >
               <img src={src} alt={name} draggable={false} className="block max-w-full" style={{ maxHeight: fit.picture }} />
+              {marks.strokes.length === 0 ? null : (
+                // Drawn in shares of the picture; the line keeps its width however the picture is scaled.
+                <svg aria-hidden className="pointer-events-none absolute inset-0 h-full w-full overflow-visible" viewBox="0 0 1 1" preserveAspectRatio="none" data-annotator-strokes={marks.strokes.length}>
+                  {marks.strokes.map((stroke, index) => (
+                    <path
+                      key={`stroke-${index}`}
+                      d={`M${stroke.map(([x, y]) => `${x} ${y}`).join('L')}${stroke.length === 1 ? 'h0' : ''}`}
+                      className="fill-none stroke-mark"
+                      strokeWidth={3}
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      vectorEffect="non-scaling-stroke"
+                    />
+                  ))}
+                </svg>
+              )}
               {marks.shapes.map((shape, index) => {
                 const isSelected = selected?.kind === 'shape' && selected.index === index
                 const number = numbers.get(rowKey('shape', index))
@@ -463,7 +508,9 @@ export function ImageAnnotator({ src, name, initial, onCancel, onDone, note }: {
               ? `Up to ${MAX_IMAGE_PINS} pins per picture.`
               : tool === 'pin'
                 ? 'Click the picture to place a pin. Drag a mark to move it.'
-                : `Drag on the picture to draw a ${tool}. A comment gives it a number.`}
+                : tool === 'pen'
+                  ? 'Draw on the picture. Undo takes back the last line.'
+                  : `Drag on the picture to draw a ${tool}. A comment gives it a number.`}
           </p>
           <div className="mt-auto flex flex-col gap-2 pt-3">
             {note ? <p className="m-0 text-[12px] text-danger">{note}</p> : null}

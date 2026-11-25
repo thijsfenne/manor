@@ -57,6 +57,7 @@ import {
   SINGLE_SUBAGENT_RULE,
   REVIEW_SKILL_PATHS,
   withSubagentRule,
+  annotationNote,
 } from '../src/composer.js'
 
 describe('Single subagent guidance', () => {
@@ -1737,5 +1738,15 @@ describe('Work handoff rule', () => {
     const text = withWorkHandoffRule(thread, projects, 'p1', []).character
     expect(text).toContain(WORK_HANDOFF_BLOCK)
     expect(text).not.toContain(WORK_HANDOFF_NO_PERSONAS_RULE)
+  })
+})
+
+describe('annotationNote', () => {
+  it('names freehand lines on a picture without listing their points', () => {
+    const note = annotationNote({ images: [
+      { annotation: { original: 1, pins: [], shapes: [], strokes: [[[0.1234, 0.5], [0.2, 0.6]]] } },
+      {},
+    ] })
+    expect(note).toBe("\n[Image #1 carries the user's marks. It has 1 freehand line drawn on it; see the picture for where. Image #2 is the same picture without marks.]")
   })
 })

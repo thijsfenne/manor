@@ -1349,7 +1349,8 @@ export const annotationNote = (event: { images?: readonly { annotation?: ImageAn
   const images = event.images ?? []
   return images.map((image, index) => {
     const { annotation } = image
-    if (annotation === undefined || (annotation.pins.length === 0 && annotation.shapes.length === 0)) return ''
+    const strokes = annotation?.strokes?.length ?? 0
+    if (annotation === undefined || (annotation.pins.length === 0 && annotation.shapes.length === 0 && strokes === 0)) return ''
     // A picture that carries marks of its own is never named as another's original.
     const unmarked = annotation.original === undefined ? undefined : images[annotation.original]
     const original = annotation.original !== undefined && unmarked !== undefined && unmarked.annotation === undefined
@@ -1367,8 +1368,11 @@ export const annotationNote = (event: { images?: readonly { annotation?: ImageAn
     })
     const commented = new Set(numbered.flatMap((mark) => (mark.kind === 'pin' ? [] : [mark.index])))
     const plain = annotation.shapes.flatMap((shape, at) => (commented.has(at) ? [] : [`${shapeName(shape)} ${range(shape)}`]))
+    const placed = annotation.pins.length + annotation.shapes.length > 0
+    // A line's points would be noise to read; the burned-in picture shows where it runs.
+    const freehand = strokes === 0 ? '' : ` It has ${strokes} freehand ${strokes === 1 ? 'line' : 'lines'} drawn on it; see the picture for where.`
     return [
-      `\n[Image #${index + 1} carries the user's marks: numbered pins and outlined areas drawn on the picture.${original} Positions are relative to the picture, from its top left.]`,
+      `\n[Image #${index + 1} carries the user's marks${placed ? ': numbered pins and outlined areas drawn on the picture' : ''}.${freehand}${original}${placed ? ' Positions are relative to the picture, from its top left.' : ''}]`,
       ...lines,
       ...plain,
       ...(lines.length > 0 ? ['Answer or act per number.'] : []),

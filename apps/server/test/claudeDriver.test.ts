@@ -1561,6 +1561,21 @@ describe('steering', () => {
     return { child, driver, handle, events, sent, boot, inputEnded: () => inputEnded }
   }
 
+  it('steers eight marked pictures and their originals inline, all sixteen', async () => {
+    const { handle, sent, boot } = start()
+    onTestFinished(() => { handle.stop() })
+    await boot()
+    const images = Array.from({ length: 16 }, (_, index) => ({
+      name: `shot-${index}.png`,
+      dataUrl: 'data:image/png;base64,iVBORw0KGgo=',
+      ...(index < 8 ? { annotation: { original: 8 + index, pins: [{ x: 0.5, y: 0.5, comment: 'here' }], shapes: [] } } : {}),
+    }))
+    void handle.steer?.(addition('Look at these', images))
+    await tick()
+    const content = sent()[1]?.message.content as { type: string }[]
+    expect(content.filter((part) => part.type === 'image')).toHaveLength(16)
+  })
+
   it.each(['typed', 'forwarded'] as const)('delivers a %s addition into the running turn and folds a split run into one result', async (source) => {
     // The receipt clock runs on fake time, so a loaded machine cannot run it out before the queued line is read.
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })

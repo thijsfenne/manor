@@ -1010,12 +1010,21 @@ const eventBase = {
 }
 
 export const MAX_MESSAGE_ATTACHMENTS = 8
+/**
+ * Pictures one message carries on the wire. A marked picture also sends its unmarked
+ * original, which takes no attachment slot, so eight marked pictures make sixteen.
+ * Measured 2026-11-25: Claude Code, Codex, Grok and Cursor each read sixteen pictures
+ * at the 2 MB limit in one turn.
+ */
+export const MAX_MESSAGE_IMAGES = MAX_MESSAGE_ATTACHMENTS * 2
 
 /** A position or length on a picture as a share of its width or height, from its top left. */
 const RelativeSchema = z.number().min(0).max(1)
 
 export const MAX_IMAGE_PINS = 20
 export const MAX_IMAGE_COMMENT_CHARS = 500
+export const MAX_IMAGE_STROKES = 50
+export const MAX_STROKE_POINTS = 500
 
 /**
  * The marks the user placed on a picture before sending it. The picture that carries
@@ -1025,7 +1034,7 @@ export const MAX_IMAGE_COMMENT_CHARS = 500
  * two pictures and the text, and lose only the comment list.
  */
 export const ImageAnnotationSchema = z.object({
-  original: z.number().int().nonnegative().max(MAX_MESSAGE_ATTACHMENTS - 1).optional(),
+  original: z.number().int().nonnegative().max(MAX_MESSAGE_IMAGES - 1).optional(),
   pins: z.array(z.object({
     x: RelativeSchema,
     y: RelativeSchema,
@@ -1040,6 +1049,8 @@ export const ImageAnnotationSchema = z.object({
     /** Optional, unlike a pin's: a shape with words joins the numbered list, one without stays a plain outline. */
     comment: z.string().max(MAX_IMAGE_COMMENT_CHARS).optional(),
   })).max(MAX_IMAGE_PINS),
+  /** Freehand lines, each a run of `[x, y]` points. No number and no comment, like a plain outline. */
+  strokes: z.array(z.array(z.tuple([RelativeSchema, RelativeSchema])).min(1).max(MAX_STROKE_POINTS)).max(MAX_IMAGE_STROKES).optional(),
 })
 export type ImageAnnotation = z.infer<typeof ImageAnnotationSchema>
 
@@ -1062,6 +1073,20 @@ export function numberedMarks(marks: Pick<ImageAnnotation, 'pins' | 'shapes'>): 
     return comment === '' ? [] : [{ ...shape, comment, index }]
   })
   return [...pins, ...shapes.map((shape, at): NumberedMark => ({ ...shape, number: pins.length + at + 1 }))]
+}
+
+/**
+ * The places in one message's images that hold another picture's unmarked original.
+ * Such a copy is never shown on its own and takes no attachment slot. It always comes
+ * after its marked picture, and a picture with marks of its own is never one.
+ */
+export function originalImageIndexes(images: readonly { annotation?: { original?: number } }[]): Set<number> {
+  const originals = new Set<number>()
+  images.forEach((image, index) => {
+    const at = image.annotation?.original
+    if (at !== undefined && at > index && images[at] !== undefined && images[at].annotation === undefined) originals.add(at)
+  })
+  return originals
 }
 
 // SVG is renderable but not multimodal: browsers load it in `<img>` under a
@@ -1187,13 +1212,16 @@ export const EventDocumentSchema = z.object({
 export type EventDocument = z.infer<typeof EventDocumentSchema>
 
 const messageAttachmentFields = {
-  images: z.array(ImageAttachmentSchema).max(MAX_MESSAGE_ATTACHMENTS).optional(),
+  images: z.array(ImageAttachmentSchema).max(MAX_MESSAGE_IMAGES).optional(),
   files: z.array(FileAttachmentSchema).max(MAX_MESSAGE_ATTACHMENTS).optional(),
   documents: z.array(DocumentUploadSchema).max(MAX_MESSAGE_ATTACHMENTS).optional(),
 }
 
-const hasAtMostMessageAttachments = (value: { images?: readonly unknown[]; files?: readonly unknown[]; documents?: readonly unknown[] }) =>
-  (value.images?.length ?? 0) + (value.files?.length ?? 0) + (value.documents?.length ?? 0) <= MAX_MESSAGE_ATTACHMENTS
+/** The user's own attachments, combined. A marked picture's original rides along without a slot. */
+const hasAtMostMessageAttachments = (value: { images?: readonly { annotation?: { original?: number } }[]; files?: readonly unknown[]; documents?: readonly unknown[] }) => {
+  const images = value.images ?? []
+  return images.length - originalImageIndexes(images).size + (value.files?.length ?? 0) + (value.documents?.length ?? 0) <= MAX_MESSAGE_ATTACHMENTS
+}
 
 export const MessageAttachmentsSchema = z.object(messageAttachmentFields).refine(hasAtMostMessageAttachments, {
   message: `images and files may contain at most ${MAX_MESSAGE_ATTACHMENTS} attachments combined`,
@@ -1323,7 +1351,7 @@ const UserMessageEventWireSchema = z.object({
   // Imported skills selected for this originating message. Optional for transcripts
   // written before skills existed; absence and an empty list mean the same thing.
   skillIds: z.array(SkillIdSchema).optional(),
-  images: z.array(EventImageSchema).max(MAX_MESSAGE_ATTACHMENTS).optional(),
+  images: z.array(EventImageSchema).max(MAX_MESSAGE_IMAGES).optional(),
   files: messageAttachmentFields.files,
   documents: z.array(EventDocumentSchema).max(MAX_MESSAGE_ATTACHMENTS).optional(),
   pageContexts: z.array(PageContextAttachmentSchema).max(MAX_PAGE_CONTEXT_ATTACHMENTS).optional(),
@@ -4887,7 +4915,7 @@ const ClientMessageWireSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('run_routine_now'), routineId: z.string(), ...optionalRequestId }),
 ])
 export const ClientMessageSchema = ClientMessageWireSchema.superRefine((message, context) => {
-  const attachments = message.type === 'send_message'
+  const attachments = message.type === 'send_message' || message.type === 'revise_work_goal'
     ? message
     : message.type === 'create_chat'
       ? message.openingMessage

@@ -1,6 +1,6 @@
 import { ImageAttachmentSchema, MessageAttachmentsSchema } from '@manor/contracts'
 import { describe, expect, it } from 'vitest'
-import { stagedFromWire, stagedImageSlots, wireImages, type DraftImage } from './imageMarks'
+import { NO_MARKS, hasMarks, marksOf, stagedFromWire, wireImages, type DraftImage } from './imageMarks'
 
 const png = (body: string) => `data:image/png;base64,${body}`
 
@@ -14,7 +14,6 @@ describe('wireImages', () => {
 
     const sent = wireImages(staged)
 
-    expect(stagedImageSlots(staged)).toBe(3)
     expect(sent).toEqual([
       { name: 'plain.png', dataUrl: png('AAAA') },
       { name: 'login.png', dataUrl: png('BBBB'), annotation: { ...marks, original: 2 } },
@@ -32,6 +31,28 @@ describe('wireImages', () => {
     ]
     expect(wireImages(stagedFromWire(wireImages(staged)))).toEqual(wireImages(staged))
     expect(stagedFromWire(wireImages(staged)).map((image) => image.name)).toEqual(['login.png', 'plain.png'])
+  })
+
+  it('sends eight marked pictures, each with its original after them all', () => {
+    const marks = { pins: [], shapes: [], strokes: [[[0.1, 0.2], [0.3, 0.4]] as [number, number][]] }
+    const staged: DraftImage[] = Array.from({ length: 8 }, (_, index) => ({ name: `shot-${index}.png`, dataUrl: png('BBBB'), annotation: marks, original: png('CCCC') }))
+
+    const sent = wireImages(staged)
+
+    expect(sent).toHaveLength(16)
+    expect(sent.slice(0, 8).map((image) => image.annotation?.original)).toEqual([8, 9, 10, 11, 12, 13, 14, 15])
+    expect(MessageAttachmentsSchema.safeParse({ images: sent }).success).toBe(true)
+    expect(wireImages(stagedFromWire(sent))).toEqual(sent)
+  })
+
+  it('reopens freehand lines intact and counts a picture with only lines as marked', () => {
+    const strokes: [number, number][][] = [[[0.1, 0.2], [0.15, 0.25], [0.2, 0.3]], [[0.5, 0.5]]]
+    const annotation = { pins: [], shapes: [], strokes }
+    expect(marksOf(annotation)).toEqual({ pins: [], shapes: [], strokes })
+    expect(hasMarks(marksOf(annotation))).toBe(true)
+    // A stored annotation from before the pen reads as no lines.
+    expect(marksOf({ pins: [], shapes: [] })).toEqual(NO_MARKS)
+    expect(hasMarks(NO_MARKS)).toBe(false)
   })
 
   it('lets a client that predates marks read the picture without them', () => {

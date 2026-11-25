@@ -3,7 +3,7 @@ import type { FaceState } from '@manor/client-runtime/face-activity'
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import { DISCLOSURE } from '../motion'
 import { AlertCircleIcon, ArrowDown01Icon, Clock01Icon, MinusSignIcon, PencilEdit02Icon, RefreshIcon, TaskDone01Icon, Tick02Icon, Undo02Icon } from '@hugeicons/core-free-icons'
-import { ROUTINE_LATE_AFTER_MS, eventImageSource, imageRefSpans, numberedMarks, projectFileWriteDetail, projectFileWriteLabel, type EventImage, type NumberedMark, type ProjectFileWrite } from '@manor/contracts'
+import { ROUTINE_LATE_AFTER_MS, eventImageSource, imageRefSpans, numberedMarks, originalImageIndexes, projectFileWriteDetail, projectFileWriteLabel, type EventImage, type NumberedMark, type ProjectFileWrite } from '@manor/contracts'
 import type { AgentConfig, EventDocument, FileAttachment, InlineQuote, MessageQuote, MessageReply, NoteQuote, PageContextAttachment, SkillConfig, WakeItem } from '@manor/contracts'
 import { wakeLines } from '../turnLabels'
 import { fileWriteGroups, type MessageQuoteSource, type PendingDocument } from '@manor/client-runtime/state'
@@ -23,7 +23,7 @@ import { quoteAuthorName } from '@manor/client-runtime/message-quotes'
 import { NoteQuoteContextChip, QuoteBlock } from './QuoteContextChip'
 import { useAgentMentions, useMessageChips } from './mentionMarkdown'
 import { AnnotateImageContext } from './annotateImage'
-import { ImageNumberBadge } from './MentionText'
+import { ImageNumberBadge, MarkCountBadge } from './MentionText'
 import { ZoomableImage, type GalleryImage } from './ui/ZoomableImage'
 import { MiddleCut } from './MiddleCut'
 import { NotesActionsContext } from './NotesLine'
@@ -161,11 +161,9 @@ export function UserBubble({
   const hasFiles = files.length > 0 || documents.length > 0
   const author = quote === undefined ? undefined : quoteAuthorName(quote, agents, quoteAuthors)
   // A marked picture's original rides along for the persona; the user already sees it under the marks.
-  const originals = new Set(images.flatMap((image, index) => {
-    const original = image.annotation?.original
-    // A picture that carries marks of its own is never hidden as another's original.
-    return original === undefined || images[original] === undefined || images[original].annotation !== undefined ? [] : [original]
-  }))
+  const originals = originalImageIndexes(images)
+  // One marked picture is read large; beside others it is a thumbnail like them, its badge counting the marks.
+  const single = images.length - originals.size === 1
   const marked = images.flatMap((image) => {
     const marks = image.annotation === undefined ? [] : numberedMarks(image.annotation)
     return marks.length === 0 ? [] : [{ name: image.name, marks }]
@@ -191,8 +189,9 @@ export function UserBubble({
               key={`${image.name}-${index}`}
               image={image}
               gallery={{ images: gallery, index }}
-              wide={image.annotation !== undefined}
+              wide={single && image.annotation !== undefined}
               {...(numbered ? { number: index + 1 } : {})}
+              marks={single ? undefined : image.annotation}
             />
           ))}
         </div>
@@ -446,7 +445,7 @@ const FALLBACK_IMAGE_SIZE = { width: 320, height: 240 }
  * Without one it is an agent's picture, sized to its own pixels within the column,
  * and a press asks `onOpen` for the file viewer.
  */
-function TranscriptImage({ image, frame = '', fit = 'object-cover', gallery, number, compact = false, wide = false, onOpen }: { image: EventImage; frame?: string; fit?: string; gallery?: { images: readonly GalleryImage[]; index: number }; number?: number; compact?: boolean; wide?: boolean; onOpen?: () => void }) {
+function TranscriptImage({ image, frame = '', fit = 'object-cover', gallery, number, marks, compact = false, wide = false, onOpen }: { image: EventImage; frame?: string; fit?: string; gallery?: { images: readonly GalleryImage[]; index: number }; number?: number; marks?: EventImage['annotation'] | undefined; compact?: boolean; wide?: boolean; onOpen?: () => void }) {
   const [attempt, setAttempt] = useState(0)
   const [failed, setFailed] = useState(false)
   const source = eventImageSource(image)
@@ -510,6 +509,7 @@ function TranscriptImage({ image, frame = '', fit = 'object-cover', gallery, num
         />
       )}
       {number === undefined ? null : <ImageNumberBadge number={number} />}
+      <MarkCountBadge annotation={marks} />
     </div>
   )
 }

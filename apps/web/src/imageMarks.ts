@@ -1,11 +1,20 @@
-import { ImageAttachmentSchema, MAX_MESSAGE_ATTACHMENTS, numberedMarks, type ImageAnnotation, type ImageAttachment, type NumberedMark } from '@manor/contracts'
+import { ImageAttachmentSchema, numberedMarks, originalImageIndexes, type ImageAnnotation, type ImageAttachment, type NumberedMark } from '@manor/contracts'
 
-/** Pins and outlined areas on one picture, positions as shares of its size. */
-export type ImageMarks = Pick<ImageAnnotation, 'pins' | 'shapes'>
+/** Pins, outlined areas and freehand lines on one picture, positions as shares of its size. */
+export type ImageMarks = Pick<ImageAnnotation, 'pins' | 'shapes'> & { strokes: ImageStroke[] }
 export type ImagePin = ImageMarks['pins'][number]
 export type ImageShape = ImageMarks['shapes'][number]
+export type ImageStroke = NonNullable<ImageAnnotation['strokes']>[number]
 
-export const NO_MARKS: ImageMarks = { pins: [], shapes: [] }
+export const NO_MARKS: ImageMarks = { pins: [], shapes: [], strokes: [] }
+
+/** The marks an annotation carries, as the editor holds them. */
+export const marksOf = (annotation: ImageAnnotation | undefined): ImageMarks =>
+  annotation === undefined ? NO_MARKS : { pins: annotation.pins, shapes: annotation.shapes, strokes: annotation.strokes ?? [] }
+
+/** The marks as the wire takes them: a picture without lines carries no `strokes` key. */
+const annotationOf = ({ strokes, ...marks }: ImageMarks): ImageAnnotation =>
+  strokes.length === 0 ? marks : { ...marks, strokes }
 
 /**
  * A picture staged in the composer. After the editor's Done, `dataUrl` holds the
@@ -23,13 +32,7 @@ export function markAnchor(mark: NumberedMark): { x: number; y: number } {
   return { x: mark.x + (mark.w / 2) * (1 - Math.SQRT1_2), y: mark.y + (mark.h / 2) * (1 - Math.SQRT1_2) }
 }
 
-export const hasMarks = (marks: ImageMarks): boolean => marks.pins.length > 0 || marks.shapes.length > 0
-
-/** Wire slots one staged picture takes: a marked one also sends its original. */
-export const imageSlots = (image: DraftImage): number => (image.original === undefined ? 1 : 2)
-
-export const stagedImageSlots = (images: readonly DraftImage[]): number =>
-  images.reduce((sum, image) => sum + imageSlots(image), 0)
+export const hasMarks = (marks: ImageMarks): boolean => marks.pins.length > 0 || marks.shapes.length > 0 || marks.strokes.length > 0
 
 /** What the unmarked picture is called on the wire, beside the marked one. */
 const originalName = (name: string): string => {
@@ -59,19 +62,14 @@ export function wireImages(images: readonly DraftImage[]): ImageAttachment[] {
  * back into its marked picture, so the tray shows one picture the editor can reopen.
  */
 export function stagedFromWire(images: readonly ImageAttachment[]): DraftImage[] {
-  const folded = new Set<number>()
-  const staged = images.map((image): DraftImage => {
+  const originals = originalImageIndexes(images)
+  return images.flatMap((image, index): DraftImage[] => {
+    if (originals.has(index)) return []
     const at = image.annotation?.original
-    const original = at === undefined ? undefined : images[at]
-    if (at === undefined || original === undefined || original.annotation !== undefined) return image
-    folded.add(at)
-    return { ...image, original: original.dataUrl }
+    const original = at === undefined || !originals.has(at) ? undefined : images[at]
+    return [original === undefined ? image : { ...image, original: original.dataUrl }]
   })
-  return staged.filter((_, index) => !folded.has(index))
 }
-
-/** True when the staged pictures still fit the wire once each original is added. */
-export const fitsWire = (slots: number): boolean => slots <= MAX_MESSAGE_ATTACHMENTS
 
 /** A theme token's value, so the burned picture wears the same colours as the editor. */
 const themeColour = (token: '--color-mark' | '--color-on-media'): string =>
@@ -105,6 +103,22 @@ export async function burnMarks(original: string, name: string, marks: ImageMark
   const ink = themeColour('--color-on-media')
   context.strokeStyle = colour
   context.lineWidth = 3 * unit
+  context.lineCap = 'round'
+  context.lineJoin = 'round'
+  context.fillStyle = colour
+  for (const [first, ...rest] of marks.strokes) {
+    if (first === undefined) continue
+    context.beginPath()
+    if (rest.length === 0) {
+      // A tap without a drag leaves one point: a dot as wide as a line.
+      context.arc(first[0] * width, first[1] * height, context.lineWidth / 2, 0, Math.PI * 2)
+      context.fill()
+      continue
+    }
+    context.moveTo(first[0] * width, first[1] * height)
+    for (const [x, y] of rest) context.lineTo(x * width, y * height)
+    context.stroke()
+  }
   for (const shape of marks.shapes) {
     const x = shape.x * width
     const y = shape.y * height
@@ -137,7 +151,7 @@ export async function burnMarks(original: string, name: string, marks: ImageMark
     context.fillText(String(mark.number), x, y + unit)
   }
   const dataUrl = canvas.toDataURL('image/webp', 0.9)
-  const parsed = ImageAttachmentSchema.safeParse({ name, dataUrl, annotation: marks })
+  const parsed = ImageAttachmentSchema.safeParse({ name, dataUrl, annotation: annotationOf(marks) })
   if (!parsed.success) throw new Error(`${name} is too large to send with its marks.`)
   return parsed.data
 }

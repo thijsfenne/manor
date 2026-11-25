@@ -1,7 +1,9 @@
 import {
   ClientMessageSchema,
   FileAttachmentSchema,
+  ImageAnnotationSchema,
   MAX_MESSAGE_ATTACHMENTS,
+  MAX_MESSAGE_IMAGES,
   MAX_MESSAGE_QUOTES,
   MAX_TEXT_FILE_BYTES,
   MessageAttachmentsSchema,
@@ -9,6 +11,7 @@ import {
   UserMessageEventSchema,
 } from '@manor/contracts'
 import { describe, expect, it } from 'vitest'
+import { WebSocketServer } from 'ws'
 
 const image = { name: 'shot.png', dataUrl: 'data:image/png;base64,aW1hZ2U=' }
 const file = { name: 'notes.md', mime: 'text/markdown', content: '# Notes' }
@@ -72,6 +75,58 @@ describe('message attachment contracts', () => {
       openingMessage: { text: 'Too many.', images, files: ninth },
     }).success).toBe(false)
     expect(images.length + files.length).toBe(MAX_MESSAGE_ATTACHMENTS)
+  })
+
+  // Eight marked pictures at the 2 MB limit with their originals: the largest message the
+  // web composer can build. Each marked one is followed by its original at the end.
+  const largest = (marked: number) => {
+    const body = 'A'.repeat(2_000_000 - 'data:image/webp;base64,'.length)
+    const dataUrl = `data:image/webp;base64,${body}`
+    const annotation = (original: number) => ({ original, pins: [{ x: 0.5, y: 0.5, comment: 'here' }], shapes: [], strokes: [[[0.1, 0.1], [0.2, 0.3]] as [number, number][]] })
+    return [
+      ...Array.from({ length: marked }, (_, index) => ({ name: `shot-${index}.webp`, dataUrl, annotation: annotation(marked + index) })),
+      ...Array.from({ length: marked }, (_, index) => ({ name: `shot-${index} (original)`, dataUrl })),
+    ]
+  }
+
+  it('lets eight marked pictures carry their originals without a slot', () => {
+    const images = largest(MAX_MESSAGE_ATTACHMENTS)
+    expect(images).toHaveLength(MAX_MESSAGE_IMAGES)
+    expect(MessageAttachmentsSchema.safeParse({ images }).success).toBe(true)
+    expect(UserMessageEventSchema.safeParse({ id: 'evt_1', ts: 1, type: 'user_message', text: 'Look.', mentions: [], images }).success).toBe(true)
+    const send = { type: 'send_message', chatId: 'chat_1', text: 'Look.', images }
+    expect(ClientMessageSchema.safeParse(send).success).toBe(true)
+    // The socket takes the whole frame: ws's own cap, which the server leaves at its default.
+    const { options } = new WebSocketServer({ noServer: true })
+    expect(Buffer.byteLength(JSON.stringify(send))).toBeLessThan(options.maxPayload!)
+  })
+
+  it('still counts every picture the user sees toward the eight', () => {
+    const images = largest(MAX_MESSAGE_ATTACHMENTS)
+    // One file more than the eight shown pictures.
+    expect(MessageAttachmentsSchema.safeParse({ images, files: [file] }).success).toBe(false)
+    // A picture with marks of its own is never hidden as another's original.
+    const marks = { pins: [], shapes: [] }
+    const disguised = [
+      { ...image, annotation: marks },
+      ...Array.from({ length: 7 }, () => image),
+      { ...image, annotation: { ...marks, original: 0 } },
+    ]
+    expect(MessageAttachmentsSchema.safeParse({ images: disguised }).success).toBe(false)
+    // An original always follows its marked picture, as the composer places it.
+    const backwards = [...Array.from({ length: 8 }, () => image), { ...image, annotation: { original: 0, pins: [], shapes: [] } }]
+    expect(MessageAttachmentsSchema.safeParse({ images: backwards }).success).toBe(false)
+    // Session feedback takes the same rule as a send.
+    const feedback = { type: 'revise_work_goal', handoffId: 'h1', version: 1, text: 'Again.' }
+    expect(ClientMessageSchema.safeParse({ ...feedback, images: largest(MAX_MESSAGE_ATTACHMENTS) }).success).toBe(true)
+    expect(ClientMessageSchema.safeParse({ ...feedback, images: Array.from({ length: 9 }, () => image) }).success).toBe(false)
+  })
+
+  it('keeps freehand lines as shares of the picture and reads a stored annotation without them', () => {
+    expect(ImageAnnotationSchema.safeParse({ pins: [], shapes: [], strokes: [[[0, 0], [1, 1]]] }).success).toBe(true)
+    expect(ImageAnnotationSchema.safeParse({ pins: [], shapes: [], strokes: [[[0, 1.2]]] }).success).toBe(false)
+    expect(ImageAnnotationSchema.safeParse({ pins: [], shapes: [], strokes: [[]] }).success).toBe(false)
+    expect(ImageAnnotationSchema.parse({ pins: [], shapes: [] })).toEqual({ pins: [], shapes: [] })
   })
 })
 
