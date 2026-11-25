@@ -9,22 +9,26 @@ import { IconSwap } from './IconSwap'
 export const NOTICE_WIDTH = 'w-[min(380px,calc(100vw-32px))]'
 
 /**
- * One card in the notice stack: a 28px mark (a kind icon or a face), what happened, the
- * chat it is about, and a close button on its corner. Every card is at least two lines
- * tall, so a one-line card (a reply under its face) matches the rest. With `onOpen` the whole card opens
+ * One card in the notice stack: a 28px mark (a kind icon), what happened, the chat it is
+ * about, and a close button on its corner. Every such card is at least two lines tall.
+ * `dmReply` is a direct message reply instead: a 32px face at the top left and the message in
+ * up to three lines, centred on the face while it is one line and with even space above and
+ * below once it is more. With `onOpen` the whole card opens
  * what it is about; only a button of its own (`action`, such as Undo) does something else.
  */
-export function NoticeCard({ mark, title, body, action, onOpen, alert = false, dismissLabel = 'Dismiss', onDismiss }: {
+export function NoticeCard({ mark, title, body, action, onOpen, dmReply = false, alert = false, dismissLabel = 'Dismiss', onDismiss }: {
   mark: ReactNode
   title: string
   body?: string
   action?: ReactNode
   onOpen?: () => void
+  dmReply?: boolean
   alert?: boolean
   dismissLabel?: string
   onDismiss: () => void
 }) {
   const reduce = useReducedMotion() ?? false
+  const textPad = dmReply ? '' : 'py-1'
   const text = (
     <>
       {/* A label that changes in place (a spinner's line turning into its outcome) swaps
@@ -32,7 +36,7 @@ export function NoticeCard({ mark, title, body, action, onOpen, alert = false, d
       <AnimatePresence initial={false}>
         <motion.span
           key={title}
-          className="col-start-1 row-start-1 block truncate text-[14px] leading-[18px] tracking-[-0.011em]"
+          className={`col-start-1 row-start-1 text-[14px] leading-[18px] tracking-[-0.011em] ${dmReply ? 'line-clamp-3 break-words' : 'block truncate'}`}
           title={title}
           initial={reduce ? { opacity: 0 } : TEXT_SWAP_BELOW}
           animate={TEXT_SWAP_REST}
@@ -47,12 +51,12 @@ export function NoticeCard({ mark, title, body, action, onOpen, alert = false, d
   )
   return (
     <div role={alert ? 'alert' : 'status'}
-      className={`group relative ${NOTICE_WIDTH} flex min-h-15 items-center gap-2.5 rounded-xl border border-line bg-raised px-3.5 py-2 text-text shadow-popover ${onOpen === undefined ? '' : 'cursor-pointer'}`}
+      className={`group relative ${NOTICE_WIDTH} flex items-center gap-2.5 rounded-xl border border-line bg-raised px-3.5 text-text shadow-popover ${dmReply ? 'py-3' : 'min-h-15 py-2'} ${onOpen === undefined ? '' : 'cursor-pointer'}`}
       onClick={onOpen}>
-      <span className="grid size-7 flex-none place-items-center">{mark}</span>
+      <span className={`grid flex-none place-items-center ${dmReply ? 'size-8 self-start' : 'size-7'}`}>{mark}</span>
       {/* The text is the card's keyboard door; a click anywhere else on the card goes the same way. */}
-      {onOpen === undefined ? <div className="grid min-w-0 flex-1 py-1">{text}</div> : (
-        <button type="button" className="grid min-w-0 flex-1 cursor-pointer border-0 bg-transparent p-0 py-1 text-left text-text [font-family:inherit]"
+      {onOpen === undefined ? <div className={`grid min-w-0 flex-1 ${textPad}`}>{text}</div> : (
+        <button type="button" className={`grid min-w-0 flex-1 cursor-pointer border-0 bg-transparent p-0 text-left text-text [font-family:inherit] ${textPad}`}
           onClick={(event) => {
             event.stopPropagation()
             onOpen()

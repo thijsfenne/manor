@@ -4,6 +4,7 @@ What changed for someone who uses Manor, newest first. A version is a tag on `ma
 
 ## Unreleased
 
+- On the Mac and the web, a direct message's notice card shows the agent's face larger at its top left and the reply in up to three lines.
 - On the Mac and the web, Settings has new groups. General keeps Profile and Power. Default agent moves to Agents, Context files to a Knowledge group beside Memory & knowledge, and Permissions to Tools, the group that was Integrations. A new Tools page, Browser & Simulator, holds the Browser's search engine and the iOS Simulator. Forget this Mac, in a paired browser, moves to Phone. The agent that answers messages addressed to nobody is called the default agent everywhere, on the Mac, the web and the phone, instead of chief of staff.
 - Notice cards give their text more room. On the Mac and the web the close button is a small round one on the card's top left corner that shows while the pointer is on the card. On the phone a card has no close button any more: swipe it up to dismiss it, as a system banner goes. A reply's face and the other cards' icons are larger, on the Mac, the web and the phone.
 - In a direct message, the marker for messages with other agents shows only that they were sent, on the Mac, the web and the phone. The quoted question under it, "reply follows" and the questions in the menu for several agents are gone. The marker or a name in the menu still opens the shared thread.
