@@ -793,16 +793,15 @@ export function Transcript({
     <PlanDockProvider value={planDock}>
     <div ref={stageRef} className="relative flex min-h-0 min-w-0 w-full">
       {/* The scroller spans the whole stage, with the readable column centred inside
-          it. Its bar is hidden rather than left riding the window's edge all day: the
-          thread says where it is with the jump-to-latest button,
-          and the column stays put instead of shifting 15px when a short chat grows
-          long enough to scroll. `min-w-0` is load-bearing in the panel: a quote or
+          it, so its bar sits on the pane's edge and shows while the thread is scrolled.
+          The gutter is kept even before the chat is long enough to scroll, so the
+          column does not shift when it grows. `min-w-0` is load-bearing in the panel: a quote or
           a table that sized the column to its content used to push every other
           bubble past the card's overflow, which is how a side chat went blank.
           `overflow-x-hidden` is the same rule on the stage: a 780px column that
           refused to shrink used to paint under the browser. */}
       <div
-        className="scrollbar-hidden flex min-w-0 flex-1 flex-col overflow-x-hidden overflow-y-auto"
+        className="flex min-w-0 flex-1 flex-col overflow-x-hidden overflow-y-auto [scrollbar-gutter:stable]"
         ref={scrollerRef}
         onScroll={() => handleScroll()}
         onPointerUp={stageSelection}

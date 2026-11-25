@@ -5,6 +5,7 @@ import { ShellBoundary } from './components/RecoveryBoundary'
 import { desktopTitleBarIsInset, listenDesktopZoom } from './desktopBrowser'
 import { applyStoredFonts } from './fonts'
 import { installOverflowTitles } from './overflowTitles'
+import { installScrollbarReveal } from './scrollbars'
 import './styles.css'
 
 // Set before the first paint, so the corner the traffic lights land in is already
@@ -19,6 +20,7 @@ if (desktopTitleBarIsInset()) {
 applyStoredFonts()
 
 installOverflowTitles(document)
+installScrollbarReveal(document)
 
 const host = document.getElementById('root')
 if (!host) throw new Error('manor: #root is missing from index.html')

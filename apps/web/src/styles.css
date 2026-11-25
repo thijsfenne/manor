@@ -860,10 +860,8 @@ pre,
 }
 
 /*
- * A scroller with no bar. The transcript spans the whole stage, so on "always show
- * scrollbars" its bar sits against the window's edge for the entire day, next to a
- * thread that already says where it is with the bottom fade and the jump-to-latest
- * button. Both properties are needed: `scrollbar-width` is the standard one, the
+ * A scroller with no bar, for a strip where even a passing bar would cover what it
+ * holds: a tab row, the decision dock. Both properties are needed: `scrollbar-width` is the standard one, the
  * `-webkit-` pseudo-element is what Safari reads. Scrolling itself is untouched, and
  * so is the keyboard: the element keeps its own focusability and its scroll keys.
  */
@@ -876,20 +874,49 @@ pre,
 }
 
 /*
- * Every other scroller's bar: no track, a thin rounded thumb inset from the edge, a
- * shade stronger under the pointer and while dragged. The thumb mixes the text colour
- * into nothing, so each theme in light and dark gets a quiet bar without its own token.
+ * Every other scroller's bar: no track, a thin rounded thumb inset from the edge, shown
+ * only while the user scrolls. `scrollbars.ts` sets `data-scrollbar="on"` on the scroller
+ * the user moves and `off` a second after it stops, and the thumb fades out from there.
+ * Resting the pointer on the thumb's spot shows it a shade stronger, also while it is
+ * dragged, so a hidden bar can still be grabbed. The thumb mixes the text colour into
+ * nothing, so each theme in light and dark gets a quiet bar without its own token.
+ *
+ * The fade animates a registered colour property, because Chromium does not animate the
+ * scrollbar pseudo-elements themselves. A keyframe rather than a transition, so a
+ * scroller's own `transition-*` utility does not cut it short. Every element resets the
+ * property, so a nested scroller does not light up with the one around it.
  *
  * Chromium, which the desktop shell runs, draws the `-webkit-` rules: a 10px bar whose
  * thumb keeps a 2px transparent border, so 6px shows. Chromium ignores those rules on
  * any element that sets `scrollbar-width` or `scrollbar-color`, which is why the
  * standard pair is only for engines without the thumb pseudo-element. That same rule keeps
- * `scrollbar-hidden` and `[scrollbar-width:none]` hidden here. Styling the bar also
- * makes macOS draw it in place of its overlay bar, so it stays visible on a trackpad.
+ * `scrollbar-hidden` and `[scrollbar-width:none]` hidden here. A classic bar keeps its
+ * 10px gutter while hidden; only an overlay bar could give it back, and styled bars are
+ * never overlay bars.
  *
  * Layered, so a component's own scrollbar utility still wins.
  */
+@property --scrollbar-thumb {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: transparent;
+}
+
 @layer base {
+  * {
+    --scrollbar-thumb: transparent;
+  }
+
+  [data-scrollbar='on'] {
+    --scrollbar-thumb: color-mix(in srgb, var(--color-text) 16%, transparent);
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    [data-scrollbar='off'] {
+      animation: scrollbar-fade 300ms var(--ease-fade);
+    }
+  }
+
   ::-webkit-scrollbar {
     width: 10px;
     height: 10px;
@@ -904,7 +931,7 @@ pre,
   ::-webkit-scrollbar-thumb {
     border: 2px solid transparent;
     border-radius: 9999px;
-    background: color-mix(in srgb, var(--color-text) 16%, transparent) padding-box;
+    background: var(--scrollbar-thumb) padding-box;
   }
 
   ::-webkit-scrollbar-thumb:hover,
@@ -912,11 +939,18 @@ pre,
     background-color: color-mix(in srgb, var(--color-text) 30%, transparent);
   }
 
+  /* Without the thumb pseudo-element the bar cannot be grabbed while hidden, so it stays. */
   @supports not selector(::-webkit-scrollbar-thumb) {
     * {
       scrollbar-width: thin;
       scrollbar-color: color-mix(in srgb, var(--color-text) 16%, transparent) transparent;
     }
+  }
+}
+
+@keyframes scrollbar-fade {
+  from {
+    --scrollbar-thumb: color-mix(in srgb, var(--color-text) 16%, transparent);
   }
 }
 
