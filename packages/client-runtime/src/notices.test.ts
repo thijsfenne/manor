@@ -1,7 +1,7 @@
-import { CURRENT_CHECKOUT, type AgentConfig, type Chat, type Routine, type ServerMessage, type WorkHandoff } from '@manor/contracts'
+import { CURRENT_CHECKOUT, type AgentConfig, type Chat, type Project, type ProjectFileWrite, type Routine, type ServerMessage, type WorkHandoff } from '@manor/contracts'
 import { describe, expect, it } from 'vitest'
 import { createNoticeStore, DONE_FLOOR_MS, doneCount, eventNotices, noticeRoute, pushNotice, unsentPings, type AppNotice, type DonePing } from './notices'
-import { clearRunningTurns, emptyWorkspace, inbox, reduce, setViewedChats, type WorkspaceState } from './state'
+import { clearRunningTurns, emptyThread, emptyWorkspace, inbox, reduce, setViewedChats, type WorkspaceState } from './state'
 
 const agent = (id: string, name: string): AgentConfig =>
   ({ id, name, color: '#8b5cf6', allowedTools: [] }) as unknown as AgentConfig
@@ -399,7 +399,37 @@ describe('the in-app notice', () => {
 
   it('shows a short run in the app but keeps the banner behind the floor', () => {
     const [notice] = notices(workspace([dm]), [turn('t1', 'running', { chatId: 'dm_smith' }), turn('t1', 'done', { chatId: 'dm_smith' })], START + 2)
-    expect(notice).toMatchObject({ kind: 'reply', title: 'Gebouwd.', body: 'Smith', chatId: 'dm_smith', banner: null, sticky: false })
+    // The face says who, so the persona's name is not repeated under the line.
+    expect(notice).toMatchObject({ kind: 'reply', title: 'Gebouwd.', body: '', face: 'smith', chatId: 'dm_smith', banner: null, sticky: false })
+  })
+
+  it('calls a project thread reply a reply under the project name, never Session done', () => {
+    const thread = chat({ id: 'chat_thread', kind: 'project', projectId: 'p1', title: 'Manor', lastMessagePreview: 'Started the Session.' })
+    const project = { id: 'p1', name: 'Manor', threadChatId: 'chat_thread' } as unknown as Project
+    const [notice] = notices(workspace([thread], { projects: [project] }), [turn('t1', 'running', { chatId: 'chat_thread' }), turn('t1', 'done', { chatId: 'chat_thread' })], AFTER_FLOOR)
+    expect(notice).toMatchObject({ kind: 'reply', title: 'Started the Session.', body: 'Manor' })
+    expect(notice?.face).toBeUndefined()
+  })
+
+  it('offers Undo once for a memory line an agent wrote, and not for its undone copy, a restore or a line without Undo', () => {
+    const write = (extra: Partial<ProjectFileWrite> = {}): ServerMessage => ({
+      type: 'event', chatId: 'dm_smith',
+      event: { id: 'e1', type: 'system_note', kind: 'info', ts: 1, text: 'Saved', projectFileWrite: { file: 'smith.md', action: 'add', line: 'Prefers a window seat', by: 'Smith', agentId: 'smith', writeId: 'w1', ...extra } },
+    }) as unknown as ServerMessage
+    const found = notices(workspace([dm]), [write()], START)
+    expect(found.map((notice) => [notice.kind, notice.title, notice.body, notice.undo, notice.sticky])).toEqual([
+      ['memory', 'Saved to memory', 'Smith: Prefers a window seat', { chatId: 'dm_smith', writeId: 'w1' }, false],
+    ])
+    // Manor's own date on a preference line is today's and goes; a date the agent wrote in a note stays.
+    expect(notices(workspace([dm]), [write({ file: 'preferences.md', line: 'Window seats (2026-11-25)' })], START)[0]?.body).toBe('Smith: Window seats')
+    expect(notices(workspace([dm]), [write({ file: 'notes.md', line: 'Trip booked (2026-12-01)' })], START)[0]?.body).toBe('Smith: Trip booked (2026-12-01)')
+    // The user who has the chat open sees the line land there.
+    expect(noticeRoute(found[0]!, { focused: true, onScreen: (chatId) => chatId === 'dm_smith' })).toBeNull()
+    expect(notices(workspace([dm]), [write({ undone: true })], START)).toEqual([])
+    expect(notices(workspace([dm]), [write({ action: 'restore' })], START)).toEqual([])
+    expect(notices(workspace([dm]), [write({ writeId: undefined })], START)).toEqual([])
+    // An open thread that already holds the event hears a repeat, not news.
+    expect(notices(workspace([dm], { threads: { dm_smith: emptyThread } }), [write(), write()], START)).toHaveLength(1)
   })
 
   it('stays silent for a settled chat and for a quiet routine, as the banner does', () => {
@@ -467,6 +497,45 @@ describe('the in-app notice', () => {
     expect(found.map((notice) => [notice.kind, notice.title, notice.slot, notice.body, notice.sticky])).toEqual([['ready', 'Waits on Confirm', 'chat_s', 'Launch checklist', true]])
   })
 
+  it('says Merged into its branch once Manor\'s merge after Confirm lands, and nothing for a commit, a stopped merge or a reconnect', () => {
+    const session = chat({ id: 'chat_s', kind: 'project', title: 'Launch checklist' })
+    const handoff = (status: 'pending' | 'complete' | 'blocked', operation: 'merge' | 'commit' = 'merge') => ({
+      id: 'h1', sourceChatId: 'dm_smith', workChatId: 'chat_s', acceptedAt: 1, state: 'active', title: 'Launch checklist', version: 3,
+      goalReport: { result: 'Done.' }, goalReachedAt: 5, goalConfirmedAt: 6,
+      goalCompletion: { status, operation, repos: [{ path: '/repo', branch: 'manor/h1', before: 'a', tree: 'b', files: [], mergeInto: 'main' }] },
+    }) as unknown as WorkHandoff
+    const directory = (...handoffs: WorkHandoff[]) => ({ type: 'directory', projects: [], chats: [dm, session], workHandoffs: handoffs }) as unknown as ServerMessage
+    const found = notices(workspace([dm, session]), [directory(handoff('pending')), directory(handoff('complete')), directory(handoff('complete'))], START)
+    expect(found.map((notice) => [notice.kind, notice.title, notice.body, notice.chatId, notice.sticky])).toEqual([['merged', 'Merged into main', 'Launch checklist', 'chat_s', false]])
+    // A shared checkout only commits, and a merge that stopped is Commit needs you, not news.
+    expect(notices(workspace([dm, session]), [directory(handoff('pending', 'commit')), directory(handoff('complete', 'commit'))], START)).toEqual([])
+    expect(notices(workspace([dm, session]), [directory(handoff('pending')), directory(handoff('blocked'))], START).map((notice) => notice.kind)).not.toContain('merged')
+    // A merge that landed while this client was away is found by the reconnect, not announced.
+    expect(notices(workspace([dm, session]), [directory(handoff('complete'))], START)).toEqual([])
+    const state = clearRunningTurns(reduce(workspace([dm, session]), directory(handoff('pending')), START))
+    expect(eventNotices(state, reduce(state, directory(handoff('complete')), START), directory(handoff('complete')), START)).toEqual([])
+  })
+
+  it('says a settled Session was reopened when the thread sent a message on to it, and not for an open one', () => {
+    const session = chat({ id: 'chat_s', kind: 'project', title: 'Launch checklist' })
+    const thread = chat({ id: 'chat_thread', kind: 'project', title: 'Manor' })
+    const sent = (reopened: boolean): ServerMessage => ({
+      type: 'event', chatId: 'chat_thread',
+      event: { id: 'n1', type: 'system_note', kind: 'info', ts: 1, text: 'Sent to “Launch checklist”.', hintFor: 'u1',
+        sessionForward: { sessionChatId: 'chat_s', title: 'Launch checklist', turnId: 't1', agentId: '__single__', ...(reopened ? { reopened: true } : {}) } },
+    }) as unknown as ServerMessage
+    const [notice, ...rest] = notices(workspace([thread, session]), [sent(true)], START)
+    expect(rest).toEqual([])
+    expect(notice).toMatchObject({ kind: 'reopened', title: 'Session reopened', body: 'Launch checklist', chatId: 'chat_s', target: { chatId: 'chat_s' }, sticky: false })
+    expect(notices(workspace([thread, session]), [sent(false)], START)).toEqual([])
+    // The user's own Unsettle leaves its note in the Session, not a forward from the thread.
+    const unsettled = { type: 'event', chatId: 'chat_s', event: { id: 'n2', type: 'system_note', kind: 'info', ts: 1, text: 'Session “Launch checklist” was reopened; the previous outcome was withdrawn.', workHandoffPhase: 'reopened' } } as unknown as ServerMessage
+    expect(notices(workspace([thread, session]), [unsettled], START)).toEqual([])
+    expect(notices(workspace([thread, session], { threads: { chat_thread: emptyThread } }), [sent(true), sent(true)], START)).toHaveLength(1)
+    // The user who has the Session open sees it come back there.
+    expect(noticeRoute(notice!, { focused: true, onScreen: (chatId) => chatId === 'chat_s' })).toBeNull()
+  })
+
   it('announces each failed routine run once, a one-time failure included, and nothing found on reconnect', () => {
     // A failed run leaves lastRunAt where it was.
     const routine = (failures: number, extra: Partial<Routine> = {}) => ({ id: 'r1', name: 'Morning brief', chatId: 'dm_smith', consecutiveFailures: failures, lastRunAt: 7, endState: null, endedAt: null, ...extra }) as unknown as Routine
@@ -527,6 +596,15 @@ describe('the notice stack', () => {
     stack = pushNotice(stack, entry('other', 'chat_2'), 2)
     stack = pushNotice(stack, entry('done', 'chat_1'), 3)
     expect(stack.map((item) => [item.key, item.at])).toEqual([['ask', 3], ['other', 2]])
+  })
+
+  it('lets a merge take the place of the Waits on Confirm it answered, but not of a question', () => {
+    let stack = pushNotice([], entry('ready', 'chat_1', { kind: 'ready', sticky: true }), 1)
+    stack = pushNotice(stack, entry('merged', 'chat_1', { kind: 'merged', settles: true }), 2)
+    expect(stack.map((item) => [item.key, item.sticky])).toEqual([['merged', false]])
+    stack = pushNotice([], entry('ask', 'chat_1', { kind: 'waiting', sticky: true }), 1)
+    stack = pushNotice(stack, entry('merged', 'chat_1', { kind: 'merged', settles: true }), 2)
+    expect(stack.map((item) => item.key)).toEqual(['ask'])
   })
 
   it('drops only news when the stack is full, never a notice that waits on the user', () => {

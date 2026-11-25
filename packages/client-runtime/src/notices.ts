@@ -1,9 +1,9 @@
-import { COMPLETION_NOTICE_FLOOR_MS, type Chat, type DesktopDoneNotice, type ServerMessage, type WorkHandoff } from '@manor/contracts'
+import { COMPLETION_NOTICE_FLOOR_MS, projectFileWriteDetail, projectThreadOf, type Chat, type DesktopDoneNotice, type ProjectFileWrite, type ServerMessage, type WorkHandoff } from '@manor/contracts'
 import { PROVIDERS } from './runtimes'
 import { sessionStatus, QUIET_SESSION } from './sessionStatus'
 import type { WorkspaceShape } from './quietState'
 import { providerPeak } from './usage'
-import { activityOf, chatOf, sessionLiveOf, sitsSettled, subagentLineage } from './workspaceSelectors'
+import { activityOf, chatOf, sessionLiveOf, sitsSettled, subagentLineage, threadOf } from './workspaceSelectors'
 
 /**
  * Manor's notices: what is worth telling the user about a chat they are not looking
@@ -46,6 +46,12 @@ export type NoticeKind =
   | 'success'
   /** The user's own action did not. */
   | 'error'
+  /** An agent wrote a memory line the user can still undo. */
+  | 'memory'
+  /** Manor's merge of a confirmed Session landed on its branch. */
+  | 'merged'
+  /** A settled Session came back to work without the user opening it. */
+  | 'reopened'
 
 /** Where Open goes. A notice about no chat names the page that holds its news. */
 export type NoticeTarget = { chatId: string } | { page: 'scheduled' | 'usage' }
@@ -70,6 +76,12 @@ export interface AppNotice {
   /** The OS banner it earns when the window is not focused, if any. */
   banner: DonePing | null
   target: NoticeTarget | null
+  /** The persona whose face stands in for the mark: a reply in a direct message. */
+  face?: string
+  /** The one notice with a button: Undo on a memory write, through `undo_memory_write`. */
+  undo?: { chatId: string; writeId: string }
+  /** It ends the Waits on Confirm its chat's sticky notice stood for, so it takes that notice's place: a merge after Confirm. A question stays. */
+  settles?: true
 }
 
 /**
@@ -147,6 +159,53 @@ function waitingPing(before: WorkspaceShape, after: WorkspaceShape, msg: ServerM
 }
 
 /**
+ * A memory line an agent just wrote that the user can still undo: a project thread's
+ * preferences.md or notes.md, or a persona's own notes. Only the write itself counts,
+ * not its undone copy or a restore, and only once: the thread, when loaded, already
+ * holding the event means it is a repeat.
+ */
+function memoryNotice(before: WorkspaceShape, after: WorkspaceShape, msg: ServerMessage): AppNotice | null {
+  if (msg.type !== 'event' || msg.event.type !== 'system_note') return null
+  const write = msg.event.projectFileWrite
+  if (write?.writeId === undefined || write.undone === true || write.action === 'restore') return null
+  if (threadOf(before, msg.chatId).events.some((event) => event.id === msg.event.id)) return null
+  const chat = chatOf(after, msg.chatId)
+  if (chat === null || sitsSettled(after, chat)) return null
+  const writer = write.agentId === undefined
+    ? after.projects.find((project) => project.threadChatId === chat.id)?.name
+    : after.agents.find((agent) => agent.id === write.agentId)?.name ?? write.by
+  const written = projectFileWriteDetail(write) ?? ''
+  // Manor dates every preference line, which on a fresh notice is always today.
+  const detail = write.file === 'preferences.md' ? written.replace(/\s*\(\d{4}-\d{2}-\d{2}\)$/, '') : written
+  return {
+    key: `memory:${write.writeId}`, kind: 'memory', slot: `memory:${chat.id}`, chatId: chat.id,
+    title: MEMORY_TITLE[write.action], body: clip(writer === undefined ? detail : `${writer}: ${detail}`),
+    sticky: false, banner: null, target: { chatId: chat.id }, undo: { chatId: chat.id, writeId: write.writeId },
+  }
+}
+
+const MEMORY_TITLE: Record<Exclude<ProjectFileWrite['action'], 'restore'>, string> = {
+  add: 'Saved to memory', create: 'Saved to memory', replace: 'Updated in memory', remove: 'Removed from memory',
+}
+
+/**
+ * A settled Session that the project thread opened again by sending one of the user's
+ * messages on to it. The thread's "Sent to" note says so; a Session the user reopens
+ * themselves, by Unsettle or by writing in it, carries no such note.
+ */
+function reopenedNotice(before: WorkspaceShape, after: WorkspaceShape, msg: ServerMessage): AppNotice | null {
+  if (msg.type !== 'event' || msg.event.type !== 'system_note' || msg.event.sessionForward?.reopened !== true) return null
+  if (threadOf(before, msg.chatId).events.some((event) => event.id === msg.event.id)) return null
+  const chat = chatOf(after, msg.event.sessionForward.sessionChatId)
+  if (chat === null) return null
+  return {
+    key: `reopened:${msg.event.id}`, kind: 'reopened', slot: chat.id, chatId: chat.id,
+    title: 'Session reopened', body: noticeText(after, chat).title,
+    sticky: false, banner: null, target: { chatId: chat.id },
+  }
+}
+
+/**
  * Everything one message can announce, for either door. A notice with a `banner` is
  * one the OS also announces (a long run ended, someone waits on the user); the rest
  * (failures, proposals, limits, short runs) only ever show in the app.
@@ -158,6 +217,10 @@ export function eventNotices(before: WorkspaceShape, after: WorkspaceShape, msg:
       return notice === null ? [] : [notice]
     }
     case 'event': {
+      const memory = memoryNotice(before, after, msg)
+      if (memory !== null) return [memory]
+      const reopened = reopenedNotice(before, after, msg)
+      if (reopened !== null) return [reopened]
       const ping = waitingPing(before, after, msg)
       if (ping === null) return []
       return [{
@@ -169,7 +232,7 @@ export function eventNotices(before: WorkspaceShape, after: WorkspaceShape, msg:
     // The socket folds every patch into a whole directory. The first one on a socket
     // (`relight` still set) is a reading, also after a reconnect.
     case 'directory':
-      return before.relight === null ? [...handoffNotices(before, after), ...helperAskNotices(before, after)] : []
+      return before.relight === null ? [...handoffNotices(before, after), ...mergedNotices(before, after), ...helperAskNotices(before, after)] : []
     case 'routines':
       return before.unheard.includes('routines') ? [] : routineNotices(before, after)
     case 'provider_usage':
@@ -191,6 +254,13 @@ function runNotice(before: WorkspaceShape, after: WorkspaceShape, msg: Extract<S
     const slot = chat.kind === 'run' && chat.routineId !== null ? `routine:${chat.routineId}` : chat.id
     return { ...base, slot, kind: 'failed', title: chat.kind === 'run' ? 'Routine failed' : 'Turn failed', body: text.title }
   }
+  // A project thread is a chat of kind project too, but it answers rather than finishes:
+  // what it said, under the project's name.
+  const thread = projectThreadOf(after.projects, chat)
+  if (thread !== undefined) {
+    const said = chat.lastMessagePreview?.trim() ?? ''
+    return { ...base, kind: 'reply', title: said === '' ? 'Replied' : clip(said), body: thread.name }
+  }
   const handoff = after.workHandoffs.find((item) => item.workChatId === chat.id)
   if (handoff !== undefined) {
     const status = sessionStatus(handoff, chat, sessionLiveOf(after)(chat.id))
@@ -199,6 +269,9 @@ function runNotice(before: WorkspaceShape, after: WorkspaceShape, msg: Extract<S
   }
   if (handoff !== undefined || chat.kind === 'project') return { ...base, kind: 'done', title: 'Session done', body: text.title }
   const said = text.body === 'Finished.' ? undefined : text.body
+  // A direct message wears the persona's face, which already says who; a group keeps its name.
+  const face = chat.kind === 'dm' ? chat.memberIds[0] : undefined
+  if (face !== undefined) return { ...base, kind: 'reply', title: said ?? 'Replied', body: '', face }
   if (chat.kind === 'dm' || chat.kind === 'group') return { ...base, kind: 'reply', title: said ?? 'Replied', body: text.title }
   return { ...base, kind: 'done', title: said ?? 'Finished', body: text.title }
 }
@@ -232,6 +305,27 @@ function handoffNotices(before: WorkspaceShape, after: WorkspaceShape): AppNotic
       return [{ ...base, key: `proposal:${handoff.id}:${handoff.version}`, kind: 'proposal', title: 'Session to Accept', body: handoff.title, sticky: true }]
     }
     return [{ ...base, key: `${status}:${handoff.id}:${handoff.version}`, kind: 'ready', title: OWED_TITLE[status], body: noticeText(after, chat).title, sticky: true }]
+  })
+}
+
+/**
+ * Manor's own merge after Confirm landed. A merge that stopped owes the user a step and
+ * is `handoffNotices`' Commit needs you; this one is only news.
+ */
+function mergedNotices(before: WorkspaceShape, after: WorkspaceShape): AppNotice[] {
+  return after.workHandoffs.flatMap((handoff): AppNotice[] => {
+    const completion = handoff.goalCompletion
+    if (completion?.status !== 'complete' || completion.operation !== 'merge') return []
+    const was = before.workHandoffs.find((item) => item.id === handoff.id)
+    if (was === undefined || was.goalCompletion?.status === 'complete') return []
+    const chat = chatOf(after, handoff.workChatId)
+    if (chat === null) return []
+    const branch = completion.repos.find((repo) => repo.mergeInto !== undefined)?.mergeInto
+    return [{
+      key: `merged:${handoff.id}:${handoff.goalConfirmedAt ?? handoff.version}`, kind: 'merged', slot: chat.id, chatId: chat.id,
+      title: branch === undefined ? 'Merged' : `Merged into ${branch}`, body: noticeText(after, chat).title,
+      sticky: false, banner: null, target: { chatId: chat.id }, settles: true,
+    }]
   })
 }
 
@@ -362,7 +456,8 @@ const HELD_NOTICES = 12
 export function pushNotice(stack: readonly NoticeEntry[], notice: AppNotice | Omit<AppNotice, 'banner'>, at: number): NoticeEntry[] {
   const { banner: _banner, ...rest } = notice as AppNotice
   const held = stack.find((entry) => entry.slot === notice.slot)
-  const top = held !== undefined && held.sticky && !notice.sticky ? { ...held, at } : { ...rest, at }
+  const settled = notice.settles === true && held?.kind === 'ready'
+  const top = held !== undefined && held.sticky && !notice.sticky && !settled ? { ...held, at } : { ...rest, at }
   // The cap only drops news: a waiting notice stays until it is opened or dismissed.
   let news = 0
   return [top, ...stack.filter((entry) => entry.slot !== notice.slot)].filter((entry) => entry.sticky || ++news <= HELD_NOTICES)

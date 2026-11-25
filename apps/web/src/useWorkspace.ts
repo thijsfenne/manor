@@ -152,6 +152,8 @@ export interface Manor {
   getAgentNotes: (agentId: string, requestId: string) => boolean
   /** Undo on one line a memory tool wrote; the server refuses it when that line changed since. */
   undoMemoryWrite: (chatId: string, writeId: string, requestId: string) => boolean
+  /** The same Undo from a memory notice, whose card is gone: the outcome comes back as a toast. */
+  undoNoticeWrite: (chatId: string, writeId: string) => boolean
   /** One palette query; the answer arrives on `requestEvents` as `search_results` with this id. */
   search: (query: string, requestId: string) => boolean
   /** Direct replies for request-scoped UI lifecycles; broadcasts remain workspace state. */
@@ -630,6 +632,8 @@ export function useWorkspace(url: string, auth?: WorkspaceAuth): Manor {
    * save, a delete from inside one), with the line that confirms them.
    */
   const ackToasts = useRef(new Map<string, string>())
+  // Requests asked from a card that has gone since, so a refusal has nowhere to stand but a toast.
+  const refusalToasts = useRef(new Set<string>())
   if (framesRef.current === null) {
     framesRef.current = createFrameQueue<ServerMessage>(
       (batch) => {
@@ -841,6 +845,7 @@ export function useWorkspace(url: string, auth?: WorkspaceAuth): Manor {
         overrideRequests.current.clear()
         // An answer cannot come over a closed socket, so nothing waiting for one is owed.
         ackToasts.current.clear()
+        refusalToasts.current.clear()
       },
       onInvalidMessage: () => console.warn('manor: server message failed the contract'),
       onMessage: (parsed) => {
@@ -866,6 +871,7 @@ export function useWorkspace(url: string, auth?: WorkspaceAuth): Manor {
         // server sent ahead of it in the same render, not a frame later.
         if (parsed.type === 'ack' || (parsed.type === 'notice' && parsed.requestId !== undefined)) framesRef.current?.flush()
         if (parsed.type === 'ack') {
+          refusalToasts.current.delete(parsed.requestId)
           const confirmed = ackToasts.current.get(parsed.requestId)
           if (confirmed !== undefined) {
             ackToasts.current.delete(parsed.requestId)
@@ -883,6 +889,10 @@ export function useWorkspace(url: string, auth?: WorkspaceAuth): Manor {
           const requestId = parsed.requestId
           // A refusal is shown where it was asked; the confirmation is simply not owed.
           ackToasts.current.delete(requestId)
+          if (refusalToasts.current.delete(requestId)) {
+            toast.error(parsed.text)
+            return
+          }
           const chatId = overrideRequests.current.get(requestId)
           if (chatId !== undefined) {
             overrideRequests.current.delete(requestId)
@@ -1222,6 +1232,16 @@ export function useWorkspace(url: string, auth?: WorkspaceAuth): Manor {
   )
   const undoMemoryWrite = useCallback(
     (chatId: string, writeId: string, requestId: string) => send({ type: 'undo_memory_write', chatId, writeId, requestId }),
+    [send],
+  )
+  const undoNoticeWrite = useCallback(
+    (chatId: string, writeId: string) => {
+      const requestId = crypto.randomUUID()
+      const sent = confirmOnAck(ackToasts.current, requestId, 'Undone', send({ type: 'undo_memory_write', chatId, writeId, requestId }))
+      if (sent) refusalToasts.current.add(requestId)
+      else toast.error('Could not undo while offline')
+      return sent
+    },
     [send],
   )
 
@@ -1756,6 +1776,7 @@ export function useWorkspace(url: string, auth?: WorkspaceAuth): Manor {
     getChatSummary,
     getAgentNotes,
     undoMemoryWrite,
+    undoNoticeWrite,
     search,
     browserActivity,
     browserUse,

@@ -1,17 +1,22 @@
-import { useEffect, useState, useSyncExternalStore, type CSSProperties, type ReactNode } from 'react'
+import { useEffect, useRef, useState, useSyncExternalStore, type CSSProperties, type ReactNode } from 'react'
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import {
   Alert02Icon,
+  Brain02Icon,
   BubbleChatIcon,
   CheckmarkCircle02Icon,
   DashboardSpeed01Icon,
+  GitMergeIcon,
+  RefreshIcon,
   Rocket01Icon,
   TaskDone01Icon,
   UserQuestion01Icon,
 } from '@hugeicons/core-free-icons'
-import { isActionNotice, VISIBLE_NOTICES, type NoticeEntry, type NoticeKind, type NoticeTarget } from '@manor/client-runtime/notices'
+import type { AgentConfig } from '@manor/contracts'
+import { isActionNotice, VISIBLE_NOTICES, type AppNotice, type NoticeEntry, type NoticeKind, type NoticeTarget } from '@manor/client-runtime/notices'
 import { TOAST_IN, TOAST_OUT, TOAST_TRAVEL, TOAST_VISIBLE_MS } from '../motion'
 import { noticeStore } from '../notices'
+import { Avatar } from './Avatar'
 import { Icon } from './Icon'
 import { Button } from './ui/Button'
 import { NoticeCard } from './ui/NoticeCard'
@@ -29,6 +34,9 @@ const MARKS: Record<NoticeKind, { icon: typeof Alert02Icon; tone: string }> = {
   limit: { icon: DashboardSpeed01Icon, tone: 'text-warn' },
   success: { icon: CheckmarkCircle02Icon, tone: 'text-ok' },
   error: { icon: Alert02Icon, tone: 'text-danger' },
+  memory: { icon: Brain02Icon, tone: 'text-muted' },
+  merged: { icon: GitMergeIcon, tone: 'text-ok' },
+  reopened: { icon: RefreshIcon, tone: 'text-muted' },
 }
 
 /** Something the house itself reports in the stack: a provider update, a Session's commit. */
@@ -44,19 +52,50 @@ export interface HouseNotice {
  * on its own unless the pointer rests on the stack or it waits on the user; Esc, with
  * the pointer or focus on the stack, dismisses the top one.
  */
-export function NoticeStack({ house, onOpen, className, style }: {
+export function NoticeStack({ house, agents, onOpen, onUndo, className, style }: {
   house: readonly HouseNotice[]
+  agents: readonly AgentConfig[]
   onOpen: (target: NoticeTarget) => void
+  onUndo: (undo: NonNullable<AppNotice['undo']>) => void
   className: string
   style?: CSSProperties
 }) {
   const reduce = useReducedMotion() ?? false
   const entries = useSyncExternalStore(noticeStore.subscribe, noticeStore.get, noticeStore.get)
   const [hovered, setHovered] = useState(false)
+  const stackRef = useRef<HTMLDivElement>(null)
   const [focused, setFocused] = useState(false)
   // The house's cards are ongoing work and always show; news fills what is left.
   const visible = entries.slice(0, Math.max(1, VISIBLE_NOTICES - house.length))
   const engaged = hovered || focused
+
+  // A card that leaves from under the pointer (closed, opened, timed out) takes the stack's
+  // pointerleave with it, which would hold every later card for good. The next move
+  // outside the stack ends the pause instead.
+  useEffect(() => {
+    if (!hovered) return
+    const onMove = (event: PointerEvent) => {
+      if (!(event.target instanceof Node && stackRef.current?.contains(event.target))) setHovered(false)
+    }
+    document.addEventListener('pointermove', onMove)
+    return () => document.removeEventListener('pointermove', onMove)
+  }, [hovered])
+  // Native listeners, because the blur of a focused button whose card React removes fires
+  // during React's commit, where its own onBlur never hears it.
+  useEffect(() => {
+    const stack = stackRef.current
+    if (stack === null) return
+    const onIn = () => setFocused(true)
+    const onOut = (event: FocusEvent) => {
+      if (!(event.relatedTarget instanceof Node && stack.contains(event.relatedTarget))) setFocused(false)
+    }
+    stack.addEventListener('focusin', onIn)
+    stack.addEventListener('focusout', onOut)
+    return () => {
+      stack.removeEventListener('focusin', onIn)
+      stack.removeEventListener('focusout', onOut)
+    }
+  }, [])
 
   const topKey = visible[0]?.key
   const houseDismiss = house[0]?.dismiss
@@ -78,19 +117,18 @@ export function NoticeStack({ house, onOpen, className, style }: {
   const items = [
     ...visible.map((entry) => ({
       key: entry.key,
-      node: <EntryCard entry={entry} paused={engaged} onOpen={onOpen} />,
+      node: <EntryCard entry={entry} paused={engaged} agents={agents} onOpen={onOpen} onUndo={onUndo} />,
     })),
     ...house,
   ]
 
   return (
     <div
+      ref={stackRef}
       className={`pointer-events-none fixed z-[calc(var(--z-settings)+1)] flex flex-col gap-2 ${className}`}
       style={style}
       onPointerEnter={() => setHovered(true)}
       onPointerLeave={() => setHovered(false)}
-      onFocus={() => setFocused(true)}
-      onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setFocused(false) }}
     >
       <AnimatePresence initial={false}>
         {items.map((item) => (
@@ -111,8 +149,14 @@ export function NoticeStack({ house, onOpen, className, style }: {
   )
 }
 
-function EntryCard({ entry, paused, onOpen }: { entry: NoticeEntry; paused: boolean; onOpen: (target: NoticeTarget) => void }) {
-  const { key, kind, sticky, target } = entry
+function EntryCard({ entry, paused, agents, onOpen, onUndo }: {
+  entry: NoticeEntry
+  paused: boolean
+  agents: readonly AgentConfig[]
+  onOpen: (target: NoticeTarget) => void
+  onUndo: (undo: NonNullable<AppNotice['undo']>) => void
+}) {
+  const { key, kind, sticky, target, undo } = entry
   // A fresh timer each time the pointer leaves: the card gets its full time again
   // after being read, rather than vanishing the moment attention moves on.
   useEffect(() => {
@@ -121,22 +165,29 @@ function EntryCard({ entry, paused, onOpen }: { entry: NoticeEntry; paused: bool
     return () => clearTimeout(timer)
   }, [key, kind, sticky, paused])
   const mark = MARKS[kind]
+  const face = entry.face === undefined ? undefined : agents.find((agent) => agent.id === entry.face)
   return (
     <NoticeCard
-      mark={<Icon icon={mark.icon} size={16} className={mark.tone} />}
+      mark={face === undefined ? <Icon icon={mark.icon} size={16} className={mark.tone} /> : (
+        <span className="grid size-5 place-items-center" title={face.name}>
+          <Avatar name={face.name} color={face.color} src={face.avatar} shape={face.avatarShape} tone={face.avatarTone} size={20} />
+        </span>
+      )}
       title={entry.title}
       body={entry.body}
       alert={kind === 'failed' || kind === 'error' || sticky}
       onDismiss={() => noticeStore.dismiss(key)}
       {...(target === null ? {} : {
-        action: (
-          <Button variant="secondary" size="small" onClick={() => {
-            noticeStore.dismiss(key)
-            onOpen(target)
-          }}>
-            Open
-          </Button>
-        ),
+        onOpen: () => {
+          noticeStore.dismiss(key)
+          onOpen(target)
+        },
+      })}
+      {...(undo === undefined ? {} : {
+        action: <Button size="small" onClick={() => {
+          noticeStore.dismiss(key)
+          onUndo(undo)
+        }}>Undo</Button>,
       })}
     />
   )

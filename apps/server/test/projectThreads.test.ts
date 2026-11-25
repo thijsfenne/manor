@@ -1299,6 +1299,7 @@ describe('sending a follow-up on to a Session', () => {
       text: 'Sent to “Export button”.', hintFor: message.id,
       sessionForward: { sessionChatId: session, title: 'Export button', turnId: 'thread_followup', agentId: '__single__' },
     })
+    expect((await notes(h, h.threadChatId)).at(-1)?.sessionForward?.reopened).toBeUndefined()
     // Once per Session for each of their messages, also by id.
     await expect(h.threads.forwardToSession(context, { session, message: 'Again' })).rejects.toThrow('already went to “Export button”')
     expect(h.queued).toHaveLength(1)
@@ -1312,6 +1313,7 @@ describe('sending a follow-up on to a Session', () => {
     const { context } = await userSays(h, 'One more thing: the label wraps')
     const note = await h.threads.forwardToSession(context, { session, message: 'One more thing: the label wraps' })
     expect(note).toContain('it was settled and is open again')
+    expect((await notes(h, h.threadChatId)).at(-1)?.sessionForward).toMatchObject({ sessionChatId: session, reopened: true })
     expect((await h.store.getChat(session))?.settledAt).toBeNull()
     expect((await h.store.workHandoffForTarget(session))?.state).toBe('active')
     expect((await notes(h, h.threadChatId)).some((event) => event.workHandoffPhase === 'reopened')).toBe(true)

@@ -1,21 +1,26 @@
 import Alert02Icon from '@hugeicons/core-free-icons/Alert02Icon'
+import Brain02Icon from '@hugeicons/core-free-icons/Brain02Icon'
 import BubbleChatIcon from '@hugeicons/core-free-icons/BubbleChatIcon'
 import Cancel01Icon from '@hugeicons/core-free-icons/Cancel01Icon'
 import CheckmarkCircle02Icon from '@hugeicons/core-free-icons/CheckmarkCircle02Icon'
 import DashboardSpeed01Icon from '@hugeicons/core-free-icons/DashboardSpeed01Icon'
+import GitMergeIcon from '@hugeicons/core-free-icons/GitMergeIcon'
+import RefreshIcon from '@hugeicons/core-free-icons/RefreshIcon'
 import Rocket01Icon from '@hugeicons/core-free-icons/Rocket01Icon'
 import TaskDone01Icon from '@hugeicons/core-free-icons/TaskDone01Icon'
 import UserQuestion01Icon from '@hugeicons/core-free-icons/UserQuestion01Icon'
 import { HugeiconsIcon, type IconSvgElement } from '@hugeicons/react-native'
 import { Fragment, useEffect, useSyncExternalStore } from 'react'
-import { AccessibilityInfo, Platform, StyleSheet, View } from 'react-native'
+import { AccessibilityInfo, Platform, Pressable, StyleSheet, View } from 'react-native'
 import Animated from 'react-native-reanimated'
 import { FullWindowOverlay } from 'react-native-screens'
-import { isActionNotice, VISIBLE_NOTICES, type NoticeEntry, type NoticeKind, type NoticeTarget } from '@manor/client-runtime/notices'
+import { actionNotice, isActionNotice, VISIBLE_NOTICES, type NoticeEntry, type NoticeKind, type NoticeTarget } from '@manor/client-runtime/notices'
 import { glassRise, glassSink } from '@/lib/glassMotion'
 import { noticeStore } from '@/lib/notices'
 import { useWindowInsets } from '@/lib/windowInsets'
+import { useWorkspaceActions, useWorkspaceData } from '@/providers/WorkspaceProvider'
 import { colors, fonts, radius, spacing } from '@/theme'
+import { Blobatar } from './Blobatar'
 import { CardButton } from './CardButton'
 import { GlassIconButton } from './GlassIconButton'
 import { GlassSurface } from './GlassSurface'
@@ -38,6 +43,9 @@ const MARKS: Record<NoticeKind, { icon: IconSvgElement; color: typeof colors.ok 
   limit: { icon: DashboardSpeed01Icon, color: colors.warning },
   success: { icon: CheckmarkCircle02Icon, color: colors.ok },
   error: { icon: Alert02Icon, color: colors.danger },
+  memory: { icon: Brain02Icon, color: colors.muted },
+  merged: { icon: GitMergeIcon, color: colors.ok },
+  reopened: { icon: RefreshIcon, color: colors.muted },
 }
 
 /**
@@ -60,36 +68,54 @@ export function NoticeStack({ onOpen }: { onOpen: (target: NoticeTarget) => void
 }
 
 function NoticeCard({ entry, onOpen }: { entry: NoticeEntry; onOpen: (target: NoticeTarget) => void }) {
-  const { key, kind, sticky, target } = entry
+  const { key, kind, sticky, target, undo } = entry
+  const { undoMemoryWrite } = useWorkspaceActions()
+  const face = useWorkspaceData().workspace.agents.find((agent) => agent.id === entry.face)
   useEffect(() => {
     if (sticky) return undefined
     const timer = setTimeout(() => noticeStore.dismiss(key), isActionNotice(kind) ? ACTION_VISIBLE_MS : NEWS_VISIBLE_MS)
     return () => clearTimeout(timer)
   }, [key, kind, sticky])
-  const spoken = entry.body === '' ? entry.title : `${entry.title}. ${entry.body}`
+  // A reply wears the persona's face instead of her name, so the voice still says who.
+  const said = [face?.name, entry.title, entry.body].filter((part) => part !== undefined && part !== '')
+  const spoken = said.join('. ')
   // Read out once as it lands, since a screen reader focused elsewhere would otherwise miss it before it goes.
   useEffect(() => AccessibilityInfo.announceForAccessibility(spoken), [key, spoken])
   const mark = MARKS[kind]
-  // Usage is the header pill's own sheet rather than a place to go, so a limit has no Open.
+  // Usage is the header pill's own sheet rather than a place to go, so a limit opens nothing.
   const opens = target !== null && ('chatId' in target || target.page === 'scheduled') ? target : null
   return (
     <Animated.View entering={glassRise} exiting={glassSink}>
       <GlassSurface radius={radius.panel} fallbackStyle={styles.fallback}>
         <View style={styles.row}>
-          <HugeiconsIcon icon={mark.icon} size={20} color={mark.color} strokeWidth={1.8} />
-          <View
-            accessible
-            accessibilityRole={kind === 'failed' || kind === 'error' || sticky ? 'alert' : 'summary'}
+          {/* The whole card opens what it is about; Undo and close are its only other buttons. */}
+          <Pressable
+            disabled={opens === null}
+            accessibilityRole={opens === null ? (kind === 'failed' || kind === 'error' || sticky ? 'alert' : 'summary') : 'button'}
             accessibilityLabel={spoken}
-            style={styles.text}
-          >
-            <Text numberOfLines={1} style={styles.title}>{entry.title}</Text>
-            {entry.body === '' ? null : <Text numberOfLines={1} style={styles.body}>{entry.body}</Text>}
-          </View>
-          {opens === null ? null : (
-            <CardButton label="Open" onPress={() => {
+            {...(opens === null ? {} : { accessibilityHint: 'Opens the chat' })}
+            onPress={() => {
+              if (opens === null) return
               noticeStore.dismiss(key)
               onOpen(opens)
+            }}
+            style={({ pressed }) => [styles.open, pressed && opens !== null && styles.pressed]}
+          >
+            {face === undefined ? <HugeiconsIcon icon={mark.icon} size={20} color={mark.color} strokeWidth={1.8} /> : (
+              <Blobatar name={face.name} color={face.color} src={face.avatar} shape={face.avatarShape} tone={face.avatarTone} size={24} />
+            )}
+            <View style={styles.text}>
+              <Text numberOfLines={1} style={styles.title}>{entry.title}</Text>
+              {entry.body === '' ? null : <Text numberOfLines={1} style={styles.body}>{entry.body}</Text>}
+            </View>
+          </Pressable>
+          {undo === undefined ? null : (
+            <CardButton label="Undo" onPress={() => {
+              noticeStore.dismiss(key)
+              undoMemoryWrite(undo.chatId, undo.writeId).then(
+                () => noticeStore.push(actionNotice('success', 'Undone')),
+                (error: unknown) => noticeStore.push(actionNotice('error', error instanceof Error ? error.message : 'Could not undo')),
+              )
             }} />
           )}
           <GlassIconButton accessibilityLabel="Dismiss" icon={Cancel01Icon} size={36} iconSize={16} onPress={() => noticeStore.dismiss(key)} />
@@ -109,8 +135,11 @@ const styles = StyleSheet.create({
     shadowRadius: 16,
     elevation: 6,
   },
-  row: { minHeight: 56, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingVertical: spacing.sm, paddingLeft: spacing.md, paddingRight: spacing.sm },
+  row: { minHeight: 56, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingRight: spacing.sm },
+  // The card's left and vertical padding sit inside the press area, so a tap on the edge opens too.
+  open: { flex: 1, minWidth: 0, alignSelf: 'stretch', flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingVertical: spacing.sm, paddingLeft: spacing.md },
+  pressed: { opacity: 0.6 },
   text: { flex: 1, minWidth: 0 },
-  title: { color: colors.text, fontFamily: fonts.sans, fontSize: 15 },
-  body: { color: colors.muted, fontFamily: fonts.sans, fontSize: 13 },
+  title: { color: colors.text, fontFamily: fonts.sans, fontSize: 14, lineHeight: 18 },
+  body: { color: colors.muted, fontFamily: fonts.sans, fontSize: 12, lineHeight: 16 },
 })

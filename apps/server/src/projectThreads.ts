@@ -697,7 +697,7 @@ export class ProjectThreads {
         kind: 'info',
         text: `Sent to “${title}”.`,
         hintFor: source.id,
-        sessionForward: { sessionChatId: target.chat.id, title, turnId: context.turnId, agentId: context.agentId },
+        sessionForward: { sessionChatId: target.chat.id, title, turnId: context.turnId, agentId: context.agentId, ...(reopened ? { reopened: true as const } : {}) },
       })
       return `Sent to “${title}” as the user's message${reopened ? '; it was settled and is open again' : ''}. Say so in one sentence that names the Session; its link shows under your reply. Start no Session for this.`
     } finally {

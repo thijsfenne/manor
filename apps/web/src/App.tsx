@@ -752,7 +752,9 @@ function Workspace({
           Settings is open is seen and can be reached. */}
       <NoticeStack
         house={houseNotices}
+        agents={workspace.agents}
         onOpen={openNoticeTarget}
+        onUndo={(undo) => manor.undoNoticeWrite(undo.chatId, undo.writeId)}
         className={phone ? 'inset-x-2 top-2 items-center' : 'items-end'}
         {...(phone ? {} : { style: { top: TOP_BAR_HEIGHT + 8, right: FRAME_GUTTER + 8 } })}
       />

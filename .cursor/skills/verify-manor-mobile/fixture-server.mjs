@@ -1148,6 +1148,12 @@ function reply(chatId, agentId, text, images = [], quotes = []) {
     broadcast({ type: 'turn_state', chatId, turnId, agentId, state: 'done' })
     dispatch('completed')
   })
+  // "mock rule: <line>" in Marlow's DM saves the line to the persona's notes, with the Undo a real `update_notes` carries.
+  const rule = /^mock rule:\s*(.+)/i.exec(text)?.[1]?.trim()
+  if (rule !== undefined && chatId === 'chat-dm-marlow') {
+    at(14_600, () => record({ id: `${id}-memory`, ts: Date.now(), type: 'system_note', kind: 'info', text: rule,
+      projectFileWrite: { file: `${agentId}.md`, action: 'add', line: rule, by: 'Marlow', turnId, agentId, writeId: `${id}-write` } }))
+  }
   // A reply in the Stilte thread proposes a Session, the way a real thread does, so a card
   // arrives while the user sits at the bottom. `kill -HUP` moves it on (see below).
   if (chatId === 'chat-thread-stilte') at(15_000, () => proposeLive(id, record))
@@ -2039,6 +2045,17 @@ server.on('connection', (socket) => {
     if (message.type === 'revise_work_goal') {
       const images = Array.isArray(message.images) ? message.images : []
       console.log(`revise_work_goal ${message.handoffId} textLength=${String(message.text ?? '').length} images=${images.map((image) => `${image?.name}:${String(image?.dataUrl ?? '').length}`).join(',') || 'none'}`)
+    }
+    if (message.type === 'undo_memory_write') {
+      const write = typeof message.writeId === 'string' ? (snapshots[message.chatId] ?? []).find((event) => event.projectFileWrite?.writeId === message.writeId) : undefined
+      // As the real server does, a line that is gone or already undone is refused rather than acknowledged.
+      if (write === undefined || write.projectFileWrite.undone === true) {
+        send(socket, { type: 'notice', kind: 'error', text: 'That line changed since, so it cannot be undone.', requestId: message.requestId })
+        return
+      }
+      const undone = { ...write, projectFileWrite: { ...write.projectFileWrite, undone: true } }
+      snapshots[message.chatId] = snapshots[message.chatId].map((event) => event === write ? undone : event)
+      broadcast({ type: 'event', chatId: message.chatId, event: undone })
     }
     const command = message.type === 'send_message' ? chatCommandOf(message) : undefined
     if (command !== undefined) runCommand(message.chatId, command)

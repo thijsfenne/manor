@@ -2642,6 +2642,8 @@ export const SystemNoteEventSchema = z.object({
     title: z.string().max(200),
     turnId: z.string(),
     agentId: z.string(),
+    // The Session was settled and this message opened it again, which the user did not do in it themselves.
+    reopened: z.literal(true).optional(),
   }).optional(),
   // A preference or note reported to the thread by someone who may not write its files.
   projectReport: z.object({
