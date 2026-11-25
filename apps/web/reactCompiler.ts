@@ -89,7 +89,7 @@ export const PURE_MODULES: Readonly<Record<string, { file: string; functions: re
       'runtimeStartedAgentIds', 'sessionLiveOf', 'sessionReadyRow', 'sessionThreadOf',
       'setThreadBundleOpen', 'sitsSettled', 'stackedConsultationMarkers', 'streamedMessages',
       'threadBundleOpen', 'threadBundleOpenItems', 'threadOf', 'threadQuestionAdvice',
-      'threadSpacing', 'threadStretch', 'unannouncedConsultations', 'withSessionTitle',
+      'threadSpacing', 'threadStretch', 'withSessionTitle',
       'workCardInView', 'workConfirmTitle', 'workResultActionLabels',
     ],
   },

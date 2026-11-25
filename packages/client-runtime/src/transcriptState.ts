@@ -668,52 +668,10 @@ export function consultationsByTurn(rows: readonly Row[]): ReadonlyMap<string, r
   return byTurn
 }
 
-/** A consultation its own turn never mentioned, so the marker has to say it. */
-export interface UnannouncedConsultation {
-  relayId: string
-  agentId: string
-  /** The first line of the question, as the sent marker stored it. */
-  question: string
-  /** Until the matching reply or failure lands, the marker says one is coming. */
-  replyPending: boolean
-}
-
-/**
- * Outgoing consultations whose asking turn finished without a word of its own, keyed by
- * that turn's id. The prompt asks every persona to say whom it asked and why, but no
- * driver guarantees it; this lets the marker carry the question instead. A turn that
- * did acknowledge leaves no entry, so the question is never shown twice.
- */
-export function unannouncedConsultations(rows: readonly Row[]): ReadonlyMap<string, readonly UnannouncedConsultation[]> {
-  const silentTurns = new Set<string>()
-  const answered = new Set<string>()
-  for (const row of rows) {
-    if (row.kind === 'turn' && row.live === undefined && row.answer.length === 0) silentTurns.add(`${row.turnId}\0${row.agentId}`)
-    if (row.kind === 'event' && row.event.type === 'agent_relay' && row.event.phase !== 'sent') answered.add(row.event.relayId)
-  }
-  const byTurn = new Map<string, UnannouncedConsultation[]>()
-  for (const row of rows) {
-    if (row.kind !== 'event' || row.event.type !== 'agent_relay' || row.event.phase !== 'sent') continue
-    const event = row.event
-    if (event.preview === undefined || !silentTurns.has(`${event.turnId}\0${event.agentId}`)) continue
-    const consultations = byTurn.get(event.turnId) ?? []
-    if (consultations.some((consultation) => consultation.relayId === event.relayId)) continue
-    consultations.push({
-      relayId: event.relayId,
-      agentId: event.peerAgentId,
-      question: event.preview,
-      replyPending: !answered.has(event.relayId),
-    })
-    byTurn.set(event.turnId, consultations)
-  }
-  return byTurn
-}
-
 /** One agent's messages both ways within one exchange, drawn as a single "N messages with" line. */
 export interface RelayExchange extends TurnConsultation {
   /** Distinct messages: each sent and each received relay counts once. */
   count: number
-  relayIds: readonly string[]
 }
 
 /** The words before a relay marker's face: "Messaged", "Message from", or an exchange's "3 messages with". */
@@ -747,7 +705,6 @@ export function relayExchanges(rows: readonly Row[]): ReadonlyMap<string, RelayE
         agentId: first.peerAgentId,
         pairChatId: first.pairChatId,
         count: messages.size,
-        relayIds: [...new Set(events.map((event) => event.relayId))],
       })
       for (const event of events.slice(1)) exchanges.set(event.id, null)
     }

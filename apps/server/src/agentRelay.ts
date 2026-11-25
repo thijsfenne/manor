@@ -255,7 +255,7 @@ export class AgentRelay {
                 turnId: context.turnId,
                 relayId,
                 phase: 'sent',
-                // The marker states the question itself when the asking turn says nothing.
+                // The single marker's hover title shows the question.
                 ...(preview(text).length === 0 ? {} : { preview: preview(text) }),
               })
               await this.options.runtime.append(targetDm.id, {

@@ -939,7 +939,7 @@ const snapshots = {
     { id: 'w1', ts: now - 600 * 60_000, type: 'user_message', text: 'Hoi Wren, dit is een oud DM-bericht.', mentions: [] },
     { id: 'w2', ts: now - 599 * 60_000, type: 'agent_message', agentId: 'agent-wren', turnId: 'turn-old', text: 'Oud antwoord van Wren.' },
     // Two consultations: one the turn announced and Sage answered, then one that ended
-    // silent with its reply still out, so the marker states the question itself.
+    // silent with its reply still out, which draws its marker alone.
     ...consultation('wa', 598, 'agent-sage', 'Klopt de release note met de changelog?', 'Ik vraag Sage of de release note klopt; haar antwoord volgt.'),
     { id: 'wa-received', ts: now - 597 * 60_000, type: 'agent_relay', agentId: 'agent-wren', peerAgentId: 'agent-sage', pairChatId: 'pair-wren-agent-sage',
       turnId: 'turn-wa', relayId: 'relay-wa', phase: 'received', preview: 'Ja, op de datumlabels na.' },

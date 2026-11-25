@@ -29,7 +29,6 @@ import {
   relayExchanges,
   relayMarkerAction,
   dmMemoryMarks,
-  unannouncedConsultations,
   workCardInView,
   type RelayExchange,
   type Row,
@@ -38,7 +37,6 @@ import {
   type TurnRow as TurnRowState,
   type TurnConsultation,
   type TurnStanding,
-  type UnannouncedConsultation,
   messageBrief,
   threadSpacing,
   streamedMessages,
@@ -344,7 +342,6 @@ export function Transcript({
   const memoryMarks = bubbleReplies ? dmMemoryMarks(rows) : undefined
   const exchanges = bubbleReplies && onOpenAgentRelay !== undefined ? relayExchanges(rows) : NO_EXCHANGES
   const consultationMarkers = bubbleReplies && onOpenAgentRelay !== undefined ? stackedConsultationMarkers(rows, exchanges) : NO_CONSULTATION_MARKERS
-  const unannounced = unannouncedConsultations(rows)
   const visibleRows = rows.filter((row) => row.kind === 'event'
     ? consultationMarkers.get(row.event.id)?.length !== 0 && exchanges.get(row.event.id) !== null
     : !(bubbleReplies && row.kind === 'turn' && onlyConsulted(row)))
@@ -695,9 +692,6 @@ export function Transcript({
   /** One row as it stands in the feed; a bundle draws its items through the same function. */
   const renderRow = (row: Row): ReactNode => {
     const consultationMarker = row.kind === 'event' ? consultationMarkers.get(row.event.id) : undefined
-    const unannouncedHere = row.kind === 'event' && row.event.type === 'agent_relay' && row.event.phase === 'sent'
-      ? unannounced.get(row.event.turnId)
-      : undefined
     const exchange = row.kind === 'event' ? exchanges.get(row.event.id) : undefined
     return row.kind === 'event' && row.event.type === 'agent_relay' && exchange != null ? (
       <RelayMarker
@@ -705,7 +699,6 @@ export function Transcript({
         exchange={exchange}
         agents={agents}
         onOpen={onOpenAgentRelay}
-        {...(unannouncedHere === undefined ? {} : { unannounced: unannouncedHere })}
       />
     ) : row.kind === 'event' && row.event.type === 'agent_relay' && consultationMarker !== undefined && onOpenAgentRelay !== undefined ? (
       <ConsultedAgents
@@ -713,7 +706,6 @@ export function Transcript({
         consultations={consultationMarker}
         agents={agents}
         onOpen={onOpenAgentRelay}
-        {...(unannouncedHere === undefined ? {} : { unannounced: unannouncedHere })}
       />
     ) : row.kind === 'event' ? (
       <EventRow
@@ -727,7 +719,6 @@ export function Transcript({
         onOpenAgentRelay={onOpenAgentRelay}
         {...(forwardSource === undefined ? {} : { forwardSource })}
         onOpenQuoteSource={stableOpenQuoteSource}
-        {...(unannouncedHere === undefined ? {} : { unannounced: unannouncedHere })}
         {...(isolation?.rowKey === row.key ? { isolatedBranch: isolation.branch } : {})}
         {...(taskRole === undefined ? {} : { taskRole })}
       />
@@ -999,7 +990,6 @@ const EventRow = memo(function EventRow({
   onOpenAgentRelay,
   forwardSource,
   onOpenQuoteSource,
-  unannounced,
   isolatedBranch,
   taskRole,
 }: {
@@ -1013,7 +1003,6 @@ const EventRow = memo(function EventRow({
   onOpenAgentRelay?: (chatId: string) => void
   forwardSource?: string
   onOpenQuoteSource?: (eventId: string) => void
-  unannounced?: readonly UnannouncedConsultation[]
   /** An isolated Session's first brief: the branch shown above it. */
   isolatedBranch?: string
   /** A helper's role, which its task card carries above the task. */
@@ -1098,14 +1087,7 @@ const EventRow = memo(function EventRow({
       if (event.projectFileWrite !== undefined) return <ProjectFileWriteCard write={event.projectFileWrite} projectName={threadProject?.name} />
       return <SystemLine kind={event.kind} text={event.text} {...(answerChange?.ids.has(event.id) === true ? { action: { label: OTHER_ANSWER, onClick: () => answerChange.onChange(event.id) } } : {})} />
     case 'agent_relay':
-      return (
-        <RelayMarker
-          event={event}
-          agents={agents}
-          onOpen={onOpenAgentRelay}
-          {...(unannounced === undefined ? {} : { unannounced })}
-        />
-      )
+      return <RelayMarker event={event} agents={agents} onOpen={onOpenAgentRelay} />
   }
 })
 
@@ -1130,18 +1112,14 @@ function RelayMarker({
   exchange,
   agents,
   onOpen,
-  unannounced,
 }: {
   event: Extract<Extract<Row, { kind: 'event' }>['event'], { type: 'agent_relay' }>
   /** Set when this marker stands for the agent's whole exchange: "N messages with". */
   exchange?: RelayExchange
   agents: AgentConfig[]
   onOpen?: (chatId: string, checkout?: CheckoutRequest) => Promise<void> | void
-  /** Set when the asking turn said nothing, so this marker states the question. */
-  unannounced?: readonly UnannouncedConsultation[]
 }) {
   const peer = personaOf(agents, event.peerAgentId)
-  const consultation = unannounced?.find((entry) => exchange === undefined ? entry.relayId === event.relayId : exchange.relayIds.includes(entry.relayId))
   const action = relayMarkerAction(event.phase, exchange)
   const label = event.phase === 'failed' && exchange === undefined ? `Message from ${peer.name} failed` : `${action} ${peer.name}`
   return (
@@ -1159,35 +1137,7 @@ function RelayMarker({
         <span>{peer.name}</span>
       </button>
       <span className="sr-only">{label}</span>
-      {consultation === undefined ? null : <ConsultationExcerpt question={consultation.question} replyPending={consultation.replyPending} />}
     </div>
-  )
-}
-
-/**
- * The question a silent turn asked, one muted line under its marker. It opens to the
- * whole first line in place; "reply follows" stays until the reply's marker lands.
- */
-function ConsultationExcerpt({ question, replyPending }: { question: string; replyPending: boolean }) {
-  const [open, setOpen] = useState(false)
-  const follows = replyPending ? ', reply follows' : ''
-  return (
-    <button
-      type="button"
-      aria-expanded={open}
-      aria-label={`Question: ${question}${follows}`}
-      onClick={() => setOpen((value) => !value)}
-      className="flex max-w-[min(100%,520px)] cursor-pointer rounded-md border-0 bg-transparent px-2 pb-1 text-[12px] leading-[16px] text-dim [font-family:inherit] hover:text-muted"
-    >
-      {open ? (
-        <span className="text-center">“{question}”{follows}</span>
-      ) : (
-        <>
-          <span className="min-w-0 truncate">“{question}”</span>
-          {replyPending ? <span className="shrink-0">, reply follows</span> : null}
-        </>
-      )}
-    </button>
   )
 }
 
@@ -1474,14 +1424,11 @@ function ConsultedAgents({
   consultations,
   agents,
   onOpen,
-  unannounced,
 }: {
   action: 'Messaged' | 'Message from'
   consultations: readonly TurnConsultation[]
   agents: AgentConfig[]
   onOpen: (chatId: string) => void
-  /** Set when the asking turn said nothing: the menu then names each question. */
-  unannounced?: readonly UnannouncedConsultation[]
 }) {
   const triggerRef = useRef<HTMLButtonElement>(null)
   const menuRef = useRef<HTMLDivElement>(null)
@@ -1498,8 +1445,6 @@ function ConsultedAgents({
   const agentIds = consultations.map((consultation) => consultation.agentId)
   const names = agentIds.map((agentId) => personaOf(agents, agentId).name)
   const count = consultations.length
-  const questionOf = (agentId: string) => unannounced?.find((entry) => entry.agentId === agentId)
-  const repliesFollow = unannounced?.some((entry) => entry.replyPending) === true
 
   useLayoutEffect(() => {
     const trigger = triggerRef.current
@@ -1508,8 +1453,8 @@ function ConsultedAgents({
     setPlacement(placeConsultedMenu(trigger.getBoundingClientRect(), region, {
       width: window.innerWidth,
       height: window.innerHeight,
-    }, count, unannounced === undefined ? CONSULTED_MENU_ROW_HEIGHT : CONSULTED_MENU_QUESTION_ROW_HEIGHT))
-  }, [count, open, unannounced])
+    }, count))
+  }, [count, open])
 
   const toggle = () => {
     if (open) {
@@ -1527,13 +1472,13 @@ function ConsultedAgents({
         type="button"
         aria-expanded={open}
         aria-haspopup="menu"
-        aria-label={`${action} ${names.join(', ')}${repliesFollow ? ', replies follow' : ''}`}
+        aria-label={`${action} ${names.join(', ')}`}
         className="flex cursor-pointer items-center gap-1 rounded-md border-0 bg-transparent px-2 py-1 text-[12px] leading-[16px] text-dim [font-family:inherit] hover:bg-surface-2 hover:text-muted"
         onClick={toggle}
       >
         <span>{action}</span>
         <AgentStack agentIds={agentIds} agents={agents} size={14} />
-        <span>{count} {count === 1 ? 'agent' : 'agents'}{repliesFollow ? ', replies follow' : ''}</span>
+        <span>{count} {count === 1 ? 'agent' : 'agents'}</span>
       </button>
       {!mounted || typeof document === 'undefined'
         ? null
@@ -1557,7 +1502,6 @@ function ConsultedAgents({
             >
               {consultations.map((consultation) => {
                 const persona = personaOf(agents, consultation.agentId)
-                const question = questionOf(consultation.agentId)?.question
                 return (
                   <li key={consultation.agentId}>
                     <button
@@ -1570,14 +1514,7 @@ function ConsultedAgents({
                       }}
                     >
                       <Avatar name={persona.name} color={persona.color} src={persona.avatar} shape={persona.avatarShape} tone={persona.avatarTone} size={24} />
-                      {question === undefined ? (
-                        <span className="min-w-0 flex-1 truncate">{persona.name}</span>
-                      ) : (
-                        <span className="flex min-w-0 flex-1 flex-col" title={question}>
-                          <span className="truncate">{persona.name}</span>
-                          <span className="truncate text-[12px] leading-[16px] text-dim">“{question}”</span>
-                        </span>
-                      )}
+                      <span className="min-w-0 flex-1 truncate">{persona.name}</span>
                     </button>
                   </li>
                 )
@@ -1593,7 +1530,6 @@ const CONSULTED_MENU_WIDTH = 220
 const CONSULTED_MENU_GAP = 6
 const CONSULTED_MENU_INSET = 8
 const CONSULTED_MENU_ROW_HEIGHT = 40
-const CONSULTED_MENU_QUESTION_ROW_HEIGHT = 56
 const CONSULTED_MENU_PADDING = 12
 
 interface ConsultedMenuBox {
@@ -1618,14 +1554,13 @@ export function placeConsultedMenu(
   region: ConsultedMenuBox | null,
   viewport: { width: number; height: number },
   count: number,
-  rowHeight = CONSULTED_MENU_ROW_HEIGHT,
 ): ConsultedMenuPlacement {
   const leftEdge = Math.max(CONSULTED_MENU_INSET, region?.left ?? 0)
   const rightEdge = Math.min(viewport.width - CONSULTED_MENU_INSET, region?.right ?? viewport.width)
   const topEdge = Math.max(CONSULTED_MENU_INSET, region?.top ?? 0)
   const bottomEdge = Math.min(viewport.height - CONSULTED_MENU_INSET, region?.bottom ?? viewport.height)
   const width = Math.min(CONSULTED_MENU_WIDTH, rightEdge - leftEdge)
-  const desiredHeight = count * rowHeight + CONSULTED_MENU_PADDING
+  const desiredHeight = count * CONSULTED_MENU_ROW_HEIGHT + CONSULTED_MENU_PADDING
   const above = trigger.top - CONSULTED_MENU_GAP - topEdge
   const below = bottomEdge - trigger.bottom - CONSULTED_MENU_GAP
   const upward = below < desiredHeight && above > below

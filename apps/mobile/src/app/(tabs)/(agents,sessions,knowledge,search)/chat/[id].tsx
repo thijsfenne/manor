@@ -24,8 +24,8 @@ import { chatSubagents, chatWaitsOnBackground, dmWorking, runningSubagents } fro
 import { chatFallbackTargets, composerRecipients, composerShowsRecipients, replyFallbackTargets, roomAgents } from '@manor/client-runtime/mentions'
 import { chatChangedFiles, resolveMarkdownRepoLink } from '@manor/client-runtime/changed-files'
 import { defaultSingleRuntime, effectiveDriver, isAutoPending, readSingleRuntime, runtimeLabel, runtimeParts, singleChatOverride, singleRuntimeVoice } from '@manor/client-runtime/runtime-choices'
-import type { ChangeableAnswer, OpenAsk, PendingDocument, QuietWorkspace, RelayExchange, Row, SessionLink, ThreadShape, TurnConsultation, TurnRow, UnannouncedConsultation, WorkHandoffRow } from '@manor/client-runtime/state'
-import { activityOf, chatOf, dmMemoryMarks, isHomeRoom, isProjectThread, roomOf, sitsSettled, messageBrief, projectSessionOverview, sessionsDot, openAsk, sessionLiveOf, threadQuestionIn, openSubagentQuestion, subagentSummaryOf, changeableAnswers, personaOf, projectWorkHandoffs, repoListingKey, rowHasQuoteSource, rowsOf, createRowMemory, createValueMemory, feedIndexOf, NO_OPEN_THREAD_BUNDLES, openThreadBundleAt, setThreadBundleOpen, threadBundleOpen, threadBundleOpenItems, threadStretch, onlyConsulted, runtimeStartedAgentIds, sessionReadyRow, sessionThreadOf, stackedConsultationMarkers, relayExchanges, relayMarkerAction, projectThreadFeed, threadQuestionAdvice, threadOf, withSessionTitle, threadSpacing, unannouncedConsultations, workDecisionOpen, type ScreenSpan } from '@manor/client-runtime/state'
+import type { ChangeableAnswer, OpenAsk, PendingDocument, QuietWorkspace, RelayExchange, Row, SessionLink, ThreadShape, TurnConsultation, TurnRow, WorkHandoffRow } from '@manor/client-runtime/state'
+import { activityOf, chatOf, dmMemoryMarks, isHomeRoom, isProjectThread, roomOf, sitsSettled, messageBrief, projectSessionOverview, sessionsDot, openAsk, sessionLiveOf, threadQuestionIn, openSubagentQuestion, subagentSummaryOf, changeableAnswers, personaOf, projectWorkHandoffs, repoListingKey, rowHasQuoteSource, rowsOf, createRowMemory, createValueMemory, feedIndexOf, NO_OPEN_THREAD_BUNDLES, openThreadBundleAt, setThreadBundleOpen, threadBundleOpen, threadBundleOpenItems, threadStretch, onlyConsulted, runtimeStartedAgentIds, sessionReadyRow, sessionThreadOf, stackedConsultationMarkers, relayExchanges, relayMarkerAction, projectThreadFeed, threadQuestionAdvice, threadOf, withSessionTitle, threadSpacing, workDecisionOpen, type ScreenSpan } from '@manor/client-runtime/state'
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router'
 import { KeyboardAwareLegendList, useKeyboardScrollToEnd } from '@legendapp/list/keyboard'
 import { dateDividers } from '@manor/client-runtime/date-dividers'
@@ -1398,7 +1398,6 @@ function LiveTranscript({
   const { rows, consultationMarkers, exchanges, visibleRows } = useTranscriptRows(thread, workspace, chatId, projectThread, sessionLive)
   // In a DM, memory writes are reached through a reply's long-press actions only.
   const memoryMarks = useMemo(() => chatKind === 'dm' ? dmMemoryMarks(rows) : undefined, [chatKind, rows])
-  const unannounced = useMemo(() => unannouncedConsultations(rows), [rows])
   const historyOffset = historyStart(visibleRows, firstKey)
   const pageRows = useMemo(() => visibleRows.slice(historyOffset), [visibleRows, historyOffset])
   // A sent message keeps its pending row's list key once stored. Updated while rendering,
@@ -1484,7 +1483,6 @@ function LiveTranscript({
     waitingOnByTurn: Map<string, string>
     consultationMarkers: ReturnType<typeof stackedConsultationMarkers>
     exchanges: ReturnType<typeof relayExchanges>
-    unannounced: ReturnType<typeof unannouncedConsultations>
     memoryMarks: ReturnType<typeof dmMemoryMarks> | undefined
     stretch: string
   }>())
@@ -1502,10 +1500,9 @@ function LiveTranscript({
     waitingOnByTurn,
     consultationMarkers,
     exchanges,
-    unannounced,
     memoryMarks,
     stretch,
-  }), [aroundMemory, consultationMarkers, dateLabels, exchanges, memoryMarks, pageRows, projectThread, stretch, unannounced, waitingOnByTurn])
+  }), [aroundMemory, consultationMarkers, dateLabels, exchanges, memoryMarks, pageRows, projectThread, stretch, waitingOnByTurn])
   // An isolated Session names its branch above its opening brief, which a later `/goal` brief is not.
   const isolatedBranch = chat?.kind === 'project' && chat.checkout.mode === 'worktree' ? chat.checkout.branch ?? undefined : undefined
   const opening = isolatedBranch === undefined ? undefined : rows.find((row) => row.kind === 'event' && row.event.type === 'user_message')
@@ -1547,7 +1544,6 @@ function LiveTranscript({
       waitingOnAgentId={item.kind === 'turn' ? around.waitingOnByTurn.get(item.turnId) : undefined}
       consultationMarker={item.kind === 'event' ? around.consultationMarkers.get(item.event.id) : undefined}
       exchange={item.kind === 'event' ? around.exchanges.get(item.event.id) ?? undefined : undefined}
-      unannounced={item.kind === 'event' && item.event.type === 'agent_relay' && item.event.phase === 'sent' ? around.unannounced.get(item.event.turnId) : undefined}
       relayOffset={around.places.get(item.key)?.relayOffset}
       {...(around.places.get(item.key)?.threadOffset === undefined ? {} : { threadOffset: around.places.get(item.key)?.threadOffset })}
       onOpenAgentRelay={onOpenAgentRelay}
@@ -1677,8 +1673,6 @@ interface TranscriptRowProps {
   consultationMarker?: readonly TurnConsultation[]
   /** Set when this relay marker stands for the agent's whole exchange: "N messages with". */
   exchange?: RelayExchange | undefined
-  /** Set when the asking turn said nothing, so the marker states the question. */
-  unannounced?: readonly UnannouncedConsultation[] | undefined
   relayOffset?: number | undefined
   /** In a project thread: where this row sits against the one above, set by `threadSpacing`. */
   threadOffset?: number | undefined
@@ -1728,7 +1722,6 @@ const TranscriptRow = memo(function TranscriptRowBody(props: TranscriptRowProps)
     waitingOnAgentId,
     consultationMarker,
     exchange,
-    unannounced,
     relayOffset,
     threadOffset,
     onOpenAgentRelay,
@@ -1838,7 +1831,6 @@ const TranscriptRow = memo(function TranscriptRowBody(props: TranscriptRowProps)
             threadOffset={undefined}
             waitingOnAgentId={undefined}
             consultationMarker={undefined}
-            unannounced={undefined}
             memoryChanges={undefined}
           />
         )}
@@ -1866,11 +1858,10 @@ const TranscriptRow = memo(function TranscriptRowBody(props: TranscriptRowProps)
             consultations={consultationMarker}
             agents={agents}
             onOpen={onOpenAgentRelay}
-            {...(unannounced === undefined ? {} : { unannounced })}
           />
         )
       }
-      return <RelayMarker agents={agents} event={row.event} onOpen={onOpenAgentRelay} {...(exchange === undefined ? {} : { exchange })} {...(unannounced === undefined ? {} : { unannounced })} />
+      return <RelayMarker agents={agents} event={row.event} onOpen={onOpenAgentRelay} {...(exchange === undefined ? {} : { exchange })} />
     }
     if (row.event.projectFileWrite !== undefined) return <ProjectFileWriteCard write={row.event.projectFileWrite} projectName={threadProject?.name} />
     return <NoteLine event={row.event} />
@@ -1950,17 +1941,14 @@ function RelayMarker({
   exchange,
   agents,
   onOpen,
-  unannounced,
 }: {
   event: Extract<Extract<Row, { kind: 'event' }>['event'], { type: 'agent_relay' }>
   exchange?: RelayExchange
   agents: AgentConfig[]
   onOpen: (chatId: string) => void
-  unannounced?: readonly UnannouncedConsultation[]
 }) {
   const peer = personaOf(agents, event.peerAgentId)
   const action = relayMarkerAction(event.phase, exchange)
-  const consultation = unannounced?.find((entry) => exchange === undefined ? entry.relayId === event.relayId : exchange.relayIds.includes(entry.relayId))
   return (
     <View style={styles.relayColumn}>
       <Pressable
@@ -1973,36 +1961,7 @@ function RelayMarker({
         <Blobatar color={peer.color} name={peer.name} shape={peer.avatarShape} tone={peer.avatarTone} size={13} src={peer.avatar} />
         <Text style={styles.relayMarkerText}>{peer.name}</Text>
       </Pressable>
-      {consultation === undefined ? null : <ConsultationExcerpt question={consultation.question} replyPending={consultation.replyPending} />}
     </View>
-  )
-}
-
-/**
- * The question a silent turn asked, one muted line under its marker. A tap opens the
- * whole first line in place; "reply follows" stays until the reply's marker lands.
- */
-function ConsultationExcerpt({ question, replyPending }: { question: string; replyPending: boolean }) {
-  const [open, setOpen] = useState(false)
-  const follows = replyPending ? ', reply follows' : ''
-  return (
-    <Pressable
-      accessibilityLabel={`Question: ${question}${follows}`}
-      accessibilityRole="button"
-      accessibilityState={{ expanded: open }}
-      hitSlop={4}
-      onPress={() => setOpen((value) => !value)}
-      style={styles.relayExcerpt}
-    >
-      {open ? (
-        <Text style={[styles.relayExcerptText, styles.relayExcerptOpen]}>“{question}”{follows}</Text>
-      ) : (
-        <>
-          <Text numberOfLines={1} style={[styles.relayExcerptText, styles.relayExcerptShrink]}>“{question}”</Text>
-          {follows.length === 0 ? null : <Text style={styles.relayExcerptText}>{follows}</Text>}
-        </>
-      )}
-    </Pressable>
   )
 }
 
@@ -2118,10 +2077,6 @@ const styles = StyleSheet.create({
   relayMarker: { alignSelf: 'center', flexDirection: 'row', alignItems: 'center', gap: 4, borderRadius: radius.sm, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs },
   relayMarkerText: { color: colors.dim, fontFamily: fonts.sans, fontSize: 12, lineHeight: 16 },
   relayColumn: { alignItems: 'center' },
-  relayExcerpt: { maxWidth: '100%', flexDirection: 'row', paddingHorizontal: spacing.sm, paddingBottom: spacing.xs },
-  relayExcerptText: { color: colors.dim, fontFamily: fonts.sans, fontSize: 12, lineHeight: 16 },
-  relayExcerptShrink: { flexShrink: 1 },
-  relayExcerptOpen: { flexShrink: 1, textAlign: 'center' },
   error: { color: colors.danger },
   footer: { position: 'absolute', right: 0, bottom: 0, left: 0 },
   // Hangs from the top of the pill row, so it rests above the pill or, without one, just

@@ -28,7 +28,6 @@ import {
   type ToolStep,
   type TurnActivity as TurnStep,
   type TurnConsultation,
-  type UnannouncedConsultation,
   type Row,
   type TurnRow,
 } from '@manor/client-runtime/state'
@@ -441,14 +440,11 @@ export function ConsultedAgents({
   consultations,
   agents,
   onOpen,
-  unannounced,
 }: {
   action: 'Messaged' | 'Message from'
   consultations: readonly TurnConsultation[]
   agents: AgentConfig[]
   onOpen: (chatId: string) => void
-  /** Set when the asking turn said nothing: the menu then names each question. */
-  unannounced?: readonly UnannouncedConsultation[]
 }) {
   const triggerRef = useRef<View>(null)
   const [anchor, setAnchor] = useState<{ top: number; right: number } | null>(null)
@@ -457,11 +453,10 @@ export function ConsultedAgents({
   const agentIds = consultations.map((consultation) => consultation.agentId)
   const names = agentIds.map((agentId) => personaOf(agents, agentId).name)
   const count = consultations.length
-  const repliesFollow = unannounced?.some((entry) => entry.replyPending) === true
 
   const show = () => {
     triggerRef.current?.measureInWindow((x, y, measuredWidth, measuredHeight) => {
-      const menuHeight = consultations.length * (unannounced === undefined ? 52 : 64) + spacing.sm * 2
+      const menuHeight = consultations.length * 52 + spacing.sm * 2
       const below = y + measuredHeight + spacing.xs
       const top = below + menuHeight <= height - insets.bottom - spacing.md
         ? below
@@ -473,7 +468,7 @@ export function ConsultedAgents({
   return (
     <>
       <Pressable
-        accessibilityLabel={`${action} ${names.join(', ')}${repliesFollow ? ', replies follow' : ''}`}
+        accessibilityLabel={`${action} ${names.join(', ')}`}
         accessibilityRole="button"
         accessibilityState={{ expanded: anchor !== null }}
         onPress={show}
@@ -482,7 +477,7 @@ export function ConsultedAgents({
       >
         <Text style={styles.consultedText}>{action}</Text>
         <AgentStack agentIds={agentIds} agents={agents} size={14} />
-        <Text style={styles.consultedText}>{count} {count === 1 ? 'agent' : 'agents'}{repliesFollow ? ', replies follow' : ''}</Text>
+        <Text style={styles.consultedText}>{count} {count === 1 ? 'agent' : 'agents'}</Text>
       </Pressable>
       {anchor === null ? null : (
         <Modal animationType="fade" onRequestClose={() => setAnchor(null)} statusBarTranslucent transparent visible>
@@ -496,7 +491,6 @@ export function ConsultedAgents({
             <View style={[styles.consultedMenu, anchor]}>
               {consultations.map((consultation) => {
                 const persona = personaOf(agents, consultation.agentId)
-                const question = unannounced?.find((entry) => entry.agentId === consultation.agentId)?.question
                 return (
                   <Pressable
                     accessibilityLabel={`Open ${persona.name} pair chat`}
@@ -509,14 +503,7 @@ export function ConsultedAgents({
                     style={({ pressed }) => [styles.consultedRow, pressed && styles.actionRowPressed]}
                   >
                     <Blobatar color={persona.color} name={persona.name} shape={persona.avatarShape} tone={persona.avatarTone} size={26} src={persona.avatar} />
-                    {question === undefined ? (
-                      <Text numberOfLines={1} style={styles.consultedName}>{persona.name}</Text>
-                    ) : (
-                      <View style={styles.consultedLabel}>
-                        <Text numberOfLines={1} style={styles.consultedName}>{persona.name}</Text>
-                        <Text numberOfLines={1} style={styles.consultedQuestion}>“{question}”</Text>
-                      </View>
-                    )}
+                    <Text numberOfLines={1} style={styles.consultedName}>{persona.name}</Text>
                   </Pressable>
                 )
               })}
@@ -1318,8 +1305,6 @@ const styles = StyleSheet.create({
   consultedMenu: { position: 'absolute', width: 220, overflow: 'hidden', borderRadius: radius.lg, ...squircle, backgroundColor: colors.raised },
   consultedRow: { minHeight: 52, flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingHorizontal: spacing.lg },
   consultedName: { flex: 1, color: colors.text, fontFamily: fonts.sans, fontSize: 16 },
-  consultedLabel: { flex: 1, minWidth: 0, paddingVertical: spacing.sm },
-  consultedQuestion: { color: colors.dim, fontFamily: fonts.sans, fontSize: 13 },
   name: { flexShrink: 0, color: colors.text, fontFamily: fonts.sans, fontSize: 16, fontWeight: '500' },
   status: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 6 },
   statusText: { flexShrink: 1, color: colors.muted, fontFamily: fonts.sans, fontSize: 13 },

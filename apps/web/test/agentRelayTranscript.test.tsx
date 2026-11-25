@@ -76,11 +76,11 @@ describe('agent relay transcript surfaces', () => {
       },
       {
         id: 'sent-sage', ts: 2, type: 'agent_relay', agentId: 'marlow', peerAgentId: 'sage',
-        pairChatId: 'pair_sage', turnId: 'turn_1', relayId: 'relay_sage', phase: 'sent',
+        pairChatId: 'pair_sage', turnId: 'turn_1', relayId: 'relay_sage', phase: 'sent', preview: 'Sage?',
       },
       {
         id: 'sent-smith', ts: 3, type: 'agent_relay', agentId: 'marlow', peerAgentId: 'smith',
-        pairChatId: 'pair_smith', turnId: 'turn_1', relayId: 'relay_smith', phase: 'sent',
+        pairChatId: 'pair_smith', turnId: 'turn_1', relayId: 'relay_smith', phase: 'sent', preview: 'Smith?',
       },
       {
         id: 'received-sage', ts: 4, type: 'agent_relay', agentId: 'marlow', peerAgentId: 'sage',
@@ -122,6 +122,8 @@ describe('agent relay transcript surfaces', () => {
     )
     expect(oneWay).toContain('aria-label="Messaged Sage, Smith"')
     expect(oneWay).toContain('2 agents')
+    // The asking turn said nothing, and the stacked marker still adds no word of its own.
+    expect(oneWay).not.toContain('replies follow')
     expect(oneWay.match(/>Messaged</g)).toHaveLength(1)
     expect(html).not.toContain('finished without a reply')
     const turn = rowsOf(thread(events), 'dm').find((row) => row.kind === 'turn')
@@ -149,46 +151,34 @@ describe('agent relay transcript surfaces', () => {
     expect(html).not.toContain('Jeeves')
   })
 
-  it('lets the marker state the question when the asking turn ended silent, and only then', () => {
-    const sent = (turnId: string, relayId: string, ts: number): ThreadEvent => ({
-      id: `sent-${turnId}`, ts, type: 'agent_relay', agentId: 'marlow', peerAgentId: 'sage',
-      pairChatId: 'pair_1', turnId, relayId, phase: 'sent', preview: 'Which change is smallest?',
-    })
-    const silent: ThreadEvent[] = [
+  it('draws only the marker when the asking turn ended silent', () => {
+    const events: ThreadEvent[] = [
       { id: 'ask', ts: 1, type: 'user_message', text: 'Vraag het Sage', mentions: [] },
       { id: 'tool', ts: 2, type: 'tool_use', turnId: 'turn_1', agentId: 'marlow', tool: 'message_agent' },
-      sent('turn_1', 'relay_1', 3),
+      {
+        id: 'sent', ts: 3, type: 'agent_relay', agentId: 'marlow', peerAgentId: 'sage',
+        pairChatId: 'pair_1', turnId: 'turn_1', relayId: 'relay_1', phase: 'sent', preview: 'Which change is smallest?',
+      },
       { id: 'result', ts: 4, type: 'turn_result', agentId: 'marlow', turnId: 'turn_1' },
     ]
-    const render = (events: ThreadEvent[]) => renderToStaticMarkup(
-      <Transcript rows={rowsOf(thread(events), 'dm')} agents={agents} skills={[]} hasSnapshot bubbleReplies onOpenAgentRelay={() => undefined} />,
+    const render = (list: ThreadEvent[]) => renderToStaticMarkup(
+      <Transcript rows={rowsOf(thread(list), 'dm')} agents={agents} skills={[]} hasSnapshot bubbleReplies onOpenAgentRelay={() => undefined} />,
     )
 
-    const waiting = render(silent)
-    expect(waiting).toContain('“Which change is smallest?”')
-    expect(waiting).toContain(', reply follows')
+    const waiting = render(events)
+    expect(waiting).toContain('>Messaged<')
+    expect(waiting).toContain('title="Which change is smallest?"')
+    expect(waiting).not.toContain('“Which change is smallest?”')
+    expect(waiting).not.toContain('reply follows')
     // The silent turn draws nothing, so its row leaves the list instead of leaving a gap.
     expect(waiting).not.toContain('data-transcript-row="turn:')
-    expect(waiting).toContain('aria-expanded="false"')
 
-    const replied = render([...silent, {
+    const replied = render([...events, {
       id: 'received', ts: 5, type: 'agent_relay', agentId: 'marlow', peerAgentId: 'sage',
       pairChatId: 'pair_1', turnId: 'turn_1', relayId: 'relay_1', phase: 'received', preview: 'The first.',
     }])
-    expect(replied).toContain('“Which change is smallest?”')
-    expect(replied).not.toContain('reply follows')
-
-    // The sentence comes before the call: an accepted call ends a DM turn.
-    const acknowledged = render([
-      { id: 'ask', ts: 1, type: 'user_message', text: 'Vraag het Sage', mentions: [] },
-      { id: 'ack', ts: 2, type: 'agent_message', agentId: 'marlow', turnId: 'turn_1', text: 'Ik vraag Sage welke wijziging het kleinst is; zijn antwoord volgt.' },
-      { id: 'tool', ts: 3, type: 'tool_use', turnId: 'turn_1', agentId: 'marlow', tool: 'message_agent' },
-      sent('turn_1', 'relay_1', 4),
-      { id: 'result', ts: 5, type: 'turn_result', agentId: 'marlow', turnId: 'turn_1' },
-    ])
-    expect(acknowledged).toContain('Ik vraag Sage')
-    expect(acknowledged).not.toContain('“Which change is smallest?”')
-    expect(acknowledged).not.toContain('reply follows')
+    expect(replied).toContain('>2 messages with<')
+    expect(replied).not.toContain('“Which change is smallest?”')
   })
 
   it('renders the asker as an agent in the pair and separates calendar days', () => {

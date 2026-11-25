@@ -20,7 +20,6 @@ import {
   stackedConsultationMarkers,
   relayExchanges,
   relayMarkerAction,
-  unannouncedConsultations,
   onlyConsulted,
   snoozeUntilTomorrow,
   subagentGroups,
@@ -315,7 +314,7 @@ describe('durable transcript projection', () => {
     ])
   })
 
-  it('lets the marker carry the question only when the asking turn said nothing', () => {
+  it('tells a DM turn that only consulted from one that also spoke', () => {
     const events: ThreadEvent[] = [
       { id: 'silent-tool', ts: 1, type: 'tool_use', turnId: 'turn_silent', agentId: 'smith', tool: 'message_agent' },
       {
@@ -336,17 +335,6 @@ describe('durable transcript projection', () => {
 
     const turns = rowsOf({ ...emptyThread, events }, 'dm').filter((row) => row.kind === 'turn')
     expect(turns.map((turn) => [turn.turnId, onlyConsulted(turn)])).toEqual([['turn_silent', true], ['turn_ack', false]])
-
-    const pending = unannouncedConsultations(rowsOf({ ...emptyThread, events }, 'dm'))
-    expect([...pending]).toEqual([
-      ['turn_silent', [{ relayId: 'relay_silent', agentId: 'iris', question: 'Which spacing should the relay rows use?', replyPending: true }]],
-    ])
-
-    const replied = unannouncedConsultations(rowsOf({ ...emptyThread, events: [...events, {
-      id: 'silent-received', ts: 8, type: 'agent_relay', agentId: 'smith', peerAgentId: 'iris',
-      pairChatId: 'pair_iris', turnId: 'turn_silent', relayId: 'relay_silent', phase: 'received',
-    }] }, 'dm'))
-    expect(replied.get('turn_silent')?.[0]?.replyPending).toBe(false)
   })
 
   it('stacks consecutive incoming replies and leaves a later one on its own marker', () => {
@@ -424,7 +412,7 @@ describe('durable transcript projection', () => {
     const rows = rowsOf({ ...emptyThread, events }, 'dm')
     const exchanges = relayExchanges(rows)
     // Two asks and two replies with Post count four; the duplicate durable send counts once.
-    expect(exchanges.get('to-post')).toEqual({ agentId: 'post', pairChatId: 'pair_post', count: 4, relayIds: ['relay_post', 'relay_post_2'] })
+    expect(exchanges.get('to-post')).toEqual({ agentId: 'post', pairChatId: 'pair_post', count: 4 })
     expect(['to-post-again', 'to-post-2', 'from-post', 'from-post-2'].map((id) => exchanges.get(id))).toEqual([null, null, null, null])
     // Sage's reply failed and the later send is still one-way: both keep their own markers.
     expect(exchanges.has('to-sage')).toBe(false)
