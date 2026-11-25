@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import {
   Alert02Icon,
   CheckmarkCircle02Icon,
@@ -7,14 +6,15 @@ import {
   LoaderCircleIcon,
 } from '@hugeicons/core-free-icons'
 import type { ProviderUpdate } from '@manor/contracts'
-import { TOAST_IN, TOAST_OUT, TOAST_TRAVEL, TOAST_VISIBLE_MS } from '../motion'
+import { TOAST_VISIBLE_MS } from '../motion'
 import { PROVIDERS } from '../runtimes'
 import { Icon } from './Icon'
 import { ProviderMark } from './ProviderMark'
 import { Button } from './ui/Button'
 import { Fold } from './ui/Fold'
 import { Popover } from './ui/Popover'
-import { ToastDismiss, ToastPill } from './ui/ToastPill'
+import type { HouseNotice } from './NoticeStack'
+import { NOTICE_WIDTH, NoticeCard, ProgressMark, ToastDismiss } from './ui/NoticeCard'
 import { useDismiss } from './ui/useDismiss'
 
 type Provider = ProviderUpdate['provider']
@@ -155,40 +155,22 @@ function toastOf(updates: ProviderUpdate[], pillHidden: boolean, done: string | 
 
 const NO_UPDATES: ProviderUpdate[] = []
 
-/** Top centre of the window. Lays out nothing; the caller gives it a positioned box. */
-export function ProviderUpdateToast({
-  toast,
-  onUpdate,
-  onDismiss,
-}: {
-  toast: UpdateToast | null
-  onUpdate: UpdateProviders
-  onDismiss: () => void
-}) {
-  const reduce = useReducedMotion() ?? false
-  // The pill keeps one key from spinner to check, so the swap happens inside it
-  // instead of one pill leaving and another arriving.
-  const key = toast === null ? null : toast.kind === 'progress' || toast.kind === 'done' ? 'pill' : toast.kind
-  return (
-    <AnimatePresence mode="wait">
-      {toast === null ? null : (
-        <motion.div
-          key={key}
-          className="no-drag pointer-events-auto"
-          initial={reduce ? { opacity: 0 } : { opacity: 0, y: -TOAST_TRAVEL }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={reduce ? { opacity: 0, transition: { duration: 0.1 } } : { opacity: 0, y: -TOAST_TRAVEL / 2, transition: TOAST_OUT }}
-          transition={reduce ? { duration: 0.12 } : TOAST_IN}
-        >
-          {toast.kind === 'progress' || toast.kind === 'done' ? (
-            <ToastPill done={toast.kind === 'done'} label={toast.label} dismissLabel={toast.kind === 'done' ? 'Dismiss' : 'Hide progress'} onDismiss={onDismiss} />
-          ) : (
-            <UpdateCard toast={toast} onUpdate={onUpdate} onDismiss={onDismiss} />
-          )}
-        </motion.div>
-      )}
-    </AnimatePresence>
-  )
+/**
+ * The provider CLIs' card in the window's notice stack. The pill keeps one key from
+ * spinner to check, so the swap happens inside it instead of one card leaving and
+ * another arriving.
+ */
+export function providerUpdateNotice(toast: UpdateToast | null, onUpdate: UpdateProviders, onDismiss: () => void): HouseNotice | null {
+  if (toast === null) return null
+  if (toast.kind === 'progress' || toast.kind === 'done') {
+    return {
+      key: 'provider-updates:pill',
+      dismiss: onDismiss,
+      node: <NoticeCard mark={<ProgressMark tone={toast.kind === 'done' ? 'done' : 'running'} />} title={toast.label}
+        dismissLabel={toast.kind === 'done' ? 'Dismiss' : 'Hide progress'} onDismiss={onDismiss} />,
+    }
+  }
+  return { key: `provider-updates:${toast.kind}`, dismiss: onDismiss, node: <UpdateCard toast={toast} onUpdate={onUpdate} onDismiss={onDismiss} /> }
 }
 
 function UpdateCard({
@@ -220,7 +202,7 @@ function UpdateCard({
   return (
     <div
       role={failed ? 'alert' : 'status'}
-      className="relative w-[min(400px,calc(100vw-32px))] rounded-xl border border-line bg-raised px-3.5 py-3 shadow-popover"
+      className={`relative ${NOTICE_WIDTH} rounded-xl border border-line bg-raised px-3.5 py-3 shadow-popover`}
     >
       {/* The mark sits in a box one title line tall, so it centres on the title's line
           rather than on the top of the text block. */}

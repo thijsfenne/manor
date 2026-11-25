@@ -10,6 +10,7 @@ import {
   type PageContextAttachment,
 } from '@manor/contracts'
 import type { ComposerAttachments } from '@manor/client-runtime/attachments'
+import type { NoticeTarget } from '@manor/client-runtime/notices'
 import { ChatStage, StageChatPane, type StageKit } from './components/workspace/ChatStage'
 import { DestinationView, isDestinationView } from './components/workspace/DestinationView'
 import { SettingsLayer, useSettingsDoors } from './components/workspace/SettingsLayer'
@@ -29,8 +30,9 @@ import { Sidebar } from './components/Sidebar'
 import type { AgentPins } from './components/chats/ChatListView'
 import { cleanDraft, draftOf } from './persona'
 import { FRAME_GUTTER, TOP_BAR_HEIGHT, TopBar, TopBarSlotContext, type TopBarSlot } from './components/TopBar'
-import { ProviderUpdateToast, useProviderUpdates } from './components/ProviderUpdates'
-import { SessionGitToast, useSessionGitToast } from './components/session/SessionGitToast'
+import { NoticeStack } from './components/NoticeStack'
+import { providerUpdateNotice, useProviderUpdates } from './components/ProviderUpdates'
+import { sessionGitNotice, useSessionGitToast } from './components/session/SessionGitToast'
 import { SESSION_SCOPE } from './components/session/DiffPanel'
 import { FileMarkSprite } from './components/fileMark'
 import { chatKindOffersSideChat } from './components/RightRail'
@@ -439,6 +441,16 @@ function Workspace({
 
   const providerUpdates = useProviderUpdates(workspace.providerUpdates)
   const sessionGitToast = useSessionGitToast(workspace.sessionGitResults, workspace.sessionCommits, manor.status === 'live')
+  const houseNotices = [
+    providerUpdateNotice(providerUpdates.toast, manor.updateProviders, providerUpdates.dismissToast),
+    sessionGitNotice(sessionGitToast.notice, sessionGitToast.dismiss),
+  ].filter((notice) => notice !== null)
+  // The stack sits above Settings, so Open leaves it first, as every other door out does.
+  const openNoticeTarget = (target: NoticeTarget) => leaveSettingsThen(() => {
+    if ('chatId' in target) openChatFromSidebar(target.chatId)
+    else if (target.page === 'scheduled') openRoutines()
+    else openUsage()
+  })()
   const browserShown = railShown && layoutHas(activeLayout, 'browser') && browserBridge !== undefined
   const floatingBrowser = useFloatingBrowser({ browserShown, drafting: newChatDraft !== null, openChatId: open?.id })
   // The simulator floats by the same rules: only by its panel's Float, gone once the panel shows again.
@@ -624,9 +636,14 @@ function Workspace({
     }
   }, [stageUp, occupiedChatIds, workspace.routines, markRoutineRunsRead])
 
+  // What the user actually sees: no stage behind a rail door, and Focus mode shows a
+  // split's focused pane alone. Only those chats keep their news out of the stack.
+  const focusedId = newChatDraft === null ? (open?.id ?? null) : null
   useEffect(() => {
-    setViewedChats(browserViewedId === null ? [...occupiedChatIds] : [...occupiedChatIds, browserViewedId])
-  }, [setViewedChats, occupiedChatIds, browserViewedId])
+    const browserColumn = browserViewedId === null ? [] : [browserViewedId]
+    const stageShown = !stageUp ? [] : focusMode ? (focusedId === null ? [] : [focusedId]) : [...occupiedChatIds]
+    setViewedChats([...occupiedChatIds, ...browserColumn], [...stageShown, ...browserColumn])
+  }, [setViewedChats, occupiedChatIds, browserViewedId, stageUp, focusMode, focusedId])
 
   const onOpenFile = (path: string) => {
     if (open !== null) openFileFor(open, path)
@@ -729,6 +746,16 @@ function Workspace({
           the changed-files card gets: only what this chat's folders actually hold, so
           a chat with nothing to browse leaves the link as the prose it was. */}
       <RepoFileLinkProvider {...(canBrowseFiles ? { files: fileListing?.files } : {})} open={onOpenFile}>
+      {/* The window's one notice stack: chat news, action confirmations and the house's
+          own progress, in the top right corner under the bar, whatever the panels do.
+          Outside the frame Settings makes inert, and above it, so what lands while
+          Settings is open is seen and can be reached. */}
+      <NoticeStack
+        house={houseNotices}
+        onOpen={openNoticeTarget}
+        className={phone ? 'inset-x-2 top-2 items-center' : 'items-end'}
+        {...(phone ? {} : { style: { top: TOP_BAR_HEIGHT + 8, right: FRAME_GUTTER + 8 } })}
+      />
       {/* The L-frame: the top bar and the rail are one surface, and the sidebar and the
           stage sit together in the inset it frames. The phone has neither. */}
       <div
@@ -737,18 +764,6 @@ function Workspace({
         {...(focusMode ? { 'data-focus-mode': '' } : {})}
         {...(settingsOpen ? COVERED : {})}
       >
-      {/* House news, not chat news: centred on the whole window, whatever the rail,
-          sidebar and panels around the chat are doing. */}
-      {phone ? null : (
-        <div className="pointer-events-none fixed inset-x-0 top-2 z-[15] flex flex-col items-center gap-2 px-4">
-          <ProviderUpdateToast
-            toast={providerUpdates.toast}
-            onUpdate={manor.updateProviders}
-            onDismiss={providerUpdates.dismissToast}
-          />
-          <SessionGitToast notice={sessionGitToast.notice} onDismiss={sessionGitToast.dismiss} />
-        </div>
-      )}
       {/* The rail first in the page, the bar after it: the rail stays the first navigation
           landmark and the first stop for the keyboard, wherever the grid draws the bar. */}
       {phone ? null : (

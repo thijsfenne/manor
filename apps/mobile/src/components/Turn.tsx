@@ -45,6 +45,7 @@ import {
 } from '@manor/client-runtime/turn-labels'
 import { activeCall, activityBlocks, type ActivityBlock, groupLabel, hasFold, hasStatus, isCompactNote, isCompacting, isPaused, isSettledCompactNote, shownSegments, statusShimmers, stepDetail, stepImages, stepLabel, subagentStepState, thumbnailStrip, traceRows, turnSummary, type StepImage, type TraceRow } from '@manor/client-runtime/turn-trace'
 import { endFace, turnFace } from '@manor/client-runtime/face-activity'
+import { actionNotice } from '@manor/client-runtime/notices'
 import * as Clipboard from 'expo-clipboard'
 import { Image } from 'expo-image'
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
@@ -63,6 +64,7 @@ import { LandedMessageContext, LandingWash } from '@/components/LandingWash'
 import { Markdown, ReplySwipe, type MarkdownLinks } from '@/components/Markdown'
 import { MemoryChangesSheet, hasMemoryChanges, memoryChangesLabel } from '@/components/MemoryChangesSheet'
 import { MemoryTraceSheet } from '@/components/MemoryTraceSheet'
+import { noticeStore } from '@/lib/notices'
 import type { DraftActions } from '@/components/OutboundDraftBubble'
 import { OutboundDraftGroup } from '@/components/OutboundDraftGroup'
 import { ShimmerText } from '@/components/ShimmerText'
@@ -215,9 +217,14 @@ export function Turn({
     try {
       await Clipboard.setStringAsync(text)
     } catch {
+      noticeStore.push(actionNotice('error', 'Could not copy'))
       return
     }
-    if (!confirm) return
+    // The answer button ticks in place; the message menu has closed, so it gets a toast.
+    if (!confirm) {
+      noticeStore.push(actionNotice('success', 'Copied'))
+      return
+    }
     setCopied(true)
     clearTimeout(copiedTimer.current)
     copiedTimer.current = setTimeout(() => setCopied(false), 1_600)

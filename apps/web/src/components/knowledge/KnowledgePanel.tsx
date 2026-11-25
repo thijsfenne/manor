@@ -15,6 +15,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ComponentPropsW
 import { createPortal } from 'react-dom'
 import type { Components } from 'react-markdown'
 import { copyText } from '../../clipboard'
+import { toast } from '../../notices'
 import type { VaultState } from '../../state'
 import type { ConnectionStatus } from '../../useWorkspace'
 import { FILES_TREE_WIDTH } from '../../useFilesPanel'
@@ -799,7 +800,10 @@ export function KnowledgePanel({
   const copyMine = () => {
     if (editor === null) return
     void copyText(editor.text).then((ok) => {
-      if (!ok) return
+      if (!ok) {
+        toast.error('Could not copy')
+        return
+      }
       setCopied(true)
       setTimeout(() => setCopied(false), 1_500)
     })

@@ -23,6 +23,7 @@ import {
   type CSSProperties,
 } from 'react'
 import { copyText } from '../clipboard'
+import { toast } from '../notices'
 import { activeTab, closeTab, moveTab, openInActive, openInNew, pruneTabs, selectTab, useCloseTabKey, useStoredTabs } from '../contentTabs'
 import { FILES_TREE_WIDTH } from '../useFilesPanel'
 import type { RepoFileWrite } from '../state'
@@ -355,7 +356,10 @@ export function RepoFilesPanel({
   const copyMine = () => {
     if (editor === null) return
     void copyText(editor.text).then((ok) => {
-      if (!ok) return
+      if (!ok) {
+        toast.error('Could not copy')
+        return
+      }
       setCopied(true)
       setTimeout(() => setCopied(false), 1_500)
     })

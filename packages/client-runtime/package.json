@@ -47,7 +47,8 @@
     "./work-changes": "./src/workChanges.ts",
     "./suggestions": "./src/suggestions.ts",
     "./search-ranking": "./src/searchRanking.ts",
-    "./date-dividers": "./src/dateDividers.ts"
+    "./date-dividers": "./src/dateDividers.ts",
+    "./notices": "./src/notices.ts"
   },
   "scripts": {
     "generate:solid-icons": "node scripts/generate-solid-icons.mjs",

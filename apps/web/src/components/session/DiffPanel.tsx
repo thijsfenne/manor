@@ -5,6 +5,7 @@ import {
 } from '@hugeicons/core-free-icons'
 import type { ServerMessage } from '@manor/contracts'
 import { copyText } from '../../clipboard'
+import { toast } from '../../notices'
 import { changeRuns, sessionDiffView, withoutWhitespaceChanges, type ChangeRun, type DiffViewFile } from '../../diffView'
 import { useRequest } from '../../useRequest'
 import { sendWorkChanges } from '../../workChanges'
@@ -130,7 +131,9 @@ export function DiffPanel({
     if (!next.delete(key)) next.add(key)
     return next
   }), [])
-  const copyPath = useCallback((path: string) => void copyText(path), [])
+  const copyPath = useCallback((path: string) => {
+    void copyText(path).then((ok) => (ok ? toast.success('Path copied') : toast.error('Could not copy the path')))
+  }, [])
   const allCollapsed = files.length > 0 && files.every((file) => collapsed.has(file.key))
 
   // Where the reader is: the last card whose top has reached the top of the pane.

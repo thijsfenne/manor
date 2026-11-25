@@ -344,6 +344,12 @@ export interface WorkspaceState {
    * arrive after its end, and must not bring it back.
    */
   relight: { ended: readonly string[] } | null
+  /**
+   * Documents this socket still owes. The first of each after a connect is a reading,
+   * not news: reset with `relight` whenever a socket opens, so a routine that failed
+   * or a limit that ran out while offline is not announced as if it just happened.
+   */
+  unheard: readonly ('routines' | 'provider_usage')[]
   /** The chat whose thread is on screen. Only ever changes when a snapshot lands. */
   openChatId: string | null
   /** Selected, waiting for its snapshot. The open chat stays rendered until it arrives. */
@@ -633,6 +639,12 @@ export interface RepoFileWrite {
   result: FileWriteResult | null
 }
 
+/** Everything a fresh socket owes before its documents count as news; see `unheard`. */
+export const UNHEARD: WorkspaceState['unheard'] = ['routines', 'provider_usage']
+
+const heard = (unheard: WorkspaceState['unheard'], doc: WorkspaceState['unheard'][number]) =>
+  unheard.includes(doc) ? unheard.filter((item) => item !== doc) : unheard
+
 export const emptyWorkspace: WorkspaceState = {
   projects: [],
   home: homeRoom([]),
@@ -653,6 +665,7 @@ export const emptyWorkspace: WorkspaceState = {
   routineHistories: {},
   hasDirectory: false,
   relight: { ended: [] },
+  unheard: UNHEARD,
   openChatId: null,
   pendingChatId: null,
   selectionCleared: false,
@@ -820,7 +833,8 @@ const withTurn = (turns: string[], turnId: string) =>
 
 const withoutTurn = (turns: string[], turnId: string) => turns.filter((id) => id !== turnId)
 
-function chatIsViewed(state: WorkspaceState, chatId: string): boolean {
+/** Whether a chat is on screen: the open one, or a split pane beside it. */
+export function chatIsViewed(state: Pick<WorkspaceState, 'openChatId' | 'viewedChatIds'>, chatId: string): boolean {
   return state.openChatId === chatId || state.viewedChatIds.has(chatId)
 }
 
@@ -1058,7 +1072,7 @@ export function reduce(
           ([routineId, history]) => targets.has(routineId) && targets.get(routineId) === history.chatId,
         ),
       )
-      return { ...state, routines: msg.routines, hasRoutines: true, routineHistories }
+      return { ...state, routines: msg.routines, hasRoutines: true, routineHistories, unheard: heard(state.unheard, 'routines') }
     }
 
     // Reply-only and keyed by both routine and target. The server echoes the target so
@@ -1102,7 +1116,7 @@ export function reduce(
     // identical set of percentages read at a later moment is still a change, because
     // how old the reading is is part of what the panel says.
     case 'provider_usage':
-      return { ...state, providerUsage: msg.perProvider }
+      return { ...state, providerUsage: msg.perProvider, unheard: heard(state.unheard, 'provider_usage') }
     case 'provider_updates':
       return { ...state, providerUpdates: msg.updates }
     case 'provider_connections':

@@ -24,10 +24,12 @@ import {
   type WorkspaceConnection,
 } from '@manor/client-runtime/connection'
 import { createFrameQueue, type FrameQueue } from '@manor/client-runtime/frame-queue'
+import { eventNotices, noticeRoute, unsentPings, type AppNotice } from '@manor/client-runtime/notices'
 import { forgetClosedWorkChanges } from '@manor/client-runtime/work-changes'
 import {
   askMyMindObjects,
   activityOf,
+  chatIsViewed,
   chatOf,
   clearArtifactRequest,
   clearNotice,
@@ -60,6 +62,7 @@ import {
   type ReactNode,
 } from 'react'
 import { AppState } from 'react-native'
+import { noticeStore } from '@/lib/notices'
 
 import { checkDevice } from '@manor/client-runtime/pairing'
 import { webSocketUrlFor } from '@manor/contracts'
@@ -209,6 +212,32 @@ const WorkspaceActionsContext = createContext<WorkspaceActions | null>(null)
 const SEARCH_CONNECTION_LOST = 'Not connected. Search again when Manor is back.'
 const requestId = (prefix: string) => `mobile-${prefix}-${Date.now()}-${Math.random().toString(36).slice(2)}`
 
+/** Steps a batch through the reducer, collecting what each message announces. */
+function foldBatch(current: WorkspaceState, batch: readonly ServerMessage[], found: AppNotice[]): WorkspaceState {
+  const now = Date.now()
+  let next = current
+  for (const message of batch) {
+    const before = next
+    next = reduce(next, message)
+    found.push(...eventNotices(before, next, message, now))
+  }
+  return next
+}
+
+/** Notices already announced, so a message the fold sees twice still notifies once. */
+const sentNotices = new Set<string>()
+
+/**
+ * In front, the stack shows news about a chat that is not on screen; in the background
+ * the server's push carries it, so nothing is shown here.
+ */
+function showNotices(found: readonly AppNotice[], state: WorkspaceState) {
+  const view = { focused: AppState.currentState === 'active', onScreen: (chatId: string) => chatIsViewed(state, chatId) }
+  for (const notice of unsentPings(found, sentNotices)) {
+    if (noticeRoute(notice, view) === 'app') noticeStore.push(notice)
+  }
+}
+
 export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const device = useConnection()
   const deviceRef = useRef(device)
@@ -253,19 +282,24 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   if (framesRef.current === null) {
     framesRef.current = createFrameQueue<ServerMessage>(
       (batch) => {
-        applyWorkspace((current) => {
-          let next = current
-          for (const message of batch) next = reduce(next, message)
-          return next
-        })
+        const found: AppNotice[] = []
+        applyWorkspace((current) => foldBatch(current, batch, found))
+        showNotices(found, store.get())
       },
       {
         request: (run) => requestAnimationFrame(run),
         cancel: (handle) => cancelAnimationFrame(handle),
       },
-      (message) => message.type === 'turn_state' && message.state !== 'running',
+      (message) => (message.type === 'turn_state' && message.state !== 'running')
+        || (message.type === 'event' && message.event.type === 'user_input_request'),
     )
   }
+
+  // Opening a chat clears what it had standing in the notice stack.
+  const { openChatId, viewedChatIds } = workspace
+  useEffect(() => {
+    noticeStore.clearChats((chatId) => chatIsViewed({ openChatId, viewedChatIds }, chatId))
+  }, [openChatId, viewedChatIds])
 
   const setWorkspace = useCallback((change: (state: WorkspaceState) => WorkspaceState) => {
     framesRef.current?.flush()
@@ -322,6 +356,9 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       // body runs, so the reset cannot land underneath queued messages.
       /* eslint-disable react-hooks/set-state-in-effect */
       setWorkspace(() => emptyWorkspace)
+      // The old house's notices and what was announced from it go too.
+      noticeStore.clear()
+      sentNotices.clear()
       setCreatedChat(null)
       setCreatedProject(null)
       // The Connect screen covers this state; a connection that becomes ready opens on connecting.

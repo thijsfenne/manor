@@ -6,7 +6,7 @@ import { Geist_500Medium_Italic } from '@expo-google-fonts/geist/500Medium_Itali
 import { useFonts } from 'expo-font'
 import { DarkTheme, DefaultTheme, router, Stack, ThemeProvider, useNavigationContainerRef } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
-import { useEffect, useRef } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
 import { useColorScheme } from 'react-native'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import { KeyboardProvider } from 'react-native-keyboard-controller'
@@ -18,6 +18,7 @@ import { WindowInsetsProvider } from '@/lib/windowInsets'
 import { lockPortrait } from '@/lib/viewerOrientation'
 import { chatIdFromNotificationResponse, Notifications } from '@/lib/notifications'
 import { notificationOpen } from '@/lib/notificationRoute'
+import { NoticeStack } from '@/components/NoticeStack'
 import { colors } from '@/theme'
 
 export default function RootLayout() {
@@ -54,6 +55,7 @@ export default function RootLayout() {
               <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.background } }}>
                 <Stack.Screen name="(tabs)" />
               </Stack>
+              <ForegroundNotices />
               <StatusBar style="auto" />
             </WorkspaceProvider>
           </ConnectionProvider>
@@ -65,9 +67,20 @@ export default function RootLayout() {
   )
 }
 
+/** Lands a tapped push or an in-app notice on its chat, the same way for both. */
+function useOpenNotified() {
+  const navigation = useNavigationContainerRef()
+  return useCallback((chatId: string) => {
+    const open = notificationOpen(navigation.isReady() ? navigation.getRootState() : undefined, chatId)
+    if (open === 'stay') return
+    if (open === 'reset') router.dismissAll()
+    router.push({ pathname: '/chat/[id]', params: { id: chatId } })
+  }, [navigation])
+}
+
 function NotificationNavigation() {
   const response = Notifications.useLastNotificationResponse()
-  const navigation = useNavigationContainerRef()
+  const openNotified = useOpenNotified()
   const handled = useRef<string | null>(null)
 
   useEffect(() => {
@@ -76,11 +89,16 @@ function NotificationNavigation() {
     if (chatId === null || responseId === null || handled.current === responseId) return
     handled.current = responseId
     void Notifications.clearLastNotificationResponseAsync()
-    const open = notificationOpen(navigation.isReady() ? navigation.getRootState() : undefined, chatId)
-    if (open === 'stay') return
-    if (open === 'reset') router.dismissAll()
-    router.push({ pathname: '/chat/[id]', params: { id: chatId } })
-  }, [navigation, response])
+    openNotified(chatId)
+  }, [openNotified, response])
 
   return null
+}
+
+function ForegroundNotices() {
+  const openNotified = useOpenNotified()
+  return <NoticeStack onOpen={(target) => {
+    if ('chatId' in target) openNotified(target.chatId)
+    else if (target.page === 'scheduled') router.push('/routines')
+  }} />
 }

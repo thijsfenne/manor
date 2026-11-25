@@ -50,7 +50,8 @@ import {
 } from '@manor/client-runtime/commands'
 import { desktopBrowser, desktopComputer, desktopNotify, desktopPresence, reuseBrowserTab, type BrowserActivity } from './desktopBrowser'
 import { BrowserCursorLifecycle } from './browserCursorLifecycle'
-import { doneCount, noticePing, unsentPings, type DonePing } from './doneNotice'
+import { doneCount, eventNotices, noticeRoute, unsentPings, type AppNotice } from '@manor/client-runtime/notices'
+import { noticeStore, toast } from './notices'
 import { animationFrames, createFrameQueue, type FrameQueue } from '@manor/client-runtime/frame-queue'
 import type { RequestEvents, RequestResponse } from './useRequest'
 import {
@@ -188,8 +189,12 @@ export interface Manor {
    * thread. A split's other pane stays live this way without a second server-open.
    */
   setResumeChats: (chatIds: readonly string[]) => void
-  /** Local: these threads are on screen, so unread and the dock treat them as viewed. */
-  setViewedChats: (chatIds: readonly string[]) => void
+  /**
+   * Local: these threads sit in the window's panes, so unread and the dock treat them
+   * as viewed. `onScreen` is the part not covered by a rail door: only news about
+   * those is held back from the notice stack, and seeing one clears its notice.
+   */
+  setViewedChats: (chatIds: readonly string[], onScreen: readonly string[]) => void
   /**
    * Opens the side panel's thread for one chat, creating it on the server the first
    * time. The answer is a `side_chat` reply naming the thread, whose snapshot this
@@ -608,12 +613,23 @@ export function useWorkspace(url: string, auth?: WorkspaceAuth): Manor {
    */
   const framesRef = useRef<FrameQueue<ServerMessage> | null>(null)
   /**
-   * Chats that finished during the fold, waiting to be announced. Queued here
-   * rather than announced in place because the fold runs inside a state updater,
-   * which React is free to run twice; the effect below is where exactly-once lives.
+   * Notices made during the fold, waiting to be announced. Queued here rather than
+   * announced in place because the fold runs inside a state updater, which React is
+   * free to run twice; the effect below is where exactly-once lives.
    */
-  const donePings = useRef<DonePing[]>([])
+  const donePings = useRef<AppNotice[]>([])
   const sentPings = useRef(new Set<string>())
+  /**
+   * The chats actually in front of the user, as the window lays them out: the stage's
+   * panes while no rail door covers them. Not `openChatId`, which stays selected behind
+   * a new-chat draft or the Knowledge page.
+   */
+  const onScreenRef = useRef<ReadonlySet<string>>(new Set())
+  /**
+   * Requests whose ack is the only sign they went through (a dialog that closes on
+   * save, a delete from inside one), with the line that confirms them.
+   */
+  const ackToasts = useRef(new Map<string, string>())
   if (framesRef.current === null) {
     framesRef.current = createFrameQueue<ServerMessage>(
       (batch) => {
@@ -621,14 +637,13 @@ export function useWorkspace(url: string, auth?: WorkspaceAuth): Manor {
         applyWorkspace((current) => {
           // Not `batch.reduce(reduce, …)`: `Array.reduce` would pass the index
           // straight into the reducer's `now` parameter and date every event to the
-          // epoch. Stepped by hand anyway, because a done notice is decided from the
-          // state on either side of the one message that ended the run.
+          // epoch. Stepped by hand anyway, because a notice is decided from the
+          // state on either side of the one message that made it.
           let state = current
           for (const msg of batch) {
             const before = state
             state = reduce(state, msg)
-            const ping = noticePing(before, state, msg, now)
-            if (ping !== null) donePings.current.push(ping)
+            donePings.current.push(...eventNotices(before, state, msg, now))
           }
           return state
         })
@@ -690,20 +705,26 @@ export function useWorkspace(url: string, auth?: WorkspaceAuth): Manor {
   }, [workspace.openChatId, workspace.pendingChatId])
 
   /**
-   * Hands what finished to the desktop host, which drops it again if the window has
-   * focus. Anything queued implies the state it was folded from changed, so this
-   * effect is always reached with the queue still fresh. Without a host — a plain
-   * browser tab, or a shell older than the bridge — the queue is emptied and nothing
-   * is shown, deliberately: there is no page-level fallback.
+   * Sends each notice through one door. A focused window shows it in the notice stack,
+   * unless its chat is on screen; an unfocused one hands its banner to the desktop
+   * host, which drops it again if focus came back meanwhile. Anything queued implies
+   * the state it was folded from changed, so this effect is always reached with the
+   * queue still fresh. Without a host (a plain browser tab, or a shell older than the
+   * bridge) an unfocused window shows nothing, deliberately: there is no page-level
+   * fallback.
    */
   useEffect(() => {
     if (donePings.current.length === 0) return
     const pings = donePings.current
     donePings.current = []
-    const notify = desktopNotify()
-    if (notify === undefined) return
-    for (const ping of unsentPings(pings, sentPings.current)) {
-      const { chatId, title, body } = ping
+    const view = { focused: document.hasFocus(), onScreen: (chatId: string) => onScreenRef.current.has(chatId) }
+    for (const notice of unsentPings(pings, sentPings.current)) {
+      const door = noticeRoute(notice, view)
+      if (door === 'app') noticeStore.push(notice)
+      if (door !== 'banner' || notice.banner === null) continue
+      const notify = desktopNotify()
+      if (notify === undefined) continue
+      const { chatId, title, body } = notice.banner
       // A host that cannot show a banner must not take the renderer down with it.
       // Loud rather than swallowed, for the same reason a dropped send is: the whole
       // failure mode of this feature is silence, and a silence with no console line
@@ -818,6 +839,8 @@ export function useWorkspace(url: string, auth?: WorkspaceAuth): Manor {
         externalBrowserRef.current = null
         setRepoFileApps([])
         overrideRequests.current.clear()
+        // An answer cannot come over a closed socket, so nothing waiting for one is owed.
+        ackToasts.current.clear()
       },
       onInvalidMessage: () => console.warn('manor: server message failed the contract'),
       onMessage: (parsed) => {
@@ -843,6 +866,11 @@ export function useWorkspace(url: string, auth?: WorkspaceAuth): Manor {
         // server sent ahead of it in the same render, not a frame later.
         if (parsed.type === 'ack' || (parsed.type === 'notice' && parsed.requestId !== undefined)) framesRef.current?.flush()
         if (parsed.type === 'ack') {
+          const confirmed = ackToasts.current.get(parsed.requestId)
+          if (confirmed !== undefined) {
+            ackToasts.current.delete(parsed.requestId)
+            toast.success(confirmed)
+          }
           const chatId = overrideRequests.current.get(parsed.requestId)
           if (chatId !== undefined) {
             overrideRequests.current.delete(parsed.requestId)
@@ -853,6 +881,8 @@ export function useWorkspace(url: string, auth?: WorkspaceAuth): Manor {
         }
         if (parsed.type === 'notice' && parsed.requestId !== undefined) {
           const requestId = parsed.requestId
+          // A refusal is shown where it was asked; the confirmation is simply not owed.
+          ackToasts.current.delete(requestId)
           const chatId = overrideRequests.current.get(requestId)
           if (chatId !== undefined) {
             overrideRequests.current.delete(requestId)
@@ -1009,7 +1039,10 @@ export function useWorkspace(url: string, auth?: WorkspaceAuth): Manor {
     resumeChatIdsRef.current = chatIds
   }, [])
 
-  const setViewedChats = useCallback((chatIds: readonly string[]) => {
+  const setViewedChats = useCallback((chatIds: readonly string[], onScreen: readonly string[]) => {
+    const shown = new Set(onScreen)
+    onScreenRef.current = shown
+    noticeStore.clearChats((chatId) => shown.has(chatId))
     setWorkspace((current) => applyViewedChats(current, chatIds))
   }, [])
 
@@ -1608,7 +1641,7 @@ export function useWorkspace(url: string, auth?: WorkspaceAuth): Manor {
   const saveMcpServer = useCallback(
     (server: McpServerDraft, requestId: string) => {
       setWorkspace(clearNotice)
-      return send({ type: 'save_mcp_server', server, requestId })
+      return confirmOnAck(ackToasts.current, requestId, 'Connector saved', send({ type: 'save_mcp_server', server, requestId }))
     },
     [send],
   )
@@ -1616,7 +1649,7 @@ export function useWorkspace(url: string, auth?: WorkspaceAuth): Manor {
   const deleteMcpServer = useCallback(
     (serverId: string, requestId: string) => {
       setWorkspace(clearNotice)
-      return send({ type: 'delete_mcp_server', serverId, requestId })
+      return confirmOnAck(ackToasts.current, requestId, 'Connector removed', send({ type: 'delete_mcp_server', serverId, requestId }))
     },
     [send],
   )
@@ -1639,7 +1672,7 @@ export function useWorkspace(url: string, auth?: WorkspaceAuth): Manor {
   const saveRoutine = useCallback(
     (routine: RoutineDraft, requestId: string) => {
       setWorkspace(clearNotice)
-      return send({ type: 'save_routine', routine: { ...routine, description: routine.description ?? '' }, requestId })
+      return confirmOnAck(ackToasts.current, requestId, 'Routine saved', send({ type: 'save_routine', routine: { ...routine, description: routine.description ?? '' }, requestId }))
     },
     [send],
   )
@@ -1647,7 +1680,7 @@ export function useWorkspace(url: string, auth?: WorkspaceAuth): Manor {
   const deleteRoutine = useCallback(
     (routineId: string, requestId: string) => {
       setWorkspace(clearNotice)
-      return send({ type: 'delete_routine', routineId, requestId })
+      return confirmOnAck(ackToasts.current, requestId, 'Routine deleted', send({ type: 'delete_routine', routineId, requestId }))
     },
     [send],
   )
@@ -1705,7 +1738,7 @@ export function useWorkspace(url: string, auth?: WorkspaceAuth): Manor {
   const deleteSkill = useCallback(
     (skillId: string, requestId: string) => {
       setWorkspace(clearNotice)
-      return send({ type: 'delete_skill', skillId, requestId })
+      return confirmOnAck(ackToasts.current, requestId, 'Skill deleted', send({ type: 'delete_skill', skillId, requestId }))
     },
     [send],
   )
@@ -1977,4 +2010,10 @@ export async function answerBrowserTool(
       error: error instanceof Error ? error.message : 'The browser action failed.',
     }
   }
+}
+
+/** Waits for the ack of a request that actually went out; a dropped send is owed nothing. */
+function confirmOnAck(pending: Map<string, string>, requestId: string, line: string, sent: boolean) {
+  if (sent) pending.set(requestId, line)
+  return sent
 }

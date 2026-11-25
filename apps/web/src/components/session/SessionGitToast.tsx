@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
-import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import type { ServerMessage } from '@manor/contracts'
-import { TOAST_IN, TOAST_OUT, TOAST_TRAVEL, TOAST_VISIBLE_MS } from '../../motion'
-import { ToastPill } from '../ui/ToastPill'
+import { TOAST_VISIBLE_MS } from '../../motion'
+import type { HouseNotice } from '../NoticeStack'
+import { NoticeCard, ProgressMark } from '../ui/NoticeCard'
 import type { SessionGitResult } from './SessionSections'
 
 export interface SessionGitNotice {
@@ -76,24 +76,13 @@ export function useSessionGitToast(results: Readonly<Record<string, SessionGitRe
   }
 }
 
-/** Top centre of the window, under the provider-update toast when both are up. */
-export function SessionGitToast({ notice, onDismiss }: { notice: SessionGitNotice | null; onDismiss: () => void }) {
-  const reduce = useReducedMotion() ?? false
-  return (
-    <AnimatePresence mode="wait">
-      {notice === null ? null : (
-        <motion.div
-          key={notice.key}
-          className="no-drag pointer-events-auto"
-          initial={reduce ? { opacity: 0 } : { opacity: 0, y: -TOAST_TRAVEL }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={reduce ? { opacity: 0, transition: { duration: 0.1 } } : { opacity: 0, y: -TOAST_TRAVEL / 2, transition: TOAST_OUT }}
-          transition={reduce ? { duration: 0.12 } : TOAST_IN}
-        >
-          <ToastPill done={notice.tone === 'done'} failed={notice.tone === 'failed'} label={notice.text}
-            dismissLabel={notice.tone === 'running' ? 'Hide progress' : 'Dismiss'} onDismiss={onDismiss} />
-        </motion.div>
-      )}
-    </AnimatePresence>
-  )
+/** A Session's Commit or Push as a card in the window's notice stack. */
+export function sessionGitNotice(notice: SessionGitNotice | null, onDismiss: () => void): HouseNotice | null {
+  if (notice === null) return null
+  return {
+    key: notice.key,
+    dismiss: onDismiss,
+    node: <NoticeCard mark={<ProgressMark tone={notice.tone} />} title={notice.text} alert={notice.tone === 'failed'}
+      dismissLabel={notice.tone === 'running' ? 'Hide progress' : 'Dismiss'} onDismiss={onDismiss} />,
+  }
 }

@@ -14,7 +14,7 @@ import {
   type OptimisticChatOverride,
 } from './optimisticOverrides'
 import type { PendingMessage } from './threadState'
-import type { WorkspaceState } from './workspaceState'
+import { UNHEARD, type WorkspaceState } from './workspaceState'
 
 /** Ids for optimistic bubbles. Local and short-lived; nothing durable keys on them. */
 let pendingCounter = 0
@@ -244,15 +244,17 @@ function withoutKey<T>(record: Record<string, T>, key: string): Record<string, T
  * someone clicked it. Clearing converges the other way instead: a turn genuinely
  * still in flight re-lights its own dot on its next delta or turn_state, and the
  * open chat's comes back with the snapshot's activeTurn, and the reconnect directory
- * lights every turn the server still runs (`relightRunning`).
+ * lights every turn the server still runs (`relightRunning`). The documents a socket
+ * owes start over too (`unheard`), so its first readings are not taken for news.
  */
 export function clearRunningTurns(state: WorkspaceState): WorkspaceState {
   const entries = Object.entries(state.activity)
   const relight = { ended: [] }
-  if (entries.every(([, activity]) => activity.runningTurns.length === 0)) return { ...state, relight }
+  if (entries.every(([, activity]) => activity.runningTurns.length === 0)) return { ...state, relight, unheard: UNHEARD }
   return {
     ...state,
     relight,
+    unheard: UNHEARD,
     activity: Object.fromEntries(
       entries.map(([chatId, activity]) =>
         activity.runningTurns.length === 0
