@@ -4,6 +4,7 @@ What changed for someone who uses Manor, newest first. A version is a tag on `ma
 
 ## Unreleased
 
+- On the Mac and the web, Quote selection now shows for a whole sentence or paragraph, also when you triple click it or drag past its end. It no longer floats over Settings or another window opened over the chat, and it hides as soon as one opens.
 - On the Mac and the web, a secondary button, such as Show in Finder, shows its label in the full text colour without hover. A primary button now visibly changes its fill on hover, in light and dark mode and in every colour theme.
 - On the Mac and the web, a direct message's notice card shows the agent's face larger at its top left and the reply in up to three lines.
 - On the Mac and the web, Settings has new groups. General keeps Profile and Power. Default agent moves to Agents, Context files to a Knowledge group beside Memory & knowledge, and Permissions to Tools, the group that was Integrations. A new Tools page, Browser & Simulator, holds the Browser's search engine and the iOS Simulator. Forget this Mac, in a paired browser, moves to Phone. The agent that answers messages addressed to nobody is called the default agent everywhere, on the Mac, the web and the phone, instead of chief of staff.

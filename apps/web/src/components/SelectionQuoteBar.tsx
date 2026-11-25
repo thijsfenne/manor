@@ -1,6 +1,10 @@
 import { createPortal } from 'react-dom'
 
-/** The floating Quote / Add to side chat bar that follows a text selection. */
+/**
+ * The floating Quote / Add to side chat bar that follows a text selection. It is part of
+ * the chat, so it stacks just under the dialog layer: a modal, a popover or the chat
+ * switcher opened over the chat covers it as it covers the chat.
+ */
 export function SelectionQuoteBar({
   left,
   top,
@@ -18,7 +22,7 @@ export function SelectionQuoteBar({
       role="toolbar"
       aria-label="Selected text actions"
       data-quote-action
-      className="fixed z-40 flex -translate-x-1/2 -translate-y-full overflow-hidden rounded-full border border-line bg-raised text-[12px] font-medium text-text shadow-pill"
+      className="fixed z-[calc(var(--z-settings)-1)] flex -translate-x-1/2 -translate-y-full overflow-hidden rounded-full border border-line bg-raised text-[12px] font-medium text-text shadow-pill"
       style={{ left, top }}
       onPointerDown={(event) => event.preventDefault()}
     >

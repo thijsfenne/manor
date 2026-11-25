@@ -78,6 +78,7 @@ import { WorkHandoffCard } from './WorkHandoffCard'
 import { Markdown } from './Markdown'
 import { useAgentMentions } from './mentionMarkdown'
 import { useStableCallback } from '../useStableCallback'
+import { quoteSourceOf } from '../quoteSelection'
 import { scrollWithin } from './scrollWithin'
 
 const NO_CONSULTATION_MARKERS: ReadonlyMap<string, readonly TurnConsultation[]> = new Map()
@@ -500,7 +501,7 @@ export function Transcript({
     wasHeld.current = held
   }, [held])
 
-  const stageSelection = () => {
+  const stageSelection = useStableCallback(() => {
     if (onQuote === undefined && onAddToSideChat === undefined) return
     const selection = window.getSelection()
     if (selection === null || selection.isCollapsed || selection.rangeCount !== 1) {
@@ -508,18 +509,25 @@ export function Transcript({
       return
     }
     const range = selection.getRangeAt(0)
-    const sourceOf = (node: Node) => (node.nodeType === Node.ELEMENT_NODE ? node as Element : node.parentElement)
-      ?.closest<HTMLElement>('[data-quote-event-id]') ?? null
-    const startSource = sourceOf(range.startContainer)
-    const endSource = sourceOf(range.endContainer)
-    if (startSource === null || endSource !== startSource || !scrollerRef.current?.contains(startSource)) {
+    const source = quoteSourceOf(
+      range,
+      (text) => text.parentElement?.closest<HTMLElement>('[data-quote-event-id]') ?? null,
+      // What the browser leaves out of the selected text: unselectable chrome, and chrome
+      // that focus mode or a fold does not draw.
+      (text) => text.parentElement !== null
+        // Optional call: WebKit before Safari 17.4 has no `checkVisibility`.
+        && text.parentElement.checkVisibility?.({ visibilityProperty: true }) !== false
+        && getComputedStyle(text.parentElement).userSelect !== 'none',
+    )
+    // An inert chat lies under a modal; nothing in it is there to quote.
+    if (source === null || !scrollerRef.current?.contains(source) || source.closest('[inert]') !== null) {
       setQuoteAction(null)
       return
     }
     const quote = quoteFromText(
-      startSource.dataset.quoteEventId ?? '',
+      source.dataset.quoteEventId ?? '',
       selection.toString(),
-      startSource.dataset.quoteAgentId,
+      source.dataset.quoteAgentId,
     )
     if (quote === undefined) {
       setQuoteAction(null)
@@ -531,7 +539,34 @@ export function Transcript({
       left: Math.max(12, Math.min(box.left + box.width / 2, window.innerWidth - 12)),
       top: Math.max(12, box.top - 8),
     })
-  }
+  })
+
+  // A selection made with the pointer is staged when the button is let go, wherever that
+  // is: a drag past the end of a message often ends on the composer or outside the chat.
+  // Only a press that began in this chat arms it, so a click elsewhere stages nothing.
+  const armRelease = () => scrollerRef.current?.ownerDocument.addEventListener('pointerup', stageSelection, { once: true })
+
+  // The bar lasts only as long as its selection does, and goes as soon as focus or a press
+  // lands outside the chat: a modal, a popover or another pane taking over. It comes back
+  // only from a new selection in the chat.
+  const quoteShown = quoteAction !== null
+  useEffect(() => {
+    const page = scrollerRef.current?.ownerDocument
+    if (!quoteShown || page === undefined) return
+    const elsewhere = (event: Event) => {
+      const target = event.target
+      if (target instanceof Element && (scrollerRef.current?.contains(target) || target.closest('[data-quote-action]') !== null)) return
+      setQuoteAction(null)
+    }
+    page.addEventListener('selectionchange', stageSelection)
+    page.addEventListener('focusin', elsewhere)
+    page.addEventListener('pointerdown', elsewhere, true)
+    return () => {
+      page.removeEventListener('selectionchange', stageSelection)
+      page.removeEventListener('focusin', elsewhere)
+      page.removeEventListener('pointerdown', elsewhere, true)
+    }
+  }, [quoteShown, stageSelection])
 
   // A target above the rendered page opens with a page of context before it, so it
   // can centre instead of sitting at the top under the header, and the scroll does
@@ -804,7 +839,7 @@ export function Transcript({
         className="flex min-w-0 flex-1 flex-col overflow-x-hidden overflow-y-auto [scrollbar-gutter:stable]"
         ref={scrollerRef}
         onScroll={() => handleScroll()}
-        onPointerUp={stageSelection}
+        onPointerDown={armRelease}
         onKeyUp={stageSelection}
         // The region a message's own popover may use. It is this and not the window
         // because the desktop shell's browser is a native layer over the right of the

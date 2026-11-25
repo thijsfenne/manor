@@ -143,7 +143,9 @@ async function handle(body) {
     return { path: dest, size: pngSize(png).join('x'), ...(await writePreview(png, dest)) }
   }
   if (cmd === 'click') {
-    await locatorFor(flags).click(flags.button === 'right' ? { button: 'right' } : {})
+    const clickCount = Number(flags.count ?? 1)
+    if (!Number.isInteger(clickCount) || clickCount < 1) throw new Error('click --count takes a whole number above 0')
+    await locatorFor(flags).click({ clickCount, ...(flags.button === 'right' ? { button: 'right' } : {}) })
     await page.waitForTimeout(200)
     return { clicked: flags.name ?? flags.placeholder }
   }
@@ -203,7 +205,8 @@ async function handle(body) {
     if (!Number.isInteger(steps) || steps < 1) throw new Error('drag --steps takes a whole number above 0')
     const box = await locatorFor(flags).boundingBox()
     if (box === null) throw new Error('Nothing visible to drag')
-    const x = box.x + box.width / 2, y = box.y + box.height / 2
+    // `--from left` presses just inside the left edge, so a drag can select a line from its first letter.
+    const x = flags.from === 'left' ? box.x + 1 : box.x + box.width / 2, y = box.y + box.height / 2
     await page.mouse.move(x, y)
     await page.mouse.down()
     // Always let go, so a failed move cannot leave the button held for the next check.
