@@ -168,9 +168,9 @@ function EntryCard({ entry, paused, agents, onOpen, onUndo }: {
   const face = entry.face === undefined ? undefined : agents.find((agent) => agent.id === entry.face)
   return (
     <NoticeCard
-      mark={face === undefined ? <Icon icon={mark.icon} size={16} className={mark.tone} /> : (
-        <span className="grid size-5 place-items-center" title={face.name}>
-          <Avatar name={face.name} color={face.color} src={face.avatar} shape={face.avatarShape} tone={face.avatarTone} size={20} />
+      mark={face === undefined ? <Icon icon={mark.icon} size={20} className={mark.tone} /> : (
+        <span className="grid" title={face.name}>
+          <Avatar name={face.name} color={face.color} src={face.avatar} shape={face.avatarShape} tone={face.avatarTone} size={28} />
         </span>
       )}
       title={entry.title}

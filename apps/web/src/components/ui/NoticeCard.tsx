@@ -9,10 +9,10 @@ import { IconSwap } from './IconSwap'
 export const NOTICE_WIDTH = 'w-[min(380px,calc(100vw-32px))]'
 
 /**
- * One card in the notice stack: a mark, what happened, the chat it is about, and a
- * close button. With `onOpen` the whole card opens what it is about; only a button of
- * its own (`action`, such as Undo or Update) does something else. The mark sits in a
- * box one title line tall, so it centres on the title rather than on the text block.
+ * One card in the notice stack: a 28px mark (a kind icon or a face), what happened, the
+ * chat it is about, and a close button on its corner. Every card is at least two lines
+ * tall, so a one-line card (a reply under its face) matches the rest. With `onOpen` the whole card opens
+ * what it is about; only a button of its own (`action`, such as Undo) does something else.
  */
 export function NoticeCard({ mark, title, body, action, onOpen, alert = false, dismissLabel = 'Dismiss', onDismiss }: {
   mark: ReactNode
@@ -47,9 +47,9 @@ export function NoticeCard({ mark, title, body, action, onOpen, alert = false, d
   )
   return (
     <div role={alert ? 'alert' : 'status'}
-      className={`${NOTICE_WIDTH} flex items-start gap-2.5 rounded-xl border border-line bg-raised py-2 pr-2 pl-3.5 text-text shadow-popover ${onOpen === undefined ? '' : 'cursor-pointer'}`}
+      className={`group relative ${NOTICE_WIDTH} flex min-h-15 items-center gap-2.5 rounded-xl border border-line bg-raised px-3.5 py-2 text-text shadow-popover ${onOpen === undefined ? '' : 'cursor-pointer'}`}
       onClick={onOpen}>
-      <span className="grid h-7 flex-none place-items-center">{mark}</span>
+      <span className="grid size-7 flex-none place-items-center">{mark}</span>
       {/* The text is the card's keyboard door; a click anywhere else on the card goes the same way. */}
       {onOpen === undefined ? <div className="grid min-w-0 flex-1 py-1">{text}</div> : (
         <button type="button" className="grid min-w-0 flex-1 cursor-pointer border-0 bg-transparent p-0 py-1 text-left text-text [font-family:inherit]"
@@ -60,8 +60,8 @@ export function NoticeCard({ mark, title, body, action, onOpen, alert = false, d
           {text}
         </button>
       )}
-      {action === undefined ? null : <span className="flex flex-none items-center self-center" onClick={(event) => event.stopPropagation()}>{action}</span>}
-      <ToastDismiss label={dismissLabel} onDismiss={onDismiss} />
+      {action === undefined ? null : <span className="flex flex-none items-center" onClick={(event) => event.stopPropagation()}>{action}</span>}
+      <CornerDismiss label={dismissLabel} onDismiss={onDismiss} />
     </div>
   )
 }
@@ -69,23 +69,29 @@ export function NoticeCard({ mark, title, body, action, onOpen, alert = false, d
 /** A spinner while something runs, a check once it is done, a warning when it failed; swapped in place. */
 export function ProgressMark({ tone }: { tone: 'running' | 'done' | 'failed' }) {
   return (
-    <IconSwap swapKey={tone} className="size-4 flex-none">
+    <IconSwap swapKey={tone} className="size-5 flex-none">
       {tone === 'failed' ? (
-        <Icon icon={Alert02Icon} size={16} className="text-danger" />
+        <Icon icon={Alert02Icon} size={20} className="text-danger" />
       ) : tone === 'done' ? (
-        <Icon icon={CheckmarkCircle02Icon} size={16} className="text-ok" />
+        <Icon icon={CheckmarkCircle02Icon} size={20} className="text-ok" />
       ) : (
-        <Icon icon={LoaderCircleIcon} size={16} className="text-muted motion-safe:animate-spin-calm" />
+        <Icon icon={LoaderCircleIcon} size={20} className="text-muted motion-safe:animate-spin-calm" />
       )}
     </IconSwap>
   )
 }
 
-export function ToastDismiss({ label, onDismiss, className = '' }: { label: string; onDismiss: () => void; className?: string }) {
+/**
+ * A card's close button: a small round one on its top left corner, half over the edge,
+ * so it never takes the room of the text or of an action on the right. It shows while
+ * the pointer is on the card or the button has keyboard focus, and always on a screen
+ * without hover. The card needs `group relative`.
+ */
+export function CornerDismiss({ label, onDismiss }: { label: string; onDismiss: () => void }) {
   return (
     <button
       type="button"
-      className={`${className} grid size-7 flex-none cursor-pointer place-items-center rounded-full border-0 bg-transparent text-dim hover:bg-surface-2 hover:text-text`}
+      className="absolute -top-2 -left-2 grid size-5 cursor-pointer place-items-center rounded-full border border-line bg-raised p-0 text-muted opacity-0 shadow-popover duration-150 motion-safe:transition-opacity group-hover:opacity-100 hover:text-text focus-visible:opacity-100 [@media(hover:none)]:opacity-100"
       title={label}
       aria-label={label}
       onClick={(event) => {
@@ -93,7 +99,7 @@ export function ToastDismiss({ label, onDismiss, className = '' }: { label: stri
         onDismiss()
       }}
     >
-      <Icon icon={Cancel01Icon} size={14} />
+      <Icon icon={Cancel01Icon} size={10} strokeWidth={2.5} />
     </button>
   )
 }

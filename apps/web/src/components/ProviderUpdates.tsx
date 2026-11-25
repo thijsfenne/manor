@@ -14,7 +14,7 @@ import { Button } from './ui/Button'
 import { Fold } from './ui/Fold'
 import { Popover } from './ui/Popover'
 import type { HouseNotice } from './NoticeStack'
-import { NOTICE_WIDTH, NoticeCard, ProgressMark, ToastDismiss } from './ui/NoticeCard'
+import { CornerDismiss, NOTICE_WIDTH, NoticeCard, ProgressMark } from './ui/NoticeCard'
 import { useDismiss } from './ui/useDismiss'
 
 type Provider = ProviderUpdate['provider']
@@ -202,13 +202,13 @@ function UpdateCard({
   return (
     <div
       role={failed ? 'alert' : 'status'}
-      className={`relative ${NOTICE_WIDTH} rounded-xl border border-line bg-raised px-3.5 py-3 shadow-popover`}
+      className={`group relative ${NOTICE_WIDTH} rounded-xl border border-line bg-raised px-3.5 py-3 shadow-popover`}
     >
       {/* The mark sits in a box one title line tall, so it centres on the title's line
           rather than on the top of the text block. */}
-      <div className="flex items-start gap-2.5 pr-7">
+      <div className="flex items-start gap-2.5">
         <span className="grid h-6 flex-none place-items-center">
-          <Icon icon={Alert02Icon} size={16} className={failed ? 'text-danger' : 'text-muted'} />
+          <Icon icon={Alert02Icon} size={20} className={failed ? 'text-danger' : 'text-muted'} />
         </span>
         <div className="min-w-0 flex-1">
           <p className="m-0 leading-6 font-medium text-text">{title}</p>
@@ -219,9 +219,7 @@ function UpdateCard({
           )}
         </div>
       </div>
-      {/* 10px from the top and the right edge alike, which also centres it on the
-          title's line: 12px padding plus half of 24 is 10px plus half of 28. */}
-      <ToastDismiss label="Dismiss" onDismiss={onDismiss} className="absolute top-2.5 right-2.5" />
+      <CornerDismiss label="Dismiss" onDismiss={onDismiss} />
 
       {single === undefined ? (
         // Failures come open: each row carries its own reason, and a fold would hide the
