@@ -157,9 +157,9 @@ export interface ComposerProps {
    * against everyone and then filtered to `mentionable` and `memberIds`, the way the
    * server drops an outsider or a persona this room cannot seat, so naming someone who
    * is not in the room reaches nobody rather than
-   * quietly falling back to whoever spoke last. Defaults to the picker's list, which
-   * is what a solo room wants: a DM parses no mentions at all, so its skills come
-   * off `fallbackTargets` no matter whose name is typed.
+   * quietly falling back to whoever spoke last. Defaults to the picker's list. A solo
+   * room passes an empty one: a DM parses no mentions at all, so its skills come off
+   * `fallbackTargets` no matter whose name is typed or picked.
    */
   roster?: AgentConfig[]
   /** Invited ids of a group. Absent in a project chat, which has no membership. */

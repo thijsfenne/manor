@@ -161,8 +161,13 @@ interface ComposerProps {
    * of staff, the server's last fallback.
    */
   fallbackTargets?: AgentConfig[]
-  /** DMs have a fixed recipient, so another persona cannot be addressed from them. */
   allowAgentMentions?: boolean
+  /**
+   * A DM's mentions: the `@` menu offers `agents` and the draft draws their chips, but
+   * a DM has a fixed recipient, so nothing they name changes who the draft reaches or
+   * which skills it offers. The server parses none there either.
+   */
+  referenceMentions?: boolean
   /**
    * The draft just gained a persona tag it did not have. The new-session stage uses
    * it to leave Single for Multiple; everywhere else it stays unset.
@@ -334,7 +339,7 @@ interface ComposerProps {
 const CARD_REACH = '[&:not(:has([data-composer-above]:not(:empty)))]:[--composer-reach:12px]'
 const CARD_REACH_DENSE = '[&:not(:has([data-composer-above]:not(:empty)))]:[--composer-reach:8px]'
 
-export function Composer({ agents, commandContext, household, overrides = NO_OVERRIDES, files = NO_FILES, filesTruncated = false, skills = NO_SKILLS, fallbackTargets, allowAgentMentions = true, onAgentMention, allowWorkDestination = true, allowBrowserMentions = true, allowComputerMentions, allowAttachments = true, allowSkills = true, allSkillsAvailable = false, showRecipients = false, memberIds, recipientsUnknown = false, steeredAgent, placeholder, draftKey, onSend, pageContexts = NO_PAGE_CONTEXTS, onRemovePageContext, replyTo, onRemoveReply, canSend, blockedNote, autoFocus = false, controls, contextMeter, checkout, onStop, running = false, touchMode = false, compact = false, heights, oneRow = false, boxRef, travelFrom = null, focusMode = false, onEscapeIdle, dictation }: ComposerProps) {
+export function Composer({ agents, commandContext, household, overrides = NO_OVERRIDES, files = NO_FILES, filesTruncated = false, skills = NO_SKILLS, fallbackTargets, allowAgentMentions = true, referenceMentions = false, onAgentMention, allowWorkDestination = true, allowBrowserMentions = true, allowComputerMentions, allowAttachments = true, allowSkills = true, allSkillsAvailable = false, showRecipients = false, memberIds, recipientsUnknown = false, steeredAgent, placeholder, draftKey, onSend, pageContexts = NO_PAGE_CONTEXTS, onRemovePageContext, replyTo, onRemoveReply, canSend, blockedNote, autoFocus = false, controls, contextMeter, checkout, onStop, running = false, touchMode = false, compact = false, heights, oneRow = false, boxRef, travelFrom = null, focusMode = false, onEscapeIdle, dictation }: ComposerProps) {
   const hostAuto = useHostAuto()
   const canMentionComputer = (allowComputerMentions ?? desktopComputer() !== undefined) && !touchMode
   const reduceMotion = useReducedMotion()
@@ -529,7 +534,7 @@ export function Composer({ agents, commandContext, household, overrides = NO_OVE
   // Personas first and always: the roster is short, it is the reason `@` exists, and
   // a file list arriving later must never push a persona off the top of the menu.
   const mentionableAgents = allowAgentMentions ? agents : NO_MENTIONABLE_AGENTS
-  const parsedAgents = allowAgentMentions ? household ?? agents : NO_MENTIONABLE_AGENTS
+  const parsedAgents = allowAgentMentions && !referenceMentions ? household ?? agents : NO_MENTIONABLE_AGENTS
   // Compared against the previous value rather than hooked into the menu pick, so a
   // name typed out in full or pasted in counts the same as one picked from the list.
   const previousValue = useRef(value)
@@ -544,7 +549,8 @@ export function Composer({ agents, commandContext, household, overrides = NO_OVE
       .filter((agent) => memberIds === undefined || memberIds.includes(agent.id))
     : []
   const fileRows = completion?.kind === 'mention' ? matchFiles(files, completion.query) : []
-  const effectiveFallbackTargets = replyFallbackTargets(replyTo, agents, fallbackTargets, memberIds)
+  // A DM's `agents` are only the others it may reference; a reply there still reaches its own agent.
+  const effectiveFallbackTargets = referenceMentions ? fallbackTargets : replyFallbackTargets(replyTo, agents, fallbackTargets, memberIds)
   // Read off `parsedAgents`, which is empty where mentions do not route: in a DM the
   // server parses none (`isSoloRoom`), so `@Smith $` there addresses the DM's persona
   // and must offer that persona's skills. Parsing the roster would offer Smith's.

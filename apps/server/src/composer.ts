@@ -4,6 +4,8 @@ import path from 'node:path'
 import {
   ROUTINE_LATE_AFTER_MS,
   SINGLE_CHAT_VOICE,
+  dmReferenceAgents,
+  parseMentions,
   modelTextOf,
   userInputAnswerText,
   type AgentConfig,
@@ -331,10 +333,31 @@ export function withHouseStyle(agent: AgentConfig, dm = false): AgentConfig {
  * Single turns, the DM variant on a DM turn. Reply language: every turn but
  * infrastructure, Single included. One helper so the four drivers agree.
  */
-export const catchUpStyle = (input: Pick<TurnInput, 'infrastructure' | 'singleSession' | 'dm'>): Pick<CatchUpInput, 'infrastructure' | 'dm' | 'replyLanguage'> =>
+export const catchUpStyle = (input: Pick<TurnInput, 'infrastructure' | 'singleSession' | 'dm'> & Partial<Pick<TurnInput, 'agent'>>): Pick<CatchUpInput, 'infrastructure' | 'dm' | 'dmAgentId' | 'replyLanguage'> =>
   input.infrastructure === true ? { infrastructure: true }
     : input.singleSession === true ? { infrastructure: true, replyLanguage: true }
-      : input.dm === true ? { dm: true, replyLanguage: true } : { replyLanguage: true }
+      : input.dm === true ? { dm: true, ...(input.agent === undefined ? {} : { dmAgentId: input.agent.id }), replyLanguage: true } : { replyLanguage: true }
+
+/**
+ * What the DM agent learns about the other agents a user message tags. In a DM a tag
+ * is a reference, never a summons, so the line says who is meant and that nobody
+ * else joins. In the message rather than the prompt, so the prefix stays cacheable.
+ */
+function dmReferenceNote(event: ThreadEvent, agents: readonly AgentConfig[], dmAgentId: string): string {
+  if (event.type !== 'user_message' || !typedByUser(event)) return ''
+  const candidates = dmReferenceAgents(agents, dmAgentId)
+  const tagged = parseMentions(event.text, candidates).flatMap((id) => candidates.filter((agent) => agent.id === id))
+  if (tagged.length === 0) return ''
+  // One line per agent whatever the description holds, so it cannot read as a new instruction.
+  const line = (agent: AgentConfig) => {
+    const description = agent.description.replace(/\s+/g, ' ').trim()
+    return `- ${agent.name}${description === '' ? '' : `: ${description}`}`
+  }
+  return [
+    `[Manor] The user tagged ${tagged.length === 1 ? 'another agent' : 'other agents'} in this message as a reference only. A tag does not bring anyone into this chat, and nobody else replies here.`,
+    ...tagged.map(line),
+  ].join('\n')
+}
 
 /** Opens the language pin; the model's side of "reply in the user's language". */
 export const REPLY_LANGUAGE_LINE =
@@ -1084,6 +1107,8 @@ export interface CatchUpInput {
   infrastructure?: boolean
   /** Pins the DM house style, with its bubble rule; see `catchUpStyle`. */
   dm?: boolean
+  /** The DM's own agent. Each unanswered typed user message that tags other chat personas gets one reference line per persona. */
+  dmAgentId?: string
   /**
    * Pins `REPLY_LANGUAGE_LINE` before the newest entry when the user typed the message that started the turn. In the
    * message, never the cached prefix, and on Single turns too, which skip the style.
@@ -1185,6 +1210,7 @@ export function composeCatchUp({
   isFullCatchUp,
   infrastructure = false,
   dm = false,
+  dmAgentId,
   replyLanguage = false,
   repoPaths = [],
   repoAccess,
@@ -1196,12 +1222,18 @@ export function composeCatchUp({
 
   const kept = events.slice(from)
   const parts: { speaker: string; support: string; typed: boolean; trailing: boolean }[] = []
+  // References ride only on the messages the DM agent has not answered yet, each on its
+  // own message, since a steering restart puts a nudge after it. Older ones were told.
+  let answered = false
   for (let index = kept.length - 1; index >= 0; index -= 1) {
     const event = kept[index]
     if (event === undefined) continue
+    if (event.type === 'agent_message') answered = true
     const speaker = catchUpSpeaker(event, label, parts.length > 0)
     if (speaker === undefined) continue
-    parts.unshift({ speaker, support: catchUpSupport(event, label), typed: typedByUser(event), trailing: trailsTheTrigger(event) })
+    const references = dmAgentId === undefined || answered ? '' : dmReferenceNote(event, agents, dmAgentId)
+    const support = [catchUpSupport(event, label), references].filter((chunk) => chunk.length > 0).join('\n')
+    parts.unshift({ speaker, support, typed: typedByUser(event), trailing: trailsTheTrigger(event) })
   }
   const lastPart = parts.at(-1)
   const trigger = [...parts].reverse().find((part) => !part.trailing)

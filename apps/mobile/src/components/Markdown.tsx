@@ -15,6 +15,7 @@ import { Gesture, GestureDetector, type GestureType } from 'react-native-gesture
 import { Linking, Pressable, ScrollView, StyleSheet, View, useWindowDimensions, type LayoutChangeEvent, type NativeScrollEvent, type NativeSyntheticEvent, type TextStyle, type ViewStyle } from 'react-native'
 
 import { ImageViewer } from '@/components/Attachments'
+import { Blobatar } from '@/components/Blobatar'
 import { useBubbleTint } from '@/components/bubbleTint'
 import { imageParts } from '@/components/markdownImageParts'
 import { sourceItemHref } from '@/components/sourceLinks'
@@ -851,8 +852,8 @@ function Inline({
 }
 
 /**
- * Plain text with every resolved persona mention drawn as a chip. In a sent message
- * the destination handles he picked are pills too; in agent prose they stay words.
+ * Plain text with every resolved persona mention drawn in her colour. In a sent message
+ * the personas and destinations he picked are pills; in agent prose destinations stay words.
  */
 function Mentions({ text, agents }: { text: string; agents: readonly AgentConfig[] }): ReactNode {
   const message = useContext(SentContext)
@@ -897,6 +898,8 @@ function Mentions({ text, agents }: { text: string; agents: readonly AgentConfig
     const agent = byName.get(handle)
     if (span.skill !== undefined) {
       out.push(<InlinePill key={span.start} label={span.skill.name} title={span.skill.description} tone="skill" />)
+    } else if (agent !== undefined && sent) {
+      out.push(<AgentPill agent={agent} key={span.start} />)
     } else if (agent !== undefined) {
       const persona = personaOf([...agents], agent.id)
       out.push(<Text key={span.start} style={[styles.mention, { color: tint?.ink ?? persona.color }]}>@{agent.name}</Text>)
@@ -979,6 +982,22 @@ function InlinePill({ label, title = label, tone, onPress }: {
   )
 }
 
+/**
+ * A persona he named in his own message: her face and name on a wash of her colour, as
+ * the Mac draws it. Inside a DM bubble it takes that bubble's wash and ink instead.
+ */
+function AgentPill({ agent }: { agent: AgentConfig }) {
+  const tint = useBubbleTint()
+  // Persona colours are hex runtime data; 2E is the Mac chip's 18% wash.
+  const wash = /^#[0-9a-f]{6}$/i.test(agent.color) ? `${agent.color}2E` : colors.chip
+  return (
+    <View accessibilityLabel={`@${agent.name}`} style={[styles.pill, styles.agentPill, { backgroundColor: tint?.wash ?? wash }]}>
+      <Blobatar color={agent.color} name={agent.name} shape={agent.avatarShape} size={14} src={agent.avatar} tone={agent.avatarTone} />
+      <Text numberOfLines={1} style={[styles.pillText, PILL_TEXT.chip, { color: tint?.ink ?? agent.color }]}>{agent.name}</Text>
+    </View>
+  )
+}
+
 const PILL_FILL = StyleSheet.create({
   code: { backgroundColor: colors.chip },
   file: { backgroundColor: colors.chip, gap: 4 },
@@ -1028,6 +1047,8 @@ const styles = StyleSheet.create({
     borderRadius: radius.round, ...squircle, transform: [{ translateY: 2 }],
   },
   pillText: { flexShrink: 1, color: colors.text, fontFamily: fonts.sans, fontSize: 14, lineHeight: 17 },
+  // The face makes this pill read low beside the text, so it takes 1 of the shared 2px nudge.
+  agentPill: { gap: 4, paddingLeft: 3, transform: [{ translateY: 1 }] },
   pillTextBlue: { color: colors.busy },
   rule: { height: StyleSheet.hairlineWidth, backgroundColor: colors.line, marginVertical: spacing.xs },
   imageParagraph: { gap: spacing.sm },

@@ -16,6 +16,7 @@ import {
   WRONG_AGENT_RULE,
   DM_ROUTINE_OUTCOME_HEADING,
   composeCatchUp,
+  catchUpStyle,
   DM_ROUTINE_INCOMPLETE_MARKER,
   DM_ROUTINE_PUBLISH_MARKER,
   DM_ROUTINE_QUIET_MARKER,
@@ -3908,6 +3909,35 @@ describe('Orchestrator', () => {
     await orchestrator.submitUserMessage(dm.id, 'Inspect this')
     await until(() => seen.length === 4, 'the DM turn')
     expect(seen.at(-1)?.agent.id).toBe('watcher')
+  })
+
+  it('treats a DM mention as a reference: one turn for the DM agent, told who was tagged', async () => {
+    const chatSmith = { ...smith, placement: 'chat' as const, mentionAllowlist: ['sage'] }
+    const chatSage = { ...sage, placement: 'chat' as const }
+    const wren = { ...sage, id: 'wren', name: 'Wren', description: 'Session lead.', placement: 'session' as const }
+    const seen: TurnInput[] = []
+    const { orchestrator, store } = await harness(
+      recording(createMockDriver({ deltaDelayMs: 0 }), seen),
+      { agents: [chatSmith, chatSage, wren] },
+    )
+    const dm = await store.createChat({ kind: 'dm', memberIds: [chatSmith.id], title: chatSmith.name })
+    const chatsBefore = (await store.listChats()).length
+
+    await orchestrator.submitUserMessage(dm.id, 'Ask @Sage what @Wren and @Smith think')
+
+    expect(seen.map((input) => input.agent.id)).toEqual(['smith'])
+    expect((await store.listChats()).length).toBe(chatsBefore)
+    const events = await store.loadEvents(dm.id)
+    expect(events.find((event) => event.type === 'user_message')).toMatchObject({ mentions: [] })
+    expect(events.filter((event) => event.type === 'agent_message').map((event) => event.agentId)).toEqual(['smith'])
+
+    const input = seen[0]!
+    const prompt = composeCatchUp({ events: input.catchUp, agents: [chatSmith, chatSage, wren], isFullCatchUp: input.isFullCatchUp, ...catchUpStyle(input) })
+    expect(prompt).toContain('[Manor] The user tagged another agent in this message as a reference only.')
+    expect(prompt).toContain('- Sage: Generalist thinker.')
+    // A Session persona and the DM agent itself are no references.
+    expect(prompt).not.toContain('- Wren')
+    expect(prompt).not.toContain('- Smith')
   })
 })
 

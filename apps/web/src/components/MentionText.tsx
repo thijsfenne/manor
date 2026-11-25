@@ -68,11 +68,12 @@ export function AgentChip({ agent }: { agent: AgentConfig }) {
     <span
       data-inline-chip
       data-agent-chip
-      className="mx-[1px] inline-flex max-w-full items-center gap-1 rounded-full bg-[color-mix(in_srgb,var(--accent)_18%,transparent)] py-[3px] pr-[7px] pl-[4px] align-middle text-[0.92em] leading-none font-medium whitespace-normal text-[var(--accent-fg)]"
+      className="relative -top-0.5 mx-[1px] inline-flex max-w-full items-center gap-1 rounded-full bg-[color-mix(in_srgb,var(--accent)_18%,transparent)] py-[3px] pr-[7px] pl-[4px] align-middle text-[0.92em] leading-none font-medium whitespace-normal text-[var(--accent-fg)]"
       style={accentStyle(agent.color)}
     >
       <Avatar name={agent.name} color={agent.color} src={agent.avatar} shape={agent.avatarShape} tone={agent.avatarTone} size={15} />
-      {agent.name}
+      {/* Geist sits high at a line height of 1: the name drops a pixel inside the pill, and the pill rises two so it centres on the text around it. */}
+      <span className="relative top-px">{agent.name}</span>
     </span>
   )
 }

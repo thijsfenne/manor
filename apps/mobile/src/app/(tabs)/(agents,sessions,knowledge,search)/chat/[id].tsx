@@ -13,7 +13,7 @@ import GitBranchIcon from '@hugeicons/core-free-icons/GitBranchIcon'
 import LockIcon from '@hugeicons/core-free-icons/LockIcon'
 import Undo02Icon from '@hugeicons/core-free-icons/Undo02Icon'
 import { HugeiconsIcon } from '@hugeicons/react-native'
-import { imageRefSpans, isModelOnlyMessage, isSoloRoom, placeQuotesAfterText, projectThreadOf, withQuoteExcerpts, ROUTINE_LATE_AFTER_MS, SINGLE_CHAT_VOICE, SUBAGENT_VOICE, userInputAnswerText, type AgentConfig, type ChatOverride, type EventDocument, type EventImage, type FileAttachment, type ImageAttachment, type InlineQuote, type MessageQuote, type MessageReply, type NoteQuote, type SkillConfig, type ThreadEvent } from '@manor/contracts'
+import { dmReferenceAgents, imageRefSpans, isModelOnlyMessage, isSoloRoom, placeQuotesAfterText, projectThreadOf, withQuoteExcerpts, ROUTINE_LATE_AFTER_MS, SINGLE_CHAT_VOICE, SUBAGENT_VOICE, userInputAnswerText, type AgentConfig, type ChatOverride, type EventDocument, type EventImage, type FileAttachment, type ImageAttachment, type InlineQuote, type MessageQuote, type MessageReply, type NoteQuote, type SkillConfig, type ThreadEvent } from '@manor/contracts'
 import type { StagedFile } from '@manor/client-runtime/attachments'
 import { avatarBubbleTint, projectBubbleTint, type BubbleTint } from '@manor/client-runtime/avatar-bubble'
 import { liveSessionContext, singleWorkContext } from '@manor/client-runtime/context-meter'
@@ -485,10 +485,12 @@ function ChatContent({ chatId }: { chatId: string | undefined }) {
     : tintProject === undefined ? undefined : projectBubbleTint(tintProject)
   const sessionLeadId = workspace.workHandoffs.find((handoff) => handoff.workChatId === chatId)?.leadAgentId
   // Nothing in a DM's message routes: the server does not parse mentions there at
-  // all, so `@Smith` inside Sage's DM is text Sage reads, not a summons. That makes
-  // the mentionable set empty rather than filtered, and it is also the roster the
-  // `$` menu reads skills off, which is why the composer gets no wider one.
-  const mentionable = chat !== null && isSoloRoom(chat) ? [] : roster
+  // all, so `@Smith` inside Sage's DM is a reference Sage reads, not a summons. The
+  // picker offers the other chat personas, and the composer parses against nobody
+  // (`roster` below), so the `$` menu keeps reading skills off the DM's own agent.
+  const mentionable = chat?.kind === 'dm' && sessionDmAgent === undefined && roster[0] !== undefined
+    ? dmReferenceAgents(workspace.agents, roster[0].id)
+    : chat !== null && isSoloRoom(chat) ? [] : roster
   /**
    * Who an un-mentioned draft falls back to, which is both what the recipient label
    * restates and who the `$` menu reads skills off. A DM has one addressee and no
@@ -1152,7 +1154,7 @@ function ChatContent({ chatId }: { chatId: string | undefined }) {
               allSkillsAvailable={singleChat}
               {...(contextMeter === undefined ? {} : { contextMeter })}
               {...(composerModel === undefined ? {} : { model: composerModel })}
-              {...(chat !== null && isSoloRoom(chat) ? {} : { roster: workspace.agents })}
+              roster={chat !== null && isSoloRoom(chat) ? [] : workspace.agents}
               {...(recipientsOf === undefined ? {} : { recipientsOf })}
               onSend={submit}
               onStop={() => {

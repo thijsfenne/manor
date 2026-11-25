@@ -3619,6 +3619,16 @@ export function agentFitsChat(agent: AgentConfig, chat: Pick<Chat, 'kind' | 'mod
   return agent.placement !== 'session'
 }
 
+/**
+ * Who a DM's `@` may name: the chat personas besides the DM's own agent. In a DM a
+ * mention is a reference the DM agent reads, never a summons, so its mention
+ * allowlist plays no part. The composers offer these and the server describes them.
+ * A persona called Work is left out: `@work` in a DM sends the message to Sessions.
+ */
+export function dmReferenceAgents<T extends AgentConfig>(agents: readonly T[], dmAgentId: string): T[] {
+  return agents.filter((agent) => agent.id !== dmAgentId && agent.name.toLowerCase() !== 'work' && agentFitsChat(agent, { kind: 'dm' }))
+}
+
 export const WorkHandoffStateSchema = z.enum(['active', 'settled', 'deleted'])
 export type WorkHandoffState = z.infer<typeof WorkHandoffStateSchema>
 

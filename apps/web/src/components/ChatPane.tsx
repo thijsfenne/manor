@@ -3,6 +3,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type 
 import { Cancel01Icon, LockIcon } from '@hugeicons/core-free-icons'
 import {
   SINGLE_CHAT_VOICE,
+  dmReferenceAgents,
   isSoloRoom,
   runtimeOn,
   type AgentConfig,
@@ -421,8 +422,11 @@ export function ChatPane({
   // No switch on a host without Auto: the picker stays open and names the model.
   const singleCanAuto = hostAuto && !browserChat &&
     !runtimeStartedAgentIds(thread).includes(SINGLE_CHAT_VOICE.id) && openSingleOverride.autoResolved !== true
-  // Mentions offer only who can sit in this room: Session personas in a Session.
-  const composerAgents = singleChat ? NO_AGENTS : roomAgents(workspace.agents, chat)
+  // Mentions offer only who can sit in this room: Session personas in a Session. A DM
+  // offers the other chat personas, as references its agent reads and nobody answers.
+  const composerAgents = singleChat ? NO_AGENTS
+    : dmAgent !== undefined ? dmReferenceAgents(workspace.agents, dmAgent.id)
+      : roomAgents(workspace.agents, chat)
   const notesActions: NotesActions | undefined = onEditPersona === undefined || onUndoMemoryWrite === undefined ? undefined : {
     requestEvents,
     connected: status === 'live',
@@ -520,7 +524,8 @@ export function ChatPane({
       commandContext={() => chatCommandContext(chat, project, thread.events, workspace.workHandoffs,
         runningTurnIds.length > 0 || sessionLive(chat.id).running || waiting || thread.pending.length > 0)}
       household={workspace.agents}
-      allowAgentMentions={!singleChat && chat.kind !== 'dm'}
+      allowAgentMentions={!singleChat && !sessionDm}
+      referenceMentions={chat.kind === 'dm'}
       allowWorkDestination={chat.kind === 'dm'}
       allSkillsAvailable={singleChat}
       showRecipients={!singleChat && composerShowsRecipients(chat.kind, thread.events, thread.pending.length)}

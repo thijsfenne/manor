@@ -1,6 +1,6 @@
 import { stageCommandContext } from '@manor/client-runtime/chat-commands'
 import { useEffect, useMemo, type ComponentProps } from 'react'
-import { NEW_SINGLE_CHAT_DEFAULT, SINGLE_CHAT_VOICE, runtimeOn, type AgentConfig } from '@manor/contracts'
+import { NEW_SINGLE_CHAT_DEFAULT, SINGLE_CHAT_VOICE, dmReferenceAgents, runtimeOn, type AgentConfig } from '@manor/contracts'
 import { useOffModels } from '../../useOffModels'
 import { Avatar } from '../Avatar'
 import { CheckoutRow, type CheckoutStatus } from '../CheckoutRow'
@@ -236,7 +236,7 @@ export function DraftStage({
       // The stage's range while the chat is composed, the foot's own from the send, as it
       // travels to the foot where the chat's composer takes over.
       {...(phone ? {} : { heights: birthing === null ? 'stage' as const : 'session' as const })}
-      agents={draftAgent === undefined ? roomAgents(workspace.agents, draftRoom) : workspace.agents}
+      agents={draftAgent === undefined ? roomAgents(workspace.agents, draftRoom) : dmReferenceAgents(workspace.agents, draftAgent.id)}
       household={workspace.agents}
       overrides={draft.overrides}
       files={composerFiles?.files}
@@ -257,10 +257,11 @@ export function DraftStage({
       {...(draftNamedProject !== undefined && generalProject !== undefined && !draft.submitting
         ? { onEscapeIdle: () => setDraftProject(generalProject.id) }
         : {})}
-      allowAgentMentions={draftAgent === undefined}
+      // A DM's tags are references its agent reads, as in the DM once it exists.
+      referenceMentions={draftAgent !== undefined}
       // Tagging a persona is asking for the house, so a fresh session follows the tag
       // into Multiple. Only here: an open chat's mode is fixed once it exists.
-      {...(draftMode === 'single' && !draft.submitting && !creating
+      {...(draftAgent === undefined && draftMode === 'single' && !draft.submitting && !creating
         ? { onAgentMention: () => setDraftMode('house') }
         : {})}
       allowWorkDestination={draft.target.kind === 'dm'}
