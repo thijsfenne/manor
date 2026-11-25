@@ -16,6 +16,7 @@ import { ActivityIndicator, FlatList, Pressable, ScrollView, StyleSheet, View, u
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import Animated, { FadeIn, useReducedMotion } from 'react-native-reanimated'
 
+import { EdgeScrim, SCRIM_REACH } from '@/components/EdgeScrim'
 import { GlassIconButton } from '@/components/GlassIconButton'
 import { GlassPressable } from '@/components/GlassPressable'
 import { Markdown } from '@/components/Markdown'
@@ -121,6 +122,8 @@ function FilePager({ files, initialId, agents, onClose }: { files: readonly DmFi
         style={styles.pager}
         windowSize={3}
       />
+      {/* A text file scrolls under the header, so it fades there as every page does. */}
+      <EdgeScrim edge="top" height={Math.max(insets.top, spacing.lg) + 44 + SCRIM_REACH} />
       <View pointerEvents="box-none" style={[styles.header, { left: spacing.lg + insets.left, right: spacing.lg + insets.right, paddingTop: Math.max(insets.top, spacing.lg) }]}>
         {/* Room for one more round button, which belongs here once it exists. */}
         <View style={styles.headerSide} />

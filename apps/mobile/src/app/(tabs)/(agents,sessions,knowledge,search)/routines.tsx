@@ -9,6 +9,7 @@ import { ConnectGate } from '@/components/ConnectGate'
 import { EmptyCard } from '@/components/EmptyCard'
 import { RoutineRow, routineOn } from '@/components/RoutineRow'
 import { DisclosureChevron } from '@/components/DisclosureChevron'
+import { useScrimScroll } from '@/components/EdgeScrim'
 import { SectionScaffold } from '@/components/SectionScaffold'
 import { SegmentedControl } from '@/components/SegmentedControl'
 import { useWorkspace } from '@/providers/WorkspaceProvider'
@@ -18,7 +19,7 @@ import { colors, fonts, radius, spacing } from '@/theme'
 const now = () => Date.now()
 
 export default function RoutinesScreen() {
-  return <ConnectGate><SectionScaffold title="Scheduled tasks"><RoutinesList /></SectionScaffold></ConnectGate>
+  return <ConnectGate><SectionScaffold tabBar={false} title="Scheduled tasks"><RoutinesList /></SectionScaffold></ConnectGate>
 }
 
 const KINDS = [{ value: 'recurring', label: 'Recurring' }, { value: 'once', label: 'Once' }] as const
@@ -42,6 +43,7 @@ function RoutinesList() {
   const [earlierOpen, setEarlierOpen] = useState(false)
   const [pickedKind, setPickedKind] = useState<ScheduleKind | null>(null)
   const kind = pickedKind ?? DEFAULT_KIND
+  const scroll = useScrimScroll(styles.list)
   // Once a minute, so a failure leaves Upcoming after its day and Today rolls over
   // without waiting for some other update.
   const [clock, setClock] = useState(now)
@@ -97,7 +99,7 @@ function RoutinesList() {
 
   return (
     <SectionList
-      contentContainerStyle={styles.list}
+      {...scroll}
       sections={sections}
       stickySectionHeadersEnabled={false}
       ItemSeparatorComponent={() => <View style={styles.gap} />}

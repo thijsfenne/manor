@@ -4,10 +4,11 @@ import type { MyMindArtifact } from '@manor/contracts'
 import { Image } from 'expo-image'
 import * as WebBrowser from 'expo-web-browser'
 import { useEffect, useRef, useState } from 'react'
-import { ActivityIndicator, FlatList, Pressable, StyleSheet, View } from 'react-native'
+import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native'
 import { TextInput } from '@/components/TextInput'
 
 import { ConnectGate } from '@/components/ConnectGate'
+import { ScrimFlatList } from '@/components/EdgeScrim'
 import { SectionScaffold } from '@/components/SectionScaffold'
 import { serverMediaUri } from '@/lib/connection'
 import { useWorkspace } from '@/providers/WorkspaceProvider'
@@ -15,7 +16,7 @@ import { Text } from '@/components/Text'
 import { colors, fonts, radius, spacing, squircle, tracking } from '@/theme'
 
 export default function ArtifactsScreen() {
-  return <ConnectGate><SectionScaffold title="Artifacts"><Library /></SectionScaffold></ConnectGate>
+  return <ConnectGate><SectionScaffold tabBar={false} title="Artifacts"><Library /></SectionScaffold></ConnectGate>
 }
 
 const KIND_LABEL: Record<MyMindArtifact['kind'], string> = {
@@ -68,48 +69,51 @@ function Library() {
   }
 
   const loading = artifacts.askingQuery !== null && artifacts.objects.length === 0
+  // Offline, failed and loading stand in for the rows, so the search field above them
+  // stays one mounted input, typing included, while the list runs under the header.
+  const listing = live && artifacts.error === null && !loading && artifacts.status !== 'unknown'
 
   return (
-    <View style={styles.host}>
-      <View style={styles.search}>
-        <HugeiconsIcon color={colors.muted} icon={Search01Icon} size={18} strokeWidth={1.7} />
-        <TextInput
-          autoCapitalize="none"
-          autoCorrect={false}
-          clearButtonMode="while-editing"
-          editable={live}
-          onChangeText={setQuery}
-          placeholder="Search your artifacts"
-          placeholderTextColor={colors.dim}
-          selectionColor={colors.text}
-          style={styles.searchInput}
-          value={query}
-        />
-      </View>
-      {!live ? (
+    <ScrimFlatList
+      contentContainerStyle={styles.list}
+      data={listing ? artifacts.objects : []}
+      ItemSeparatorComponent={() => <View style={styles.gap} />}
+      keyboardDismissMode="on-drag"
+      keyboardShouldPersistTaps="handled"
+      keyExtractor={(item) => item.id}
+      ListHeaderComponent={(
+        <View style={styles.search}>
+          <HugeiconsIcon color={colors.muted} icon={Search01Icon} size={18} strokeWidth={1.7} />
+          <TextInput
+            autoCapitalize="none"
+            autoCorrect={false}
+            clearButtonMode="while-editing"
+            editable={live}
+            onChangeText={setQuery}
+            placeholder="Search your artifacts"
+            placeholderTextColor={colors.dim}
+            selectionColor={colors.text}
+            style={styles.searchInput}
+            value={query}
+          />
+        </View>
+      )}
+      ListEmptyComponent={!live ? (
         <Text style={styles.note}>Your Mac is offline.</Text>
       ) : artifacts.error !== null ? (
         <Text style={[styles.note, styles.error]}>{artifacts.error}</Text>
-      ) : loading || artifacts.status === 'unknown' ? (
+      ) : !listing ? (
         <View style={styles.loading}><ActivityIndicator color={colors.muted} /></View>
       ) : (
-        <FlatList
-          contentContainerStyle={styles.list}
-          data={artifacts.objects}
-          ItemSeparatorComponent={() => <View style={styles.gap} />}
-          keyboardDismissMode="on-drag"
-          keyboardShouldPersistTaps="handled"
-          keyExtractor={(item) => item.id}
-          ListEmptyComponent={<Text style={styles.note}>{artifacts.query.trim() === '' ? 'No artifacts in this view.' : `Nothing found for “${artifacts.query.trim()}”.`}</Text>}
-          ListFooterComponent={artifacts.loadingMore ? <View style={styles.loading}><ActivityIndicator color={colors.muted} /></View> : null}
-          onEndReached={() => {
-            if (artifacts.hasMore && !artifacts.loadingMore) loadMoreArtifacts()
-          }}
-          onEndReachedThreshold={0.6}
-          renderItem={({ item }) => <ArtifactRow artifact={item} />}
-        />
+        <Text style={styles.note}>{artifacts.query.trim() === '' ? 'No artifacts in this view.' : `Nothing found for “${artifacts.query.trim()}”.`}</Text>
       )}
-    </View>
+      ListFooterComponent={artifacts.loadingMore ? <View style={styles.loading}><ActivityIndicator color={colors.muted} /></View> : null}
+      onEndReached={() => {
+        if (listing && artifacts.hasMore && !artifacts.loadingMore) loadMoreArtifacts()
+      }}
+      onEndReachedThreshold={0.6}
+      renderItem={({ item }) => <ArtifactRow artifact={item} />}
+    />
   )
 }
 
@@ -156,8 +160,7 @@ function ArtifactRow({ artifact }: { artifact: MyMindArtifact }) {
 }
 
 const styles = StyleSheet.create({
-  host: { flex: 1 },
-  search: { height: 44, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginHorizontal: spacing.lg, marginVertical: spacing.sm, borderRadius: radius.md, ...squircle, backgroundColor: colors.surface2, paddingHorizontal: spacing.md },
+  search: { height: 44, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginVertical: spacing.sm, borderRadius: radius.md, ...squircle, backgroundColor: colors.surface2, paddingHorizontal: spacing.md },
   searchInput: { flex: 1, color: colors.text, fontFamily: fonts.sans, fontSize: 16, letterSpacing: tracking.body, paddingVertical: 0 },
   list: { paddingHorizontal: spacing.lg, paddingBottom: 48 },
   gap: { height: spacing.sm },

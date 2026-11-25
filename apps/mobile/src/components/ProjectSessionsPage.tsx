@@ -9,7 +9,7 @@ import { StyleSheet, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { CHAT_HEADER_HEIGHT } from '@/components/ChatHeader'
-import { EdgeScrim } from '@/components/EdgeScrim'
+import { EdgeScrim, SCRIM_REACH } from '@/components/EdgeScrim'
 import { GlassIconButton } from '@/components/GlassIconButton'
 import { SessionOverviewList } from '@/components/SessionOverviewList'
 import { Text } from '@/components/Text'
@@ -39,9 +39,10 @@ export function ProjectSessionsPage({ threadId, projectName, overview, agents, o
         overview={overview}
         threadId={threadId}
       />
+      <EdgeScrim edge="bottom" height={insets.bottom + SCRIM_REACH} />
       {/* Drawn over the list, as the thread's own header, so rows scroll up softly behind it. */}
       <View pointerEvents="box-none" style={styles.header}>
-        <EdgeScrim edge="top" height={insets.top + CHAT_HEADER_HEIGHT + 28} />
+        <EdgeScrim edge="top" height={insets.top + CHAT_HEADER_HEIGHT + SCRIM_REACH} />
         <View pointerEvents="box-none" style={[styles.row, { paddingTop: insets.top + 6 }]}>
           <GlassIconButton accessibilityLabel="Back to the thread" icon={ArrowLeft01Icon} onPress={onBack} />
           <View style={styles.heading}>

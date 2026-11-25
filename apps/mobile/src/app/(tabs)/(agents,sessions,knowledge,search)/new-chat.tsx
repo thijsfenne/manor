@@ -39,21 +39,21 @@ import {
   KeyboardAvoidingView,
   Platform,
   Pressable,
-  ScrollView,
   StyleSheet,
   Switch,
   View,
 } from 'react-native'
 import { TextInput } from '@/components/TextInput'
-import { SafeAreaView } from 'react-native-safe-area-context'
 
 import { ConnectGate } from '@/components/ConnectGate'
 import { useOffModels } from '@/useOffModels'
 import { Composer } from '@/components/Composer'
 import { AiBotHeadLookingIcon } from '@/components/customIcons'
+import { ScrimScrollView } from '@/components/EdgeScrim'
 import { GlassIconButton } from '@/components/GlassIconButton'
 import { ProviderMark } from '@/components/ProviderMark'
 import { RuntimeSheet, SingleRuntimeSheet } from '@/components/RuntimeSheet'
+import { ScrimFrame } from '@/components/SectionScaffold'
 import { SegmentedControl } from '@/components/SegmentedControl'
 import { useWorkspace } from '@/providers/WorkspaceProvider'
 import { Text } from '@/components/Text'
@@ -62,6 +62,9 @@ import { useHostAuto } from '@/useHostAuto'
 import { MAC_ANSWER_WAIT_MS, sendWaitLine } from '@/lib/sendWait'
 
 type Stage = 'projects' | 'folders' | 'draft'
+
+/** The header row under the status bar: close or back, the title, and Add folder. */
+const HEADER_HEIGHT = 62
 
 export default function NewChatScreen() {
   return (
@@ -337,14 +340,20 @@ function NewChatFlow() {
   const title = stage === 'projects' ? 'Choose project' : stage === 'folders' ? 'Add folder' : 'New Session'
 
   return (
-    <SafeAreaView edges={['top', 'bottom']} style={styles.screen}>
-      <SheetHeader
-        canGoBack={stage !== 'projects'}
-        onBack={showProjects}
-        onClose={() => router.back()}
-        onAdd={stage === 'projects' ? showFolders : undefined}
-        title={title}
-      />
+    <ScrimFrame
+      header={(
+        <SheetHeader
+          canGoBack={stage !== 'projects'}
+          onBack={showProjects}
+          onClose={() => router.back()}
+          onAdd={stage === 'projects' ? showFolders : undefined}
+          title={title}
+        />
+      )}
+      headerHeight={HEADER_HEIGHT}
+      // The draft does not scroll, and a bottom scrim would only fade over its composer.
+      tabBar={stage !== 'draft'}
+    >
       {stage === 'projects' ? (
         <ProjectPicker
           onAdd={showFolders}
@@ -417,7 +426,7 @@ function NewChatFlow() {
         override={singleOverride}
         fallback={singleDefault}
       />
-    </SafeAreaView>
+    </ScrimFrame>
   )
 }
 
@@ -435,13 +444,13 @@ function SheetHeader({
   onAdd?: () => void
 }) {
   return (
-    <View style={styles.header}>
+    <View pointerEvents="box-none" style={styles.header}>
       <GlassIconButton
         accessibilityLabel={canGoBack ? 'Back' : 'Close'}
         icon={canGoBack ? ArrowLeft01Icon : Cancel01Icon}
         onPress={canGoBack ? onBack : onClose}
       />
-      <Text numberOfLines={1} style={styles.headerTitle}>{title}</Text>
+      <Text numberOfLines={1} pointerEvents="none" style={styles.headerTitle}>{title}</Text>
       {onAdd === undefined ? <View style={styles.headerButton} /> : (
         <GlassIconButton
           accessibilityLabel="Add folder"
@@ -469,7 +478,7 @@ function ProjectPicker({
   onRemove: (projectId: string) => void
 }) {
   return (
-    <ScrollView
+    <ScrimScrollView
       contentContainerStyle={[styles.content, projects.length === 0 && general === undefined && styles.fill]}
       keyboardShouldPersistTaps="handled"
     >
@@ -556,7 +565,7 @@ function ProjectPicker({
           </View>
         </>
       )}
-    </ScrollView>
+    </ScrimScrollView>
   )
 }
 
@@ -583,7 +592,7 @@ function FolderPicker({
 }) {
   return (
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.fill}>
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+      <ScrimScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <View style={styles.fieldGroup}>
           <Text style={styles.fieldLabel}>Folder on your Mac</Text>
           <View style={styles.pathField}>
@@ -679,7 +688,7 @@ function FolderPicker({
         </Pressable>
         <Text style={styles.hostHint}>This folder stays on your Mac. The app only uses Manor as a remote control.</Text>
         {error === null ? null : <Text accessibilityRole="alert" style={styles.error}>{error}</Text>}
-      </ScrollView>
+      </ScrimScrollView>
     </KeyboardAvoidingView>
   )
 }
@@ -870,10 +879,9 @@ function ScopeRow({
 
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: colors.background },
   fill: { flex: 1 },
   header: {
-    minHeight: 62,
+    height: HEADER_HEIGHT,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,

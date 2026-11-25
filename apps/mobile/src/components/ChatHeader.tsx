@@ -15,7 +15,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { AgentStack } from '@/components/AgentStack'
 import { AiBotHeadLookingIcon } from '@/components/customIcons'
 import { Blobatar } from '@/components/Blobatar'
-import { EdgeScrim } from '@/components/EdgeScrim'
+import { EdgeScrim, SCRIM_REACH } from '@/components/EdgeScrim'
 import { GlassIconButton } from '@/components/GlassIconButton'
 import { GlassPressable } from '@/components/GlassPressable'
 import { GlassGroup } from '@/components/GlassSurface'
@@ -99,7 +99,7 @@ export function ChatHeader({ title, subtitle, project, projectThread = false, dr
   if (threadMark !== undefined) {
     return (
       <View pointerEvents="box-none" style={styles.host}>
-        <EdgeScrim edge="top" height={insets.top + CHAT_HEADER_HEIGHT + 28} />
+        <EdgeScrim edge="top" height={insets.top + CHAT_HEADER_HEIGHT + SCRIM_REACH} />
         <View pointerEvents="box-none" style={[styles.row, { paddingTop: insets.top + 6 }]}>
           <GlassIconButton accessibilityLabel="Back to Sessions" icon={ArrowLeft01Icon} onPress={onBack} />
           <View pointerEvents="box-none" style={styles.centre}>
@@ -138,7 +138,7 @@ export function ChatHeader({ title, subtitle, project, projectThread = false, dr
     const { agent } = dm
     return (
       <View pointerEvents="box-none" style={styles.host}>
-        <EdgeScrim edge="top" height={insets.top + CHAT_HEADER_HEIGHT + 28} />
+        <EdgeScrim edge="top" height={insets.top + CHAT_HEADER_HEIGHT + SCRIM_REACH} />
         <View pointerEvents="box-none" style={[styles.row, { paddingTop: insets.top + 6 }]}>
           <GlassIconButton accessibilityLabel="Back" icon={ArrowLeft01Icon} onPress={onBack} />
           <View pointerEvents="box-none" style={styles.centre}>
@@ -165,7 +165,7 @@ export function ChatHeader({ title, subtitle, project, projectThread = false, dr
 
   return (
     <View pointerEvents="box-none" style={styles.host}>
-      <EdgeScrim edge="top" height={insets.top + CHAT_HEADER_HEIGHT + 28} />
+      <EdgeScrim edge="top" height={insets.top + CHAT_HEADER_HEIGHT + SCRIM_REACH} />
       <View pointerEvents="box-none" style={[styles.row, { paddingTop: insets.top + 6 }]}>
         <GlassIconButton accessibilityLabel="Back" icon={ArrowLeft01Icon} onPress={onBack} />
 

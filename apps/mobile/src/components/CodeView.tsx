@@ -2,6 +2,7 @@ import { highlight, type Token } from '@manor/client-runtime/highlight'
 import { useMemo } from 'react'
 import { FlatList, ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native'
 
+import { useScrimScroll } from '@/components/EdgeScrim'
 import { Text } from '@/components/Text'
 import { colors, fonts, spacing, syntax } from '@/theme'
 
@@ -28,11 +29,14 @@ export function CodeView({ code, language }: { code: string; language: string })
   const longest = useMemo(() => lines.reduce((max, line) => Math.max(max, line.reduce((n, token) => n + token.text.length, 0)), 0), [lines])
   const rowWidth = Math.max(width - spacing.lg * 2, GUTTER + longest * CHAR_WIDTH + spacing.xl)
   const digits = String(lines.length).length
+  // The page scrolls sideways under the header too; only the lines pad clear of it.
+  const scroll = useScrimScroll(styles.list)
 
   return (
-    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.host}>
+    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={[styles.host, scroll.style]}>
       <FlatList
-        contentContainerStyle={styles.list}
+        contentContainerStyle={scroll.contentContainerStyle}
+        scrollIndicatorInsets={scroll.scrollIndicatorInsets}
         data={lines}
         getItemLayout={(_, index) => ({ length: LINE_HEIGHT, offset: LINE_HEIGHT * index, index })}
         initialNumToRender={48}

@@ -11,13 +11,14 @@ import { PROJECT_ICON_OPTIONS, draftMark, markFields, projectColorChoices, proje
 import { HugeiconsIcon } from '@hugeicons/react-native'
 import { MAX_PROJECT_FOLDERS, type Project } from '@manor/contracts'
 import { useEffect, useRef, useState } from 'react'
-import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, View } from 'react-native'
+import { ActivityIndicator, Alert, Pressable, StyleSheet, View } from 'react-native'
 import { TextInput } from '@/components/TextInput'
 
 import { CardButton } from '@/components/CardButton'
 import { GlassIconButton } from '@/components/GlassIconButton'
 import { GlassPressable } from '@/components/GlassPressable'
 import { ProjectMark } from '@/components/ProjectMark'
+import { ScrimScrollView } from '@/components/EdgeScrim'
 import { Sheet } from '@/components/Sheet'
 import { Text } from '@/components/Text'
 import { serverMediaUri } from '@/lib/connection'
@@ -201,7 +202,7 @@ export function ProjectSettingsSheet({ project, open, onClose, onFiles, onDelete
       {...(onDismiss === undefined ? {} : { onDismiss })}
       open={open}
     >
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+      <ScrimScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <View style={styles.hero}>
           <View style={styles.markSlot}>
             <View style={[styles.mark, { backgroundColor: `${draft.color}29` }]}>
@@ -368,7 +369,7 @@ export function ProjectSettingsSheet({ project, open, onClose, onFiles, onDelete
             <Text style={styles.deleteText}>Delete project thread</Text>
           </Pressable>
         </View>
-      </ScrollView>
+      </ScrimScrollView>
     </Sheet>
   )
 }

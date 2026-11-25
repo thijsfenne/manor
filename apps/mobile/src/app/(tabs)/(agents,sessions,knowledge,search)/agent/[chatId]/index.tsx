@@ -3,7 +3,6 @@
  * FIRST VIEWPORT: Back, her face large with name and role, the Name and Title fields, Model, then Files, Scheduled tasks, Skills and Connectors.
  */
 import AiBrain01Icon from '@hugeicons/core-free-icons/AiBrain01Icon'
-import ArrowLeft01Icon from '@hugeicons/core-free-icons/ArrowLeft01Icon'
 import ArrowRight01Icon from '@hugeicons/core-free-icons/ArrowRight01Icon'
 import BoxIcon from '@hugeicons/core-free-icons/BoxIcon'
 import Clock01Icon from '@hugeicons/core-free-icons/Clock01Icon'
@@ -14,16 +13,16 @@ import { effectiveDriver, runtimeParts } from '@manor/client-runtime/runtime-cho
 import type { AgentConfig } from '@manor/contracts'
 import { router, useLocalSearchParams } from 'expo-router'
 import { useState, type ReactNode } from 'react'
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native'
+import { Pressable, StyleSheet, View } from 'react-native'
 import { TextInput } from '@/components/TextInput'
-import { SafeAreaView } from 'react-native-safe-area-context'
 
 import { Blobatar } from '@/components/Blobatar'
 import { ConnectGate } from '@/components/ConnectGate'
-import { GlassIconButton } from '@/components/GlassIconButton'
+import { ScrimScrollView } from '@/components/EdgeScrim'
 import { ProviderMark } from '@/components/ProviderMark'
 import { routineOn } from '@/components/RoutineRow'
 import { AgentRuntimeSheet } from '@/components/RuntimeSheet'
+import { SectionScaffold } from '@/components/SectionScaffold'
 import { Text } from '@/components/Text'
 import { agentHoldings, agentOfDm, type AgentList } from '@/lib/agentOverview'
 import { useWorkspace, type AgentEdit } from '@/providers/WorkspaceProvider'
@@ -45,17 +44,15 @@ function AgentOverview() {
   const back = () => (router.canGoBack() ? router.back() : router.replace({ pathname: '/chat/[id]', params: { id: chatId } }))
 
   return (
-    <SafeAreaView edges={['top']} style={styles.screen}>
-      <View style={styles.header}>
-        <GlassIconButton accessibilityLabel="Back" icon={ArrowLeft01Icon} onPress={back} />
-      </View>
+    // No title: her face and name lead the page right under the back button.
+    <SectionScaffold onBack={back} title="">
       {agent === undefined ? (
         <Text style={styles.gone}>This agent is no longer in Manor.</Text>
       ) : (
         // Keyed on the agent, so a draft never carries over to another one.
         <AgentPage agent={agent} chatId={chatId} key={agent.id} />
       )}
-    </SafeAreaView>
+    </SectionScaffold>
   )
 }
 
@@ -73,7 +70,7 @@ function AgentPage({ agent, chatId }: { agent: AgentConfig; chatId: string }) {
 
   return (
     <>
-      <ScrollView contentContainerStyle={styles.page} keyboardShouldPersistTaps="handled">
+      <ScrimScrollView contentContainerStyle={styles.page} keyboardShouldPersistTaps="handled">
         <View style={styles.identity}>
           <Blobatar color={agent.color} name={agent.name} shape={agent.avatarShape} tone={agent.avatarTone} size={96} src={agent.avatar} />
           <View style={styles.nameLine}>
@@ -106,7 +103,7 @@ function AgentPage({ agent, chatId }: { agent: AgentConfig; chatId: string }) {
           <Row icon={BoxIcon} label="Skills" onPress={() => openList('skills')} value={`${holdings.skills.length} on`} />
           <Row icon={ConnectIcon} label="Connectors" last onPress={() => openList('connectors')} value={`${holdings.connectors.length} on`} />
         </View>
-      </ScrollView>
+      </ScrimScrollView>
 
       <AgentRuntimeSheet
         agent={agent}
@@ -241,8 +238,6 @@ function Row({ icon, label, value, spoken, last = false, onPress }: {
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: colors.background },
-  header: { width: '100%', maxWidth: 760, minHeight: 60, alignSelf: 'center', flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.lg, paddingTop: spacing.xs },
   gone: { color: colors.muted, fontFamily: fonts.sans, fontSize: 15, padding: spacing.lg },
   page: { width: '100%', maxWidth: 760, alignSelf: 'center', gap: spacing.xl, paddingHorizontal: spacing.lg, paddingTop: spacing.sm, paddingBottom: 48 },
   identity: { alignItems: 'center', gap: spacing.md },

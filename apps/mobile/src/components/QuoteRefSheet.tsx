@@ -2,8 +2,9 @@ import ArrowUpRight01Icon from '@hugeicons/core-free-icons/ArrowUpRight01Icon'
 import { HugeiconsIcon } from '@hugeicons/react-native'
 import { quoteText, type AgentConfig, type InlineQuote } from '@manor/contracts'
 import { quoteAuthorName } from '@manor/client-runtime/message-quotes'
-import { Pressable, ScrollView, StyleSheet } from 'react-native'
+import { Pressable, StyleSheet } from 'react-native'
 
+import { ScrimScrollView } from '@/components/EdgeScrim'
 import { Sheet } from '@/components/Sheet'
 import { Text } from '@/components/Text'
 import { colors, fonts, radius, spacing, squircle } from '@/theme'
@@ -42,9 +43,9 @@ export function QuoteRefSheet({
     <Sheet onClose={onClose} open={quote !== null} subtitle={source} title="Quote">
       {quote === null ? null : (
         <>
-          <ScrollView contentContainerStyle={styles.body}>
+          <ScrimScrollView contentContainerStyle={styles.body}>
             <Text selectable style={styles.text}>{quoteText(quote)}</Text>
-          </ScrollView>
+          </ScrimScrollView>
           {jump === undefined ? null : (
             <Pressable accessibilityLabel="Show source message" accessibilityRole="button" onPress={jump} style={({ pressed }) => [styles.action, pressed && styles.pressed]}>
               <HugeiconsIcon color={colors.onPrimary} icon={ArrowUpRight01Icon} size={18} strokeWidth={2} />

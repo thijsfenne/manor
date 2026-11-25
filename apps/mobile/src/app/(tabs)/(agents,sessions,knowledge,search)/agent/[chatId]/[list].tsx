@@ -4,9 +4,10 @@
  */
 import { router, useLocalSearchParams } from 'expo-router'
 import { useState } from 'react'
-import { ScrollView, StyleSheet, View } from 'react-native'
+import { StyleSheet, View } from 'react-native'
 
 import { ConnectGate } from '@/components/ConnectGate'
+import { ScrimScrollView } from '@/components/EdgeScrim'
 import { EmptyCard } from '@/components/EmptyCard'
 import { byName, ConnectorRow, SkillRow } from '@/components/PluginRows'
 import { RoutineRow } from '@/components/RoutineRow'
@@ -51,10 +52,10 @@ function AgentListBody({ chatId, kind }: { chatId: string; kind: AgentList }) {
   }[kind]
 
   return (
-    <ScrollView contentContainerStyle={styles.page}>
+    <ScrimScrollView contentContainerStyle={styles.page}>
       <Text style={styles.note}>{kind === 'tasks' ? 'Run or change these on the Scheduled tasks page or your Mac.' : 'Change these in Agent settings on your Mac.'}</Text>
       {items.length === 0 ? empty : <View style={[styles.rows, kind !== 'tasks' && styles.plugins]}>{items}</View>}
-    </ScrollView>
+    </ScrimScrollView>
   )
 }
 

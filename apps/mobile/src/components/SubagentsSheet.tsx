@@ -7,10 +7,11 @@ import type { SubagentSummary } from '@manor/contracts'
 import type { ToolStep } from '@manor/client-runtime/state'
 import { isManorSubagent, SUBAGENT_STATE_LABEL, launchDriver, subagentKindLine, subagentState, subagentStateOf, subagentTask, type ChatSubagent, type SubagentState } from '@manor/client-runtime/turn-trace'
 import { useRef, useState } from 'react'
-import { Platform, Pressable, ScrollView, StyleSheet, View, type ColorValue } from 'react-native'
+import { Platform, Pressable, StyleSheet, View, type ColorValue } from 'react-native'
 
 import { DisclosureChevron } from '@/components/DisclosureChevron'
 import { ProviderMark } from '@/components/ProviderMark'
+import { ScrimScrollView } from '@/components/EdgeScrim'
 import { Sheet } from '@/components/Sheet'
 import { Spinner } from '@/components/TaskCard'
 import { Text } from '@/components/Text'
@@ -141,7 +142,7 @@ export function SubagentsSheet({ open, onClose, subagents, summary, onOpen, onSt
       subtitle={running.length === 0 ? `${subagents.length} in this chat` : `${running.length} running`}
       title="Agents"
     >
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrimScrollView contentContainerStyle={styles.content}>
         {subagents.length === 0 ? <Text style={styles.empty}>No agents in this chat.</Text> : null}
         {running.map(row)}
         {previous.length === 0 ? null : (
@@ -162,7 +163,7 @@ export function SubagentsSheet({ open, onClose, subagents, summary, onOpen, onSt
             {previousOpen ? previous.map(row) : null}
           </>
         )}
-      </ScrollView>
+      </ScrimScrollView>
     </Sheet>
   )
 }

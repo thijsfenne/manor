@@ -1,13 +1,65 @@
 import MaskedView from '@react-native-masked-view/masked-view'
 import { BlurView } from 'expo-blur'
 import { LinearGradient } from 'expo-linear-gradient'
-import { Platform, StyleSheet, View } from 'react-native'
+import { createContext, useContext } from 'react'
+import { FlatList, Platform, ScrollView, StyleSheet, View, type FlatListProps, type ScrollViewProps, type StyleProp, type ViewStyle } from 'react-native'
 
-import { scrims, useScheme } from '@/theme'
+import { scrims, sheetScrims, useScheme } from '@/theme'
 
 interface EdgeScrimProps {
   edge: 'top' | 'bottom'
   height: number
+  /** The colour it fades from: the page, or a page sheet's own surface. */
+  surface?: 'page' | 'sheet'
+}
+
+/** How far a scrim reaches past the header or bar it sits behind, so the fade ends in open content. */
+export const SCRIM_REACH = 28
+
+/**
+ * Where the header and bar drawn over a screen end. `SectionScaffold` and `Sheet` pad
+ * their content by these, so whatever they hold starts below the header and ends
+ * above the bar; a scroll view reaches back under both with `useScrimScroll`, or is a
+ * `ScrimScrollView` or `ScrimFlatList`. Zero anywhere else, so a shared list reads it
+ * wherever it is placed.
+ */
+export interface ScrimInsets {
+  top: number
+  bottom: number
+}
+
+export const ScrimInsetsContext = createContext<ScrimInsets>({ top: 0, bottom: 0 })
+
+const firstNumber = (...values: unknown[]) => values.find((value): value is number => typeof value === 'number') ?? 0
+
+/**
+ * The props that let a scroll view run under the header and bar: it reaches through
+ * the frame's padding to both edges and pads its content by as much again, on top of
+ * its own padding, so its ends rest clear and its rows slide under the scrims.
+ */
+export function useScrimScroll(contentContainerStyle?: StyleProp<ViewStyle>) {
+  const { top, bottom } = useContext(ScrimInsetsContext)
+  const own = StyleSheet.flatten(contentContainerStyle) ?? {}
+  return {
+    style: { marginTop: -top, marginBottom: -bottom },
+    contentContainerStyle: [own, {
+      paddingTop: top + firstNumber(own.paddingTop, own.paddingVertical, own.padding),
+      paddingBottom: bottom + firstNumber(own.paddingBottom, own.paddingVertical, own.padding),
+    }],
+    scrollIndicatorInsets: { top, bottom },
+  }
+}
+
+/** A `ScrollView` that runs under the header and bar; reads the insets itself, so it works placed straight inside a `Sheet`. */
+export function ScrimScrollView({ contentContainerStyle, style, ...props }: Omit<ScrollViewProps, 'scrollIndicatorInsets'>) {
+  const scroll = useScrimScroll(contentContainerStyle)
+  return <ScrollView {...props} contentContainerStyle={scroll.contentContainerStyle} scrollIndicatorInsets={scroll.scrollIndicatorInsets} style={[style, scroll.style]} />
+}
+
+/** A `FlatList` that runs under the header and bar, as `ScrimScrollView` does. */
+export function ScrimFlatList<T>({ contentContainerStyle, style, ...props }: Omit<FlatListProps<T>, 'scrollIndicatorInsets'>) {
+  const scroll = useScrimScroll(contentContainerStyle)
+  return <FlatList {...props} contentContainerStyle={scroll.contentContainerStyle} scrollIndicatorInsets={scroll.scrollIndicatorInsets} style={[style, scroll.style]} />
 }
 
 /**
@@ -23,15 +75,16 @@ const LAYERS: readonly { reach: number; intensity: number }[] = [
 ]
 
 /**
- * What sits behind the chat header and the composer: the page colour at the edge
- * fading to nothing over the transcript, with the transcript blurring progressively
+ * What sits behind every header, tab bar and composer: the page colour at the edge
+ * fading to nothing over the content, with the content blurring progressively
  * as it slides under. Pointer-transparent, so the list under it still scrolls where
  * it shows through. Android has no progressive blur worth its frame budget, so it
  * gets the gradient alone.
  */
-export function EdgeScrim({ edge, height }: EdgeScrimProps) {
+export function EdgeScrim({ edge, height, surface = 'page' }: EdgeScrimProps) {
   const scheme = useScheme()
   const stops = scrims[scheme]
+  const tone = surface === 'sheet' ? sheetScrims[scheme] : stops
   const top = edge === 'top'
   const start = top ? { x: 0.5, y: 0 } : { x: 0.5, y: 1 }
   const end = top ? { x: 0.5, y: 1 } : { x: 0.5, y: 0 }
@@ -58,7 +111,7 @@ export function EdgeScrim({ edge, height }: EdgeScrimProps) {
           ))
         : null}
       <LinearGradient
-        colors={[stops.edge, stops.mid, stops.clear]}
+        colors={[tone.edge, tone.mid, tone.clear]}
         end={end}
         locations={[0, 0.42, 1]}
         start={start}

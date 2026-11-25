@@ -92,30 +92,35 @@ export const syntax = {
   variable: adaptive('#b03b6a', '#f29cb8'),
 } as const
 
+/** The scrim's fade in one surface colour: whole at the edge, gone over the content. */
+const ramp = (rgb: string) => ({ edge: `rgba(${rgb}, 1)`, mid: `rgba(${rgb}, 0.72)`, clear: `rgba(${rgb}, 0)` })
+
 /**
- * Stops for the scrims behind the chat header and composer. Plain strings rather
+ * Stops for the scrims behind every header, tab bar and composer. Plain strings rather
  * than `DynamicColorIOS`, because a gradient is drawn by a native view that takes
  * literal colours; `useScheme` picks the set for the current appearance.
  */
 export const scrims = {
   light: {
-    /** Fully the page at the edge, nothing over the transcript. */
-    edge: 'rgba(238, 240, 243, 1)',
-    mid: 'rgba(238, 240, 243, 0.72)',
-    clear: 'rgba(238, 240, 243, 0)',
+    /** The page (`background`) at the edge, nothing over the content. */
+    ...ramp('247, 248, 250'),
     /** Mask stops for the progressive blur: alpha is all a mask reads. */
     mask: 'rgba(0, 0, 0, 1)',
     maskClear: 'rgba(0, 0, 0, 0)',
     blurTint: 'light' as const,
   },
   dark: {
-    edge: 'rgba(12, 13, 14, 1)',
-    mid: 'rgba(12, 13, 14, 0.72)',
-    clear: 'rgba(12, 13, 14, 0)',
+    ...ramp('12, 13, 14'),
     mask: 'rgba(0, 0, 0, 1)',
     maskClear: 'rgba(0, 0, 0, 0)',
     blurTint: 'dark' as const,
   },
+} as const
+
+/** The same ramp in a page sheet's own colour (`sheet`), which is a step lighter than the page in dark. */
+export const sheetScrims = {
+  light: ramp('247, 248, 250'),
+  dark: ramp('15, 16, 17'),
 } as const
 
 /**
@@ -142,7 +147,11 @@ export const shimmerTones = {
   dark: { base: '#8a8f98', glow: '#f7f8f8', clear: 'rgba(247, 248, 248, 0)' },
 } as const
 
-export const useScheme = () => (useColorScheme() === 'light' ? 'light' : 'dark')
+export const useScheme = () => {
+  const scheme = useColorScheme()
+  // As `adaptive`: only iOS follows the system into light.
+  return Platform.OS === 'ios' && scheme === 'light' ? 'light' : 'dark'
+}
 
 export const fonts = {
   // Geist is the UI face, bundled and loaded in the root layout.

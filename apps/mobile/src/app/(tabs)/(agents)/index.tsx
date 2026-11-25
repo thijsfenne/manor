@@ -2,10 +2,11 @@ import type { AgentConfig } from '@manor/contracts'
 import { chatList, chatListPins, createListedState, type ChatListRow } from '@manor/client-runtime/state'
 import { router, useFocusEffect, useIsFocused } from 'expo-router'
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { FlatList, Pressable, StyleSheet, View } from 'react-native'
+import { Pressable, StyleSheet, View } from 'react-native'
 
 import { AgentStack } from '@/components/AgentStack'
 import { ConnectGate } from '@/components/ConnectGate'
+import { ScrimFlatList } from '@/components/EdgeScrim'
 import { Blobatar } from '@/components/Blobatar'
 import { RoleBadge } from '@/components/RoleBadge'
 import { SectionScaffold } from '@/components/SectionScaffold'
@@ -107,7 +108,7 @@ function DirectList() {
   }
 
   return (
-    <FlatList
+    <ScrimFlatList
       contentContainerStyle={styles.list}
       data={conversationRows}
       extraData={focused}

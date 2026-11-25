@@ -22,8 +22,8 @@ import {
   type ProjectThreadRow,
 } from '@manor/client-runtime/state'
 import { router } from 'expo-router'
-import { useMemo, useRef, useState, type ComponentType, type ReactElement, type Ref } from 'react'
-import { FlatList, Pressable, StyleSheet, View } from 'react-native'
+import { useMemo, useRef, useState, type ComponentType, type ReactElement, type ReactNode, type Ref } from 'react'
+import { Pressable, StyleSheet, View } from 'react-native'
 import ReanimatedSwipeable, {
   type SwipeableMethods,
   type SwipeableProps,
@@ -33,6 +33,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { ConnectGate } from '@/components/ConnectGate'
 import { DisclosureChevron } from '@/components/DisclosureChevron'
+import { ScrimFlatList } from '@/components/EdgeScrim'
 import { GlassPressable } from '@/components/GlassPressable'
 import { KeyboardFooter } from '@/components/KeyboardFooter'
 import { SectionScaffold } from '@/components/SectionScaffold'
@@ -126,14 +127,31 @@ function ProjectInbox() {
         ? { title: 'Connecting to your Mac' }
         : { title: 'Loading Sessions' }
 
+  const toolbar = (scrim: ReactNode) => (
+    <KeyboardFooter enabled={false} sink={insets.bottom} pointerEvents="box-none" style={styles.toolbarArea}>
+      {scrim}
+      <View pointerEvents="box-none" style={styles.toolbar}>
+        <GlassPressable
+          accessibilityLabel="New session"
+          fallbackColor={colors.text}
+          fallbackStyle={styles.buttonShadow}
+          hitSlop={6}
+          onPress={() => router.push('/new-chat')}
+          radius={25}
+          tintColor={glassTints.primary[scheme]}
+        >
+          <View style={styles.newSessionContent}>
+            <Text maxFontSizeMultiplier={1.35} style={styles.newSessionLabel}>New session</Text>
+          </View>
+        </GlassPressable>
+      </View>
+    </KeyboardFooter>
+  )
+
   return (
-    <SectionScaffold compactTitle edgeToEdge title="Sessions" trailing={<UsageButton />}>
-      <FlatList
-        contentContainerStyle={[
-          styles.list,
-          { paddingBottom: 84 + Math.max(insets.bottom, spacing.md) },
-          rows.length === 0 && styles.emptyList,
-        ]}
+    <SectionScaffold compactTitle title="Sessions" toolbar={toolbar} trailing={<UsageButton />}>
+      <ScrimFlatList
+        contentContainerStyle={[styles.list, rows.length === 0 && styles.emptyList]}
         data={rows}
         keyExtractor={(row) => row.key}
         onEndReached={loadMoreSettled}
@@ -188,24 +206,6 @@ function ProjectInbox() {
           )
         }}
       />
-
-      <KeyboardFooter enabled={false} sink={insets.bottom} pointerEvents="box-none" style={styles.toolbarArea}>
-        <View pointerEvents="box-none" style={styles.toolbar}>
-          <GlassPressable
-            accessibilityLabel="New session"
-            fallbackColor={colors.text}
-            fallbackStyle={styles.buttonShadow}
-            hitSlop={6}
-            onPress={() => router.push('/new-chat')}
-            radius={25}
-            tintColor={glassTints.primary[scheme]}
-          >
-            <View style={styles.newSessionContent}>
-              <Text maxFontSizeMultiplier={1.35} style={styles.newSessionLabel}>New session</Text>
-            </View>
-          </GlassPressable>
-        </View>
-      </KeyboardFooter>
     </SectionScaffold>
   )
 }

@@ -15,10 +15,11 @@ import Tick02Icon from '@hugeicons/core-free-icons/Tick02Icon'
 import ViewIcon from '@hugeicons/core-free-icons/ViewIcon'
 import { HugeiconsIcon, type IconSvgElement } from '@hugeicons/react-native'
 import { Image } from 'expo-image'
-import { ScrollView, StyleSheet, View } from 'react-native'
+import { StyleSheet, View } from 'react-native'
 
 import { ConnectGate } from '@/components/ConnectGate'
 import { appLabel } from '@/components/ConnectCards'
+import { ScrimScrollView } from '@/components/EdgeScrim'
 import { EmptyCard } from '@/components/EmptyCard'
 import { byName, ConnectorRow, PluginRow, SkillRow } from '@/components/PluginRows'
 import { SectionScaffold } from '@/components/SectionScaffold'
@@ -28,7 +29,7 @@ import { Text } from '@/components/Text'
 import { colors, fonts, radius, spacing } from '@/theme'
 
 export default function PluginsScreen() {
-  return <ConnectGate><SectionScaffold title="Plugins"><PluginsRoom /></SectionScaffold></ConnectGate>
+  return <ConnectGate><SectionScaffold tabBar={false} title="Plugins"><PluginsRoom /></SectionScaffold></ConnectGate>
 }
 
 type PluginSection = 'connectors' | 'skills' | 'suggestions'
@@ -53,13 +54,13 @@ const INTRO: Partial<Record<PluginSection, string>> = {
 function PluginsRoom() {
   const [section, setSection] = useState<PluginSection>('connectors')
   return (
-    <ScrollView contentContainerStyle={styles.page}>
+    <ScrimScrollView contentContainerStyle={styles.page}>
       <View style={styles.head}>
         <SegmentedControl fill label="Plugin section" options={SECTIONS} value={section} onChange={setSection} />
         {INTRO[section] === undefined ? null : <Text style={styles.intro}>{INTRO[section]}</Text>}
       </View>
       {section === 'connectors' ? <Connectors /> : section === 'skills' ? <Skills /> : <Suggestions />}
-    </ScrollView>
+    </ScrimScrollView>
   )
 }
 

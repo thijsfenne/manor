@@ -6,9 +6,10 @@ import type { AgentConfig, DmFile } from '@manor/contracts'
 import { DM_FILE_FILTERS, DM_FILES_EMPTY_TITLE, DM_FILES_MORE, DM_FILES_SHOWN, DM_FILTER_EMPTY, dmFilesEmptyLine, filterDmFiles, groupDmFiles, type DmFileFilter } from '@manor/client-runtime/dm-files'
 import { Image } from 'expo-image'
 import { useRef, useState } from 'react'
-import { ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native'
+import { ActivityIndicator, Platform, Pressable, StyleSheet, View } from 'react-native'
 import Animated, { FadeIn, useReducedMotion } from 'react-native-reanimated'
 
+import { ScrimScrollView } from '@/components/EdgeScrim'
 import { dmFileGlyph, FileViewer, saveDmFile } from '@/components/FileViewer'
 import { SegmentedControl } from '@/components/SegmentedControl'
 import { Sheet } from '@/components/Sheet'
@@ -69,7 +70,7 @@ export function FileLibrary({ name, files, agents, onShowInChat }: {
 
   return (
     <>
-      <ScrollView contentContainerStyle={styles.list}>
+      <ScrimScrollView contentContainerStyle={styles.list}>
         <SegmentedControl fill label="Filter" onChange={setFilter} options={DM_FILE_FILTERS} value={filter} />
         {filter !== 'all' && groups.length === 0 ? (
           <Text style={styles.filterEmpty}>{DM_FILTER_EMPTY[filter]}</Text>
@@ -102,7 +103,7 @@ export function FileLibrary({ name, files, agents, onShowInChat }: {
             </Animated.View>
           )
         })}
-      </ScrollView>
+      </ScrimScrollView>
       <FileMenu
         error={error}
         file={menu?.file ?? null}

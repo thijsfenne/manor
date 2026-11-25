@@ -31,11 +31,12 @@ import {
 } from '@manor/client-runtime/runtime-choices'
 import { MODELS, defaultModel, effortsFor } from '@manor/client-runtime/runtimes'
 import { useState } from 'react'
-import { Pressable, ScrollView, StyleSheet, Switch, View } from 'react-native'
+import { Pressable, StyleSheet, Switch, View } from 'react-native'
 import Animated, { FadeIn, FadeOut, SlideInLeft, SlideInRight, useReducedMotion } from 'react-native-reanimated'
 
 import { Blobatar } from '@/components/Blobatar'
 import { ProviderMark } from '@/components/ProviderMark'
+import { ScrimScrollView } from '@/components/EdgeScrim'
 import { Sheet } from '@/components/Sheet'
 import { Text } from '@/components/Text'
 import { colors, fonts, radius, spacing, squircle } from '@/theme'
@@ -97,7 +98,7 @@ export function RuntimeSheet({ open, onClose, agents, overrides, activeAgentIds,
     >
       {selected === null ? (
         <Animated.View entering={still ? undefined : direction === 'back' ? SlideInLeft.duration(220) : FadeIn.duration(120)} exiting={still ? undefined : FadeOut.duration(80)} key="list" style={styles.fill}>
-          <ScrollView contentContainerStyle={styles.list}>
+          <ScrimScrollView contentContainerStyle={styles.list}>
             <View style={styles.group}>
               {agents.map((agent, index) => {
                 const override = overrides[agent.id] ?? {}
@@ -135,7 +136,7 @@ export function RuntimeSheet({ open, onClose, agents, overrides, activeAgentIds,
                 )
               })}
             </View>
-          </ScrollView>
+          </ScrimScrollView>
         </Animated.View>
       ) : (
         <Animated.View entering={still ? undefined : SlideInRight.duration(220)} exiting={still ? undefined : FadeOut.duration(80)} key={selected.id} style={styles.fill}>
@@ -274,7 +275,7 @@ function RuntimeSections({
   const fastCapable = supportsFastMode(driver, model)
 
   return (
-    <ScrollView contentContainerStyle={styles.list}>
+    <ScrimScrollView contentContainerStyle={styles.list}>
       {allowAuto && hostAuto && driver !== 'mock' ? (
         <View style={styles.row}>
           <Text style={styles.menuLabel}>Auto mode</Text>
@@ -364,7 +365,7 @@ function RuntimeSections({
           />
         </Section>
       ) : null}
-    </ScrollView>
+    </ScrimScrollView>
   )
 }
 

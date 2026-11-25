@@ -1,6 +1,7 @@
 import type { MemoryChange, MemoryChangeLine } from '@manor/contracts'
-import { ScrollView, StyleSheet, View } from 'react-native'
+import { StyleSheet, View } from 'react-native'
 
+import { ScrimScrollView } from '@/components/EdgeScrim'
 import { Sheet } from '@/components/Sheet'
 import { Text } from '@/components/Text'
 import { colors, fonts, radius, spacing, squircle } from '@/theme'
@@ -19,7 +20,7 @@ export function MemoryChangesSheet({ open, onClose, changes }: MemoryChangesShee
   const shown = changes.filter((change) => change.lines.length > 0)
   return (
     <Sheet onClose={onClose} open={open} subtitle={memoryChangesLabel(changes)} title="Memory updated">
-      <ScrollView contentContainerStyle={styles.list}>
+      <ScrimScrollView contentContainerStyle={styles.list}>
         {shown.map((change) => (
           <View key={change.path} style={styles.file}>
             <Text numberOfLines={1} style={styles.fileName}>{baseName(change.path)}</Text>
@@ -40,7 +41,7 @@ export function MemoryChangesSheet({ open, onClose, changes }: MemoryChangesShee
             {change.truncated ? <Text style={styles.cut}>Shortened, only the first lines are shown.</Text> : null}
           </View>
         ))}
-      </ScrollView>
+      </ScrimScrollView>
     </Sheet>
   )
 }

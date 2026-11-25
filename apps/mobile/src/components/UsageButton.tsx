@@ -1,6 +1,6 @@
 import DashboardSpeed02Icon from '@hugeicons/core-free-icons/DashboardSpeed02Icon'
 import { useEffect, useId, useMemo, useState } from 'react'
-import { ScrollView, StyleSheet, View } from 'react-native'
+import { StyleSheet, View } from 'react-native'
 import Svg, { Circle, Defs, G, Mask, Rect } from 'react-native-svg'
 
 import type { ProviderUsage, UsageWindow } from '@manor/contracts'
@@ -22,6 +22,7 @@ import {
 import { GlassIconButton } from '@/components/GlassIconButton'
 import { GlassPressable } from '@/components/GlassPressable'
 import { ProviderMark } from '@/components/ProviderMark'
+import { ScrimScrollView } from '@/components/EdgeScrim'
 import { Sheet } from '@/components/Sheet'
 import { Text } from '@/components/Text'
 import { useWorkspace, useWorkspaceData } from '@/providers/WorkspaceProvider'
@@ -162,11 +163,11 @@ function UsageList() {
   }
 
   return (
-    <ScrollView contentContainerStyle={styles.list}>
+    <ScrimScrollView contentContainerStyle={styles.list}>
       {providers.map((usage) => (
         <ProviderCard key={usage.provider} usage={usage} now={now} />
       ))}
-    </ScrollView>
+    </ScrimScrollView>
   )
 }
 

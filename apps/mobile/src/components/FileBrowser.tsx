@@ -7,11 +7,12 @@ import type { AgentConfig, RepoFileResult } from '@manor/contracts'
 import { basename, dirname, entriesUnder, resolveRelativeFileLink, type TreeEntry } from '@manor/client-runtime/file-tree'
 import { languageOf } from '@manor/client-runtime/highlight'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { ActivityIndicator, FlatList, Pressable, ScrollView, StyleSheet, View } from 'react-native'
+import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native'
 import { TextInput } from '@/components/TextInput'
 import Animated, { FadeIn, FadeOut, SlideInLeft, SlideInRight, useReducedMotion } from 'react-native-reanimated'
 
 import { CodeView } from '@/components/CodeView'
+import { ScrimFlatList, ScrimScrollView } from '@/components/EdgeScrim'
 import { Markdown, type MarkdownLinks } from '@/components/Markdown'
 import { Text } from '@/components/Text'
 import { withVaultPictures, type VaultPictures } from '@/lib/noteImages'
@@ -133,6 +134,22 @@ export function FileBrowser({ place, onPlace, files, truncated, preview, live, a
   }
 
   const searching = query.trim() !== ''
+  const search = (
+    <View style={styles.search}>
+      <HugeiconsIcon color={colors.muted} icon={Search01Icon} size={18} strokeWidth={1.7} />
+      <TextInput
+        autoCapitalize="none"
+        autoCorrect={false}
+        clearButtonMode="while-editing"
+        onChangeText={setQuery}
+        placeholder="Search files…"
+        placeholderTextColor={colors.dim}
+        selectionColor={colors.text}
+        style={styles.searchInput}
+        value={query}
+      />
+    </View>
+  )
   return (
     <Animated.View entering={still ? undefined : direction === 'back' ? SlideInLeft.duration(220) : FadeIn.duration(120)} exiting={still ? undefined : FadeOut.duration(80)} key={place.dir} style={styles.fill}>
       {!live ? (
@@ -142,48 +159,32 @@ export function FileBrowser({ place, onPlace, files, truncated, preview, live, a
       ) : files.length === 0 ? (
         <Empty text={emptyText} />
       ) : (
-        <>
-          {files.length >= SEARCH_FROM ? (
-            <View style={styles.search}>
-              <HugeiconsIcon color={colors.muted} icon={Search01Icon} size={18} strokeWidth={1.7} />
-              <TextInput
-                autoCapitalize="none"
-                autoCorrect={false}
-                clearButtonMode="while-editing"
-                onChangeText={setQuery}
-                placeholder="Search files…"
-                placeholderTextColor={colors.dim}
-                selectionColor={colors.text}
-                style={styles.searchInput}
-                value={query}
-              />
-            </View>
-          ) : null}
-          <FlatList
-            contentContainerStyle={styles.list}
-            data={entries}
-            keyboardShouldPersistTaps="handled"
-            keyExtractor={(entry) => `${entry.kind}:${entry.path}`}
-            ListEmptyComponent={<Empty text={searching ? `No files match “${query.trim()}”.` : 'This folder is empty.'} />}
-            ListFooterComponent={truncated ? <Text style={styles.truncated}>Not everything is shown.</Text> : null}
-            renderItem={({ item }) => (
-              <Pressable accessibilityLabel={item.path} accessibilityRole="button" onPress={() => openEntry(item)} style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}>
-                <View style={styles.mark}>
-                  <HugeiconsIcon color={item.kind === 'folder' ? colors.text : colors.muted} icon={item.kind === 'folder' ? Folder01Icon : FileEmpty02Icon} size={20} strokeWidth={1.6} />
-                </View>
-                <View style={styles.names}>
-                  <Text numberOfLines={1} style={styles.name}>{item.name}</Text>
-                  {searching ? (
-                    <Text ellipsizeMode="head" numberOfLines={1} style={styles.dir}>{dirname(item.path) || '/'}</Text>
-                  ) : item.kind === 'folder' ? (
-                    <Text numberOfLines={1} style={styles.dir}>{item.count === 1 ? '1 file' : `${item.count} files`}</Text>
-                  ) : null}
-                </View>
-                <HugeiconsIcon color={colors.dim} icon={ArrowRight01Icon} size={16} strokeWidth={1.7} />
-              </Pressable>
-            )}
-          />
-        </>
+        <ScrimFlatList
+          contentContainerStyle={styles.list}
+          data={entries}
+          keyboardShouldPersistTaps="handled"
+          keyExtractor={(entry) => `${entry.kind}:${entry.path}`}
+          // In the list rather than pinned above it, so the rows slide under the header from the top.
+          ListHeaderComponent={files.length >= SEARCH_FROM ? search : null}
+          ListEmptyComponent={<Empty text={searching ? `No files match “${query.trim()}”.` : 'This folder is empty.'} />}
+          ListFooterComponent={truncated ? <Text style={styles.truncated}>Not everything is shown.</Text> : null}
+          renderItem={({ item }) => (
+            <Pressable accessibilityLabel={item.path} accessibilityRole="button" onPress={() => openEntry(item)} style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}>
+              <View style={styles.mark}>
+                <HugeiconsIcon color={item.kind === 'folder' ? colors.text : colors.muted} icon={item.kind === 'folder' ? Folder01Icon : FileEmpty02Icon} size={20} strokeWidth={1.6} />
+              </View>
+              <View style={styles.names}>
+                <Text numberOfLines={1} style={styles.name}>{item.name}</Text>
+                {searching ? (
+                  <Text ellipsizeMode="head" numberOfLines={1} style={styles.dir}>{dirname(item.path) || '/'}</Text>
+                ) : item.kind === 'folder' ? (
+                  <Text numberOfLines={1} style={styles.dir}>{item.count === 1 ? '1 file' : `${item.count} files`}</Text>
+                ) : null}
+              </View>
+              <HugeiconsIcon color={colors.dim} icon={ArrowRight01Icon} size={16} strokeWidth={1.7} />
+            </Pressable>
+          )}
+        />
       )}
     </Animated.View>
   )
@@ -210,7 +211,7 @@ function Preview({
   if (result.content === '') return <Empty text="This file is empty." />
   if (/\.(md|markdown)$/i.test(path)) {
     return (
-      <ScrollView contentContainerStyle={styles.doc}>
+      <ScrimScrollView contentContainerStyle={styles.doc}>
         <Markdown
           agents={agents}
           links={links}
@@ -218,7 +219,7 @@ function Preview({
           text={pictures === undefined ? result.content : withVaultPictures(result.content, path, pictures)}
           vaultImages={pictures !== undefined}
         />
-      </ScrollView>
+      </ScrimScrollView>
     )
   }
   return <CodeView code={result.content} language={languageOf(path, result.content.split('\n', 1)[0])} />
@@ -246,7 +247,7 @@ const kb = (bytes: number) => `${Math.max(1, Math.round(bytes / 1024))} kB`
 
 const styles = StyleSheet.create({
   fill: { flex: 1 },
-  search: { height: 44, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginHorizontal: spacing.lg, marginBottom: spacing.sm, borderRadius: radius.md, ...squircle, backgroundColor: colors.surface2, paddingHorizontal: spacing.md },
+  search: { height: 44, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.sm, borderRadius: radius.md, ...squircle, backgroundColor: colors.surface2, paddingHorizontal: spacing.md },
   searchInput: { flex: 1, color: colors.text, fontFamily: fonts.sans, fontSize: 16, letterSpacing: tracking.body, paddingVertical: 0 },
   list: { paddingHorizontal: spacing.lg, paddingBottom: spacing.xxl },
   row: { minHeight: 56, flexDirection: 'row', alignItems: 'center', gap: spacing.md, borderRadius: radius.md, ...squircle, paddingHorizontal: spacing.md },

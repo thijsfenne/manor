@@ -9,11 +9,12 @@ import { draftSettled, draftShown, draftStatus, draftStatusLabel, snoozeUntilTom
 import type { OutboundDraftThread, SlackRichText } from '@manor/contracts'
 import { slackRichTextFallback, SlackRichTextSchema, isOutboundSlackChannelId, OUTBOUND_DRAFT_BODY_MAX, OUTBOUND_DRAFT_SUBJECT_MAX, OUTBOUND_DRAFT_TO_MAX } from '@manor/contracts'
 import { useRef, useState, type ReactNode } from 'react'
-import { Keyboard, Linking, Pressable, ScrollView, StyleSheet, View } from 'react-native'
+import { Keyboard, Linking, Pressable, StyleSheet, View } from 'react-native'
 import { TextInput } from '@/components/TextInput'
 import Animated, { Easing, FadeIn, FadeOut, LinearTransition, ReduceMotion } from 'react-native-reanimated'
 
 import { CardButton } from '@/components/CardButton'
+import { ScrimScrollView } from '@/components/EdgeScrim'
 import { Sheet } from '@/components/Sheet'
 import { Text } from '@/components/Text'
 import { colors, fonts, radius, spacing, squircle, tracking } from '@/theme'
@@ -399,7 +400,7 @@ function ThreadSheet({
         : `${String(result.messages.length)} ${result.messages.length === 1 ? 'message' : 'messages'}, read only`
   return (
     <Sheet onClose={onClose} onDismiss={onDismiss} open={open} subtitle={subtitle} title={draft.subject?.trim().length ? draft.subject : draft.to}>
-      <ScrollView contentContainerStyle={styles.sheetContent} keyboardShouldPersistTaps="handled">
+      <ScrimScrollView contentContainerStyle={styles.sheetContent} keyboardShouldPersistTaps="handled">
         {result === undefined ? (
           <Text style={styles.sheetNote}>Fetching the conversation from the mailbox…</Text>
         ) : result.status === 'error' ? (
@@ -424,7 +425,7 @@ function ThreadSheet({
             <Text style={styles.quoteMore}>{draft.channel === 'gmail' ? 'Open in Gmail' : 'Open in Slack'}</Text>
           </Pressable>
         )}
-      </ScrollView>
+      </ScrimScrollView>
     </Sheet>
   )
 }

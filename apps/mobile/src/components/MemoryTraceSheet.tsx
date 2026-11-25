@@ -1,7 +1,8 @@
 import type { MemoryRead, MemoryTrace } from '@manor/contracts'
 import { Fragment, type ReactNode } from 'react'
-import { ScrollView, StyleSheet, View } from 'react-native'
+import { StyleSheet, View } from 'react-native'
 
+import { ScrimScrollView } from '@/components/EdgeScrim'
 import { Sheet } from '@/components/Sheet'
 import { Text } from '@/components/Text'
 import { colors, fonts, radius, spacing, squircle } from '@/theme'
@@ -17,7 +18,7 @@ export function MemoryTraceSheet({ open, onClose, trace }: MemoryTraceSheetProps
   const summary = trace.summary
   return (
     <Sheet onClose={onClose} open={open} subtitle={summaryLabel(trace)} title="Memory">
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrimScrollView contentContainerStyle={styles.content}>
         {summary.status === 'not_read' ? (
           <Text style={styles.empty}>No memory was read this turn.</Text>
         ) : summary.status === 'used' ? (
@@ -54,7 +55,7 @@ export function MemoryTraceSheet({ open, onClose, trace }: MemoryTraceSheetProps
             </Derivation>
           </View>
         )}
-      </ScrollView>
+      </ScrimScrollView>
     </Sheet>
   )
 }

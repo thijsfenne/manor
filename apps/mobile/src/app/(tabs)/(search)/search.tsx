@@ -8,12 +8,13 @@ import { chatList, createListedState, inbox, personaOf, projectThreads } from '@
 import { buildNoteIndex, resolveNote } from '@manor/client-runtime/vault-notes'
 import { SEARCH_QUERY_MAX, searchMatchKind, searchWords, type SearchMessageHit, type SearchNoteHit } from '@manor/contracts'
 import { router, useFocusEffect } from 'expo-router'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { FlatList, Pressable, StyleSheet, View } from 'react-native'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { Pressable, StyleSheet, View } from 'react-native'
 import { TextInput } from '@/components/TextInput'
 import { useKeyboardState } from 'react-native-keyboard-controller'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
+import { ScrimFlatList } from '@/components/EdgeScrim'
 import { FileBrowser } from '@/components/FileBrowser'
 import { GlassSurface } from '@/components/GlassSurface'
 import { KeyboardFooter } from '@/components/KeyboardFooter'
@@ -161,10 +162,37 @@ export default function SearchScreen() {
           ? { title: 'Searching' }
           : { title: 'Nothing found', copy: 'Try fewer words, or a word from the title.' }
 
+  const toolbar = (scrim: ReactNode) => (
+    <KeyboardFooter
+      enabled={keyboardUp}
+      pointerEvents="box-none"
+      sink={insets.bottom}
+      style={styles.toolbarArea}
+    >
+      {scrim}
+      <GlassSurface fallbackStyle={styles.floatingFallback} radius={25} style={styles.searchControl}>
+        <HugeiconsIcon color={colors.muted} icon={Search01Icon} size={21} strokeWidth={1.7} />
+        <TextInput
+          accessibilityLabel="Search chats, messages and notes"
+          autoCorrect={false}
+          clearButtonMode="while-editing"
+          maxFontSizeMultiplier={1.35}
+          onChangeText={setQuery}
+          placeholder="Search"
+          placeholderTextColor={colors.muted}
+          returnKeyType="search"
+          selectionColor={colors.text}
+          style={styles.searchInput}
+          value={query}
+        />
+      </GlassSurface>
+    </KeyboardFooter>
+  )
+
   return (
-    <SectionScaffold edgeToEdge title="Search" trailing={<UsageButton />}>
-      <FlatList
-        contentContainerStyle={[styles.list, { paddingBottom: 84 + insets.bottom }, results.length === 0 && styles.emptyList]}
+    <SectionScaffold title="Search" toolbar={toolbar} trailing={<UsageButton />}>
+      <ScrimFlatList
+        contentContainerStyle={[styles.list, results.length === 0 && styles.emptyList]}
         data={results}
         keyboardDismissMode="on-drag"
         keyboardShouldPersistTaps="handled"
@@ -183,30 +211,6 @@ export default function SearchScreen() {
         ) : null}
         renderItem={({ item }) => <ResultRow author={authorOf(item)} onPress={() => pick(item)} result={item} />}
       />
-
-      <KeyboardFooter
-        enabled={keyboardUp}
-        pointerEvents="box-none"
-        sink={insets.bottom}
-        style={styles.toolbarArea}
-      >
-        <GlassSurface fallbackStyle={styles.floatingFallback} radius={25} style={styles.searchControl}>
-          <HugeiconsIcon color={colors.muted} icon={Search01Icon} size={21} strokeWidth={1.7} />
-          <TextInput
-            accessibilityLabel="Search chats, messages and notes"
-            autoCorrect={false}
-            clearButtonMode="while-editing"
-            maxFontSizeMultiplier={1.35}
-            onChangeText={setQuery}
-            placeholder="Search"
-            placeholderTextColor={colors.muted}
-            returnKeyType="search"
-            selectionColor={colors.text}
-            style={styles.searchInput}
-            value={query}
-          />
-        </GlassSurface>
-      </KeyboardFooter>
     </SectionScaffold>
   )
 }
