@@ -16,7 +16,7 @@ colors:
   quiet-silver: "light-dark(#565b66, #8a8f98)"
   distant-silver: "light-dark(#616773, #62666d)"
   primary: "light-dark(#16181b, #f7f8f8)"
-  primary-hover: "light-dark(#000000, #ffffff)"
+  primary-hover: "light-dark(#383a3c, #d4d5d5)"
   on-primary: "light-dark(#ffffff, #08090a)"
   control: "light-dark(#3d4451, #26262b)"
   skill-violet: "light-dark(#7c4ddb, #a78bfa)"
@@ -82,7 +82,7 @@ components:
     padding: "6px 14px"
   button-secondary:
     backgroundColor: "color-mix(in srgb, var(--color-text) 8%, transparent)"
-    textColor: "{colors.quiet-silver}"
+    textColor: "{colors.house-ink}"
     typography: "{typography.body}"
     rounded: "{rounded.button}"
     padding: "6px 14px"
@@ -284,8 +284,8 @@ The global radius scale is 1.25. Small marks start at the extra small and small 
 ### Buttons
 
 - **Shape:** Soft but controlled, using the dedicated small and regular button radii.
-- **Primary:** House Ink fill with the inverse text color. Medium buttons use 14px horizontal and 6px vertical padding.
-- **Secondary:** An 8% wash of the text color with muted text, increasing to 13% on hover.
+- **Primary:** House Ink fill with the inverse text color. Hover steps the fill 15% toward the canvas; a disabled one stays put. Medium buttons use 14px horizontal and 6px vertical padding.
+- **Secondary:** An 8% wash of the text color with full text color, the wash increasing to 13% on hover.
 - **Ghost:** Transparent at rest and tonal on hover.
 - **Danger:** A restrained wash of the danger color, never a solid alarm block by default.
 - **Hover / Focus:** Hover changes fill or text contrast. Keyboard focus uses the 2px persona aware ring unless the control is field shaped.

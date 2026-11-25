@@ -10,9 +10,9 @@ type ButtonSize = 'compact' | 'small' | 'medium'
  * needs no second set of values — the wash follows the token that flipped.
  */
 const variantClass: Record<ButtonVariant, string> = {
-  primary: 'border-transparent bg-primary text-on-primary hover:bg-primary-hover',
+  primary: 'border-transparent bg-primary text-on-primary not-disabled:hover:bg-primary-hover',
   secondary:
-    'border-transparent bg-[color-mix(in_srgb,var(--color-text)_8%,transparent)] text-muted hover:bg-[color-mix(in_srgb,var(--color-text)_13%,transparent)] hover:text-text',
+    'border-transparent bg-[color-mix(in_srgb,var(--color-text)_8%,transparent)] text-text hover:bg-[color-mix(in_srgb,var(--color-text)_13%,transparent)]',
   ghost: 'border-transparent bg-transparent text-muted hover:bg-surface-2 hover:text-text',
   danger:
     'border-transparent bg-[color-mix(in_srgb,var(--color-danger)_12%,transparent)] text-danger hover:bg-[color-mix(in_srgb,var(--color-danger)_20%,transparent)]',

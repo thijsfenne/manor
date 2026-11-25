@@ -134,7 +134,6 @@ export function modeTokens(palette: Palette, mode: Mode): Record<string, string>
     muted: p.muted,
     dim: p.dim,
     primary: p.primary,
-    'primary-hover': mix(p.primary, dark ? '#ffffff' : '#000000', 50),
     'on-primary': p.onPrimary,
     control: dark ? p.userBubble : mix(p.text, p.muted, 65),
     ok: p.ok,

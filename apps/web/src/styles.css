@@ -195,7 +195,10 @@
   /* The interaction colour: white, so the one loud thing on screen is the act
      you are meant to take. Persona colours stay chromatic, this does not. */
   --color-primary: #f7f8f8;
-  --color-primary-hover: #ffffff;
+  /* A step from primary back toward the canvas. The fill is already at the end of the
+     scale (near white in dark, near black in light), so that is the only way hover shows.
+     Derived, so light and every colour theme follow without a value of their own. */
+  --color-primary-hover: color-mix(in srgb, var(--color-primary) 85%, var(--color-bg));
   --color-on-primary: #08090a;
 
   /* The fill a native checkbox paints when it is checked. Its own token because the
@@ -572,7 +575,6 @@
 
   /* Still "the one loud thing", still achromatic; the room changed, not the rule. */
   --color-primary: #16181b;
-  --color-primary-hover: #000000;
   --color-on-primary: #ffffff;
 
   --color-control: #3d4451;

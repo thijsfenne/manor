@@ -43,7 +43,7 @@ export function ConnectScreen({ error }: { error: string | null }) {
         {shown === null ? null : <p className="m-0 text-[12px] text-danger" role="alert">{shown}</p>}
         <button
           type="submit"
-          className="mt-1 cursor-pointer rounded-button border border-transparent bg-primary px-3.5 py-[7px] text-[13px] font-medium text-on-primary hover:bg-primary-hover disabled:cursor-default disabled:opacity-[0.45]"
+          className="mt-1 cursor-pointer rounded-button border border-transparent bg-primary px-3.5 py-[7px] text-[13px] font-medium text-on-primary not-disabled:hover:bg-primary-hover disabled:cursor-default disabled:opacity-[0.45]"
           disabled={link.trim() === ''}
         >
           Connect
