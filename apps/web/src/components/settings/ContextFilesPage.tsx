@@ -155,7 +155,7 @@ export function ContextFilesPage({ files, notice, requestEvents, onRequest, onSa
   return (
     <SettingsPage
       title="Context files"
-      description="Shared with Claude Code, Codex and Grok."
+      description="Agents with memory on read these in every turn."
       {...(files?.root ? { onSaveShortcut: saveOpen } : {})}
     >
       {files === null ? (
@@ -198,7 +198,7 @@ export function ContextFilesPage({ files, notice, requestEvents, onRequest, onSa
               <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 text-label text-dim">
                 <span className="min-w-0 truncate" title={`${files.root}/${selected}`}>{files.root}/{selected}</span>
                 <span className="tabular-nums">
-                  {draft.text.length.toLocaleString('en')} characters, about {Math.round(draft.text.length / ESTIMATED_CHARS_PER_TOKEN).toLocaleString('en')} tokens in every prompt
+                  {draft.text.length.toLocaleString('en')} characters, about {Math.round(draft.text.length / ESTIMATED_CHARS_PER_TOKEN).toLocaleString('en')} tokens
                 </span>
               </div>
 

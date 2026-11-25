@@ -389,7 +389,7 @@ function RootPage({ draft, agent, registry, notes, taskCount, hasFiles, pin, onP
   // The mock stays offered only to an agent already on it, so it keeps its way out.
   const providers = PROVIDERS.map((option) => option.value).filter((driver) => driver !== 'mock' || agent.driver === 'mock')
   const access = [
-    draft.isCos ? 'Chief of staff' : null,
+    draft.isCos ? 'Default agent' : null,
     draft.placement === 'session' ? 'Sessions' : null,
     draft.memoryScope ? 'Memory on' : null,
   ].filter((part) => part !== null).join(', ')
@@ -543,7 +543,7 @@ function AccessPage({ draft, agent, agents, subagents, edit, onOpenSubagents }: 
         />
         {session ? null : (
           <SwitchRow
-            label="Chief of staff"
+            label="Default agent"
             hint={!draft.isCos && other !== null
               ? `${other.name} holds it now. Turning this on takes it; only one agent can.`
               : 'Takes every message you do not address to someone else.'}

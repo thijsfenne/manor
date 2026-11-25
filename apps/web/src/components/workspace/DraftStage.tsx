@@ -164,7 +164,7 @@ export function DraftStage({
     ? ''
     : passesTo.length > 0
       ? `Passes work to ${nameList(passesTo)}.`
-      : draftAgent.isCos && draftAgent.role === '' ? 'Chief of staff' : draftAgent.role
+      : draftAgent.isCos && draftAgent.role === '' ? 'Default agent' : draftAgent.role
   // The stage's sources travel with the create, so the slot they were staged in is
   // spent. Left standing they would ride along into the next new chat as well. A create
   // the server then refuses puts them back, the same way the text goes back in the box.

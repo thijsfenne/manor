@@ -115,12 +115,7 @@ export function SkillsView({
     <main className="h-full min-h-0 overflow-y-auto">
       <section className="mx-auto w-full max-w-page px-8 pt-10 pb-10 max-[720px]:px-5 max-[720px]:pt-7 max-[720px]:pb-7">
         <div className="flex items-end justify-between gap-6 max-[640px]:flex-col max-[640px]:items-stretch max-[640px]:gap-4">
-          <div>
-            <h1 className="m-0 font-display text-[24px] leading-tight font-semibold tracking-[-0.02em]">Skills</h1>
-            <p className="mt-1 mb-0 max-w-[590px] text-[16px] leading-relaxed text-muted">
-              Reusable instructions your agents can call on.
-            </p>
-          </div>
+          <h1 className="m-0 font-display text-[24px] leading-tight font-semibold tracking-[-0.02em]">Skills</h1>
           <Button variant="primary" className="inline-flex flex-none items-center gap-2 max-[640px]:self-start" onClick={openImport}>
             <Icon icon={Download04Icon} size={14} />
             Import skill

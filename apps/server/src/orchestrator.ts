@@ -2237,7 +2237,7 @@ export class Orchestrator {
           // configuration for a problem Manor does not have yet.
           text:
             members === undefined
-              ? 'Nobody was addressed and no chief of staff is configured, so this message stays in the chat as context.'
+              ? 'Nobody was addressed and no default agent is set, so this message stays in the chat as context.'
               : 'Nobody in this chat takes un-mentioned messages, so mention someone by name to get an answer.',
         })
       }

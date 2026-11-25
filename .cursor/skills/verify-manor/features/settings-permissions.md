@@ -10,7 +10,7 @@ Settings → Permissions shows Manor's own macOS Accessibility and Screen Record
 
 ## How to get to it (user POV)
 
-- Press ⌘, (or open Settings from the account menu), then `Permissions` under System.
+- Press ⌘, (or open Settings from the account menu), then `Permissions` under Tools.
 
 ## Driving it with control-manor
 

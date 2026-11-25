@@ -1,6 +1,6 @@
 import type { HouseSettings, SimulatorDevice } from '@manor/contracts'
 
-/** What Settings → Simulator stored; null until the user ticked a device. */
+/** What Settings → Browser & Simulator stored; null until the user ticked a device. */
 export type SimulatorSelection = HouseSettings['simulatorDevices']
 
 /** One runtime's devices, as the panel list and the Settings checklist draw them. */

@@ -311,7 +311,7 @@ function HeadCard({
               </span>
             </span>
           </span>
-          {agent.role || agent.isCos ? <RoleBadge label={agent.role || 'Chief of staff'} /> : null}
+          {agent.role || agent.isCos ? <RoleBadge label={agent.role || 'Default agent'} /> : null}
         </span>
       </button>
       {menu === null ? null : (

@@ -1,8 +1,7 @@
 import { useEffect, useId, useRef, useState, type ChangeEvent } from 'react'
-import { DEFAULT_USER_PROFILE, type AgentConfig, type AgentDraft, type HouseSettings, type SimulatorAction, type SimulatorState, type SystemInfo, type UserProfile } from '@manor/contracts'
+import { DEFAULT_USER_PROFILE, type HouseSettings, type SystemInfo, type UserProfile } from '@manor/contracts'
 import { AVATAR_ACCEPT, shrinkToAvatar } from '../../avatar'
 import { DEFAULT_THEMES, type ThemePair } from '../../colorThemes'
-import { cleanDraft, cosOf, draftOf } from '../../persona'
 import type { Notice } from '../../state'
 import type { ThemeChoice as Choice } from '../../useTheme'
 import { useRequest, type RequestEvents } from '../../useRequest'
@@ -10,12 +9,9 @@ import { DEFAULT_PROFILE_PHOTO } from '../AccountPopover'
 import { Button } from '../ui/Button'
 import { formInputClass } from '../ui/FormField'
 import { RequestNotice } from '../ui/RequestNotice'
-import { Select } from '../ui/Select'
 import { SettingsGroup, SettingsPage, SettingsRow } from './SettingsLayout'
-import { BrowserGroup } from './BrowserSettings'
 import { FontGroup } from './FontSettings'
 import { PowerGroup } from './PowerSettings'
-import { SimulatorGroup } from './SimulatorSettings'
 import { ModePicker, ThemeGrid } from './ThemePicker'
 
 const OFFLINE = 'Nothing was sent, the connection is down. Try again once it is back.'
@@ -27,91 +23,26 @@ function PageNotice({ notice, problem, onDismiss }: { notice: Notice | null; pro
   return <p className="m-0 text-label text-danger" role="status">{problem}</p>
 }
 
-export function GeneralPage({ agents, profile, account, notice, requestEvents, onSaveAgent, onSaveProfile, onDismissNotice, settings, onSaveSettings, info, onRequestInfo, simulator, connected, onSimulatorAction }: {
-  agents: AgentConfig[]
+export function GeneralPage({ profile, notice, requestEvents, onSaveProfile, onDismissNotice, settings, onSaveSettings, info, onRequestInfo }: {
   /** Null until the server's connect message lands; nothing is saved over an unread profile. */
   profile: UserProfile | null
-  /** Present only where sign-in is on; the local desktop app has nobody to sign out. */
-  account?: { onForget: () => void }
   notice: Notice | null
   requestEvents: RequestEvents
-  onSaveAgent: (draft: AgentDraft, requestId: string) => boolean
   onSaveProfile: (profile: UserProfile, requestId: string) => boolean
   onDismissNotice: () => void
   /** Null until the server has sent them; the groups that save them wait. */
   settings: HouseSettings | null
-  /** False when the socket was down and nothing left. */
-  onSaveSettings: (settings: HouseSettings) => boolean
+  onSaveSettings: (settings: HouseSettings) => void
   info: SystemInfo | null
   onRequestInfo: () => void
-  /** The device list the Simulator group picks from. */
-  simulator: SimulatorState | null
-  connected: boolean
-  onSimulatorAction: (action: SimulatorAction, udid?: string) => boolean
 }) {
   const [problem, setProblem] = useState<string | null>(null)
   return (
     <SettingsPage title="General">
       <ProfileGroup profile={profile} requestEvents={requestEvents} onSave={onSaveProfile} onProblem={setProblem} onDismissNotice={onDismissNotice} />
-      <RoutingGroup agents={agents} requestEvents={requestEvents} onSaveAgent={onSaveAgent} onProblem={setProblem} onDismissNotice={onDismissNotice} />
       <PowerGroup settings={settings} info={info} onSaveSettings={onSaveSettings} onRequestInfo={onRequestInfo} />
-      <BrowserGroup settings={settings} onSave={onSaveSettings} />
-      <SimulatorGroup settings={settings} simulator={simulator} connected={connected} onSave={onSaveSettings} onAction={onSimulatorAction} />
-      {account === undefined ? null : (
-        <SettingsGroup title="This browser">
-          <SettingsRow label="Forget this Mac" description="Removes this browser from Manor. Pair it again from Settings → Phone on your Mac.">
-            <Button size="compact" variant="secondary" onClick={account.onForget}>Forget this Mac</Button>
-          </SettingsRow>
-        </SettingsGroup>
-      )}
       <PageNotice notice={notice} problem={problem} onDismiss={onDismissNotice} />
     </SettingsPage>
-  )
-}
-
-function RoutingGroup({ agents, requestEvents, onSaveAgent, onProblem, onDismissNotice }: {
-  agents: AgentConfig[]
-  requestEvents: RequestEvents
-  onSaveAgent: (draft: AgentDraft, requestId: string) => boolean
-  onProblem: (problem: string | null) => void
-  onDismissNotice: () => void
-}) {
-  const request = useRequest(requestEvents)
-  const holder = cosOf(agents)
-  // The server seats only these as chief: Session agents never are.
-  const eligible = agents.filter((agent) => agent.placement !== 'session')
-
-  const pick = (agentId: string) => {
-    onProblem(null)
-    onDismissNotice()
-    // Choosing nobody takes the flag off whoever holds it; choosing someone gives it
-    // to her, and the server takes it from the previous holder in the same write.
-    const target = agentId === '' ? holder : agents.find((agent) => agent.id === agentId)
-    if (target === null || target === undefined) return
-    const draft = cleanDraft({ ...draftOf(target), isCos: agentId !== '' })
-    if (!request.start((requestId) => onSaveAgent(draft, requestId))) onProblem(OFFLINE)
-  }
-
-  return (
-    <SettingsGroup title="Routing">
-      <SettingsRow
-        label="Default agent"
-        description="Answers messages in a shared room that mention nobody, and delegates from there."
-      >
-        <div className="w-[200px]">
-          <Select
-            label="Default agent"
-            value={holder?.id ?? ''}
-            disabled={request.pending}
-            options={[
-              { value: '', label: 'Nobody' },
-              ...eligible.map((agent) => ({ value: agent.id, label: agent.name })),
-            ]}
-            onChange={pick}
-          />
-        </div>
-      </SettingsRow>
-    </SettingsGroup>
   )
 }
 
@@ -226,7 +157,7 @@ export function AppearancePage({ choice, onChange, settings, onSaveSettings }: {
         >
           <div className="flex flex-col gap-3 pt-2">
             <ThemeGrid themes={themes} onChange={saveThemes} />
-            <p className="m-0 text-label text-muted">The left orb is the light version, the right orb the dark one. Pick each separately; they may come from different themes.</p>
+            <p className="m-0 text-label text-muted">The left orb sets the light theme, the right orb the dark one. They can come from different themes.</p>
           </div>
         </SettingsGroup>
       )}

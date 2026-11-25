@@ -1,12 +1,17 @@
 import { ArrowUpRight01Icon, PlusSignIcon } from '@hugeicons/core-free-icons'
-import type { AgentConfig, Chat } from '@manor/contracts'
+import type { AgentConfig, AgentDraft, Chat } from '@manor/contracts'
 import { useLayoutEffect, useRef, useState } from 'react'
+import { cleanDraft, cosOf, draftOf } from '../../persona'
+import { useRequest, type RequestEvents } from '../../useRequest'
 import { AgentSettings, type AgentSettingsProps } from '../agents/AgentSettings'
 import { Avatar } from '../Avatar'
 import { Icon } from '../Icon'
 import { Button } from '../ui/Button'
+import { Select } from '../ui/Select'
 import { SelectionMarker } from '../ui/SelectionMarker'
+import { SettingsRow } from './SettingsLayout'
 
+const OFFLINE = 'Nothing was sent, the connection is down. Try again once it is back.'
 const ROW_MARKER = 'settings-agent-row'
 /** The list's sticky top (top-6) plus the page's bottom padding (pb-10), the room it needs besides itself. */
 const LIST_ROOM = 24 + 40
@@ -21,6 +26,53 @@ const listOrder = (agents: readonly AgentConfig[]) => [
 export const dmOf = (chats: readonly Chat[], agent: AgentConfig) => agent.placement === 'session'
   ? undefined
   : chats.find((chat) => chat.kind === 'dm' && chat.memberIds[0] === agent.id)
+
+/** The agent that takes unaddressed messages, the same flag as the Default agent switch in the agent's settings. */
+function DefaultAgentRow({ agents, requestEvents, onSaveAgent }: {
+  agents: AgentConfig[]
+  requestEvents: RequestEvents
+  onSaveAgent: (draft: AgentDraft, requestId: string) => boolean
+}) {
+  const request = useRequest(requestEvents)
+  const [problem, setProblem] = useState<string | null>(null)
+  const holder = cosOf(agents)
+  // The server seats only these as chief: Session agents never are.
+  const eligible = agents.filter((agent) => agent.placement !== 'session')
+
+  const pick = (agentId: string) => {
+    setProblem(null)
+    // Choosing nobody takes the flag off whoever holds it; choosing someone gives it
+    // to her, and the server takes it from the previous holder in the same write.
+    const target = agentId === '' ? holder : agents.find((agent) => agent.id === agentId)
+    if (target === null || target === undefined) return
+    const draft = cleanDraft({ ...draftOf(target), isCos: agentId !== '' })
+    const sent = request.start((requestId) => onSaveAgent(draft, requestId), {
+      noticeInPlace: true,
+      onNotice: (notice) => setProblem(notice.text),
+    })
+    if (!sent) setProblem(OFFLINE)
+  }
+
+  return (
+    <SettingsRow
+      label="Default agent"
+      description={problem === null ? 'Answers messages in a shared room that mention nobody, and delegates from there.' : <span className="text-danger" role="status">{problem}</span>}
+    >
+      <div className="w-[200px]">
+        <Select
+          label="Default agent"
+          value={holder?.id ?? ''}
+          disabled={request.pending}
+          options={[
+            { value: '', label: 'Nobody' },
+            ...eligible.map((agent) => ({ value: agent.id, label: agent.name })),
+          ]}
+          onChange={pick}
+        />
+      </div>
+    </SettingsRow>
+  )
+}
 
 interface AgentsPageProps extends Omit<AgentSettingsProps, 'agent' | 'onClose'> {
   /** From the Settings location: an id, or nothing for the first agent edited here. */
@@ -75,7 +127,7 @@ export function AgentsPage({ agentId, chats, onSelect, onOpenDm, onNewAgent, ...
           <Avatar name={agent.name} color={agent.color} src={agent.avatar} shape={agent.avatarShape} tone={agent.avatarTone} size={24} center />
         </span>
         <span className="relative min-w-0 flex-1 truncate text-[14px]">{agent.name}</span>
-        {agent.isCos ? <span className="relative flex-none text-meta text-dim">Chief</span> : null}
+        {agent.isCos ? <span className="relative flex-none text-meta text-dim">Default agent</span> : null}
         {inDm ? <Icon icon={ArrowUpRight01Icon} size={14} className="relative flex-none text-dim" /> : null}
       </button>
     )
@@ -99,6 +151,10 @@ export function AgentsPage({ agentId, chats, onSelect, onOpenDm, onNewAgent, ...
             New agent
           </Button>
         </header>
+
+        <div className="mx-8 mb-6 border-b border-line @max-[560px]:mx-5">
+          <DefaultAgentRow agents={settings.agents} requestEvents={settings.requestEvents} onSaveAgent={settings.onSaveAgent} />
+        </div>
 
         <div className="grid grid-cols-[minmax(0,264px)_minmax(0,1fr)] gap-6 px-6 pb-10 @max-[720px]:grid-cols-1">
           <nav ref={listRef} aria-label="Agents list" className={`self-start ${listFits ? '@min-[720px]:sticky @min-[720px]:top-6' : ''}`}>

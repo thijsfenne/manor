@@ -94,7 +94,7 @@ export function StoragePage({ settings, archivedAt, notice, requestEvents, onSav
   )
 
   return (
-    <SettingsPage title="Storage" description="How long Manor keeps things before it tidies up. Checked every hour.">
+    <SettingsPage title="Storage">
       <SettingsGroup title="Chats" {...restore(['autoSettleDays', 'archiveRetentionDays'])}>
         <SettingsRow label="Settle quiet Sessions" description="A Session with no new messages for this long moves to Settled.">
           {control('autoSettleDays', 'Settle quiet Sessions', 'Never')}

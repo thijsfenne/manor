@@ -252,7 +252,7 @@ function ConversationRow({
 }
 
 /** Her role, or the nearest true answer when she has none written down. */
-const roleLabel = (agent: AgentConfig) => agent.role || (agent.isCos ? 'Chief of staff' : agent.driver)
+const roleLabel = (agent: AgentConfig) => agent.role || (agent.isCos ? 'Default agent' : agent.driver)
 
 function RowMeta({ row }: { row: ChatListRow }) {
   return (

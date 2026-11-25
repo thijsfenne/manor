@@ -11,6 +11,7 @@ import { AutoRulesPage } from './AutoRulesPage'
 import { ContextFilesPage } from './ContextFilesPage'
 import { AppearancePage, GeneralPage, KeybindingsPage } from './PersonalPages'
 import type { SettingsLocation } from './sections'
+import { PanelsPage } from './PanelsPage'
 import { PhonePage } from './PhonePage'
 import { PermissionsPage } from './PermissionsPage'
 import { StoragePage } from './StoragePage'
@@ -57,19 +58,13 @@ export function SettingsHost({
       case 'general':
         return (
           <GeneralPage
-            agents={workspace.agents}
             profile={workspace.profile}
-            {...(account === undefined ? {} : { account })}
             requestEvents={manor.requestEvents}
-            onSaveAgent={manor.saveAgent}
             onSaveProfile={manor.saveProfile}
             settings={workspace.houseSettings}
             onSaveSettings={manor.saveHouseSettings}
             info={workspace.systemInfo}
             onRequestInfo={manor.requestSystemInfo}
-            simulator={workspace.simulator}
-            connected={manor.status === 'live'}
-            onSimulatorAction={manor.simulatorAction}
             {...common}
           />
         )
@@ -208,11 +203,23 @@ export function SettingsHost({
           <PhonePage
             access={workspace.phoneAccess}
             pairingLink={workspace.pairingLink}
+            {...(account === undefined ? {} : { account })}
             requestEvents={manor.requestEvents}
             onRequest={manor.requestPhoneAccess}
             onSetServing={manor.setTailscaleServe}
             onCreateLink={manor.createPairingLink}
             onRevoke={manor.revokeDevice}
+            {...common}
+          />
+        )
+      case 'panels':
+        return (
+          <PanelsPage
+            settings={workspace.houseSettings}
+            simulator={workspace.simulator}
+            connected={manor.status === 'live'}
+            onSave={manor.saveHouseSettings}
+            onSimulatorAction={manor.simulatorAction}
             {...common}
           />
         )

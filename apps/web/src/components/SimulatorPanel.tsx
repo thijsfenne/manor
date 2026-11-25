@@ -221,7 +221,7 @@ function SimulatorBody({ state, view, selection, connected, onAction, compact = 
   )
 
   if (state === null) return note('Looking for simulators…')
-  if (state.status === 'off') return note('Turn on the iOS Simulator in Settings, General.')
+  if (state.status === 'off') return note('Turn on the iOS Simulator in Settings, Browser & Simulator.')
   if (state.status === 'unavailable') return note(state.detail ?? 'The iOS Simulator is not available on this Mac.')
   if (shown === undefined || stream === undefined) return <DeviceList state={state} view={view} selection={selection} connected={connected} compact={compact} />
   if (dropped) return note('The screen stopped.', { label: 'Try again', run: () => onAction('watch', shown.udid) })
@@ -247,7 +247,7 @@ function DeviceList({ state, view, selection, connected, compact }: {
   const failure = state.error !== undefined && !rowError ? <p className="m-0 px-0.5 text-label text-danger" role="status">{state.error}</p> : null
   const note = (text: string) => <div className="flex flex-col gap-3 px-3.5 py-6">{failure}<p className="m-0 text-dim">{text}</p></div>
   if (view.devices.length === 0) return note('No iOS simulators found. Add one in Xcode, under Window, Devices and Simulators.')
-  if (groups.length === 0) return note('No simulators are picked for this list. Pick them in Settings, General, under Simulator.')
+  if (groups.length === 0) return note('No simulators are picked for this list. Pick them in Settings, Browser & Simulator.')
   const pending = state.pending
   return (
     <div className={`flex min-h-0 flex-col gap-4 overflow-y-auto p-3 ${compact ? 'max-h-[440px]' : ''}`}>

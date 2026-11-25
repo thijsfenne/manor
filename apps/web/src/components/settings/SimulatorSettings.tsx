@@ -6,7 +6,7 @@ import { Switch } from '../ui/Switch'
 import { SettingsGroup, SettingsRow } from './SettingsLayout'
 
 /**
- * General's Simulator group: the one switch behind the Simulator door, and under it the
+ * The Simulator group on Browser & Simulator: the one switch behind the Simulator door, and under it the
  * devices the panel's list shows. Off, Manor runs no simulator tool and downloads
  * nothing; the door is gone from every Session.
  */

@@ -121,12 +121,26 @@ function deviceLine(device: PairedDevice): string {
   return `${paired}, last seen ${ago === 'now' ? 'just now' : `${ago} ago`}`
 }
 
+/** A paired browser's way out. Only there: the local desktop app has nobody to sign out. */
+function ForgetGroup({ onForget }: { onForget: () => void }) {
+  return (
+    <SettingsGroup title="This browser">
+      <SettingsRow label="Forget this Mac" description="Removes this browser from Manor. Pair it again from Settings → Phone on your Mac.">
+        <Button size="compact" variant="secondary" onClick={onForget}>Forget this Mac</Button>
+      </SettingsRow>
+    </SettingsGroup>
+  )
+}
+
 /**
  * Settings → Phone: Tailscale HTTPS so a phone can reach this Mac, a one-time pairing
- * link with its QR code, and the devices that paired, each with Revoke.
+ * link with its QR code, the devices that paired, each with Revoke, and in a paired
+ * browser the way to forget this Mac.
  */
-export function PhonePage({ access, pairingLink, notice, requestEvents, onRequest, onSetServing, onCreateLink, onRevoke, onDismissNotice }: {
+export function PhonePage({ access, pairingLink, account, notice, requestEvents, onRequest, onSetServing, onCreateLink, onRevoke, onDismissNotice }: {
   access: PhoneAccess | null
+  /** Present only where sign-in is on; the local desktop app has nobody to sign out. */
+  account?: { onForget: () => void }
   pairingLink: PairingLink | null
   notice: Notice | null
   requestEvents: RequestEvents
@@ -145,6 +159,7 @@ export function PhonePage({ access, pairingLink, notice, requestEvents, onReques
   // later revoke of that device does not bring the spent code back.
   const [shown, setShown] = useState<{ before: ReadonlySet<string>; usedBy: string | null } | null>(null)
   const [revokingId, setRevokingId] = useState<string | null>(null)
+  const forget = account === undefined ? null : <ForgetGroup onForget={account.onForget} />
 
   // Tailscale can change outside Manor, so coming back to the window asks again.
   useEffect(() => {
@@ -157,6 +172,7 @@ export function PhonePage({ access, pairingLink, notice, requestEvents, onReques
     return (
       <SettingsPage title="Phone">
         <p className="m-0 text-label text-dim">Asking the Mac…</p>
+        {forget}
       </SettingsPage>
     )
   }
@@ -224,6 +240,8 @@ export function PhonePage({ access, pairingLink, notice, requestEvents, onReques
           </SettingsRow>
         ))}
       </SettingsGroup>
+
+      {forget}
 
       {shownNotice === null ? null : <RequestNotice notice={shownNotice} onDismiss={() => { setProblem(null); onDismissNotice() }} />}
     </SettingsPage>

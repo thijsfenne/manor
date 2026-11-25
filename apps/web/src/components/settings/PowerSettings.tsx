@@ -10,7 +10,7 @@ const KEEP_AWAKE_OPTIONS: readonly SelectOption<KeepAwakeMode>[] = [
 ]
 
 /**
- * General's Power group. Only a server on macOS can hold the Mac awake, so the group
+ * The Power group on General. Only a server on macOS can hold the Mac awake, so the group
  * is absent until system info says so, and while the settings are still unread.
  */
 export function PowerGroup({ settings, info, onSaveSettings, onRequestInfo }: {

@@ -13,7 +13,7 @@ import { Button } from '../ui/Button'
 import { Select, type SelectOption } from '../ui/Select'
 import { SettingsGroup, SettingsPage, SettingsRow } from './SettingsLayout'
 
-const DESCRIPTION = 'Dictate a message in the composer. Speech is turned into text on this Mac; nothing is sent to a service.'
+const DESCRIPTION = 'Speech becomes text on this Mac. Nothing is sent to a service.'
 
 const LANGUAGE_OPTIONS: readonly SelectOption<DictationLanguage>[] = [
   { value: 'auto', label: 'Automatic' },
@@ -211,7 +211,7 @@ export function VoicePage({ settings, onSave }: {
           && settings.dictationMicrophone === DEFAULT_HOUSE_SETTINGS.dictationMicrophone
         }
       >
-        <SettingsRow label="Language" description={`The language you speak. Automatic lets the model find it.${languageNote}`}>
+        <SettingsRow label="Language" description={`Automatic lets the model find it.${languageNote}`}>
           <div className="w-[200px]">
             <Select
               label="Language"
@@ -221,7 +221,7 @@ export function VoicePage({ settings, onSave }: {
             />
           </div>
         </SettingsRow>
-        <SettingsRow label="Microphone" description="The input Manor records from.">
+        <SettingsRow label="Microphone">
           <div className="w-[200px]">
             <Select
               label="Microphone"

@@ -305,10 +305,10 @@ export function MemoryPage({ info, settings, connections, onRequest, onCheck, on
           <SettingsGroup title="Daily log">
             <SettingsRow
               label="Written after each turn"
-              description="Manor adds a line when a turn decided or learned something, and distills finished days into long-term memory. Both run on a signed-in provider."
+              description="Manor adds a line when a turn decided or learned something, and distills finished days into long-term memory."
             >
               {writer === undefined ? null : writer === null ? (
-                <span className="text-label text-text">No provider is signed in, so nothing is written. Sign in under Providers.</span>
+                <span className="text-label text-text">No provider is signed in, so nothing is written. Sign in under Providers & keys.</span>
               ) : (
                 <span className="text-label text-muted">Runs on {PROVIDER_NAME[writer.provider]}</span>
               )}

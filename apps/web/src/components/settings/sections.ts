@@ -5,6 +5,7 @@ import {
   ConnectIcon,
   CpuIcon,
   FileEditIcon,
+  Globe02Icon,
   HardDriveIcon,
   HierarchySquare02Icon,
   InformationCircleIcon,
@@ -38,6 +39,7 @@ export type SettingsSection =
   | 'memory'
   | 'connections'
   | 'skills'
+  | 'panels'
   | 'phone'
   | 'permissions'
   | 'storage'
@@ -62,7 +64,7 @@ export const SETTINGS_GROUPS: readonly { label: string; sections: readonly Secti
   {
     label: 'Personal',
     sections: [
-      { id: 'general', label: 'General', icon: Settings02Icon, keywords: ['forget this mac', 'default agent', 'photo', 'name', 'profile', 'routing', 'keep awake', 'sleep', 'power', 'search engine', 'browser'] },
+      { id: 'general', label: 'General', icon: Settings02Icon, keywords: ['photo', 'name', 'profile', 'keep awake', 'sleep', 'power'] },
       { id: 'appearance', label: 'Appearance', icon: PaintBoardIcon, keywords: ['theme', 'dark', 'light', 'system', 'font', 'code font', 'typeface'] },
       { id: 'keybindings', label: 'Keybindings', icon: KeyboardIcon, keywords: ['shortcuts', 'keys', 'workspace'] },
       { id: 'voice', label: 'Voice', icon: Mic01Icon, keywords: ['dictation', 'microphone', 'speech', 'transcribe', 'whisper', 'parakeet', 'language'] },
@@ -71,10 +73,16 @@ export const SETTINGS_GROUPS: readonly { label: string; sections: readonly Secti
   {
     label: 'Agents',
     sections: [
-      { id: 'agents', label: 'Agents', icon: AiBotHeadLookingIcon, keywords: ['agent settings', 'personas', 'new agent'] },
-      { id: 'context', label: 'Context files', icon: FileEditIcon, keywords: ['context file', 'instructions', 'standing files'] },
-      { id: 'auto', label: 'Auto mode rules', icon: MagicWand01Icon, keywords: ['rules', 'provider', 'model', 'reasoning', 'fast mode'] },
+      { id: 'agents', label: 'Agents', icon: AiBotHeadLookingIcon, keywords: ['default agent', 'chief of staff', 'routing', 'agent settings', 'personas', 'new agent'] },
       { id: 'subagents', label: 'Subagents', icon: HierarchySquare02Icon, keywords: ['allowed', 'maximum concurrent subagents', 'allow subagents to delegate'] },
+      { id: 'auto', label: 'Auto mode rules', icon: MagicWand01Icon, keywords: ['rules', 'provider', 'model', 'reasoning', 'fast mode'] },
+    ],
+  },
+  {
+    label: 'Knowledge',
+    sections: [
+      { id: 'memory', label: 'Memory & knowledge', icon: BookOpen01Icon, keywords: ['memory folder', 'knowledge folder', 'note ai model', 'daily log'] },
+      { id: 'context', label: 'Context files', icon: FileEditIcon, keywords: ['context file', 'instructions', 'standing files'] },
     ],
   },
   {
@@ -84,20 +92,20 @@ export const SETTINGS_GROUPS: readonly { label: string; sections: readonly Secti
       { id: 'providers', label: 'Providers & keys', icon: CpuIcon, keywords: ['provider clis', 'keys', 'api keys and app passwords', 'sign in', 'subscriptions'] },
     ],
   },
-  { label: 'Knowledge', sections: [{ id: 'memory', label: 'Memory & knowledge', icon: BookOpen01Icon, keywords: ['memory folder', 'knowledge folder', 'note ai model', 'daily log'] }] },
   {
-    label: 'Integrations',
+    label: 'Tools',
     sections: [
       { id: 'connections', label: 'Connectors', icon: ConnectIcon, keywords: ['connectors', 'apps', 'mcp', 'servers', 'composio'] },
       { id: 'skills', label: 'Skills', icon: PuzzleIcon, keywords: ['import skill', 'filter skills'] },
+      { id: 'panels', label: 'Browser & Simulator', icon: Globe02Icon, keywords: ['browser', 'search engine', 'simulator', 'ios', 'xcode', 'devices'] },
+      { id: 'permissions', label: 'Permissions', icon: SecurityCheckIcon, keywords: ['accessibility', 'screen recording', 'system settings', 'privacy', 'computer use'] },
     ],
   },
   {
     label: 'System',
     sections: [
-      { id: 'phone', label: 'Phone', icon: SmartPhone01Icon, keywords: ['pair phone', 'tailscale https', 'paired devices', 'revoke', 'qr code'] },
-      { id: 'permissions', label: 'Permissions', icon: SecurityCheckIcon, keywords: ['accessibility', 'screen recording', 'system settings', 'privacy', 'computer use'] },
       { id: 'storage', label: 'Storage', icon: HardDriveIcon, keywords: ['settle quiet sessions', 'delete archived chats', 'keep picture copies', 'keep backups', 'retention'] },
+      { id: 'phone', label: 'Phone', icon: SmartPhone01Icon, keywords: ['pair phone', 'tailscale https', 'paired devices', 'revoke', 'qr code', 'forget this mac'] },
       { id: 'about', label: 'About', icon: InformationCircleIcon, keywords: ['version', 'logs', 'diagnostics', 'server running since'] },
     ],
   },

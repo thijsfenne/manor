@@ -381,7 +381,7 @@ describe('ManorService, deleting a persona', () => {
     expect(events.at(-1)).toMatchObject({
       type: 'system_note',
       kind: 'info',
-      text: 'Nobody was addressed and no chief of staff is configured, so this message stays in the chat as context.',
+      text: 'Nobody was addressed and no default agent is set, so this message stays in the chat as context.',
     })
   })
 

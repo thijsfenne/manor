@@ -7,7 +7,7 @@ import { SettingsGroup, SettingsRow } from './SettingsLayout'
 const ENGINE_OPTIONS = BrowserSearchEngineSchema.options.map((value) => ({ value, label: SEARCH_ENGINES[value].label }))
 
 /**
- * The Browser's search engine, on the General page. A pick saves at once. The Browser
+ * The Browser's search engine, on the Browser & Simulator page. A pick saves at once. The Browser
  * lives only in the desktop app, so without its bridge the group is not drawn, nor
  * while the settings are still on their way.
  */

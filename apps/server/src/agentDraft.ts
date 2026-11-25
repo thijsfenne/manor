@@ -40,7 +40,7 @@ export function checkAgentDraft(draft: AgentDraft, roster: readonly AgentConfig[
   }
   const placement = draft.placement ?? roster.find((agent) => agent.id === draft.id)?.placement ?? 'chat'
   if (placement === 'session' && draft.isCos) {
-    return { ok: false, message: 'A Session persona cannot be chief of staff.' }
+    return { ok: false, message: 'A Session agent cannot be the default agent.' }
   }
   if (draft.speed === 'fast' && !supportsFastMode(draft.driver, draft.model ?? defaultModel(draft.driver))) {
     return { ok: false, message: 'Fast mode is not available for this provider and model.' }
