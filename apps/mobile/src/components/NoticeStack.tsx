@@ -120,7 +120,7 @@ function NoticeCard({ entry, stackTop, onOpen }: { entry: NoticeEntry; stackTop:
               >
                 <View style={styles.mark}>
                   {face === undefined ? <HugeiconsIcon icon={mark.icon} size={24} color={mark.color} strokeWidth={1.8} /> : (
-                    <Blobatar name={face.name} color={face.color} src={face.avatar} shape={face.avatarShape} tone={face.avatarTone} size={32} />
+                    <Blobatar name={face.name} color={face.color} src={face.avatar} shape={face.avatarShape} finish={face.avatarFinish} tone={face.avatarTone} size={32} />
                   )}
                 </View>
                 <View style={styles.text}>

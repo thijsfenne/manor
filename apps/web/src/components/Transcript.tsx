@@ -1167,7 +1167,7 @@ function RelayMarker({
         className="flex cursor-pointer items-center gap-1 rounded-md border-0 bg-transparent px-2 py-1 text-[12px] leading-[16px] text-dim [font-family:inherit] hover:bg-surface-2 hover:text-muted disabled:cursor-default disabled:hover:bg-transparent"
       >
         <span>{action}</span>
-        <Avatar name={peer.name} color={peer.color} src={peer.avatar} shape={peer.avatarShape} tone={peer.avatarTone} size={13} />
+        <Avatar name={peer.name} color={peer.color} src={peer.avatar} shape={peer.avatarShape} tone={peer.avatarTone} finish={peer.avatarFinish} size={13} />
         <span>{peer.name}</span>
       </button>
       <span className="sr-only">{label}</span>
@@ -1191,6 +1191,7 @@ function RelayedAgentMessage({
         avatar={persona.avatar}
         avatarShape={persona.avatarShape}
         avatarTone={persona.avatarTone}
+        avatarFinish={persona.avatarFinish}
       />
       <AgentBubble color={persona.color} text={event.text} agents={agents} images={event.images ?? []} />
     </div>
@@ -1324,6 +1325,7 @@ const TurnRow = memo(function TurnRow({
       avatar={persona.avatar}
       avatarShape={persona.avatarShape}
       avatarTone={persona.avatarTone}
+      avatarFinish={persona.avatarFinish}
       working={running}
       face={face}
       status={status}
@@ -1547,7 +1549,7 @@ function ConsultedAgents({
                         onOpen(consultation.pairChatId)
                       }}
                     >
-                      <Avatar name={persona.name} color={persona.color} src={persona.avatar} shape={persona.avatarShape} tone={persona.avatarTone} size={24} />
+                      <Avatar name={persona.name} color={persona.color} src={persona.avatar} shape={persona.avatarShape} tone={persona.avatarTone} finish={persona.avatarFinish} size={24} />
                       <span className="min-w-0 flex-1 truncate">{persona.name}</span>
                     </button>
                   </li>

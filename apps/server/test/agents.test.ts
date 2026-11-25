@@ -243,10 +243,11 @@ describe('ManorService, saving a persona', () => {
   it('stores chosen avatar settings and treats an empty silhouette as none', async () => {
     const test = await harness([sage])
 
-    await test.manor.handle({ type: 'save_agent', agent: draft({ avatarShape: 'sun', avatarTone: 0.9 }) }, test.reply)
+    await test.manor.handle({ type: 'save_agent', agent: draft({ avatarShape: 'sun', avatarTone: 0.9, avatarFinish: 'fluffy' }) }, test.reply)
 
     expect(lastRoster(test.broadcast).at(-1)?.avatarShape).toBe('sun')
     expect(lastRoster(test.broadcast).at(-1)?.avatarTone).toBe(0.9)
+    expect(lastRoster(test.broadcast).at(-1)?.avatarFinish).toBe('fluffy')
 
     await test.manor.handle(
       { type: 'save_agent', agent: draft({ id: 'nova', name: 'Nova', avatarShape: '' }) },

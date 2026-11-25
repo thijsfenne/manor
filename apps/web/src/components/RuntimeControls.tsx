@@ -94,7 +94,7 @@ function RuntimeFacepile({ agents, overrides, disabled, startedAgentIds = [], al
         <span className="flex flex-none items-center">
           {agents.map((agent) => (
             <span key={agent.id} className="-ml-1.5 flex first:ml-0">
-              <Avatar name={agent.name} color={agent.color} src={agent.avatar} shape={agent.avatarShape} tone={agent.avatarTone} size={18} />
+              <Avatar name={agent.name} color={agent.color} src={agent.avatar} shape={agent.avatarShape} tone={agent.avatarTone} finish={agent.avatarFinish} size={18} />
             </span>
           ))}
         </span>

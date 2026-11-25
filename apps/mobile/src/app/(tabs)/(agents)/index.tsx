@@ -175,6 +175,7 @@ function HeadCard({ row, agent, compact, disabled, focused, onPress }: { row: Ch
         color={agent.color}
         name={agent.name}
         shape={agent.avatarShape}
+        finish={agent.avatarFinish}
         tone={agent.avatarTone}
         size={compact ? PINNED_FACE_SIZE : CHIEF_FACE_SIZE}
         src={agent.avatar}
@@ -230,6 +231,7 @@ function ConversationRow({
             color={agent.color}
             name={agent.name}
             shape={agent.avatarShape}
+            finish={agent.avatarFinish}
             tone={agent.avatarTone}
             size={FACE_WIDTH}
             src={agent.avatar}

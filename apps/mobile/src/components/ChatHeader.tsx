@@ -151,7 +151,7 @@ export function ChatHeader({ title, subtitle, project, projectThread = false, dr
               style={styles.pill}
             >
               <View style={styles.agentPill}>
-                <Blobatar color={agent.color} name={agent.name} shape={agent.avatarShape} tone={agent.avatarTone} size={28} src={agent.avatar} />
+                <Blobatar color={agent.color} name={agent.name} shape={agent.avatarShape} finish={agent.avatarFinish} tone={agent.avatarTone} size={28} src={agent.avatar} />
                 <Text numberOfLines={1} style={styles.pillName}>{agent.name}</Text>
                 {agent.role === '' ? null : <Text numberOfLines={1} style={styles.pillRole}>{agent.role}</Text>}
               </View>
@@ -174,7 +174,7 @@ export function ChatHeader({ title, subtitle, project, projectThread = false, dr
             {pair === undefined ? <Text numberOfLines={1} style={styles.title}>{title}</Text> : pair.map((member, index) => (
               <View key={member.id} style={styles.pairMember}>
                 {index === 0 ? null : <HugeiconsIcon color={colors.dim} icon={ArrowLeftRightIcon} size={16} strokeWidth={1.8} />}
-                <Blobatar color={member.color} name={member.name} shape={member.avatarShape} tone={member.avatarTone} size={22} src={member.avatar} />
+                <Blobatar color={member.color} name={member.name} shape={member.avatarShape} finish={member.avatarFinish} tone={member.avatarTone} size={22} src={member.avatar} />
                 <Text numberOfLines={1} style={styles.title}>{member.name}</Text>
               </View>
             ))}

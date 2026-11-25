@@ -3,11 +3,12 @@ import { BLOB_FACE_TRAITS, DEFAULT_BLOB_TONE, WORKING_GAZE, blobShapeOf } from '
 import { DOT, DOTS_RATE, WAKE, loopSteps, type Dot as MeltDot, type DotsPlan, type EyePose, type Key, type MoveId, type Step } from '@manor/client-runtime/busy-face'
 import { EYE_MOVE_MS, FACE_LOOK, towardStops, type FaceLook, type FaceState } from '@manor/client-runtime/face-activity'
 import { frameOf, outlinePoints, plan, type GestureId } from '@manor/client-runtime/face-gesture'
-import { CLAY, clayTones, palette, sheenInk, traits as seedTraits, type Glow, type Tones } from '@manor/blobatar'
+import { CLAY, FUR, PILE, clayTones, furPlan, furTones, palette, pileOpacity, sheenInk, traits as seedTraits, type FurTones, type Glow, type Tones } from '@manor/blobatar'
 import { happy, sad, sleepy, unsure } from '@manor/blobatar/expression'
 import { _parts } from '@manor/blobatar/internal'
+import type { AvatarFinish } from '@manor/contracts'
 import { Image } from 'expo-image'
-import { Fragment, useEffect, useEffectEvent, useId, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useEffectEvent, useId, useMemo, useRef, useState, type ReactNode } from 'react'
 import { StyleSheet, View, type ColorValue, type ViewStyle } from 'react-native'
 import Animated, {
   Easing,
@@ -30,7 +31,7 @@ import Animated, {
   type CSSStyle,
   type SharedValue,
 } from 'react-native-reanimated'
-import Svg, { Circle, ClipPath, Defs, G, Path, RadialGradient, Rect, Stop } from 'react-native-svg'
+import Svg, { Circle, ClipPath, Defs, G, Image as SvgImage, Path, RadialGradient, Rect, Stop } from 'react-native-svg'
 
 import { keyOffsets } from '@/lib/busyFrames'
 import { eyeFrames, gestureFrames, type Layer } from '@/lib/faceFrames'
@@ -70,6 +71,8 @@ interface BlobatarProps {
   shape?: string
   /** Chosen swatch position; absent keeps the existing deep tone. */
   tone?: number
+  /** The finish her face wears, as she stores it; absent keeps clay. The phone only draws it. */
+  finish?: AvatarFinish | undefined
   size: number
   /**
    * Her turn is running. On the face that moves fully (`animate`), her whole face plays
@@ -114,7 +117,7 @@ type Play = 'loop' | 'dots' | 'home'
  * native side without a worklet per frame, which is what lets a transcript full of
  * faces scroll at speed. Only a face at work costs more; see `WorkFace`.
  */
-export function Blobatar({ name, color, src, shape, tone = DEFAULT_BLOB_TONE, size, working = false, animate = false, face: state }: BlobatarProps) {
+export function Blobatar({ name, color, src, shape, tone = DEFAULT_BLOB_TONE, finish = 'clay', size, working = false, animate = false, face: state }: BlobatarProps) {
   const still = useReducedMotion()
   const full = animate === true
   const hue = accentHue(color)
@@ -139,7 +142,7 @@ export function Blobatar({ name, color, src, shape, tone = DEFAULT_BLOB_TONE, si
   const worn = blobShapeOf(name, shape)
   // The working face wears her resting traits, so a turn starting moves the face she has
   // rather than drawing a new one.
-  const rest = useMemo(() => (portrait ? null : faceOf({ name, size, tone, hue, shape })), [hue, name, portrait, shape, size, tone])
+  const rest = useMemo(() => (portrait ? null : faceOf({ name, size, tone, hue, shape, finish })), [finish, hue, name, portrait, shape, size, tone])
   // A face the loop cannot measure works the still way.
   const rig = useMemo(() => (plays && rest !== null ? rigFor(rest) : undefined), [plays, rest])
   const work = rig === undefined || playing === undefined || rest === null ? undefined : { rig, play: playing, face: rest }
@@ -148,8 +151,8 @@ export function Blobatar({ name, color, src, shape, tone = DEFAULT_BLOB_TONE, si
   const moment = work === undefined ? own : undefined
   const pose = moment?.pose
   const face = useMemo(
-    () => (rest === null || (pose === undefined && !pinned) ? rest : faceOf({ name, size, tone, hue, shape, pinned, pose })),
-    [hue, name, pinned, pose, rest, shape, size, tone],
+    () => (rest === null || (pose === undefined && !pinned) ? rest : faceOf({ name, size, tone, hue, shape, finish, pinned, pose })),
+    [finish, hue, name, pinned, pose, rest, shape, size, tone],
   )
 
   if (portrait || face === null) {
@@ -202,12 +205,13 @@ export function Blobatar({ name, color, src, shape, tone = DEFAULT_BLOB_TONE, si
 }
 
 /** A face taken apart: at rest, in a pose of the library, or pinned to the still working gaze. */
-function faceOf({ name, size, tone, hue, shape, pinned = false, pose }: {
+function faceOf({ name, size, tone, hue, shape, finish, pinned = false, pose }: {
   name: string
   size: number
   tone: number
   hue: number | undefined
   shape: string | undefined
+  finish: AvatarFinish
   pinned?: boolean
   pose?: keyof typeof POSES | undefined
 }) {
@@ -222,6 +226,7 @@ function faceOf({ name, size, tone, hue, shape, pinned = false, pose }: {
       ...(pose !== undefined ? { expression: POSES[pose] } : pinned ? { expression: unsure } : {}),
     }),
     size,
+    finish,
   )
 }
 
@@ -277,7 +282,10 @@ interface Face {
   /** The library's ink for this face; absent leaves the path to its own default. */
   eyeFill: string | undefined
   eyes: Eye[]
-  /** Whether the eyes wear the clay sheen: dark ink on a shaded face past `CLAY.small`. */
+  finish: AvatarFinish
+  /** The fur's colours, on a fluffy face with a head colour; every fur layer reads them. */
+  fur: FurTones | undefined
+  /** Whether the eyes wear their finish's sheen: dark ink on a clay or fluffy face past its small size. */
   sheen: boolean
   pose: Pose
   /** Seeded timings, in milliseconds and box units, straight from the library. */
@@ -300,7 +308,7 @@ const PART = /<(path|circle)\s([^>]*)\/>/g
  * have read. Written against the markup `_parts` emits for this major of the
  * library, which its adapters also read; the shape is stable inside a major.
  */
-function takeApart(parts: ReturnType<typeof _parts>, size: number): Face | null {
+function takeApart(parts: ReturnType<typeof _parts>, size: number, finish: AvatarFinish): Face | null {
   const inner = parts.inner
   const eyesTag = inner.indexOf('class="mo-eyes"')
   if (eyesTag < 0) return null
@@ -339,6 +347,9 @@ function takeApart(parts: ReturnType<typeof _parts>, size: number): Face | null 
     return raw === undefined ? fallback : Number.parseFloat(raw)
   }
   const head = vars['--mo-head'] ?? bodyFill
+  const fur = finish === 'fluffy' && head !== undefined ? furTones(head) : undefined
+  // The finish's own small size, under which its eyes are plain; a flat face has no sheen.
+  const shaded = finish === 'clay' ? size > CLAY.small : finish === 'fluffy' && size > FUR.small
   return {
     size,
     // The custom properties carry a tinting pose's colours; the markup keeps the resting pair.
@@ -347,8 +358,10 @@ function takeApart(parts: ReturnType<typeof _parts>, size: number): Face | null 
     silhouette: silhouette(body),
     eyeFill: vars['--mo-eye'] ?? eyeFill,
     eyes,
+    finish,
+    fur,
     // The resting ink, as the web's animated markup decides it, so a tinting pose does not toggle it.
-    sheen: size > CLAY.small && head !== undefined && eyeFill !== undefined && sheenInk(eyeFill),
+    sheen: shaded && head !== undefined && eyeFill !== undefined && sheenInk(eyeFill),
     pose: {
       esx: num('--mo-esx', IDLE.esx),
       esy: num('--mo-esy', IDLE.esy),
@@ -495,7 +508,7 @@ function LiveFace({ face, size }: { face: Face; size: number }) {
           </Svg>
           <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, gaze]}>
             {face.eyes.map((eye) => (
-              <EyeLayer eye={eye} fill={face.eyeFill} key={eye.wrap} pose={face.pose} sheen={face.sheen} size={size} still={still} timing={face} />
+              <EyeLayer eye={eye} face={face} key={eye.wrap} size={size} still={still} />
             ))}
           </Animated.View>
         </Animated.View>
@@ -603,18 +616,50 @@ function StillFace({ face, size }: { face: Face; size: number }) {
 function Eyes({ face }: { face: Face }) {
   return (
     <G {...(face.eyeFill === undefined ? {} : { fill: face.eyeFill })}>
-      {face.eyes.map((eye) => (
-        <Fragment key={eye.wrap}>
-          <Path d={eye.d} />
-          {face.sheen ? <Sheen d={eye.d} /> : null}
-        </Fragment>
-      ))}
+      {face.eyes.map((eye) => <EyeInk d={eye.d} face={face} key={eye.wrap} />)}
     </G>
   )
 }
 
-/** The soft sheen inside a dark eye: the web's `CLAY.sheen`, in the box of whatever it fills. */
-function SheenGlow({ id }: { id: string }) {
+/**
+ * One eye as her finish draws it, inside whatever layer moves the eye, so every layer
+ * of it poses and blinks with the eye. `fill` is the ink, absent where a group around
+ * it carries the ink. A fluffy eye past `FUR.small` is a bead pressed into the pile:
+ * the crease above it and the lit lip under it are the eye itself, moved.
+ */
+function EyeInk({ d, face, fill }: { d: string; face: Face; fill?: string | undefined }) {
+  const fur = face.fur !== undefined && !furPlan(face.size).small ? face.fur : undefined
+  const { crease, lip } = FUR.eye
+  return (
+    <>
+      {fur ? (
+        <>
+          <Path d={d} fill="none" opacity={crease.opacity} stroke={fur.deep} strokeWidth={crease.width} transform={`translate(${crease.dx} ${crease.dy})`} />
+          <Path d={d} fill={fur.tip} opacity={lip.opacity} stroke={fur.tip} strokeWidth={lip.width} transform={`translate(${lip.dx} ${lip.dy})`} />
+        </>
+      ) : null}
+      <Path d={d} {...(fill === undefined ? {} : { fill })} />
+      {face.sheen ? <Sheen d={d} finish={face.finish} /> : null}
+    </>
+  )
+}
+
+/**
+ * The soft sheen inside a dark eye, in the box of whatever it fills: the web's
+ * `CLAY.sheen`, or on a fluffy face the narrow glow of `FUR.eye.sheen`.
+ */
+function SheenGlow({ id, finish }: { id: string; finish: AvatarFinish }) {
+  if (finish === 'fluffy') {
+    // Stated as an ellipse in box fractions: the native side applies a gradient transform
+    // after it has resolved the box, so the web's translate and scale would move it off the eye.
+    const sheen = FUR.eye.sheen
+    return (
+      <RadialGradient cx={sheen.cx} cy={sheen.cy} id={id} rx={sheen.rx} ry={sheen.ry}>
+        <Stop offset={0} stopColor="white" stopOpacity={sheen.opacity} />
+        <Stop offset={1} stopColor="white" stopOpacity={0} />
+      </RadialGradient>
+    )
+  }
   const { sheen } = CLAY
   return (
     <RadialGradient cx={sheen.cx} cy={sheen.cy} id={id} r={sheen.r}>
@@ -624,12 +669,12 @@ function SheenGlow({ id }: { id: string }) {
   )
 }
 
-function Sheen({ d }: { d: string }) {
+function Sheen({ d, finish }: { d: string; finish: AvatarFinish }) {
   const id = useId().replace(/[^\w-]/g, '')
   return (
     <>
       <Defs>
-        <SheenGlow id={id} />
+        <SheenGlow finish={finish} id={id} />
       </Defs>
       <Path d={d} fill={`url(#${id})`} />
     </>
@@ -694,6 +739,110 @@ function ClayGlow({ id, glow, tones, keep = 1 }: { id: string; glow: Glow; tones
   )
 }
 
+/**
+ * The head in the finish she wears: clay, flat (the head fill alone), or fluffy. With
+ * `morph`, every layer that repeats the head's shapes draws the working face's step.
+ */
+function Body({ face, morph }: { face: Face; morph?: Morph }) {
+  if (face.finish === 'clay') return <ClayBody face={face} morph={morph} />
+  if (face.fur !== undefined) return <FurBody face={face} fur={face.fur} morph={morph} />
+  return (
+    <G fill={face.bodyFill ?? colors.muted}>
+      <Shapes face={face} morph={morph} />
+    </G>
+  )
+}
+
+/** The head's parts as they are filled: at rest, or at the step of the morph a working face is on. */
+function Shapes({ face, morph }: { face: Face; morph: Morph | undefined }) {
+  return morph === undefined ? <Parts body={face.body} /> : morph.shapes.map((steps, index) => <MorphPath key={index} step={morph.step} steps={steps} />)
+}
+
+/**
+ * The head in fur, from the numbers the web's `fur` draws (see the library's fur.ts),
+ * in the same order: the fringe, the flat fill, then inside one clip of all the head's
+ * parts the light, the inner shade, the rim and the pile.
+ *
+ * The fringe is the head's own parts stroked with a dash under the fill, so a working
+ * face morphs every pass with the outline, and the clip follows the way clay's does.
+ * The inner shade is clay's stepped one, with no blur. `furPlan` sheds detail on a list
+ * face: a mid face drops the loosest pass and takes fewer steps, and a small one is the
+ * coarse fringe, the fill and the light alone.
+ *
+ * The pile image stays in head space while the clip moves, so the outline slides over
+ * the fibres rather than dragging them.
+ */
+function FurBody({ face, fur, morph }: { face: Face; fur: FurTones; morph: Morph | undefined }) {
+  const id = useId().replace(/[^\w-]/g, '')
+  const { small, fringe, steps } = furPlan(face.size)
+  const { light: L, rim: R, inner, comb } = FUR
+  const clip = `url(#${id}k)`
+  const light = <Rect fill={`url(#${id}l)`} height={BOX} width={BOX} />
+  // The lit head through the clip moved by this share of the shade's offset. The rects
+  // are moved back, so the light stays where it is and only the cut travels.
+  const lit = (share: number, cover: number) => (
+    <G key={share} opacity={cover} transform={`translate(${inner.dx * share} ${inner.dy * share})`}>
+      <G clipPath={clip} clipRule="nonzero">
+        <G transform={`translate(${-inner.dx * share} ${-inner.dy * share})`}>
+          <Rect fill={fur.head} height={BOX} width={BOX} />
+          {light}
+        </G>
+      </G>
+    </G>
+  )
+  return (
+    <>
+      <Defs>
+        <ClipPath id={`${id}k`}>
+          {morph === undefined
+            ? face.silhouette.map((d, index) => <Path d={d} key={index} />)
+            : morph.shapes.map((steps, index) => <MorphPath key={index} step={morph.step} steps={steps} />)}
+        </ClipPath>
+        <RadialGradient cx={L.cx} cy={L.cy} gradientUnits="userSpaceOnUse" id={`${id}l`} r={L.r}>
+          <Stop offset={0} stopColor={fur.hi} stopOpacity={L.hi} />
+          <Stop offset={L.from} stopColor={fur.hi} stopOpacity={0} />
+          <Stop offset={L.from} stopColor={fur.shade} stopOpacity={0} />
+          <Stop offset={1} stopColor={fur.shade} stopOpacity={L.lo} />
+        </RadialGradient>
+        {small ? null : (
+          <RadialGradient cx={R.cx} cy={R.cy} gradientUnits="userSpaceOnUse" id={`${id}r`} r={R.r}>
+            <Stop offset={R.from} stopColor={fur.tip} stopOpacity={0} />
+            <Stop offset={1} stopColor={fur.tip} stopOpacity={R.opacity} />
+          </RadialGradient>
+        )}
+      </Defs>
+      {/* Longest hairs first, so the short dense ones lie over the long loose ones. */}
+      {fringe.slice().reverse().map((pass) => (
+        <G
+          fill="none"
+          key={pass.width}
+          stroke={fur.hair}
+          strokeDasharray={pass.dash}
+          strokeOpacity={pass.opacity}
+          strokeWidth={pass.width}
+          {...(pass.comb === 0 ? {} : { transform: `translate(${comb.dx * pass.comb} ${comb.dy * pass.comb})` })}
+        >
+          <Shapes face={face} morph={morph} />
+        </G>
+      ))}
+      <G fill={fur.head}>
+        <Shapes face={face} morph={morph} />
+      </G>
+      <G clipPath={clip} clipRule="nonzero">
+        {light}
+        {small ? null : (
+          <>
+            <Rect fill={fur.deep} height={BOX} opacity={inner.opacity} width={BOX} />
+            {Array.from({ length: steps }, (_, k) => lit((k + 1) / steps, 1 / (steps - k)))}
+            <Rect fill={`url(#${id}r)`} height={BOX} width={BOX} />
+            <SvgImage height={BOX} href={PILE} opacity={pileOpacity(fur)} preserveAspectRatio="none" width={BOX} />
+          </>
+        )}
+      </G>
+    </>
+  )
+}
+
 /** From this size up the shade is drawn in `CLAY_STEPS` steps instead of two. */
 const CLAY_LARGE = 64
 const CLAY_STEPS = 6
@@ -718,7 +867,7 @@ const CLAY_STEPS = 6
  *
  * With `morph`, the head's shapes are the working face's: see `MorphPath`.
  */
-function Body({ face, morph }: { face: Face; morph?: Morph }) {
+function ClayBody({ face, morph }: { face: Face; morph: Morph | undefined }) {
   const id = useId().replace(/[^\w-]/g, '')
   const fill = face.bodyFill ?? colors.muted
   const tones = useMemo(() => (face.bodyFill === undefined ? undefined : clayTones(face.bodyFill)), [face.bodyFill])
@@ -774,27 +923,11 @@ function Body({ face, morph }: { face: Face; morph?: Morph }) {
 const POSE_MS = 300
 const poseEase = cubicBezier(0.45, 0.05, 0.5, 1)
 
-function EyeLayer({
-  eye,
-  fill,
-  pose,
-  sheen,
-  size,
-  still,
-  timing,
-}: {
-  eye: Eye
-  fill: string | undefined
-  pose: Pose
-  sheen: boolean
-  size: number
-  still: boolean
-  timing: Pick<Face, 'blink' | 'blinkPhase'>
-}) {
+function EyeLayer({ eye, face, size, still }: { eye: Eye; face: Face; size: number; still: boolean }) {
   const unit = size / BOX
   // The array form: RN reads the string form's decimals as a third, z component.
   const origin: (string | number)[] = [`${eye.cx}%`, `${eye.cy}%`, 0]
-  const stance = eyeStance(eye, pose)
+  const stance = eyeStance(eye, face.pose)
   // Each number eases from wherever it is to where the pose wants it, which is
   // what the stylesheet does with the custom properties this is derived from.
   const posed: Motion = {
@@ -824,19 +957,18 @@ function EyeLayer({
     }
     return {
       animationName: keyframes,
-      animationDuration: timing.blink,
-      animationDelay: timing.blinkPhase,
+      animationDuration: face.blink,
+      animationDelay: face.blinkPhase,
       animationIterationCount: 'infinite' as const,
       animationTimingFunction: 'linear' as const,
     }
-  }, [eye.lean, still, timing.blink, timing.blinkPhase])
+  }, [eye.lean, still, face.blink, face.blinkPhase])
 
   return (
     <Animated.View style={[StyleSheet.absoluteFill, { transformOrigin: origin }, posed]}>
       <Animated.View style={[StyleSheet.absoluteFill, { transformOrigin: origin }, blink]}>
         <Svg height={size} viewBox={`0 0 ${BOX} ${BOX}`} width={size}>
-          <Path d={eye.d} {...(fill === undefined ? {} : { fill })} />
-          {sheen ? <Sheen d={eye.d} /> : null}
+          <EyeInk d={eye.d} face={face} fill={face.eyeFill} />
         </Svg>
       </Animated.View>
     </Animated.View>
@@ -911,15 +1043,28 @@ function WorkEye({ face, size, side, core, step, stage, clock }: {
 }) {
   const id = useId().replace(/[^\w-]/g, '')
   const box = useAnimatedProps(() => eyeBoxAt(stage.get(), side, clock.get()))
+  // A fluffy eye keeps its crease and lip at work: the same rect, moved as `EyeInk` moves the path.
+  const fur = face.fur !== undefined && !furPlan(face.size).small ? face.fur : undefined
+  const { crease, lip } = FUR.eye
   return (
     <Svg height={size} viewBox={`0 0 ${BOX} ${BOX}`} width={size}>
       <Defs>
         <ClipPath id={`${id}c`}>
           <MorphPath step={step} steps={core} />
         </ClipPath>
-        {face.sheen ? <SheenGlow id={`${id}s`} /> : null}
+        {face.sheen ? <SheenGlow finish={face.finish} id={`${id}s`} /> : null}
       </Defs>
       <G clipPath={`url(#${id}c)`} {...(face.eyeFill === undefined ? {} : { fill: face.eyeFill })}>
+        {fur ? (
+          <>
+            <G transform={`translate(${crease.dx} ${crease.dy})`}>
+              <AnimatedRect animatedProps={box} fill="none" opacity={crease.opacity} stroke={fur.deep} strokeWidth={crease.width} />
+            </G>
+            <G transform={`translate(${lip.dx} ${lip.dy})`}>
+              <AnimatedRect animatedProps={box} fill={fur.tip} opacity={lip.opacity} stroke={fur.tip} strokeWidth={lip.width} />
+            </G>
+          </>
+        ) : null}
         <AnimatedRect animatedProps={box} />
         {face.sheen ? <AnimatedRect animatedProps={box} fill={`url(#${id}s)`} /> : null}
       </G>
@@ -1261,7 +1406,7 @@ function StateFace({ face, size, look }: { face: Face; size: number; look: FaceL
         return (
           <Animated.View key={eye.wrap} pointerEvents="none" style={[StyleSheet.absoluteFill, added.rest]}>
             <Animated.View style={[StyleSheet.absoluteFill, added.loop]}>
-              <EyeLayer eye={eye} fill={face.eyeFill} pose={face.pose} sheen={face.sheen} size={size} still={false} timing={face} />
+              <EyeLayer eye={eye} face={face} size={size} still={false} />
             </Animated.View>
           </Animated.View>
         )

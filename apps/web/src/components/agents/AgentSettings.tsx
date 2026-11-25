@@ -410,7 +410,7 @@ function RootPage({ draft, agent, registry, notes, taskCount, hasFiles, pin, onP
         title="Change face"
         onClick={() => open('face')}
       >
-        <Avatar name={draft.name} color={safeHex(draft.color)} src={draft.avatar} shape={draft.avatarShape} tone={draft.avatarTone} size={72} />
+        <Avatar name={draft.name} color={safeHex(draft.color)} src={draft.avatar} shape={draft.avatarShape} tone={draft.avatarTone} finish={draft.avatarFinish} size={72} />
         <span className="absolute right-[-2px] bottom-0.5 grid size-[22px] place-items-center rounded-full border border-line bg-surface-2 text-muted">
           <Icon icon={PencilEdit02Icon} size={12} />
         </span>

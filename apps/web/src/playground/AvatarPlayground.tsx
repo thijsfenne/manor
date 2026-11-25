@@ -1,5 +1,6 @@
 import { PlayIcon, StopIcon } from '@hugeicons/core-free-icons'
 import { palette, traits as seedTraits, type Expression } from '@manor/blobatar'
+import { AVATAR_FINISHES, type AvatarFinish } from '@manor/contracts'
 import * as poses from '@manor/blobatar/expression'
 import { Blobatar } from '@manor/blobatar/react'
 import { FACE_LOOK, type FaceState } from '@manor/client-runtime/face-activity'
@@ -26,6 +27,7 @@ interface Settings {
   name: string
   color: string
   tone: number
+  finish: AvatarFinish
   /** A silhouette id, or empty to let the name pick one. */
   shape: string
   size: number
@@ -68,6 +70,8 @@ const named = (id: string) => id.charAt(0).toUpperCase() + id.slice(1)
 const GESTURE_OPTIONS = [{ value: '', label: 'None' }, ...Object.keys(GESTURES).map((id) => ({ value: id, label: named(id) }))]
 const MOMENT_OPTIONS = [{ value: '', label: 'None' }, ...Object.keys(FACE_LOOK).map((id) => ({ value: id, label: named(id) }))]
 
+const FINISHES = AVATAR_FINISHES.map((finish) => ({ value: finish, label: named(finish) }))
+
 const SHAPES = [{ value: '', label: 'From name' }, ...BLOB_SHAPES.map((shape) => ({ value: shape.id, label: shape.label }))]
 
 const EXPRESSION_OPTIONS = [
@@ -79,6 +83,7 @@ const INITIAL: Settings = {
   name: SEED,
   color: palette(seedTraits(SEED)('hue') * 360, true, DEFAULT_BLOB_TONE).head ?? '',
   tone: DEFAULT_BLOB_TONE,
+  finish: 'clay',
   shape: '',
   size: 96,
   mode: 'resting',
@@ -163,6 +168,9 @@ export function AvatarPlayground() {
         <Range label="Tone" value={settings.tone} min={0} max={1} step={0.01} digits={2} ticks={BLOB_TONES.map((tone) => tone.value)} onChange={(value) => set('tone', value)} />
         <FormField label="Shape" custom>
           <Select label="Shape" value={settings.shape} options={SHAPES} onChange={(value) => set('shape', value)} />
+        </FormField>
+        <FormField label="Finish" custom>
+          <Select label="Finish" value={settings.finish} options={FINISHES} onChange={(value) => set('finish', value)} />
         </FormField>
         <Range label="Size" value={settings.size} min={16} max={160} step={1} unit="px" onChange={(value) => set('size', value)} />
         <FormField label="State" custom>
@@ -286,7 +294,7 @@ export function PlaygroundPane({ theme }: { theme: string }) {
  * stopping it moves the same face rather than drawing a new one.
  */
 function Face({ settings }: { settings: Settings }) {
-  const { name, color, tone, shape, size, mode, animate } = settings
+  const { name, color, tone, finish, shape, size, mode, animate } = settings
   const hue = accentHue(color)
   // A moment is composed the way `Avatar` composes it: eyes, pose and gesture from one look.
   const look = settings.moment === '' || !animate ? undefined : FACE_LOOK[settings.moment as FaceState]
@@ -305,7 +313,7 @@ function Face({ settings }: { settings: Settings }) {
   const dot = palette(hue ?? seedTraits(name)('hue') * 360, true, tone).head ?? 'var(--accent-fg)'
   const slot = useRef<HTMLSpanElement>(null)
   const busy = animate && (look === undefined ? mode === 'busy' : look.eyes === 'loop' || look.eyes === 'dots')
-  const drawn = JSON.stringify([name, color, tone, traits, shape, size])
+  const drawn = JSON.stringify([name, color, tone, finish, traits, shape, size])
   // A moment plays what a turn would: the loop for work, the dots for writing. Going from one to the other is handed over.
   const run = useBusyFace(slot, busy, look === undefined ? settings.busy : { speed: settings.busy.speed, play: look.eyes === 'dots' ? 'dots' : 'loop' }, drawn)
   const gesture = look === undefined ? settings.gesture : (look.gesture ?? '')
@@ -337,7 +345,7 @@ function Face({ settings }: { settings: Settings }) {
           name={name}
           size={size}
           tone={tone}
-          shading="clay"
+          {...(finish === 'flat' ? {} : { shading: finish })}
           traits={traits}
           {...(shape === '' ? {} : { shape })}
           {...(animate ? { animate: 'always' as const } : {})}

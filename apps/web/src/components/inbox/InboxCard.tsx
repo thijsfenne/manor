@@ -129,7 +129,7 @@ export function InboxCard({
             <span className="flex flex-none flex-col gap-1.5 pt-px">
               {agentIds.map((agentId) => {
                 const persona = personaOf(agents, agentId)
-                return <Avatar key={agentId} name={persona.name} color={persona.color} src={persona.avatar} shape={persona.avatarShape} tone={persona.avatarTone} size={15} />
+                return <Avatar key={agentId} name={persona.name} color={persona.color} src={persona.avatar} shape={persona.avatarShape} tone={persona.avatarTone} finish={persona.avatarFinish} size={15} />
               })}
             </span>
             <span className="flex min-w-0 flex-1 flex-col gap-1.5">

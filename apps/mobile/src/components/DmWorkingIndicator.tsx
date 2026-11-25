@@ -96,6 +96,7 @@ export function DmWorkingIndicator({ working, persona, agents, bare = false }: {
             shape={persona.avatarShape}
             size={FACE_SIZE}
             src={persona.avatar}
+            finish={persona.avatarFinish}
             tone={persona.avatarTone}
           />
         </View>

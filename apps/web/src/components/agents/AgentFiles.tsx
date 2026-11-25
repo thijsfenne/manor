@@ -86,7 +86,7 @@ export function AgentFiles({ chatId, name, files, revision, status, agents, user
     if (agent === undefined) return { name: file.agentId, face: null }
     return {
       name: agent.name,
-      face: <Avatar name={agent.name} color={agent.color} src={agent.avatar} shape={agent.avatarShape} tone={agent.avatarTone} size={16} center />,
+      face: <Avatar name={agent.name} color={agent.color} src={agent.avatar} shape={agent.avatarShape} tone={agent.avatarTone} finish={agent.avatarFinish} size={16} center />,
     }
   }
 

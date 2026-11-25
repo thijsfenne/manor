@@ -374,7 +374,7 @@ export function DraftStage({
                 written to: the picker would be a control with one dead option. */}
             {draftAgent !== undefined ? (
               <div className="mb-6 flex flex-col items-center gap-2.5">
-                <Avatar name={draftAgent.name} color={draftAgent.color} src={draftAgent.avatar} shape={draftAgent.avatarShape} tone={draftAgent.avatarTone} size={56} />
+                <Avatar name={draftAgent.name} color={draftAgent.color} src={draftAgent.avatar} shape={draftAgent.avatarShape} tone={draftAgent.avatarTone} finish={draftAgent.avatarFinish} size={56} />
                 <h1 className="m-0 text-center font-display text-[24px] font-semibold tracking-[-0.02em] text-text">
                   {draftAgent.name}
                 </h1>

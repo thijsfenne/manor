@@ -124,7 +124,7 @@ export function AgentsPage({ agentId, chats, onSelect, onOpenDm, onNewAgent, ...
       >
         {current ? <SelectionMarker layoutId={ROW_MARKER} className="rounded-lg" /> : null}
         <span className="relative flex flex-none">
-          <Avatar name={agent.name} color={agent.color} src={agent.avatar} shape={agent.avatarShape} tone={agent.avatarTone} size={24} center />
+          <Avatar name={agent.name} color={agent.color} src={agent.avatar} shape={agent.avatarShape} tone={agent.avatarTone} finish={agent.avatarFinish} size={24} center />
         </span>
         <span className="relative min-w-0 flex-1 truncate text-[14px]">{agent.name}</span>
         {agent.isCos ? <span className="relative flex-none text-meta text-dim">Default agent</span> : null}

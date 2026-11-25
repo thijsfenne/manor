@@ -1,7 +1,7 @@
 import { useRef, useState, type ChangeEvent, type ReactNode } from 'react'
 import { Cancel01Icon, ColorPickerIcon, Upload01Icon } from '@hugeicons/core-free-icons'
 import { palette } from '@manor/blobatar'
-import type { AgentDraft } from '@manor/contracts'
+import { AVATAR_FINISHES, type AgentDraft, type AvatarFinish } from '@manor/contracts'
 import { accentHue } from '../../accent'
 import { AVATAR_ACCEPT, shrinkToAvatar } from '../../avatar'
 import { BLOB_SHAPES, BLOB_TONES, DEFAULT_BLOB_TONE, blobShapeOf } from '../../blobShapes'
@@ -17,6 +17,8 @@ const tileClass =
 const pickedClass = 'border-[var(--color-text)] bg-user-bg'
 const unpickedClass = 'border-transparent hover:border-dim'
 
+const FINISH_LABELS: Record<AvatarFinish, string> = { clay: 'Clay', flat: 'Flat', fluffy: 'Fluffy' }
+
 /** One face choice: its label above, its tiles on a card of their own, as the rows of Agent settings sit. */
 function FaceSection({ label, groupLabel, gap = 'gap-1', children }: { label: string; groupLabel: string; gap?: string; children: ReactNode }) {
   return (
@@ -30,9 +32,9 @@ function FaceSection({ label, groupLabel, gap = 'gap-1', children }: { label: st
 }
 
 /**
- * The Face page of Agent settings: the face as it stands, then colour, shape and tone,
- * every tile this agent's own face. An own picture replaces all three and carries its
- * way out in the corner.
+ * The Face page of Agent settings: the face as it stands, then colour, shape, finish and
+ * tone, every face tile this agent's own face. An own picture replaces all of them and
+ * carries its way out in the corner.
  */
 export function AgentFacePage({ draft, onChange }: {
   draft: AgentDraft
@@ -64,7 +66,7 @@ export function AgentFacePage({ draft, onChange }: {
   return (
     <div className="flex flex-col items-center gap-5">
       <div className="relative">
-        <Avatar name={draft.name} color={accent} src={draft.avatar} shape={draft.avatarShape} tone={draft.avatarTone} size={88} />
+        <Avatar name={draft.name} color={accent} src={draft.avatar} shape={draft.avatarShape} tone={draft.avatarTone} finish={draft.avatarFinish} size={88} />
         {picture ? (
           <button
             type="button"
@@ -79,29 +81,32 @@ export function AgentFacePage({ draft, onChange }: {
       </div>
 
       <FaceSection label="Colour" groupLabel="Agent colour" gap="gap-1.5">
-        {personaColorChoices(draft.color).map((option) => {
-          const selected = option.value.toLowerCase() === accent.toLowerCase()
-          return (
-            <button
-              key={option.value}
-              type="button"
-              className={`${tileClass} size-7 ${selected ? 'border-[var(--color-text)]' : unpickedClass}`}
-              aria-label={option.label}
-              aria-pressed={selected}
-              title={option.label}
-              onClick={() => onChange({ color: option.value })}
-            >
-              <span className="size-[22px] rounded-full" style={{ backgroundColor: option.value }} />
-            </button>
-          )
-        })}
-        <span
-          className={`${tileClass} relative size-7 border-dashed border-dim text-muted hover:border-[var(--color-text)] hover:text-text focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-primary`}
-          title="Custom colour"
-        >
-          <Icon icon={ColorPickerIcon} size={14} />
-          <input className="absolute inset-0 cursor-pointer opacity-0" type="color" value={accent} aria-label="Custom colour" onChange={(event) => onChange({ color: event.target.value })} />
-        </span>
+        {/* Eight tiles a row, so the swatches and the picker split into two even rows. */}
+        <div className="flex max-w-[16.75rem] flex-wrap justify-center gap-1.5">
+          {personaColorChoices(draft.color).map((option) => {
+            const selected = option.value.toLowerCase() === accent.toLowerCase()
+            return (
+              <button
+                key={option.value}
+                type="button"
+                className={`${tileClass} size-7 ${selected ? 'border-[var(--color-text)]' : unpickedClass}`}
+                aria-label={option.label}
+                aria-pressed={selected}
+                title={option.label}
+                onClick={() => onChange({ color: option.value })}
+              >
+                <span className="size-[22px] rounded-full" style={{ backgroundColor: option.value }} />
+              </button>
+            )
+          })}
+          <span
+            className={`${tileClass} relative size-7 border-dashed border-dim text-muted hover:border-[var(--color-text)] hover:text-text focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-primary`}
+            title="Custom colour"
+          >
+            <Icon icon={ColorPickerIcon} size={14} />
+            <input className="absolute inset-0 cursor-pointer opacity-0" type="color" value={accent} aria-label="Custom colour" onChange={(event) => onChange({ color: event.target.value })} />
+          </span>
+        </div>
       </FaceSection>
 
       <FaceSection label="Shape" groupLabel="Shape">
@@ -118,7 +123,27 @@ export function AgentFacePage({ draft, onChange }: {
               disabled={picture}
               onClick={() => onChange({ avatarShape: option.id })}
             >
-              <Avatar name={draft.name} color={accent} shape={option.id} tone={draft.avatarTone} size={30} center />
+              <Avatar name={draft.name} color={accent} shape={option.id} tone={draft.avatarTone} finish={draft.avatarFinish} size={30} center />
+            </button>
+          )
+        })}
+      </FaceSection>
+
+      <FaceSection label="Finish" groupLabel="Finish">
+        {AVATAR_FINISHES.map((finish) => {
+          const selected = (draft.avatarFinish ?? 'clay') === finish
+          return (
+            <button
+              key={finish}
+              type="button"
+              className={`${tileClass} size-11 ${selected ? pickedClass : unpickedClass}`}
+              aria-label={`Finish: ${FINISH_LABELS[finish]}`}
+              aria-pressed={selected}
+              title={FINISH_LABELS[finish]}
+              disabled={picture}
+              onClick={() => onChange({ avatarFinish: finish })}
+            >
+              <Avatar name={draft.name} color={accent} shape={draft.avatarShape} tone={draft.avatarTone} finish={finish} size={30} center />
             </button>
           )
         })}

@@ -2,6 +2,7 @@ import { motionVars, rootClass, type Animate } from "./animate";
 import type { Palette } from "./color";
 import type { Expression } from "./expression";
 import { makeBlobatar, makeParts, resolve, type BlobatarOptions } from "./render";
+import { furVars } from "./fur";
 import { toneVars } from "./shading";
 import { style } from "./styles/blob";
 import type { Layout } from "./styles/compose";
@@ -27,7 +28,7 @@ export const blobatar = makeBlobatar(style);
  * animating, the pose is custom properties on the same element the timing goes
  * on, not geometry. `poseVars` returns nothing at all for `"idle"`.
  */
-const motion = (mode: Animate, e?: Expression, shaded?: boolean) => (t: Traits, p: Palette) => {
+const motion = (mode: Animate, e?: Expression, shading?: BlobatarOptions["shading"]) => (t: Traits, p: Palette) => {
   // `vars` is also how we know whether to set `mo-expr`: an expression that
   // moves nothing emits nothing, so an empty object *is* idle. That keeps the
   // class in step with the pose without a second notion of "is this idle".
@@ -56,9 +57,9 @@ const motion = (mode: Animate, e?: Expression, shaded?: boolean) => (t: Traits, 
       // disappears mid-morph on the way out.
       "--mo-head": c.head!,
       "--mo-eye": c.eye!,
-      // The clay finish is relit from the head, so its colours follow the head's
-      // into a tinting pose the same way. Only a shaded face pays for them.
-      ...(shaded ? toneVars(c.head!) : {}),
+      // A finish is relit from the head, so its colours follow the head's into a
+      // tinting pose the same way. Only a shaded face pays for them.
+      ...(shading === "clay" ? toneVars(c.head!) : shading === "fluffy" ? furVars(c.head!) : {}),
       ...pose,
     },
   };
@@ -74,7 +75,7 @@ export function _parts(name: string, opts: BlobatarOptions = {}) {
   return makeParts(style)(
     name,
     opts,
-    opts.animate && motion(opts.animate, opts.expression, !!opts.shading),
+    opts.animate && motion(opts.animate, opts.expression, opts.shading),
   );
 }
 

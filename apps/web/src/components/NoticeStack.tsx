@@ -170,7 +170,7 @@ function EntryCard({ entry, paused, agents, onOpen, onUndo }: {
     <NoticeCard
       mark={face === undefined ? <Icon icon={mark.icon} size={20} className={mark.tone} /> : (
         <span className="grid" title={face.name}>
-          <Avatar name={face.name} color={face.color} src={face.avatar} shape={face.avatarShape} tone={face.avatarTone} size={32} />
+          <Avatar name={face.name} color={face.color} src={face.avatar} shape={face.avatarShape} tone={face.avatarTone} finish={face.avatarFinish} size={32} />
         </span>
       )}
       title={entry.title}

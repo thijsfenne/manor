@@ -57,6 +57,7 @@ function RoutineFace({ routine, agent }: { routine: Routine; agent: AgentConfig 
         shape={agent?.avatarShape}
         size={28}
         src={agent?.avatar}
+        finish={agent?.avatarFinish}
         tone={agent?.avatarTone}
       />
     </View>

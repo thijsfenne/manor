@@ -175,7 +175,7 @@ export function GroupDialogContent({ mode, agents, members, title, notice = null
                     }`}
                     onClick={() => toggle(agent.id)}
                   >
-                    <Avatar name={agent.name} color={agent.color} src={agent.avatar} shape={agent.avatarShape} tone={agent.avatarTone} size={22} />
+                    <Avatar name={agent.name} color={agent.color} src={agent.avatar} shape={agent.avatarShape} tone={agent.avatarTone} finish={agent.avatarFinish} size={22} />
                     <span className="min-w-0 flex-1 truncate">{agent.name}</span>
                     {on ? <Icon className="flex-none" icon={Tick02Icon} size={14} /> : null}
                   </button>

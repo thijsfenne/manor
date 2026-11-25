@@ -6,9 +6,10 @@ export interface PersonaColorOption {
 }
 
 /**
- * The colours a persona is offered, in order. The same hues a project picks from,
- * so a room and an agent never sit beside each other in two shades of nearly the
- * same blue. Not a set anyone is held to: the form keeps a custom swatch, and a
+ * The colours a persona is offered, in order. The first eight are the hues a project
+ * picks from, so a room and an agent never sit beside each other in two shades of
+ * nearly the same blue; the six after them fill the gaps between those hues on the
+ * wheel, so no two faces share one. Not a set anyone is held to: the form keeps a custom swatch, and a
  * character brings its own clay colour along, which is offered as itself.
  */
 export const PERSONA_COLOR_OPTIONS: readonly PersonaColorOption[] = [
@@ -20,6 +21,12 @@ export const PERSONA_COLOR_OPTIONS: readonly PersonaColorOption[] = [
   { value: '#E0AF68', label: 'Amber' },
   { value: '#C77DBB', label: 'Pink' },
   { value: '#E5817C', label: 'Red' },
+  { value: '#E183A1', label: 'Rose' },
+  { value: '#EE8E64', label: 'Coral' },
+  { value: '#E0CC55', label: 'Yellow' },
+  { value: '#73CD9F', label: 'Mint' },
+  { value: '#52BCCF', label: 'Cyan' },
+  { value: '#B174D4', label: 'Magenta' },
 ]
 
 const FIRST_COLOR = '#8B7EC8'
@@ -88,6 +95,7 @@ export const draftOf = (agent: AgentConfig): AgentDraft => ({
   avatar: agent.avatar,
   avatarShape: agent.avatarShape,
   avatarTone: agent.avatarTone,
+  avatarFinish: agent.avatarFinish,
 })
 
 /**

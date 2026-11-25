@@ -596,7 +596,7 @@ describe('persistent SQLite store', () => {
     await store.setSession(chat.id, sage.id, 'provider-session', { driver: 'codex', seededThroughEventId: event.id })
     await store.setChatSummary(chat.id, 'A summary', event.id)
     await store.setChatOverride(chat.id, sage.id, { model: 'gpt-5.5' })
-    await store.saveAgent({ ...sage, avatarTone: 0.9 })
+    await store.saveAgent({ ...sage, avatarTone: 0.9, avatarFinish: 'flat' })
     await store.saveSkill({ id: 'example', name: 'Example', description: '', instructions: '', sources: [] }, [
       { path: 'SKILL.md', bytes: new Uint8Array([1, 2, 3]), sha256: 'test-hash', mode: 0o644 },
     ])
@@ -607,7 +607,7 @@ describe('persistent SQLite store', () => {
     expect(await reopened.getSessions(chat.id, sage.id)).toMatchObject([{ sessionId: 'provider-session', seededThroughEventId: event.id }])
     expect(await reopened.getChatSummary(chat.id)).toMatchObject({ summary: 'A summary' })
     expect(await reopened.loadChatOverrides(chat.id)).toEqual({ [sage.id]: { model: 'gpt-5.5' } })
-    expect((await reopened.loadRoster())[0]?.avatarTone).toBe(0.9)
+    expect((await reopened.loadRoster())[0]).toMatchObject({ avatarTone: 0.9, avatarFinish: 'flat' })
     expect((await reopened.loadSkillBundle('example'))[0]?.bytes).toEqual(new Uint8Array([1, 2, 3]))
     expect((await reopened.listChats())[0]?.lastMessagePreview).toBe('Preserve me')
   })

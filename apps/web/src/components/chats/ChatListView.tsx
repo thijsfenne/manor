@@ -297,7 +297,7 @@ function HeadCard({
         aria-current={selected ? 'page' : undefined}
         onClick={onOpen}
       >
-        <Avatar name={agent.name} color={agent.color} src={agent.avatar} shape={agent.avatarShape} tone={agent.avatarTone} size={compact ? PINNED_FACE_SIZE : CHIEF_FACE_SIZE} center working={row.running && !row.waiting} />
+        <Avatar name={agent.name} color={agent.color} src={agent.avatar} shape={agent.avatarShape} tone={agent.avatarTone} finish={agent.avatarFinish} size={compact ? PINNED_FACE_SIZE : CHIEF_FACE_SIZE} center working={row.running && !row.waiting} />
         {row.running && !row.waiting ? <span className="sr-only">Working</span> : null}
         <span className="flex max-w-full min-w-0 flex-col items-center gap-1">
           {/* The mark hangs beside the name instead of in its flow, so the name stays centred
@@ -411,7 +411,7 @@ function ChatRow({
       >
         <span className="flex flex-none justify-center" style={{ width: FACE_WIDTH }}>
           {persona !== null ? (
-            <Avatar name={persona.name} color={persona.color} src={persona.avatar} shape={persona.avatarShape} tone={persona.avatarTone} size={FACE_WIDTH} working={row.running && !row.waiting} />
+            <Avatar name={persona.name} color={persona.color} src={persona.avatar} shape={persona.avatarShape} tone={persona.avatarTone} finish={persona.avatarFinish} size={FACE_WIDTH} working={row.running && !row.waiting} />
           ) : (
             <AgentStack agentIds={row.agentIds} agents={agents} size={GROUP_FACE_SIZE} footprint={FACE_WIDTH} />
           )}

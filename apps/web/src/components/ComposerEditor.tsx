@@ -567,7 +567,7 @@ function ComposerEditorInner({ value, caret, agents, skills, allowBrowser, allow
   const snapshot = useRef({ value, caret })
   const applying = useRef(false)
   const focusedInitially = useRef(false)
-  const agentSignature = `${imageCount}:${quotes.map(quoteExcerpt).join('|')}:${allowBrowser}:${allowComputer}:${allowWork}:` + agents.map((agent) => `${agent.id}:${agent.name}:${agent.color}:${agent.avatar ?? ''}:${agent.avatarShape ?? ''}:${agent.avatarTone ?? ''}`).join('|') + ':' + skills.map((skill) => `${skill.id}:${skill.name}:${skill.description}`).join('|')
+  const agentSignature = `${imageCount}:${quotes.map(quoteExcerpt).join('|')}:${allowBrowser}:${allowComputer}:${allowWork}:` + agents.map((agent) => `${agent.id}:${agent.name}:${agent.color}:${agent.avatar ?? ''}:${agent.avatarShape ?? ''}:${agent.avatarTone ?? ''}:${agent.avatarFinish ?? ''}`).join('|') + ':' + skills.map((skill) => `${skill.id}:${skill.name}:${skill.description}`).join('|')
   const agentSignatureRef = useRef(agentSignature)
   const imageCountRef = useRef(imageCount)
   const [history] = useState(createEmptyHistoryState)

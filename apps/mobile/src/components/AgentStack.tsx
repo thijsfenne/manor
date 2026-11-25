@@ -77,7 +77,7 @@ export function AgentStack({
           const persona = personaOf(agents, agentId)
           return (
             <View key={agentId} style={[styles.placed, places[index], { zIndex: marks.length - index }]}>
-              <Blobatar {...living} color={persona.color} name={persona.name} shape={persona.avatarShape} tone={persona.avatarTone} size={size} src={persona.avatar} />
+              <Blobatar {...living} color={persona.color} name={persona.name} shape={persona.avatarShape} finish={persona.avatarFinish} tone={persona.avatarTone} size={size} src={persona.avatar} />
             </View>
           )
         })}
@@ -100,7 +100,7 @@ export function AgentStack({
         return (
           // Earlier faces paint over later ones, so each slides under the one before it.
           <View key={agentId} style={[index === 0 ? null : { marginLeft: -Math.round(size * 0.4) }, { zIndex: shown.length - index }]}>
-            <Blobatar {...living} color={persona.color} name={persona.name} shape={persona.avatarShape} tone={persona.avatarTone} size={size} src={persona.avatar} />
+            <Blobatar {...living} color={persona.color} name={persona.name} shape={persona.avatarShape} finish={persona.avatarFinish} tone={persona.avatarTone} size={size} src={persona.avatar} />
           </View>
         )
       })}

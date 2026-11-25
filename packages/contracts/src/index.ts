@@ -307,6 +307,10 @@ export const PERSONA_TOOLS: readonly string[] = [
   'Artifact', 'Workflow', 'ReportFindings', 'DesignSync', 'EnterWorktree', 'ExitWorktree',
 ]
 
+/** The finishes a generated face can wear, in the order the face editor offers them. */
+export const AVATAR_FINISHES = ['clay', 'flat', 'fluffy'] as const
+export type AvatarFinish = (typeof AVATAR_FINISHES)[number]
+
 export const AgentConfigSchema = z.object({
   id: z.string(),
   name: z.string(),
@@ -373,6 +377,8 @@ export const AgentConfigSchema = z.object({
   avatarShape: z.string().optional(),
   // Position in the avatar library's tone range; absent keeps the deep (0.7) swatch.
   avatarTone: z.number().min(0).max(1).optional(),
+  // The finish her generated face wears; absent keeps clay, so existing faces do not change.
+  avatarFinish: z.enum(AVATAR_FINISHES).optional(),
   // Absent only on pre-migration rosters. New personas default to chat in the store.
   placement: z.enum(['chat', 'session']).optional(),
   // Lifted to the top of the chat list, desktop and phone, instead of taking a place

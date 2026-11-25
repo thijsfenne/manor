@@ -136,6 +136,8 @@ const r2 = (v: number) => Math.round(v * 100) / 100
  */
 export interface Finish {
   id: string
+  /** Which finish: this module's clay, or the fur in `fur.ts`. */
+  kind: "clay" | "fluffy"
   size?: number
   tones?: Tones
   dark?: boolean

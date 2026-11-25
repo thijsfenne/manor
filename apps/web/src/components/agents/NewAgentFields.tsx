@@ -40,7 +40,7 @@ export function NewAgentFields({ draft, providers, disabled = false, onChange }:
   return (
     <div className="flex flex-col gap-4">
       <div className="grid justify-items-center gap-3">
-        <Avatar name={draft.name} color={accent} shape={draft.avatarShape} tone={draft.avatarTone} size={72} />
+        <Avatar name={draft.name} color={accent} shape={draft.avatarShape} tone={draft.avatarTone} finish={draft.avatarFinish} size={72} />
         <div className="flex flex-wrap justify-center gap-1.5" role="group" aria-label="Agent colour">
           {personaColorChoices(draft.color).map((option) => {
             const selected = option.value.toLowerCase() === accent.toLowerCase()
@@ -79,7 +79,7 @@ export function NewAgentFields({ draft, providers, disabled = false, onChange }:
                 title={option.label}
                 onClick={() => edit({ avatarShape: option.id })}
               >
-                <Avatar name={draft.name} color={accent} shape={option.id} tone={draft.avatarTone} size={28} center />
+                <Avatar name={draft.name} color={accent} shape={option.id} tone={draft.avatarTone} finish={draft.avatarFinish} size={28} center />
               </button>
             )
           })}

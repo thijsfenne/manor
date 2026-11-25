@@ -389,7 +389,8 @@ function start(host: HTMLElement, first: BusyLook): BusyRun | undefined {
   // One that was walking home on nodes this slot no longer shows has nowhere left to go.
   holding.get(host)?.()
 
-  // Each eye is one shape, drawn up to three times under the clay finish: a lit lip a little lower, the eye, a sheen.
+  // Each eye is one shape, drawn up to three times under the clay finish (a lit lip a little
+  // lower, the eye, a sheen) and up to four in fur, which adds a crease above.
   const pairs = [...drawn.querySelectorAll<SVGGElement>('.mo-eye')].map((eye) => {
     const paths = [...eye.querySelectorAll<SVGPathElement>('path')]
     return { paths, main: paths.find((path) => !path.hasAttribute('fill') && !path.hasAttribute('style')) ?? paths[0] }
@@ -425,7 +426,7 @@ function start(host: HTMLElement, first: BusyLook): BusyRun | undefined {
     }
     const rects = pair.paths.map((path) => {
       const rect = node('rect')
-      for (const name of ['style', 'fill', 'opacity']) if (path.hasAttribute(name)) rect.setAttribute(name, path.getAttribute(name)!)
+      for (const name of ['style', 'fill', 'opacity', 'stroke', 'stroke-width']) if (path.hasAttribute(name)) rect.setAttribute(name, path.getAttribute(name)!)
       lid.append(rect)
       return { rect, lower: centre(path) - centre(pair.main!) }
     })
@@ -434,9 +435,11 @@ function start(host: HTMLElement, first: BusyLook): BusyRun | undefined {
   eyes.append(defs, ...lids.map((each) => each.lid))
 
   // Everything that follows the outline: the head's shapes, the library's clip that repeats
-  // them for the clay finish, and the clip of the eyes. A petal is a circle; while the face
-  // works it is the same circle as a path, so it can change shape.
-  const finish = [...(host.querySelector('.mo-root > defs > clipPath')?.children ?? [])]
+  // them for a finish, each pass of the fur's fringe, and the clip of the eyes. A petal is a
+  // circle; while the face works it is the same circle as a path, so it can change shape.
+  const repeats = [host.querySelector('.mo-root > defs > clipPath'), ...body.querySelectorAll(':scope > [data-fringe]')]
+    .map((each) => [...(each?.children ?? [])])
+    .filter((each) => each.length === shapes.length)
   const swapped: Array<[Element, Element]> = []
   const redrawn = (shape: Element | undefined) => {
     if (shape?.tagName !== 'circle') return shape
@@ -448,7 +451,7 @@ function start(host: HTMLElement, first: BusyLook): BusyRun | undefined {
     return path
   }
   const outlines = shapes.map((shape, index) => {
-    const twins = [redrawn(shape), redrawn(finish.length === shapes.length ? finish[index] : undefined)].flatMap((each) => each ?? [])
+    const twins = [redrawn(shape), ...repeats.map((each) => redrawn(each[index]))].flatMap((each) => each ?? [])
     return { twins, d: twins[0]!.getAttribute('d') ?? '' }
   })
   const cores = outlines.pop()!

@@ -1,6 +1,7 @@
 import { Blobatar } from '@manor/blobatar/react'
 import { palette, traits as seedTraits } from '@manor/blobatar'
 import { happy, sad, sleepy, unsure } from '@manor/blobatar/expression'
+import type { AvatarFinish } from '@manor/contracts'
 import { FACE_LOOK, type FaceState } from '@manor/client-runtime/face-activity'
 import '@manor/blobatar/motion.css'
 import { useReducedMotion } from 'motion/react'
@@ -24,6 +25,8 @@ interface AvatarProps {
   shape?: string
   /** Chosen swatch position; absent keeps the existing deep tone. */
   tone?: number
+  /** The finish her face wears; absent keeps clay. */
+  finish?: AvatarFinish
   /** Square side in pixels. Every call site picks one deliberately; there is no default. */
   size: number
   /**
@@ -56,7 +59,7 @@ interface AvatarProps {
  * Purely decorative everywhere it appears, because the name is always right next
  * to it, so it takes no alt text and no role.
  */
-export const Avatar = memo(function Avatar({ name, color, src, shape, tone = DEFAULT_BLOB_TONE, size, center = false, working = false, face }: AvatarProps) {
+export const Avatar = memo(function Avatar({ name, color, src, shape, tone = DEFAULT_BLOB_TONE, finish = 'clay', size, center = false, working = false, face }: AvatarProps) {
   const slot = useRef<HTMLSpanElement>(null)
   const [onScreen, setOnScreen] = useState(false)
   const [pageVisible, setPageVisible] = useState(true)
@@ -110,7 +113,7 @@ export const Avatar = memo(function Avatar({ name, color, src, shape, tone = DEF
   // The loop is the costly part of a working face, so one scrolled out of view rests
   // and wakes into another order of moves when it comes back. Going from the loop to
   // the dots and back is handed over on the running face.
-  const drawn = JSON.stringify([name, hue, tone, shape, size])
+  const drawn = JSON.stringify([name, hue, tone, shape, finish, size])
   // Her faces share a beat, so the transcript and the sidebar move together and write together.
   useBusyFace(slot, busy && moving && onScreen, { ...(look?.eyes === 'dots' ? DOTS_LOOK : BUSY_LOOK), beat: name }, drawn)
   // The body and the added eye move rest with the loop when the face is out of sight.
@@ -164,7 +167,7 @@ export const Avatar = memo(function Avatar({ name, color, src, shape, tone = DEF
         // larger merely because the face animates.
         size={size}
         tone={tone}
-        shading="clay"
+        {...(finish === 'flat' ? {} : { shading: finish })}
         // Resting faces render still until the focused window or pointer needs them.
         {...(moving ? { animate: 'always' as const } : {})}
         {...(hue === undefined ? {} : { hue })}

@@ -9,6 +9,7 @@
  */
 import type { Palette } from "../color";
 import { superellipse } from "../shape";
+import { fur, furTones } from "../fur";
 import { CLAY, clay, clayTones, paint, sheenInk, type Finish } from "../shading";
 import type { Traits } from "../traits";
 import type { Body, Deco, Ellipse, Shape } from "./shapes";
@@ -130,46 +131,61 @@ export function compose(bands: Band[], fit: Fit, chosen: Shape[] = []) {
 
   function render(l: ReturnType<typeof layout>, p: Palette, mo?: boolean, finish?: Finish) {
     const r2 = (v: number) => Math.round(v * 100) / 100;
-    // A still face is painted from the palette it wears. An animated one reads its
-    // colours from the custom properties, and keeps only what may not move with them.
-    const tones = finish && clayTones(p.head!);
-    const look = finish && { ...finish, ...(mo ? { dark: tones!.dark } : { tones }) };
     const small = finish?.size !== undefined && finish.size <= CLAY.small;
-    const eyes = look && small ? optical(l.eyes, l.face) : l.eyes;
+    const eyes = finish && small ? optical(l.eyes, l.face) : l.eyes;
     const outline = l.draw ? l.draw(l.body) : superellipse(l.body);
     const shapes =
       l.petals.map(d => `<circle cx="${r2(d.cx)}" cy="${r2(d.cy)}" r="${r2(d.r)}"/>`).join("") +
       l.extra.map(d => `<path d="${d}"/>`).join("") +
       `<path d="${outline}"/>`;
-    const finished = look && clay(look, shapes);
-    // The lip and the sheen ride inside the eye's own group, so they pose and travel
+    const sheen = !!p.eye && sheenInk(p.eye);
+    // A still face is painted from the palette it wears. An animated one reads its
+    // colours from the custom properties, and keeps only what may not move with them.
+    const dressed = finish?.kind === "fluffy" ? fluffy(finish) : finish && clayed(finish);
+    function clayed(finish: Finish) {
+      const tones = clayTones(p.head!);
+      const look = { ...finish, ...(mo ? { dark: tones.dark } : { tones }) };
+      const done = clay(look, shapes);
+      // The lip rides under each eye and the sheen over it, both from the clay numbers.
+      const eye = (e: Eye) => {
+        const d = superellipse(e);
+        return [
+          ...(small ? [] : [`<path d="${superellipse({ ...e, cy: e.cy + CLAY.lip.dy })}" ${paint("fill", CLAY.lip.tone, look.tones)} opacity="${CLAY.lip.opacity}"/>`]),
+          `<path d="${d}"/>`,
+          ...(done.sheen && sheen ? [`<path d="${d}" fill="${done.sheen}"/>`] : []),
+        ];
+      };
+      return { defs: done.defs, fringe: "", overlays: done.overlays, eye, cls: "" };
+    }
+    function fluffy(finish: Finish) {
+      const tones = furTones(p.head!);
+      const done = fur({ id: finish.id, size: finish.size, flags: tones, ...(mo ? {} : { tones }) }, shapes);
+      // Marked so the stylesheet can ease the fur's own colours with the head's.
+      return { ...done, eye: (e: Eye) => done.eye(e, sheen), cls: ` class="mo-fur"` };
+    }
+    // The finish's eye layers ride inside the eye's own group, so they pose and travel
     // with it. There they are one child with the eye: the stylesheet blinks each child
     // of an eye about its own centre, and a layer blinking apart from its eye leaves a
     // sliver on a closed one.
-    const lip = (e: Eye) =>
-      look && !small
-        ? `<path d="${superellipse({ ...e, cy: e.cy + CLAY.lip.dy })}" ${paint("fill", CLAY.lip.tone, look.tones)} opacity="${CLAY.lip.opacity}"/>`
-        : "";
     const eye = (e: Eye, i: number) => {
-      const d = superellipse(e);
-      const sheen = finished?.sheen && p.eye && sheenInk(p.eye) ? `<path d="${d}" fill="${finished.sheen}"/>` : "";
-      const layers = [lip(e), `<path d="${d}"/>`, sheen].filter(Boolean);
+      const layers = dressed ? dressed.eye(e) : [`<path d="${superellipse(e)}"/>`];
       const path = mo && layers.length > 1 ? `<g>${layers.join("")}</g>` : layers.join("");
       return mo
         ? `<g class="mo-eye" style="--mo-wrap:${i ? 1 : -1};--mo-lean:${r2(e.rot)};transform-origin:${r2(e.cx)}px ${r2(e.cy)}px">${path}</g>`
         : path;
     };
     const body =
-      `<g fill="${p.head}">` +
+      `<g fill="${p.head}"${dressed?.cls ?? ""}>` +
+      (dressed?.fringe ?? "") +
       shapes +
-      (finished?.overlays ?? "") +
+      (dressed?.overlays ?? "") +
       `</g>` +
       `<g fill="${p.eye}"${mo ? ` class="mo-eyes"` : ""}>` +
       eyes.map(eye).join("") +
       `</g>`;
     return {
       // Outside the breathe, the bob and a static pose, so the ids they reference stay put.
-      defs: finished?.defs ?? "",
+      defs: dressed?.defs ?? "",
       body: mo ? `<g class="mo-breathe"><g class="mo-bob">${body}</g></g>` : body,
     };
   }

@@ -243,6 +243,7 @@ export function Turn({
       color={persona.color}
       name={persona.name}
       shape={persona.avatarShape}
+      finish={persona.avatarFinish}
       tone={persona.avatarTone}
       size={32}
       src={persona.avatar}
@@ -502,7 +503,7 @@ export function ConsultedAgents({
                     }}
                     style={({ pressed }) => [styles.consultedRow, pressed && styles.actionRowPressed]}
                   >
-                    <Blobatar color={persona.color} name={persona.name} shape={persona.avatarShape} tone={persona.avatarTone} size={26} src={persona.avatar} />
+                    <Blobatar color={persona.color} name={persona.name} shape={persona.avatarShape} finish={persona.avatarFinish} tone={persona.avatarTone} size={26} src={persona.avatar} />
                     <Text numberOfLines={1} style={styles.consultedName}>{persona.name}</Text>
                   </Pressable>
                 )

@@ -98,9 +98,11 @@ export interface BlobatarOptions {
   expression?: Expression;
   /**
    * A finish over the flat head. `"clay"` models it with light from the top
-   * left, an inner shadow and a matte highlight; see `shading.ts`. Omitted, the output is the flat default, byte for byte.
+   * left, an inner shadow and a matte highlight; see `shading.ts`. `"fluffy"`
+   * dresses it in short pile; see `fur.ts`. Omitted, the output is the flat
+   * default, byte for byte.
    */
-  shading?: "clay";
+  shading?: "clay" | "fluffy";
   /**
    * Prefixes the gradient and filter ids that `shading` defines. Ids are
    * document-wide, so every inline blobatar on a page needs its own; the React
@@ -161,7 +163,7 @@ let shaded = 0;
  */
 const shade = (opts: BlobatarOptions): Finish | undefined =>
   opts.shading
-    ? { id: `s${opts.idPrefix ?? ++shaded}-`, size: opts.size }
+    ? { id: `s${opts.idPrefix ?? ++shaded}-`, kind: opts.shading, size: opts.size }
     : undefined;
 
 /** Wraps the body in the pose transform, when there is one. */

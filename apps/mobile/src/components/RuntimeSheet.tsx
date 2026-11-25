@@ -114,7 +114,7 @@ export function RuntimeSheet({ open, onClose, agents, overrides, activeAgentIds,
                     style={({ pressed }) => [styles.row, pressed && styles.rowPressed, disabled && styles.disabled]}
                   >
                     <View style={[styles.identity, !seated && styles.unseated]}>
-                      <Blobatar color={agent.color} name={agent.name} shape={agent.avatarShape} tone={agent.avatarTone} size={30} src={agent.avatar} />
+                      <Blobatar color={agent.color} name={agent.name} shape={agent.avatarShape} finish={agent.avatarFinish} tone={agent.avatarTone} size={30} src={agent.avatar} />
                       <View style={styles.names}>
                         <Text numberOfLines={1} style={styles.name}>{agent.name}</Text>
                         <Text numberOfLines={1} style={styles.role}>{agent.role}</Text>

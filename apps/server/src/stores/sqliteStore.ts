@@ -69,6 +69,7 @@ const toAgent = (draft: AgentDraft, id: string): AgentConfig => ({
   ...(draft.avatar === undefined ? {} : { avatar: draft.avatar }),
   ...(draft.avatarShape === undefined || draft.avatarShape === '' ? {} : { avatarShape: draft.avatarShape }),
   ...(draft.avatarTone === undefined ? {} : { avatarTone: draft.avatarTone }),
+  ...(draft.avatarFinish === undefined ? {} : { avatarFinish: draft.avatarFinish }),
 })
 /** Store operations run synchronously inside one SQLite transaction, then cross the async runtime seam. */
 export function createSqliteStore(options: SqliteStoreOptions): Store & {

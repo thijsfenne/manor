@@ -992,7 +992,7 @@ function AgentPill({ agent }: { agent: AgentConfig }) {
   const wash = /^#[0-9a-f]{6}$/i.test(agent.color) ? `${agent.color}2E` : colors.chip
   return (
     <View accessibilityLabel={`@${agent.name}`} style={[styles.pill, styles.agentPill, { backgroundColor: tint?.wash ?? wash }]}>
-      <Blobatar color={agent.color} name={agent.name} shape={agent.avatarShape} size={14} src={agent.avatar} tone={agent.avatarTone} />
+      <Blobatar color={agent.color} name={agent.name} shape={agent.avatarShape} size={14} src={agent.avatar} finish={agent.avatarFinish} tone={agent.avatarTone} />
       <Text numberOfLines={1} style={[styles.pillText, PILL_TEXT.chip, { color: tint?.ink ?? agent.color }]}>{agent.name}</Text>
     </View>
   )

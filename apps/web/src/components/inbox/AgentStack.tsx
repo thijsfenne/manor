@@ -75,7 +75,7 @@ export function AgentStack({ agentIds: requested, agents, size, footprint }: Age
               className="absolute"
               style={{ ...positions[index], zIndex: visibleIds.length - index }}
             >
-              <Avatar name={persona.name} color={persona.color} src={persona.avatar} shape={persona.avatarShape} tone={persona.avatarTone} size={size} />
+              <Avatar name={persona.name} color={persona.color} src={persona.avatar} shape={persona.avatarShape} tone={persona.avatarTone} finish={persona.avatarFinish} size={size} />
             </span>
           )
         })}
@@ -132,7 +132,7 @@ export function AgentStack({ agentIds: requested, agents, size, footprint }: Age
             // slides under the one before it.
             className={`flex-none ${index === shown.length - 1 ? '' : '-ml-2.5'}`}
           >
-            <Avatar name={persona.name} color={persona.color} src={persona.avatar} shape={persona.avatarShape} tone={persona.avatarTone} size={size} />
+            <Avatar name={persona.name} color={persona.color} src={persona.avatar} shape={persona.avatarShape} tone={persona.avatarTone} finish={persona.avatarFinish} size={size} />
           </span>
         )
       })}

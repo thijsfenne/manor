@@ -1960,7 +1960,7 @@ function RelayMarker({
         style={({ pressed }) => [styles.relayMarker, pressed && styles.pressed]}
       >
         <Text style={styles.relayMarkerText}>{action}</Text>
-        <Blobatar color={peer.color} name={peer.name} shape={peer.avatarShape} tone={peer.avatarTone} size={13} src={peer.avatar} />
+        <Blobatar color={peer.color} name={peer.name} shape={peer.avatarShape} finish={peer.avatarFinish} tone={peer.avatarTone} size={13} src={peer.avatar} />
         <Text style={styles.relayMarkerText}>{peer.name}</Text>
       </Pressable>
     </View>

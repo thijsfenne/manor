@@ -298,7 +298,7 @@ function Crumb({
           {pairPersonas.map((member, index) => (
             <Fragment key={member.id}>
               {index === 0 ? null : <Icon icon={ArrowLeftRightIcon} size={compact ? 14 : 16} className="mx-0.5 flex-none text-dim" />}
-              <Avatar name={member.name} color={member.color} src={member.avatar} shape={member.avatarShape} tone={member.avatarTone} size={compact ? face : 28} />
+              <Avatar name={member.name} color={member.color} src={member.avatar} shape={member.avatarShape} tone={member.avatarTone} finish={member.avatarFinish} size={compact ? face : 28} />
               <span className={`min-w-0 truncate text-[14px] font-semibold tracking-[-0.01em] ${titleTone}`}>{member.name}</span>
             </Fragment>
           ))}
@@ -314,22 +314,22 @@ function Crumb({
             aria-label={`Agent settings for ${persona.name}`}
             onClick={onEditPersona}
           >
-            <Avatar name={persona.name} color={persona.color} src={persona.avatar} shape={persona.avatarShape} tone={persona.avatarTone} size={face} />
+            <Avatar name={persona.name} color={persona.color} src={persona.avatar} shape={persona.avatarShape} tone={persona.avatarTone} finish={persona.avatarFinish} size={face} />
             <PersonaLabel persona={persona} tone={titleTone} />
           </button>
         ) : (
           <>
             {persona.avatar === undefined || persona.avatar === '' ? (
-              <Avatar name={persona.name} color={persona.color} shape={persona.avatarShape} tone={persona.avatarTone} size={face} />
+              <Avatar name={persona.name} color={persona.color} shape={persona.avatarShape} tone={persona.avatarTone} finish={persona.avatarFinish} size={face} />
             ) : (
               <ZoomableImage
                 src={persona.avatar}
                 alt={`${persona.name} avatar`}
                 frame="pointer-events-auto rounded-full"
-                thumbnail={<Avatar name={persona.name} color={persona.color} src={persona.avatar} shape={persona.avatarShape} tone={persona.avatarTone} size={face} />}
+                thumbnail={<Avatar name={persona.name} color={persona.color} src={persona.avatar} shape={persona.avatarShape} tone={persona.avatarTone} finish={persona.avatarFinish} size={face} />}
                 zoomedClassName="size-80"
                 zoomedContent={
-                  <Avatar name={persona.name} color={persona.color} src={persona.avatar} shape={persona.avatarShape} tone={persona.avatarTone} size={320} />
+                  <Avatar name={persona.name} color={persona.color} src={persona.avatar} shape={persona.avatarShape} tone={persona.avatarTone} finish={persona.avatarFinish} size={320} />
                 }
                 zoomFromThumbnail
               />

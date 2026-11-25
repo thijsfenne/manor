@@ -3,11 +3,19 @@ import { traits } from '@manor/blobatar'
 /** Existing faces keep the deep swatch until a different tone is chosen. */
 export const DEFAULT_BLOB_TONE = 0.7
 
-/** Pale neutral is omitted: it disappears against the light theme. */
+/**
+ * Swatch positions in the library's tone bands, lightest family first. Pale neutral is
+ * omitted: it disappears against the light theme. White leans on a finish for its
+ * edge, so on a flat face it is faint there too.
+ */
 export const BLOB_TONES = [
   { label: 'Pastel', value: 0.1 },
+  { label: 'White', value: 0.22 },
+  { label: 'Grey', value: 0.27 },
+  { label: 'Muted', value: 0.4 },
   { label: 'Mid', value: 0.5 },
   { label: 'Deep', value: DEFAULT_BLOB_TONE },
+  { label: 'Dusk', value: 0.83 },
   { label: 'Bright', value: 0.9 },
   { label: 'Ink', value: 0.97 },
 ] as const

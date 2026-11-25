@@ -362,7 +362,8 @@
 
 /*
  * The clay finish is relit from the head, so its gradients and filters read
- * `--mo-hi`, `--mo-lo` and `--mo-deep` beside `--mo-head`. They ease on the same
+ * `--mo-hi`, `--mo-lo` and `--mo-deep` beside `--mo-head`; the fur reads its
+ * own set, see `furVars`. They ease on the same
  * clock as the fill, or a tinting pose would snap its shading while the head
  * under it took the whole morph to arrive.
  */
@@ -374,9 +375,15 @@
   transition: flood-color var(--mo-morph) var(--mo-morph-ease);
 }
 
-/* The lit lip under a shaded eye, which is the first path of the eye's one child. */
-.mo-eye > g > path:first-child {
-  transition: fill var(--mo-morph) var(--mo-morph-ease);
+/*
+ * A finish's layers that read a custom property through `style`: the lit lip under a
+ * shaded eye, and the fur's crease, hairs, shade and head beneath its light.
+ */
+.mo-eye path[style],
+.mo-fur [style] {
+  transition:
+    fill var(--mo-morph) var(--mo-morph-ease),
+    stroke var(--mo-morph) var(--mo-morph-ease);
 }
 
 /**
@@ -1185,7 +1192,9 @@
   .mo-bob,
   .mo-eyes,
   .mo-eye,
-  .mo-eye > * {
+  .mo-eye > *,
+  .mo-eye path[style],
+  .mo-fur [style] {
     animation: none;
     transition: none;
   }

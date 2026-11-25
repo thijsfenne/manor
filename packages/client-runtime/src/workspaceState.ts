@@ -121,6 +121,7 @@ function sameRoster(current: AgentConfig[], next: AgentConfig[]) {
         agent.avatar === other.avatar &&
         agent.avatarShape === other.avatarShape &&
         agent.avatarTone === other.avatarTone &&
+        agent.avatarFinish === other.avatarFinish &&
         (agent.skillIds ?? []).length === (other.skillIds ?? []).length &&
         (agent.skillIds ?? []).every((skillId, at) => skillId === (other.skillIds ?? [])[at]) &&
         (agent.mentionAllowlist ?? []).length === (other.mentionAllowlist ?? []).length &&

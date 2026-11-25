@@ -1037,7 +1037,7 @@ export function Composer({ agents, commandContext, household, overrides = NO_OVE
         className="flex min-w-0 items-center gap-1 text-[color:var(--accent)]"
         style={accentStyle(agent.color)}
       >
-        <Avatar name={agent.name} color={agent.color} src={agent.avatar} shape={agent.avatarShape} tone={agent.avatarTone} size={16} />
+        <Avatar name={agent.name} color={agent.color} src={agent.avatar} shape={agent.avatarShape} tone={agent.avatarTone} finish={agent.avatarFinish} size={16} />
         <span className="max-w-[120px] truncate py-px font-medium">{agent.name}</span>
       </span>
     ))
@@ -1119,7 +1119,7 @@ export function Composer({ agents, commandContext, household, overrides = NO_OVE
                 {...(shownRecipients?.some((recipient) => recipient.id === agent.id) === true ? { 'data-current': '' } : {})}
                 onClick={() => addressTo(agent)}
               >
-                <Avatar name={agent.name} color={agent.color} src={agent.avatar} shape={agent.avatarShape} tone={agent.avatarTone} size={20} />
+                <Avatar name={agent.name} color={agent.color} src={agent.avatar} shape={agent.avatarShape} tone={agent.avatarTone} finish={agent.avatarFinish} size={20} />
                 <span className="min-w-0 flex-1 truncate font-medium">{agent.name}</span>
                 {agent.role === '' ? null : <span className="min-w-0 flex-none truncate text-meta text-dim">{agent.role}</span>}
               </button>
@@ -1358,7 +1358,7 @@ export function Composer({ agents, commandContext, household, overrides = NO_OVE
                   onMouseEnter={() => setActiveIndex(position)}
                 >
                   <span className="flex min-w-0 flex-none items-center gap-1.5">
-                    <Avatar name={agent.name} color={agent.color} src={agent.avatar} shape={agent.avatarShape} tone={agent.avatarTone} size={20} />
+                    <Avatar name={agent.name} color={agent.color} src={agent.avatar} shape={agent.avatarShape} tone={agent.avatarTone} finish={agent.avatarFinish} size={20} />
                     {/* Name capped rather than shrinking, so a long one eats itself
                         instead of squeezing the title next to it down to nothing. */}
                     <span className="max-w-[140px] flex-none truncate">{agent.name}</span>

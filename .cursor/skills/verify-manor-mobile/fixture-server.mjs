@@ -1323,6 +1323,8 @@ const roster = {
       isCos: true,
       mentionAllowlist: ['agent-sage'],
       avatarShape: 'round',
+      // One persona per face finish, Smith on the default clay; Marlow answers, so his fur also works.
+      avatarFinish: 'fluffy',
       dmOnly: false,
     },
     {
@@ -1341,6 +1343,7 @@ const roster = {
       isCos: false,
       mentionAllowlist: [],
       avatarShape: 'sun',
+      avatarFinish: 'flat',
       dmOnly: false,
     },
     {

@@ -72,7 +72,7 @@ function AgentPage({ agent, chatId }: { agent: AgentConfig; chatId: string }) {
     <>
       <ScrimScrollView contentContainerStyle={styles.page} keyboardShouldPersistTaps="handled">
         <View style={styles.identity}>
-          <Blobatar color={agent.color} name={agent.name} shape={agent.avatarShape} tone={agent.avatarTone} size={96} src={agent.avatar} />
+          <Blobatar color={agent.color} name={agent.name} shape={agent.avatarShape} finish={agent.avatarFinish} tone={agent.avatarTone} size={96} src={agent.avatar} />
           <View style={styles.nameLine}>
             <Text maxFontSizeMultiplier={1.35} style={styles.name}>{agent.name}</Text>
             {agent.role === '' ? null : <Text maxFontSizeMultiplier={1.35} style={styles.role}>{agent.role}</Text>}

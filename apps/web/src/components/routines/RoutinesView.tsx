@@ -381,7 +381,7 @@ function RoutineRow({ rowRef, routine, agent, waiting, selected, now, reduceMoti
             color={color}
             {...(agent?.avatar === undefined ? {} : { src: agent.avatar })}
             {...(agent?.avatarShape === undefined ? {} : { shape: agent.avatarShape })}
-            tone={agent?.avatarTone}
+            tone={agent?.avatarTone} finish={agent?.avatarFinish}
             size={24}
           />
         )}

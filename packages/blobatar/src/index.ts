@@ -19,6 +19,8 @@ export {
 } from "./color";
 export { traits, type Traits, type TraitOverrides } from "./traits";
 export { CLAY, clayTones, sheenInk, type Glow, type Stop, type Tone, type Tones } from "./shading";
+export { FUR, furPlan, furTones, pileOpacity, type Fringe, type FurTones } from "./fur";
+export { PILE } from "./pile";
 export { normalizeSeed } from "./hash";
 
 /**

@@ -51,7 +51,7 @@ export function SessionAgentsDialog({
                 onClick={() => onEdit(agent.id)}
                 className="flex w-full cursor-pointer items-center gap-3 rounded-lg border-0 bg-transparent px-2 py-2 text-left hover:bg-surface-2 focus-visible:bg-surface-2"
               >
-                <Avatar name={agent.name} color={agent.color} src={agent.avatar} shape={agent.avatarShape} tone={agent.avatarTone} size={32} />
+                <Avatar name={agent.name} color={agent.color} src={agent.avatar} shape={agent.avatarShape} tone={agent.avatarTone} finish={agent.avatarFinish} size={32} />
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-[14px] font-medium text-text">{agent.name}</span>
                   {agent.description === '' ? null : <span className="block truncate text-[12.5px] text-muted">{agent.description}</span>}

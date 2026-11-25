@@ -305,7 +305,7 @@ function NavRailDoors({
                       color={agent.color}
                       src={agent.avatar}
                       shape={agent.avatarShape}
-                      tone={agent.avatarTone}
+                      tone={agent.avatarTone} finish={agent.avatarFinish}
                       size={size - 12}
                       center
                       working={running && !waiting}

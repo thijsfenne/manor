@@ -1,5 +1,5 @@
 import { renderToStaticMarkup } from 'react-dom/server'
-import { CLAY, _layout, blobatar, clayTones } from '@manor/blobatar'
+import { CLAY, FUR, PILE, _layout, blobatar, clayTones, furTones } from '@manor/blobatar'
 import { _parts } from '@manor/blobatar/internal'
 import { mad, sad } from '@manor/blobatar/expression'
 import { Blobatar } from '@manor/blobatar/react'
@@ -11,11 +11,11 @@ const hexes = (markup: string) => new Set(markup.match(/#[0-9a-f]{6}\b/gi))
 
 describe('the clay finish', () => {
   it('keeps the flat default output fixed', () => {
-    // FNV-1a over fifty default faces, retaken when cloud and capsule became one stadium core. A change
-    // to the layout ranges moves it; a change to the finish must not.
+    // FNV-1a over fifty default faces, retaken when white, grey, muted and dusk joined the tone bands
+    // and moved some seeded tones. A change to the layout ranges moves it; a change to a finish must not.
     let hash = 2166136261
     for (let i = 0; i < 50; i++) for (const c of blobatar(`p${i}`, { size: 24 })) hash = Math.imul(hash ^ c.charCodeAt(0), 16777619) >>> 0
-    expect(hash.toString(16)).toBe('d27a9245')
+    expect(hash.toString(16)).toBe('6f6d3dd5')
     expect(blobatar('Wren', { shading: undefined, idPrefix: 'x' })).toBe(blobatar('Wren'))
   })
 
@@ -94,12 +94,14 @@ describe('the clay finish', () => {
       const xs = [...d.matchAll(/(-?[\d.]+)[ ,](-?[\d.]+)/g)].map((pair) => Number(pair[1]))
       return Math.max(...xs) - Math.min(...xs)
     }
-    const flat = eyes(blobatar('Wren'))
-    const small = eyes(blobatar('Wren', { shading: 'clay', size: 20 }))
+    // On the deep swatch, whose dark eyes wear a sheen.
+    const deep = { tone: 0.7 }
+    const flat = eyes(blobatar('Wren', deep))
+    const small = eyes(blobatar('Wren', { ...deep, shading: 'clay', size: 20 }))
     expect(small).toHaveLength(2)
     expect(width(small[0]!)).toBeGreaterThan(width(flat[0]!) * 1.05)
     // Past the small size each eye is its own again: the lit lip, the eye, its sheen.
-    const large = eyes(blobatar('Wren', { shading: 'clay', size: 64 }))
+    const large = eyes(blobatar('Wren', { ...deep, shading: 'clay', size: 64 }))
     expect(large).toHaveLength(6)
     expect(large[1]).toBe(flat[0])
     expect(large[2]).toBe(flat[0])
@@ -117,5 +119,38 @@ describe('the clay finish', () => {
     }
     // The lower half of the trait is no lift at all.
     expect(at(0.4).cy).toBe(at(0).cy)
+  })
+})
+
+describe('the fluffy finish', () => {
+  it('gives every reference a target, and draws no filter at any size', () => {
+    for (const size of [20, 36, 88]) {
+      const face = blobatar('Wren', { shading: 'fluffy', size, idPrefix: `f${size}` })
+      expect(referenced(face).every((id) => defined(face).includes(id))).toBe(true)
+      expect(face).not.toContain('<filter')
+    }
+  })
+
+  it('draws by optical size: a coarse fringe and the light when small, the pile above', () => {
+    const passes = (markup: string) => markup.match(/data-fringe=""/g)?.length ?? 0
+    const small = blobatar('Wren', { shading: 'fluffy', size: FUR.small })
+    const middle = blobatar('Wren', { shading: 'fluffy', size: FUR.mid })
+    const large = blobatar('Wren', { shading: 'fluffy', size: 88 })
+    expect([passes(small), passes(middle), passes(large)]).toEqual([FUR.fringeSmall.length, 3, FUR.fringe.length])
+    expect(small).not.toContain('<image')
+    expect(large).toContain(`href="${PILE}"`)
+    // Every pass repeats the head's own parts, so the busy morph can reshape it with them.
+    const cloud = blobatar('Wren', { shading: 'fluffy', size: 88, shape: 'cloud' })
+    const parts = cloud.slice(cloud.indexOf('<clipPath'), cloud.indexOf('</clipPath>')).match(/<(path|circle)/g)?.length
+    for (const pass of cloud.match(/<g data-fringe="".*?<\/g>/g) ?? []) expect(pass.match(/<(path|circle)/g)?.length).toBe(parts)
+  })
+
+  it('keeps an animated face free of its colours, which follow the pose', () => {
+    const rest = _parts('Wren', { shading: 'fluffy', idPrefix: 'a', animate: 'always', size: 88 })
+    const hot = _parts('Wren', { shading: 'fluffy', idPrefix: 'a', animate: 'always', size: 88, expression: mad })
+    expect(hot.inner).toBe(rest.inner)
+    expect(rest.inner).toContain('var(--mo-hair)')
+    expect(hexes(rest.inner).has(furTones(_layout('Wren').palette.head!).hair)).toBe(false)
+    expect(hot.vars?.['--mo-hair']).toBe(furTones(_layout('Wren', { expression: mad }).palette.head!).hair)
   })
 })

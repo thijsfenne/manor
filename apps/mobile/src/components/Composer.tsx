@@ -888,7 +888,7 @@ function SuggestionRow({ row, onPick }: { row: MentionRow; onPick: () => void })
     const { agent } = row
     return (
       <Pressable accessibilityLabel={`Mention ${agent.name}`} accessibilityRole="button" onPress={onPick} style={shell}>
-        <View style={styles.rowIcon}><Blobatar color={agent.color} name={agent.name} shape={agent.avatarShape} tone={agent.avatarTone} size={24} src={agent.avatar} /></View>
+        <View style={styles.rowIcon}><Blobatar color={agent.color} name={agent.name} shape={agent.avatarShape} finish={agent.avatarFinish} tone={agent.avatarTone} size={24} src={agent.avatar} /></View>
         <RowBody description={agent.role} title={agent.name} tint={agent.color} />
         <Text style={styles.rowKind}>Agent</Text>
       </Pressable>
@@ -1003,7 +1003,7 @@ function Recipients({ recipients }: { recipients: AgentConfig[] | 'unknown' }) {
       ) : (
         recipients.map((agent) => (
           <View key={agent.id} style={styles.recipient}>
-            <Blobatar color={agent.color} name={agent.name} shape={agent.avatarShape} tone={agent.avatarTone} size={16} src={agent.avatar} />
+            <Blobatar color={agent.color} name={agent.name} shape={agent.avatarShape} finish={agent.avatarFinish} tone={agent.avatarTone} size={16} src={agent.avatar} />
             <Text numberOfLines={1} style={[styles.recipientName, { color: agent.color }]}>{agent.name}</Text>
           </View>
         ))

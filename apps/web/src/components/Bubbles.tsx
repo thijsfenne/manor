@@ -4,7 +4,7 @@ import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import { DISCLOSURE } from '../motion'
 import { AlertCircleIcon, ArrowDown01Icon, Clock01Icon, MinusSignIcon, PencilEdit02Icon, RefreshIcon, TaskDone01Icon, Tick02Icon, Undo02Icon } from '@hugeicons/core-free-icons'
 import { ROUTINE_LATE_AFTER_MS, eventImageSource, imageRefSpans, numberedMarks, originalImageIndexes, projectFileWriteDetail, projectFileWriteLabel, type EventImage, type NumberedMark, type ProjectFileWrite } from '@manor/contracts'
-import type { AgentConfig, EventDocument, FileAttachment, InlineQuote, MessageQuote, MessageReply, NoteQuote, PageContextAttachment, SkillConfig, WakeItem } from '@manor/contracts'
+import type { AgentConfig, AvatarFinish, EventDocument, FileAttachment, InlineQuote, MessageQuote, MessageReply, NoteQuote, PageContextAttachment, SkillConfig, WakeItem } from '@manor/contracts'
 import { wakeLines } from '../turnLabels'
 import { fileWriteGroups, type MessageQuoteSource, type PendingDocument } from '@manor/client-runtime/state'
 import { describeBytes, utf8Size } from '@manor/client-runtime/attachments'
@@ -44,6 +44,7 @@ export function TurnHeader({
   avatar,
   avatarShape,
   avatarTone,
+  avatarFinish,
   working = false,
   face: state,
   status,
@@ -54,6 +55,7 @@ export function TurnHeader({
   avatar?: string
   avatarShape?: string
   avatarTone?: number
+  avatarFinish?: AvatarFinish
   /** Her turn is still running, which is the one thing her face here is allowed to say. */
   working?: boolean
   /** What that turn is doing, for the face to show. See `Avatar`. */
@@ -65,7 +67,7 @@ export function TurnHeader({
    */
   quiet?: boolean
 }) {
-  const face = <Avatar name={name} color={color} src={avatar} shape={avatarShape} tone={avatarTone} size={32} working={working} face={state} />
+  const face = <Avatar name={name} color={color} src={avatar} shape={avatarShape} tone={avatarTone} finish={avatarFinish} size={32} working={working} face={state} />
   if (quiet) {
     return (
       <div className="flex min-h-8 w-fit max-w-full items-center gap-1.5 text-[16px] leading-none font-semibold" style={accentStyle(color)}>

@@ -127,7 +127,7 @@ export function RuntimeRoster({
                   <span
                     className={`flex min-w-0 items-center gap-2 ${inactive ? 'opacity-40' : ''}`}
                   >
-                    <Avatar name={agent.name} color={agent.color} src={agent.avatar} shape={agent.avatarShape} tone={agent.avatarTone} size={24} />
+                    <Avatar name={agent.name} color={agent.color} src={agent.avatar} shape={agent.avatarShape} tone={agent.avatarTone} finish={agent.avatarFinish} size={24} />
                     {/* Name capped rather than shrinking, so a long one eats itself
                         instead of squeezing the title next to it down to nothing.
                         Tight leading plus truncate clipped Argus's g; a hair of
@@ -171,7 +171,7 @@ export function RuntimeRoster({
               onClick={nav.back}
             >
               <Icon icon={ArrowLeft01Icon} size={13} />
-              <Avatar name={selected.name} color={selected.color} src={selected.avatar} shape={selected.avatarShape} tone={selected.avatarTone} size={24} />
+              <Avatar name={selected.name} color={selected.color} src={selected.avatar} shape={selected.avatarShape} tone={selected.avatarTone} finish={selected.avatarFinish} size={24} />
               <span className="min-w-0 flex-1 truncate py-px">{selected.name}</span>
               <span className="flex-none text-meta text-dim">All agents</span>
             </button>

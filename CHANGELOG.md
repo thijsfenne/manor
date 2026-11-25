@@ -4,6 +4,7 @@ What changed for someone who uses Manor, newest first. A version is a tag on `ma
 
 ## Unreleased
 
+- A generated face can wear one of three finishes, on the Mac, the web and the phone: Clay, the lit look faces have today, Flat, the plain colour with no light or shade, and Fluffy, a head in soft short fur with a fringe of hairs around its edge. Pick it in an agent's Face page, in a new Finish row between Shape and Tone; existing faces keep Clay. The working face keeps its finish while it moves, and its fur follows the outline. The Face page also offers six more colours (Rose, Coral, Yellow, Mint, Cyan and Magenta) and four more tones (White, Grey, Muted and Dusk). A White face shows its edge through Clay or Fluffy; Flat on a light background leaves it faint. The phone needs a new build.
 - On the Mac and the web, Quote selection now shows for a whole sentence or paragraph, also when you triple click it or drag past its end. It no longer floats over Settings or another window opened over the chat, and it hides as soon as one opens.
 - On the Mac and the web, a secondary button, such as Show in Finder, shows its label in the full text colour without hover. A primary button now visibly changes its fill on hover, in light and dark mode and in every colour theme.
 - On the Mac and the web, a direct message's notice card shows the agent's face larger at its top left and the reply in up to three lines.

@@ -347,11 +347,17 @@ export function tinted(
  * Thresholds are cumulative, so pale and mid tones dominate and the near-black
  * body stays a rare find.
  */
+// Manor added white, grey, muted and dusk in the gaps between the stored swatch
+// positions (0.1, 0.5, 0.7, 0.9, 0.97), so a stored tone keeps its colour.
 const TONES: [number, { l: number; c: number }][] = [
   [0.2, { l: 0.86, c: 0.085 }], // pastel
+  [0.25, { l: 0.94, c: 0.008 }], // white
+  [0.3, { l: 0.64, c: 0.014 }], // grey
   [0.36, { l: 0.9, c: 0.028 }], // pale neutral
+  [0.45, { l: 0.7, c: 0.06 }], // muted
   [0.62, { l: 0.73, c: 0.135 }], // mid
   [0.8, { l: 0.62, c: 0.165 }], // deep
+  [0.86, { l: 0.45, c: 0.11 }], // dusk
   [0.93, { l: 0.87, c: 0.16 }], // bright
   // Dark, but not darker than a dark host surface. At l 0.17 this swatch scored
   // 1.03:1 against a near-black page and the body simply vanished, leaving two

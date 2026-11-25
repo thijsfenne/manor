@@ -4,6 +4,7 @@ import type {
   DeliveredFile,
   SlackRichText,
   AgentConfig,
+  AvatarFinish,
   Chat,
   ChatMode,
   FileAttachment,
@@ -3256,6 +3257,7 @@ export interface Persona {
   /** The silhouette her generated face wears, or absent to let her name pick one. */
   avatarShape?: string
   avatarTone?: number
+  avatarFinish?: AvatarFinish
 }
 
 /** A persona no longer on the roster, who still owns the turns she ran. */
@@ -3361,6 +3363,7 @@ export function personaOf(agents: AgentConfig[], agentId: string): Persona {
     avatar: agent.avatar,
     avatarShape: agent.avatarShape,
     avatarTone: agent.avatarTone,
+    avatarFinish: agent.avatarFinish,
   }
 }
 
@@ -3444,6 +3447,7 @@ export function usageRows(agents: AgentConfig[], thread: ThreadShape): UsageRow[
     avatar: agent.avatar,
     avatarShape: agent.avatarShape,
     avatarTone: agent.avatarTone,
+    avatarFinish: agent.avatarFinish,
     usage: thread.usage[agent.id],
     contextTokens: contexts[agent.id],
   }))
