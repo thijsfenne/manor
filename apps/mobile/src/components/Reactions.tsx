@@ -11,8 +11,8 @@ import { colors, fonts, radius, spacing } from '@/theme'
 const BADGE = 26
 
 /**
- * The emoji on a DM bubble's bottom right edge. The user's own on an agent's message
- * takes itself off on a tap; the agent's on the user's message wears its accent ring.
+ * The emoji on a DM bubble's bottom outer edge: left under an agent's message, right under
+ * the user's. The user's own takes itself off on a tap where it may; the agent's wears its accent ring.
  */
 export function ReactionBadge({ reaction, color, onRemove }: {
   reaction: MessageReaction
@@ -25,11 +25,12 @@ export function ReactionBadge({ reaction, color, onRemove }: {
       <Text style={styles.badgeEmoji}>{reaction.emoji}</Text>
     </GlassSurface>
   )
+  const spot = [styles.badgeSpot, color === undefined ? styles.badgeLeft : styles.badgeRight]
   if (onRemove === undefined) {
-    return <View accessibilityLabel={`Reacted ${reaction.emoji}`} accessibilityRole="image" style={styles.badgeSpot}>{glass}</View>
+    return <View accessibilityLabel={`Reacted ${reaction.emoji}`} accessibilityRole="image" style={spot}>{glass}</View>
   }
   return (
-    <Pressable accessibilityLabel={`Remove your ${reaction.emoji} reaction`} accessibilityRole="button" hitSlop={8} onPress={onRemove} style={styles.badgeSpot}>
+    <Pressable accessibilityLabel={`Remove your ${reaction.emoji} reaction`} accessibilityRole="button" hitSlop={8} onPress={onRemove} style={spot}>
       {glass}
     </Pressable>
   )
@@ -101,7 +102,9 @@ function Choice({ current, emoji, onPick, size }: {
 }
 
 const styles = StyleSheet.create({
-  badgeSpot: { position: 'absolute', right: spacing.md, bottom: -BADGE / 2 - 2, zIndex: 1 },
+  badgeSpot: { position: 'absolute', bottom: -BADGE / 2 - 2, zIndex: 1 },
+  badgeLeft: { left: spacing.md },
+  badgeRight: { right: spacing.md },
   badge: { minWidth: BADGE, height: BADGE, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4 },
   badgeEmoji: { fontSize: 14, lineHeight: 18 },
   pill: { flexDirection: 'row', alignItems: 'center', padding: spacing.xs },

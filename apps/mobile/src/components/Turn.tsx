@@ -1259,7 +1259,7 @@ function Reply({
   onLongPressSource?: (source: QuoteSelectionSource, frame?: HeldFrame) => void
   onSwipeReply?: () => void
   bubble?: boolean
-  /** The user's reaction, a badge on the bubble's bottom right edge. */
+  /** The user's reaction, a badge on the bubble's bottom left edge. */
   reaction?: MessageReaction
   onRemoveReaction?: () => void
 }) {

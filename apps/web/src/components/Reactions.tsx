@@ -7,8 +7,8 @@ import { IconButton } from './ui/IconButton'
 import { Menu, useMenu } from './ui/Menu'
 
 /**
- * The emoji on a DM bubble's bottom right edge. The user's own on an agent's message
- * takes itself off on a press; the agent's on the user's message wears its accent ring.
+ * The emoji on a DM bubble's bottom outer edge: left under an agent's message, right under
+ * the user's. The user's own takes itself off on a press where it may; the agent's wears its accent ring.
  */
 export function ReactionBadge({ reaction, color, onRemove }: {
   reaction: MessageReaction
@@ -16,7 +16,8 @@ export function ReactionBadge({ reaction, color, onRemove }: {
   color?: string
   onRemove?: () => void
 }) {
-  const className = 'absolute -bottom-3 right-3 z-[1] grid h-6 min-w-6 place-items-center rounded-full border px-1 text-[14px] leading-none surface-floating shadow-popover'
+  const side = color === undefined ? 'left-3' : 'right-3'
+  const className = `absolute -bottom-3 ${side} z-[1] grid h-6 min-w-6 place-items-center rounded-full border px-1 text-[14px] leading-none surface-floating shadow-popover`
   const ring = color === undefined ? 'border-line' : 'border-[color:var(--accent)]'
   if (onRemove === undefined) {
     return (

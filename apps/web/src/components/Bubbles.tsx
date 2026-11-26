@@ -558,7 +558,7 @@ interface AgentBubbleProps {
   /** Durable messages inside this visual answer; adjacent Work beats may be joined. */
   quoteSources?: readonly MessageQuoteSource[]
   quoteAgentId?: string
-  /** A reaction badge on the bubble's bottom right edge, in a DM. */
+  /** A reaction badge on the bubble's bottom left edge, in a DM; a short reply widens to hold it. */
   badge?: ReactNode
 }
 
@@ -584,7 +584,7 @@ function AgentBubbleView({ color, text, agents, images = [], live = false, bubbl
     </div>
   ) : null
   return (
-    <div className={bubble ? `relative flex w-fit max-w-bubble min-w-0 flex-col gap-1.5${badge === undefined ? '' : ' mb-3'}` : 'flex min-w-0'}>
+    <div className={bubble ? `relative flex w-fit max-w-bubble flex-col gap-1.5${badge === undefined ? ' min-w-0' : ' mb-3 min-w-14'}` : 'flex min-w-0'}>
       {bubble ? pictures : null}
       {viewing === null ? null : (
         <FileViewer files={eventImageFiles(images)} index={viewing} onIndex={setViewing} onClose={() => setViewing(null)} />
