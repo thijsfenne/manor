@@ -415,3 +415,85 @@ describe('steers inside a Work turn', () => {
       .toEqual(['First', 'turn', 'Queued', 'Waiting', 'Typing'])
   })
 })
+
+describe('steers in a DM', () => {
+  // The chat as it reads: the user's lines, each turn row as its standing bubbles.
+  const read = (rows: ReturnType<typeof rowsOf>) => rows.map((row) =>
+    row.kind === 'event' && row.event.type === 'user_message' ? `user:${row.event.text}`
+      : row.kind === 'turn' ? `turn:${row.tail.map((segment) => segment.kind === 'reply' ? segment.text : segment.kind).join('|')}`
+        : row.kind)
+  const dm = (events: ThreadEvent[], live = true) => rowsOf({ ...emptyThread, events, ...(live ? { liveTurns: running() } : {}) }, 'dm')
+
+  it('keeps what the agent already said above the steer and writes on below it', () => {
+    const done = (id: string, ts: number, output: string): ThreadEvent =>
+      ({ id, ts, type: 'tool_result', ...agent, toolCallId: id.replace('r', 't'), outcome: 'success', output }) as ThreadEvent
+    const events: ThreadEvent[] = [
+      first, tool('t0', 2), done('r0', 3, 'read'), say('m1', 4, 'Looking for the file'), tool('t1', 5),
+      steer('user_2', 6, 'Here is the link'),
+    ]
+    const live = dm(events)
+    expect(read(live)).toEqual(['user:First', 'turn:Looking for the file', 'user:Here is the link', 'turn:'])
+    const [above, below] = [live[1] as Turn, live.at(-1) as Turn]
+    expect(above.live).toBeUndefined()
+    expect(below.live?.state).toBe('running')
+    // Finished work stays with what it led to; the call still running goes on below, still running.
+    expect(above.activities.map((step) => step.key)).toEqual(['t0', 'm1'])
+    expect(below.activities.map((step) => step.kind === 'tool' && `${step.key}:${step.status}`)).toEqual(['t1:running'])
+    const answered = dm([...events, done('r1', 7, 'found'), say('m2', 8, 'Found it')])
+    expect(read(answered)).toEqual(['user:First', 'turn:Looking for the file', 'user:Here is the link', 'turn:Found it'])
+    const step = (answered.at(-1) as Turn).activities[0]
+    expect(step?.kind === 'tool' && step.output).toBe('found')
+  })
+
+  it('moves the whole turn below a steer sent before it wrote anything, as before', () => {
+    const rows = dm([first, tool('t1', 2), steer('user_2', 3, 'Early'), say('m1', 4, 'Done')])
+    expect(read(rows)).toEqual(['user:First', 'user:Early', 'turn:Done'])
+    expect((rows.at(-1) as Turn).activities.map((step) => step.kind)).toEqual(['tool', 'say'])
+    // A delivered file was shown too, so it stays above.
+    const file: ThreadEvent = { id: 'f1', ts: 2, type: 'file_delivery', ...agent, file: { id: 'f1', name: 'cv.pdf', mime: 'application/pdf', size: 1 } }
+    const delivered = dm([first, file, steer('user_2', 3, 'Thanks'), say('m1', 4, 'Done')])
+    expect(read(delivered)).toEqual(['user:First', 'turn:', 'user:Thanks', 'turn:Done'])
+    expect((delivered[1] as Turn).files).toHaveLength(1)
+  })
+
+  it('splits at each of two steers in one turn', () => {
+    const events: ThreadEvent[] = [
+      first, say('m1', 2, 'One'), steer('user_2', 3, 'Wait'), say('m2', 4, 'Two'),
+      steer('user_3', 5, 'And'), say('m3', 6, 'Three'), result,
+    ]
+    const rows = dm(events, false)
+    expect(read(rows)).toEqual(['user:First', 'turn:One', 'user:Wait', 'turn:Two', 'user:And', 'turn:Three'])
+    expect(new Set(rows.map((row) => row.key)).size).toBe(rows.length)
+    // The turn's end belongs to the part below the last steer.
+    expect((rows.at(-1) as Turn).completed).toBe(true)
+  })
+
+  it('reads the same reopened from stored events as it did live', () => {
+    const events: ThreadEvent[] = [first, say('m1', 2, 'One'), steer('user_2', 3, 'Wait'), say('m2', 4, 'Two')]
+    const live = read(dm(events))
+    const reopened = read(dm([...events, result], false))
+    expect(reopened).toEqual(live)
+    expect(reopened).toEqual(['user:First', 'turn:One', 'user:Wait', 'turn:Two'])
+  })
+
+  it('folds a turn that showed nothing after the steer back above it', () => {
+    const rows = dm([first, say('m1', 2, 'All done'), steer('user_2', 3, 'Thanks'), result], false)
+    expect(read(rows)).toEqual(['user:First', 'turn:All done', 'user:Thanks'])
+    expect((rows[1] as Turn).completed).toBe(true)
+    // A partial a failure cut off is not shown in a DM, so its error stays with the reply above.
+    const failed = dm([
+      first, say('m1', 2, 'All done'), steer('user_2', 3, 'Thanks'),
+      { ...say('m2', 4, 'Half'), interrupted: true } as ThreadEvent,
+      { id: 'n', ts: 5, type: 'system_note', kind: 'error', text: 'Crashed', ...agent } as ThreadEvent,
+    ], false)
+    expect(failed.map((row) => row.kind)).toEqual(['event', 'turn', 'event'])
+    expect((failed[1] as Turn).note?.text).toBe('Crashed')
+  })
+
+  it('keeps a Session turn whole with the steer inline', () => {
+    const rows = rowsOf({ ...emptyThread, events: [first, say('m1', 2, 'One'), steer('user_2', 3, 'Wait'), say('m2', 4, 'Two'), result] })
+    expect(outerUsers(rows)).toEqual(['First'])
+    expect(rows.filter((row) => row.kind === 'turn')).toHaveLength(1)
+    expect(turnOf(rows).timeline.map((item) => item.kind)).toEqual(['say', 'user', 'say'])
+  })
+})

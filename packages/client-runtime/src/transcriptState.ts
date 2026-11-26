@@ -502,7 +502,8 @@ export const finishedSilent = (turn: TurnRow): boolean =>
   turn.answer.length === 0 &&
   (turn.asks ?? []).length === 0 &&
   (turn.drafts ?? []).length === 0 &&
-  (turn.files ?? []).length === 0
+  (turn.files ?? []).length === 0 &&
+  (turn.connects ?? []).length === 0
 
 /** A card a running DM turn shows before its reply is whole: a draft, a todo list, or a question already answered. */
 export const dmLiveCard = (segment: TurnSegment): boolean =>
@@ -521,6 +522,7 @@ export const onlyConsulted = (turn: TurnRow): boolean =>
   turn.hasSentRelay === true &&
   turn.tail.length === 0 &&
   (turn.files ?? []).length === 0 &&
+  (turn.connects ?? []).length === 0 &&
   (turn.memoryChanges ?? []).length === 0 &&
   turn.segments.every((segment) => segment.kind === 'work' || segment.kind === 'edits')
 
@@ -2574,6 +2576,45 @@ function cloneTurn(turn: TurnRow): TurnRow {
   }
 }
 
+/** A message a DM already drew as a bubble: the line a steer splits a turn at. */
+const shownInDm = (item: TurnTimelineItem): boolean =>
+  item.kind === 'say' && item.interrupted !== true && (item.text.length > 0 || item.images.length > 0)
+
+/**
+ * Cuts a DM turn at a steer (2026-11-26). What it already showed (its messages, the work
+ * that finished and the files it delivered) becomes a row of its own that keeps the turn's
+ * place above the steer. The turn keeps its identity, its live state, its plan, its calls
+ * still running with their helpers' steps, and everything turn-wide, and goes on below.
+ * Steps keep their objects, so a result arriving later still finds its step.
+ */
+function splitShown(turn: TurnRow, steerKey: string, ts: number): TurnRow {
+  const running = new Set(turn.activities.flatMap((step) => step.kind === 'tool' && step.status === 'running' ? [step.toolCallId] : []))
+  const goesOn = (item: TurnTimelineItem) => item.kind === 'todo' || (item.kind === 'tool' && item.status === 'running') ||
+    ((item.kind === 'tool' || item.kind === 'reasoning') && item.parentToolCallId !== undefined && running.has(item.parentToolCallId))
+  const shown: TurnRow = {
+    kind: 'turn',
+    key: `${turn.key}:before:${steerKey}`,
+    turnId: turn.turnId,
+    agentId: turn.agentId,
+    asks: [],
+    drafts: [],
+    ...(turn.files === undefined ? {} : { files: turn.files }),
+    activities: turn.activities.filter((step) => !goesOn(step)),
+    timeline: turn.timeline.filter((item) => !goesOn(item)),
+    segments: [],
+    answer: [],
+    tail: [],
+    ...(turn.startedAt === undefined ? {} : { startedAt: turn.startedAt }),
+    ...(turn.endedAt === undefined ? {} : { endedAt: turn.endedAt }),
+  }
+  delete turn.files
+  turn.activities = turn.activities.filter(goesOn)
+  turn.timeline = turn.timeline.filter(goesOn)
+  turn.startedAt = ts
+  turn.endedAt = ts
+  return shown
+}
+
 /** Applies the status sweep and readable segment projection to one isolated turn. */
 function finishTurn(turn: TurnRow, dmBeats: boolean): void {
   const running = turn.live?.state === 'running'
@@ -2669,6 +2710,8 @@ function durableRowsOf(events: ThreadEvent[], dmBeats: boolean): DurableRows {
   const earlyWrites: { row: Row; write: ProjectFileWrite; turnId: string }[] = []
 
   const unattached = new Map<string, Extract<Row, { kind: 'event' }>[]>()
+  /** In a DM, each steered turn's part shown before its last steer, which stands above that steer. */
+  const shownBefore = new Map<TurnRow, TurnRow>()
 
   const turnFor = (turnId: string, agentId: string, ts?: number): TurnRow => {
     const identity = turnIdentity(turnId, agentId)
@@ -2743,7 +2786,13 @@ function durableRowsOf(events: ThreadEvent[], dmBeats: boolean): DurableRows {
         if (event.steersTurnId !== undefined) {
           if (steered !== undefined) {
             const previous = rows.indexOf(steered)
-            if (previous >= 0) rows.splice(previous, 1)
+            if (previous >= 0 && dmBeats && (steered.timeline.some(shownInDm) || steered.files !== undefined)) {
+              // What the turn already said keeps its place above the steer; it goes on below.
+              const shown = splitShown(steered, row.key, event.ts)
+              rows[previous] = shown
+              groups.push(shown)
+              shownBefore.set(steered, shown)
+            } else if (previous >= 0) rows.splice(previous, 1)
             rows.push(steered)
           } else if (!dmBeats && !byTurnId.has(event.steersTurnId)) {
             unattached.set(event.steersTurnId, [...unattached.get(event.steersTurnId) ?? [], row])
@@ -3081,6 +3130,16 @@ function durableRowsOf(events: ThreadEvent[], dmBeats: boolean): DurableRows {
     rows.splice(rows.indexOf(row), 1)
   }
 
+  // A turn that ended without showing anything after its last steer had said it all
+  // before: it folds back into the part above, rather than leaving an empty turn below.
+  for (const [turn, shown] of shownBefore) {
+    if (open.get(turnIdentity(turn.turnId, turn.agentId)) === turn || turn.files !== undefined || turn.connects !== undefined ||
+      turn.timeline.some((item) => shownInDm(item) || item.kind === 'draft' || item.kind === 'ask')) continue
+    const { key, startedAt, timeline, activities } = shown
+    Object.assign(shown, turn, { key, startedAt, timeline: [...timeline, ...turn.timeline], activities: [...activities, ...turn.activities] })
+    rows.splice(rows.indexOf(turn), 1)
+    groups.splice(groups.indexOf(turn), 1)
+  }
   for (const turn of groups) {
     if (sentRelays.has(`${turn.turnId}\0${turn.agentId}`)) turn.hasSentRelay = true
   }
