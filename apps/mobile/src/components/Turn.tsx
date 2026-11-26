@@ -14,13 +14,15 @@ import Tick02Icon from '@hugeicons/core-free-icons/Tick02Icon'
 import ViewIcon from '@hugeicons/core-free-icons/ViewIcon'
 import Wrench01Icon from '@hugeicons/core-free-icons/Wrench01Icon'
 import { HugeiconsIcon, type IconSvgElement } from '@hugeicons/react-native'
-import { ROUTINE_LATE_AFTER_MS, SECRET_CLOSED_TEXT, isSkippedAnswer, userInputAnswerText, type AgentConfig, type Project, type FileEdit, type EventImage, type MessageReply, type UserInputQuestion, type UserInputAnswers } from '@manor/contracts'
+import { ROUTINE_LATE_AFTER_MS, SECRET_CLOSED_TEXT, isSkippedAnswer, userInputAnswerText, type AgentConfig, type MessageReaction, type Project, type FileEdit, type EventImage, type MessageReply, type UserInputQuestion, type UserInputAnswers } from '@manor/contracts'
 import {
   answerTextOf,
+  endedQuietly,
   fileWriteGroups,
   finishedSilent,
   dmLiveCard,
   personaOf,
+  reactionTargetOf,
   streamedMessages,
   type Persona,
   type ReasoningStep,
@@ -48,11 +50,13 @@ import { actionNotice } from '@manor/client-runtime/notices'
 import * as Clipboard from 'expo-clipboard'
 import { Image } from 'expo-image'
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { BlurView } from 'expo-blur'
 import { Modal, Pressable, StyleSheet, View, useWindowDimensions, type AccessibilityState, type ColorValue } from 'react-native'
 import { Gesture, GestureDetector } from 'react-native-gesture-handler'
 import Animated, { Extrapolation, FadeIn, interpolate, ReduceMotion, runOnJS, useAnimatedStyle, useReducedMotion, useSharedValue, withSpring } from 'react-native-reanimated'
 
 import { Attachments, ImageViewer } from '@/components/Attachments'
+import { ARRIVAL_SPRING } from '@/lib/arrival'
 import { FileViewer } from '@/components/FileViewer'
 import { AgentStack } from '@/components/AgentStack'
 import { DiffSheet } from '@/components/DiffSheet'
@@ -63,6 +67,8 @@ import { LandedMessageContext, LandingWash } from '@/components/LandingWash'
 import { Markdown, ReplySwipe, type MarkdownLinks } from '@/components/Markdown'
 import { MemoryChangesSheet, hasMemoryChanges, memoryChangesLabel } from '@/components/MemoryChangesSheet'
 import { MemoryTraceSheet } from '@/components/MemoryTraceSheet'
+import { GlassSurface } from '@/components/GlassSurface'
+import { ReactionBadge, ReactionPalette, ReactionPill } from '@/components/Reactions'
 import { noticeStore } from '@/lib/notices'
 import type { DraftActions } from '@/components/OutboundDraftBubble'
 import { OutboundDraftGroup } from '@/components/OutboundDraftGroup'
@@ -74,7 +80,7 @@ import { DeliveredFiles } from '@/components/DeliveredFiles'
 import { ConnectCards } from '@/components/ConnectCards'
 import { Text } from '@/components/Text'
 import type { QuoteSelectionSource } from '@/components/QuoteSelectionSheet'
-import { colors, fonts, radius, spacing, squircle } from '@/theme'
+import { colors, fonts, radius, spacing, squircle, useScheme } from '@/theme'
 import { useWindowInsets } from '@/lib/windowInsets'
 import { serverMediaUri } from '@/lib/connection'
 
@@ -96,6 +102,7 @@ export function Turn({
   showSpeaker = true,
   threadProject,
   onReply,
+  onReact,
   onQuoteSource,
   onOpenSubagent,
   draftActions,
@@ -123,6 +130,8 @@ export function Turn({
   threadProject?: Project
   /** Offered by DMs and groups once this turn has a finished visible answer. */
   onReply?: (reply: MessageReply) => void
+  /** Sets or takes off the user's reaction on one of this turn's messages. DMs only. */
+  onReact?: (eventId: string, emoji: string | null) => void
   onQuoteSource?: (source: QuoteSelectionSource) => void
   /** Opens one helper's own screen from its row in this turn, by launch call id. */
   onOpenSubagent?: (toolCallId: string) => void
@@ -167,6 +176,7 @@ export function Turn({
     setOpen(true)
   }
   const [actionSource, setActionSource] = useState<QuoteSelectionSource | null>(null)
+  const [actionFrame, setActionFrame] = useState<HeldFrame | undefined>(undefined)
   const [copied, setCopied] = useState(false)
   const [memoryOpen, setMemoryOpen] = useState(false)
   const [changesOpen, setChangesOpen] = useState(false)
@@ -237,6 +247,10 @@ export function Turn({
     />
   )
   if (bubbleReplies && dmTurnDrawsNothing(turn)) return null
+  // A reaction lands on a finished DM message; one still arriving waits until it is whole.
+  const reactable = bubbleReplies && onReact !== undefined
+  const heldReply = actionSource === null ? undefined
+    : standing.find((segment) => segment.kind === 'reply' && reactionTargetOf(segment) === actionSource.eventId)
   const face = (
     <Blobatar
       animate={latest ? true : 'blink'}
@@ -298,10 +312,12 @@ export function Turn({
             bubble={bubbleReplies}
             images={segment.images}
             key={segment.key}
+            {...(bubbleReplies && segment.reaction !== undefined ? { reaction: segment.reaction } : {})}
+            {...(reactable && reactionTargetOf(segment) !== undefined ? { onRemoveReaction: () => onReact?.(reactionTargetOf(segment)!, null) } : {})}
             links={links}
             quoteAgentId={turn.agentId}
             quoteSources={segment.quoteSources}
-            onLongPressSource={bubbleReplies && showFooter || onQuoteSource !== undefined ? setActionSource : undefined}
+            onLongPressSource={bubbleReplies && showFooter || onQuoteSource !== undefined ? (source, frame) => { setActionFrame(frame); setActionSource(source) } : undefined}
             {...(!bubbleReplies || onReply === undefined || !showFooter
               ? {}
               : {
@@ -386,6 +402,18 @@ export function Turn({
       ) : null}
       {actionSource === null ? null : (
         <TurnActions
+          {...(actionFrame === undefined ? {} : {
+            held: { frame: actionFrame, body: <Markdown agents={agents} bleed={false} links={links} selectable={false} text={actionSource.text} /> },
+          })}
+          {...(reactable && heldReply?.kind === 'reply' ? {
+            reactions: {
+              ...(heldReply.reaction === undefined ? {} : { current: heldReply.reaction }),
+              onPick: (emoji: string | null) => {
+                setActionSource(null)
+                onReact?.(actionSource.eventId, emoji)
+              },
+            },
+          } : {})}
           canCopy={!quiet && actionSource.text.length > 0}
           canReply={onReply !== undefined && actionSource.text.length > 0}
           canQuote={onQuoteSource !== undefined && actionSource.text.length > 0}
@@ -428,6 +456,8 @@ export function Turn({
  * still takes a slot, and every slot inserted above the indicator moves it.
  */
 export function dmTurnDrawsNothing(turn: TurnRow): boolean {
+  // Its reaction was the answer, or the user's reaction needed none: the badge is all that shows.
+  if (endedQuietly(turn)) return true
   // Partial text a stop or failure cut off stays out of a DM, as `standing` drops it.
   const standing = turn.tail.some((segment) => segment.kind !== 'reply' || segment.interrupted !== true)
   if (standing || (turn.files?.length ?? 0) > 0 || (turn.connects?.length ?? 0) > 0 || turn.fileWrites !== undefined) return false
@@ -585,6 +615,8 @@ function FooterIconButton({
 
 /** Secondary actions for the one beat that was held. */
 function TurnActions({
+  reactions,
+  held,
   canCopy,
   canReply,
   canQuote,
@@ -599,6 +631,10 @@ function TurnActions({
   onMemory,
   onMemoryChanges,
 }: {
+  /** The quick reaction row, on a finished agent message in a DM. */
+  reactions?: { current?: MessageReaction; onPick: (emoji: string | null) => void }
+  /** A held DM bubble: drawn again over the blurred chat, between the pill and the actions. */
+  held?: { frame: HeldFrame; body: ReactNode }
   canCopy: boolean
   canReply: boolean
   canQuote: boolean
@@ -615,27 +651,100 @@ function TurnActions({
   onMemoryChanges: () => void
 }) {
   const insets = useWindowInsets()
-  return (
-    <Modal animationType="fade" onRequestClose={onClose} transparent visible>
-      <View style={[styles.actionScrim, { paddingBottom: Math.max(insets.bottom, spacing.lg) }]}>
-        <Pressable
-          accessibilityLabel="Close message actions"
-          accessibilityRole="button"
-          onPress={onClose}
-          style={StyleSheet.absoluteFill}
-        />
-        <View style={styles.actionMenu}>
-          {canCopy ? <ActionRow icon={Copy01Icon} label="Copy" onPress={() => { onClose(); onCopy() }} /> : null}
-          {canReply ? <ActionRow icon={ReplyIcon} label="Reply" onPress={onReply} /> : null}
-          {canQuote ? <ActionRow icon={TextSelectionIcon} label="Quote text" onPress={onQuote} /> : null}
-          {hasMemory ? <ActionRow icon={Brain02Icon} label="Memory used" onPress={onMemory} /> : null}
-          {hasMemoryChanges ? <ActionRow icon={NoteEditIcon} label="Memory updated" onPress={onMemoryChanges} /> : null}
-          {trace === undefined ? null : <ActionRow icon={Wrench01Icon} label={trace === 'open' ? 'Hide work' : 'Show work'} onPress={onTrace} />}
+  const window = useWindowDimensions()
+  const scheme = useScheme()
+  const still = useReducedMotion()
+  const [more, setMore] = useState(false)
+  const rows = [
+    canReply ? <ActionRow icon={ReplyIcon} key="reply" label="Reply" onPress={onReply} /> : null,
+    canCopy ? <ActionRow icon={Copy01Icon} key="copy" label="Copy" onPress={() => { onClose(); onCopy() }} /> : null,
+    canQuote ? <ActionRow icon={TextSelectionIcon} key="quote" label="Quote text" onPress={onQuote} /> : null,
+    hasMemory ? <ActionRow icon={Brain02Icon} key="memory" label="Memory used" onPress={onMemory} /> : null,
+    hasMemoryChanges ? <ActionRow icon={NoteEditIcon} key="changes" label="Memory updated" onPress={onMemoryChanges} /> : null,
+    trace === undefined ? null : <ActionRow icon={Wrench01Icon} key="trace" label={trace === 'open' ? 'Hide work' : 'Show work'} onPress={onTrace} />,
+  ].filter((row) => row !== null)
+  const close = (
+    <Pressable accessibilityLabel="Close message actions" accessibilityRole="button" onPress={onClose} style={StyleSheet.absoluteFill} />
+  )
+  // The held bubble stays where it was when it fits; otherwise it moves, and a tall one is
+  // cut, so the pill above it and the actions below it stay on screen.
+  const top = insets.top + spacing.sm
+  const bottom = window.height - Math.max(insets.bottom, spacing.lg)
+  const pill = reactions === undefined ? 0 : HELD_PILL + HELD_GAP
+  const below = (more ? HELD_PALETTE : rows.length * HELD_ROW) + HELD_GAP
+  const frame = held?.frame ?? { x: 0, y: 0, width: 0, height: 0 }
+  const height = Math.min(frame.height, Math.max(HELD_ROW, bottom - top - pill - below))
+  const y = Math.min(Math.max(frame.y, top + pill), bottom - below - height)
+  const left = Math.max(spacing.lg, Math.min(frame.x, window.width - spacing.lg - HELD_MENU))
+  // One spring opens the held view: the bubble travels from where it was held and lifts,
+  // the pill and the actions grow out of it and travel along. Closing is the modal's fade.
+  const travel = frame.y - y
+  const opened = useSharedValue(still ? 1 : 0)
+  useEffect(() => {
+    if (!still) opened.set(withSpring(1, ARRIVAL_SPRING))
+  }, [opened, still])
+  const lifted = useAnimatedStyle(() => ({
+    transform: [
+      { translateY: travel * (1 - opened.get()) },
+      { scale: interpolate(opened.get(), [0, 0.5, 1], [1, 1.04, 1]) },
+    ],
+  }))
+  const grown = useAnimatedStyle(() => ({
+    opacity: opened.get(),
+    transform: [{ translateY: travel * (1 - opened.get()) }, { scale: interpolate(opened.get(), [0, 1], [0.6, 1]) }],
+  }))
+  if (held === undefined) {
+    return (
+      <Modal animationType="fade" onRequestClose={onClose} transparent visible>
+        <View style={[styles.actionScrim, { paddingBottom: Math.max(insets.bottom, spacing.lg) }]}>
+          {close}
+          <View style={styles.actionMenu}>{rows}</View>
         </View>
-      </View>
+      </Modal>
+    )
+  }
+  return (
+    <Modal animationType="fade" onRequestClose={onClose} statusBarTranslucent transparent visible>
+      <BlurView intensity={28} style={StyleSheet.absoluteFill} tint={scheme === 'dark' ? 'dark' : 'light'} />
+      <View style={[StyleSheet.absoluteFill, styles.heldScrim]}>{close}</View>
+      {reactions === undefined ? null : (
+        <Animated.View style={[styles.heldPill, { top: y - HELD_GAP - HELD_PILL, left: frame.x }, grown]}>
+          <ReactionPill
+            {...(reactions.current === undefined ? {} : { current: reactions.current })}
+            more={more}
+            onMore={() => setMore((open) => !open)}
+            onPick={reactions.onPick}
+          />
+        </Animated.View>
+      )}
+      <Animated.View pointerEvents="none" style={[styles.replyBubble, styles.heldBubble, { top: y, left: frame.x, width: frame.width, height }, lifted]}>
+        {held.body}
+      </Animated.View>
+      {more && reactions !== undefined ? (
+        <ReactionPalette
+          {...(reactions.current === undefined ? {} : { current: reactions.current })}
+          onPick={reactions.onPick}
+          style={[styles.heldBelow, { top: y + height + HELD_GAP, left: spacing.lg, right: spacing.lg, height: HELD_PALETTE }]}
+        />
+      ) : rows.length === 0 ? null : (
+        <Animated.View style={[styles.heldBelow, { top: y + height + HELD_GAP, left, width: HELD_MENU }, grown]}>
+          <GlassSurface radius={radius.lg}>
+            <View style={styles.heldRows}>{rows}</View>
+          </GlassSurface>
+        </Animated.View>
+      )}
     </Modal>
   )
 }
+
+/** Where the held bubble sat on screen, in window points. */
+interface HeldFrame { x: number; y: number; width: number; height: number }
+
+const HELD_PILL = 52
+const HELD_GAP = spacing.sm
+const HELD_ROW = 52
+const HELD_MENU = 248
+const HELD_PALETTE = 300
 
 function ActionRow({
   icon,
@@ -1137,6 +1246,8 @@ function Reply({
   onLongPressSource,
   onSwipeReply,
   bubble = false,
+  reaction,
+  onRemoveReaction,
 }: {
   text: string
   images?: readonly EventImage[]
@@ -1144,12 +1255,26 @@ function Reply({
   links?: MarkdownLinks
   quoteSources?: readonly { eventId: string; text: string }[]
   quoteAgentId?: string
-  onLongPressSource?: (source: QuoteSelectionSource) => void
+  /** A bubble also hands over where it sits, so the held layout can draw it in place. */
+  onLongPressSource?: (source: QuoteSelectionSource, frame?: HeldFrame) => void
   onSwipeReply?: () => void
   bubble?: boolean
+  /** The user's reaction, a badge on the bubble's bottom right edge. */
+  reaction?: MessageReaction
+  onRemoveReaction?: () => void
 }) {
   const still = useReducedMotion()
   const drag = useSharedValue(0)
+  const bubbleRef = useRef<View>(null)
+  const hold = (source: QuoteSelectionSource) => {
+    if (onLongPressSource === undefined) return
+    const held = { ...source, ...(quoteAgentId === undefined ? {} : { agentId: quoteAgentId }) }
+    if (!bubble || bubbleRef.current === null) {
+      onLongPressSource(held)
+      return
+    }
+    bubbleRef.current.measureInWindow((x, y, width, height) => onLongPressSource(held, { x, y, width, height }))
+  }
   // The message follows the finger to the trigger, then gives only a fifth of the rest.
   // A drag the system cancelled never replies; either way it springs home at the speed
   // it was let go with.
@@ -1186,19 +1311,20 @@ function Reply({
           <Animated.View style={[swipeStyle, styles.reply]}>
             {/* In a DM only the words sit in the bubble; the pictures stand on the chat itself. */}
             {said ? (
-              <View style={[styles.reply, bubble && styles.replyBubble]}>
+              <View ref={bubbleRef} style={[styles.reply, bubble && styles.replyBubble, reaction !== undefined && styles.replyReacted]}>
                 {quoteSources !== undefined && quoteSources.length > 0 ? quoteSources.map((source) => (
                   <Pressable
                     accessibilityHint={onLongPressSource === undefined ? undefined : 'Press and hold for actions'}
                     delayLongPress={360}
                     disabled={onLongPressSource === undefined}
                     key={source.eventId}
-                    onLongPress={onLongPressSource === undefined ? undefined : () => onLongPressSource({ ...source, ...(quoteAgentId === undefined ? {} : { agentId: quoteAgentId }) })}
+                    onLongPress={onLongPressSource === undefined ? undefined : () => hold(source)}
                   >
                     <LandingWash eventId={source.eventId} style={styles.replyWash} />
-                    <Markdown agents={agents} bleed={!bubble} links={links} text={source.text} />
+                    <Markdown agents={agents} bleed={!bubble} links={links} selectable={onLongPressSource === undefined} text={source.text} />
                   </Pressable>
                 )) : text === '' ? null : <Markdown agents={agents} bleed={!bubble} links={links} text={text} />}
+                {reaction === undefined ? null : <ReactionBadge reaction={reaction} {...(onRemoveReaction === undefined ? {} : { onRemove: onRemoveReaction })} />}
               </View>
             ) : null}
             <Attachments images={images} onOpenImage={setViewing} />
@@ -1350,6 +1476,7 @@ const styles = StyleSheet.create({
   replyCue: { position: 'absolute', top: 0, bottom: 0, left: spacing.md, justifyContent: 'center' },
   // Around the words, short of a bubble's padding so it stays inside the bubble.
   replyWash: { top: -spacing.xs, right: -spacing.sm, bottom: -spacing.xs, left: -spacing.sm, borderRadius: radius.md, ...squircle },
+  replyReacted: { marginBottom: spacing.md },
   replyBubble: { alignSelf: 'flex-start', borderRadius: radius.composer, ...squircle, backgroundColor: colors.bubble, paddingHorizontal: spacing.md + 2, paddingVertical: spacing.sm + 1 },
   messageFooter: { minHeight: 28, flexDirection: 'row', alignItems: 'center', gap: 2 },
   footerButton: { width: 28, height: 28, alignItems: 'center', justifyContent: 'center', borderRadius: radius.sm },
@@ -1362,6 +1489,12 @@ const styles = StyleSheet.create({
   footnoteGroup: { color: colors.dim, fontFamily: fonts.sans, fontSize: 12, lineHeight: 17 },
   footnoteLine: { color: colors.muted, fontFamily: fonts.sans, fontSize: 12, lineHeight: 17 },
   messageTime: { paddingRight: spacing.xs, color: colors.dim, fontFamily: fonts.sans, fontSize: 12 },
+  heldScrim: { backgroundColor: colors.scrim, opacity: 0.4 },
+  heldPill: { position: 'absolute', transformOrigin: 'left bottom' },
+  heldBubble: { position: 'absolute', overflow: 'hidden' },
+  heldBelow: { position: 'absolute', transformOrigin: 'left top' },
+  // The rows round themselves, so a pressed row keeps the curve and the glass keeps its rim.
+  heldRows: { overflow: 'hidden', borderRadius: radius.lg, ...squircle },
   actionScrim: { flex: 1, justifyContent: 'flex-end', backgroundColor: colors.scrim, padding: spacing.lg },
   actionMenu: { overflow: 'hidden', borderRadius: radius.lg, ...squircle, backgroundColor: colors.raised },
   actionRow: { minHeight: 52, flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingHorizontal: spacing.lg },

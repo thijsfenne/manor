@@ -13,10 +13,12 @@ import { useLiveThread } from '../liveThread'
 import {
   answerTextOf,
   dmLiveCard,
+  endedQuietly,
   finishedSilent,
   goalReportEventId,
   onlyConsulted,
   personaOf,
+  reactionTargetOf,
   rowHasQuoteSource,
   feedIndexOf,
   NO_OPEN_THREAD_BUNDLES,
@@ -60,7 +62,8 @@ import { OutboundDraftGroup } from './OutboundDraftGroup'
 import { ChangedFiles } from './ChangedFiles'
 import { DeliveredFiles } from './DeliveredFiles'
 import { ConnectCards } from './ConnectCards'
-import { BOUNDS_ATTRIBUTE, MessageActions, MessageFooter } from './MessageFooter'
+import { BOUNDS_ATTRIBUTE, BubbleActions, MessageFooter } from './MessageFooter'
+import { ReactionBadge } from './Reactions'
 import { TodoList } from './TodoList'
 import { PinnedPlan, PlanDockProvider, usePlanDock } from './PinnedPlan'
 import { useTopBarSlot } from './TopBar'
@@ -184,6 +187,8 @@ interface TranscriptProps {
   resultActions?: WorkResultActions
   /** Absent outside DMs and groups, where message targeting is not offered. */
   onReply?: (reply: MessageReply) => void
+  /** Sets or takes off the user's reaction on an agent's message. DMs only. */
+  onReact?: (eventId: string, emoji: string | null) => void
   /** Stages selected visible text without changing who the next message reaches. */
   onQuote?: (quote: MessageQuote) => void
   /** Stages selected visible text in the side chat and opens its panel. */
@@ -284,6 +289,7 @@ export function Transcript({
   onOpenDiff,
   resultActions,
   onReply,
+  onReact,
   onQuote,
   onAddToSideChat,
   connected = true,
@@ -333,6 +339,7 @@ export function Transcript({
   const stableOpenChat = useStableCallback((chatId: string) => onOpenAgentRelay?.(chatId))
   const stableOpenSubagents = useStableCallback((toolCallId: string) => onOpenSubagents?.(toolCallId))
   const stableReply = useStableCallback((reply: MessageReply) => onReply?.(reply))
+  const stableReact = useStableCallback((eventId: string, emoji: string | null) => onReact?.(eventId, emoji))
   // A wake's notice rows find the helper they report on here.
   const subagentLaunches: SubagentLaunches = {
     byCallId: new Map(chatSubagents(rows).flatMap((subagent) => subagent.step.toolCallId === undefined ? [] : [[subagent.step.toolCallId, subagent] as const])),
@@ -345,7 +352,7 @@ export function Transcript({
   const consultationMarkers = bubbleReplies && onOpenAgentRelay !== undefined ? stackedConsultationMarkers(rows, exchanges) : NO_CONSULTATION_MARKERS
   const visibleRows = rows.filter((row) => row.kind === 'event'
     ? consultationMarkers.get(row.event.id)?.length !== 0 && exchanges.get(row.event.id) !== null
-    : !(bubbleReplies && row.kind === 'turn' && onlyConsulted(row)))
+    : !(bubbleReplies && row.kind === 'turn' && (onlyConsulted(row) || endedQuietly(row))))
   // The project thread's open bundles; the user's next message folds them all again.
   const [openBundles, setOpenBundles] = useState(NO_OPEN_THREAD_BUNDLES)
   const stretch = threadStretch(visibleRows)
@@ -810,6 +817,7 @@ export function Transcript({
         onOpenChat={onOpenAgentRelay === undefined ? undefined : stableOpenChat}
         renderUser={renderInlineUser}
         onReply={onReply === undefined ? undefined : stableReply}
+        onReact={onReact === undefined || !bubbleReplies ? undefined : stableReact}
         connected={connected}
         waitingOnAgentId={waitingOnByTurn.get(row.turnId)}
         bubbleReplies={bubbleReplies}
@@ -1109,6 +1117,9 @@ const EventRow = memo(function EventRow({
           dm={dm}
           quoteAuthors={quoteAuthors}
           sourceEventId={event.id}
+          {...(dm && event.reaction?.agentId !== undefined ? {
+            badge: <ReactionBadge reaction={event.reaction} color={personaOf(agents, event.reaction.agentId).color} />,
+          } : {})}
         />
       )
       return hints === null && forwards === undefined && forwarded === null ? message : <>{forwarded}{message}{hints}{forwards}</>
@@ -1214,6 +1225,7 @@ interface TurnRowProps {
   /** Draws a steering message the user sent into this turn while it ran (Sessions and project threads, never a DM). */
   renderUser?: (row: Extract<Row, { kind: 'event' }>) => ReactNode
   onReply?: (reply: MessageReply) => void
+  onReact?: ((eventId: string, emoji: string | null) => void) | undefined
   connected?: boolean
   draftActions?: DraftActions
   waitingOnAgentId?: string
@@ -1232,7 +1244,7 @@ interface TurnRowProps {
 const HUNG_BELOW = '[@media(hover:hover)]:absolute [@media(hover:hover)]:inset-x-0 [@media(hover:hover)]:top-full'
 
 const TurnRow = memo(function TurnRow({
-  turn, agents, showSpeaker, repoFiles, onOpenFile, onOpenSubagents, onOpenChat, renderUser, onReply, connected = true, draftActions, waitingOnAgentId,
+  turn, agents, showSpeaker, repoFiles, onOpenFile, onOpenSubagents, onOpenChat, renderUser, onReply, onReact, connected = true, draftActions, waitingOnAgentId,
   bubbleReplies, memoryChanges: dmMemory, threadProject, openTrace, pinPlan = false,
 }: TurnRowProps) {
   const persona = personaOf(agents, turn.agentId)
@@ -1386,6 +1398,7 @@ const TurnRow = memo(function TurnRow({
           {...(onReply === undefined ? {} : {
             onReply: (text: string) => onReply({ turnId: turn.turnId, agentId: turn.agentId, text }),
           })}
+          {...(onReact === undefined ? {} : { onReact })}
           {...(draftActions === undefined ? {} : { draftActions })}
         />
       ))}
@@ -1624,6 +1637,7 @@ function StandingSegment({
   trace,
   memoryChanges,
   onReply,
+  onReact,
   renderUser,
 }: {
   segment: TurnStanding
@@ -1636,20 +1650,36 @@ function StandingSegment({
   trace?: TurnRowState['memoryTrace']
   memoryChanges?: TurnRowState['memoryChanges']
   onReply?: (text: string) => void
+  onReact?: (eventId: string, emoji: string | null) => void
   renderUser?: (row: Extract<Row, { kind: 'event' }>) => ReactNode
 }) {
   if (segment.kind === 'user') return renderUser?.(segment.row) ?? null
   if (segment.kind === 'reply') {
     if (!bubble) return <AgentBubble color={color} text={segment.text} agents={agents} images={segment.images} quoteAgentId={agentId} quoteSources={segment.quoteSources} />
+    const target = onReact === undefined ? undefined : reactionTargetOf(segment)
+    const react = target === undefined ? undefined : (emoji: string | null) => onReact?.(target, emoji)
+    const reaction = segment.reaction
     return (
       <div className="group/beat flex min-w-0 items-end gap-1">
-        <AgentBubble bubble color={color} text={segment.text} agents={agents} images={segment.images} quoteAgentId={agentId} quoteSources={segment.quoteSources} />
-        <MessageActions
-          className="mb-0.5 opacity-0 transition-opacity group-hover/beat:opacity-100 focus-within:opacity-100"
+        <AgentBubble
+          bubble
+          color={color}
           text={segment.text}
-          trace={trace}
-          memoryChanges={memoryChanges}
+          agents={agents}
+          images={segment.images}
+          quoteAgentId={agentId}
+          quoteSources={segment.quoteSources}
+          {...(reaction === undefined ? {} : {
+            badge: <ReactionBadge reaction={reaction} {...(react === undefined ? {} : { onRemove: () => react(null) })} />,
+          })}
+        />
+        <BubbleActions
+          text={segment.text}
+          {...(trace === undefined ? {} : { trace })}
+          {...(memoryChanges === undefined ? {} : { memoryChanges })}
           {...(onReply === undefined ? {} : { onReply: () => onReply(segment.text) })}
+          {...(reaction === undefined ? {} : { reaction })}
+          {...(react === undefined ? {} : { onReact: react })}
         />
       </div>
     )

@@ -43,7 +43,7 @@ export class UserInputCapabilities {
     return token
   }
 
-  take(token: string | undefined, use: 'ask' | 'draft' | 'relay' | 'subagent' | 'deliver' | 'goal' | 'project' | 'instructions' | 'offer' = 'ask'): UserInputContext {
+  take(token: string | undefined, use: 'ask' | 'draft' | 'relay' | 'subagent' | 'deliver' | 'react' | 'goal' | 'project' | 'instructions' | 'offer' = 'ask'): UserInputContext {
     if (token === undefined || token === '') throw new InvalidUserInputCapabilityError()
     const capability = this.entries.get(token)
     if (capability === undefined) {

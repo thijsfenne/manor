@@ -14,6 +14,8 @@ export * from './quoteRefs.js'
 export * from './noteMarker.js'
 export * from './userMessage.js'
 export * from './chatCommands.js'
+export * from './reactions.js'
+import { MessageReactionSchema, ReactionEmojiSchema, ReactionPromptSchema } from './reactions.js'
 import { ConnectRequestEventSchema, ConnectStatusEventSchema, OpenConnectCardMessageSchema } from './connectCard.js'
 export * from './composioApps.js'
 import {
@@ -1434,6 +1436,10 @@ const UserMessageEventWireSchema = z.object({
   originTurnId: z.string().optional(),
   relayId: z.string().optional(),
   relayDepth: z.number().int().nonnegative().optional(),
+  // The DM agent's reaction to this message, set by its `react` tool.
+  reaction: MessageReactionSchema.optional(),
+  // Set only on Manor's model-only message that tells the agent the user reacted to its message.
+  reactionTo: ReactionPromptSchema.optional(),
 })
 export const UserMessageEventSchema = UserMessageEventWireSchema.refine(hasAtMostMessageAttachments, {
   message: `images and files may contain at most ${MAX_MESSAGE_ATTACHMENTS} attachments combined`,
@@ -1457,6 +1463,8 @@ export const AgentMessageEventSchema = z.object({
   // shape keeps them available after restarts and to later multimodal turns.
   images: z.array(EventImageSchema).max(4).optional(),
   usage: UsageSchema.optional(),
+  // The user's reaction to this message, in a DM.
+  reaction: MessageReactionSchema.optional(),
 })
 
 /**
@@ -2315,6 +2323,11 @@ export const TurnResultEventSchema = z.object({
    * the chat: no model ran, and the scheduler ends it `expired` rather than failed.
    */
   routineExpired: z.literal(true).optional(),
+  /**
+   * The turn ended without words on purpose: the user's reaction asked nothing of it, or
+   * the agent's own reaction was the whole answer. Clients draw no row and no silence line.
+   */
+  quiet: z.literal(true).optional(),
   /** What memory was observed and what a separate cheap model inferred from it. */
   memoryTrace: MemoryTraceSchema.optional(),
   /**
@@ -4587,6 +4600,8 @@ const ClientMessageWireSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('get_dm_files'), chatId: z.string(), ...optionalRequestId }),
   /** The icon the project's linked folders offer for the icon picker, answered as `repo_icon`. */
   z.object({ type: z.literal('find_repo_icon'), projectId: z.string(), ...optionalRequestId }),
+  /** The user's one reaction on an agent message in a DM; `null` removes it. */
+  z.object({ type: z.literal('set_reaction'), chatId: z.string(), eventId: z.string().min(1).max(120), emoji: ReactionEmojiSchema.nullable(), ...optionalRequestId }),
   /** Takes back one memory tool write, only while the line it wrote still reads that way. */
   z.object({ type: z.literal('undo_memory_write'), chatId: z.string(), writeId: z.string().max(200), ...optionalRequestId }),
   z.object({

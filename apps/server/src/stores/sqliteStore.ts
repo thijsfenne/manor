@@ -1184,6 +1184,17 @@ export function createSqliteStore(options: SqliteStoreOptions): Store & {
       events.replace(chatId, scrubPersistedEvent(event))
       return undefined
     },
+    patchEvent(chatId, eventId, change) {
+      if (!chats.has(chatId))
+        throw new Error(`unknown chat ${chatId}`)
+      const stored = (events.get(chatId) ?? []).find((event) => event.id === eventId)
+      const next = stored === undefined ? undefined : change(stored)
+      if (next === undefined) return undefined
+      if (next.id !== eventId) throw new Error('a patch keeps the event id')
+      const scrubbed = scrubPersistedEvent(next)
+      events.replace(chatId, scrubbed)
+      return scrubbed
+    },
     getChatSummary(chatId) {
       const held = summaries.get(chatId)
       return held === undefined ? undefined : { ...held }

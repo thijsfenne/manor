@@ -167,6 +167,7 @@ interface ChatPaneProps {
   reply?: MessageReply
   onRemoveReply?: () => void
   onReply?: (reply: MessageReply) => void
+  onReact?: (eventId: string, emoji: string | null) => void
   onQuote?: (quote: MessageQuote) => void
   outboundActions: DraftActions
   trailing?: ReactNode
@@ -256,6 +257,7 @@ export function ChatPane({
   reply,
   onRemoveReply,
   onReply,
+  onReact,
   onQuote,
   outboundActions,
   trailing,
@@ -675,6 +677,7 @@ export function ChatPane({
             {...(dmAgent === undefined ? {} : { dmAgentId: dmAgent.id, runningChatIds })}
             {...(userBubbleTint === undefined ? {} : { userBubbleTint })}
             {...(onReply === undefined || (chat.kind !== 'dm' && chat.kind !== 'group') ? {} : { onReply })}
+            {...(onReact === undefined || chat.kind !== 'dm' ? {} : { onReact })}
             {...(onQuote === undefined || chat.kind === 'pair' ? {} : { onQuote })}
             {...(onAddToSideChat === undefined || chat.kind === 'pair' ? {} : { onAddToSideChat })}
             {...(canBrowseFiles && composerFiles !== undefined ? { repoFiles: composerFiles.files, onOpenFile } : {})}

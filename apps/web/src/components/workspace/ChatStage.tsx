@@ -574,6 +574,7 @@ export function StageChatPane({
     {...(chat.kind === 'dm' || chat.kind === 'group'
       ? { onReply: (next: MessageReply) => setReply(chat.id, next) }
       : {})}
+    {...(chat.kind === 'dm' ? { onReact: (eventId: string, emoji: string | null) => manor.setReaction(chat.id, eventId, emoji) } : {})}
     {...(chat.kind === 'pair'
       ? {}
       : { onQuote: (next: MessageQuote) => insertQuoteIntoDraft(chat.id, { kind: 'message', ...next }) })}

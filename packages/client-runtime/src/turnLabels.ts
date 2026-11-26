@@ -193,6 +193,7 @@ export function cleanCommand(detail: string): string {
  */
 const NAMED_TOOLS: Readonly<Record<string, readonly [string, string]>> = {
   mcp__manor__goal_reached: ['Reporting done', 'Reported done'],
+  mcp__manor__react: ['Reacting', 'Reacted'],
   mcp__manor__set_session_status: ['Updating the status', 'Updated the status'],
   mcp__manor__write_instructions: ['Writing its instructions', 'Wrote its instructions'],
   mcp__manor__update_project_file: ['Updating project notes', 'Updated project notes'],

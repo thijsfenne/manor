@@ -6,7 +6,7 @@ export const BUILT_IN_INTERACTION_MCP_NAME = 'manor'
 export const INTERACTION_TOOL_NAMES = [
   'ask_user', 'request_secret', 'prepare_outbound_draft', 'message_agent',
   'delegate_task', 'task_result', 'task_cancel', 'subagent_capabilities',
-  'deliver_file', 'goal_reached', 'review_passed',
+  'deliver_file', 'react', 'goal_reached', 'review_passed',
   'update_project_file', 'update_notes', 'answer_session_question', 'report_to_project', 'send_to_session', 'set_session_status',
   'write_instructions', 'offer_instructions_line',
 ] as const
@@ -56,6 +56,8 @@ export function interactionMcpAttachment(
     subagents?: SubagentToolCatalog
     /** Off where the user would never see the result: quiet routine fires and agent pairs. */
     allowDeliver?: boolean
+    /** Every DM turn; the broker refuses a turn the user's own message did not start. */
+    allowReact?: boolean
     /** Only the goal owner's turn in a goal Session; the call itself ends that chain. */
     allowGoal?: boolean
     /** Only Argus's turn in a goal Session; a passed review unlocks `goal_reached`. */
@@ -85,6 +87,7 @@ export function interactionMcpAttachment(
   const subagents = runtime.subagents
   const mayStart = subagents !== undefined && subagents.models.length > 0
   const deliverUrl = runtime.deliverBrokerUrl ?? brokerUrl.replace(/\/internal\/user-input$/, '/internal/deliver-file')
+  const reactUrl = brokerUrl.replace(/\/internal\/user-input$/, '/internal/react')
   const goalUrl = runtime.goalBrokerUrl ?? brokerUrl.replace(/\/internal\/user-input$/, '/internal/goal-claims')
   const secretUrl = runtime.secretBrokerUrl ?? brokerUrl.replace(/\/internal\/user-input$/, '/internal/secret-request')
   const projectUrl = runtime.projectBrokerUrl ?? brokerUrl.replace(/\/internal\/user-input$/, '/internal/project-thread')
@@ -96,6 +99,7 @@ export function interactionMcpAttachment(
     ...(runtime.allowRelay === true ? ['message_agent'] : []),
     ...(subagents === undefined ? [] : SUBAGENT_TOOLS.filter((tool) => mayStart || tool !== 'delegate_task')),
     ...(runtime.allowDeliver === true ? ['deliver_file'] : []),
+    ...(runtime.allowReact === true ? ['react'] : []),
     ...(runtime.allowGoal === true ? ['goal_reached'] : []),
     ...(runtime.allowReview === true ? ['review_passed'] : []),
     ...(runtime.allowProjectFiles === true ? ['update_project_file'] : []),
@@ -124,6 +128,7 @@ export function interactionMcpAttachment(
         ...(subagents === undefined ? [] : ['--subagent-catalog', JSON.stringify(subagents)]),
         '--deliver-url',
         deliverUrl,
+        ...(runtime.allowReact === true ? ['--react-url', reactUrl] : []),
         '--goal-url',
         goalUrl,
         '--project-url',
@@ -145,6 +150,7 @@ export function interactionMcpAttachment(
           ? 'Delegate a task to a subagent on another model with delegate_task.'
           : 'Collect or cancel subagents started earlier with task_result and task_cancel.']),
         ...(runtime.allowDeliver === true ? ['Hand the user a finished file with deliver_file.'] : []),
+        ...(runtime.allowReact === true ? ['React to the user\'s message with one emoji with react.'] : []),
         ...(runtime.allowGoal === true ? ['Mark this Session\'s goal reached with goal_reached.'] : []),
         ...(runtime.allowReview === true ? ['Pass a clean review of this Session\'s diff with review_passed.'] : []),
         ...(runtime.allowProjectFiles === true ? ['Write this project\'s preferences.md and notes.md with update_project_file.'] : []),

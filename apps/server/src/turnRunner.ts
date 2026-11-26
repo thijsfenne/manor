@@ -238,6 +238,10 @@ export interface TurnRequest {
   readonly projectThread?: { reason: 'user' | 'wake' | ProjectThreadReason }
   /** A new agent's interview turn in its DM: offered `write_instructions`, which takes one write. */
   readonly instructionsInterview?: true
+  /** Started by the user's reaction in a DM: ending with no words is an answer, not a silence. */
+  readonly reactionPrompt?: true
+  /** The user's message in a DM that started this turn; the only one `react` may mark. */
+  readonly reactTarget?: string
 }
 
 export interface ActiveTurn {
@@ -311,6 +315,10 @@ export interface ActiveTurn {
   ranWritingShell?: true
   /** Set by `deliver_file`: a handed-over file is a visible result, so the turn is not silent. */
   deliveredFile?: boolean
+  /** See `TurnRequest.reactTarget`. */
+  reactTarget?: string
+  /** Set by `react`: the badge on the user's message is a visible answer, alone or beside text. */
+  reacted?: true
   /** Set by `goal_reached` through the broker; the latest call's claims go on the goal note. */
   goalClaims?: GoalClaim[]
   goalReport?: GoalReport
@@ -884,6 +892,7 @@ export class TurnRunner {
       ...(turn.wakes === true ? { wakes: true as const } : {}),
       ...(turn.goal?.owner.id === agent.id && room?.mode === 'single' ? { singleGoal: true as const } : {}),
       ...(turn.goal?.owner.id === agent.id ? { goalOpen: true as const } : {}),
+      ...(turn.reactTarget === undefined ? {} : { reactTarget: turn.reactTarget }),
     }
     const threadGuarded = turn.projectThread === undefined && room?.kind !== 'side' && this.options.projectThreadTurns !== undefined
     let goalReached = false
@@ -1305,6 +1314,8 @@ export class TurnRunner {
       // the user would not see it or where it would bypass a quiet routine's publish rule.
       // Side chats are sealed from files, so they do not get it either.
       allowDeliver: !quietRoutine && !aside && room?.kind !== 'pair',
+      // Offered on every DM turn so the prompt prefix holds; the call refuses a turn the user's message did not start.
+      allowReact: room?.kind === 'dm',
       allowGoal,
       allowReview: turn.goal !== undefined && agent.id === CODE_REVIEWER_ID,
       allowProjectFiles: threadTurn,
@@ -2162,7 +2173,12 @@ export class TurnRunner {
         // nothing passed as an answered turn and no retry fired (market scan,
         // 2026-08-16). Asking the client's question is what closes that.
         // A delivered file is itself the result the user sees, so it counts as the report.
-        const delivered = state.deliveredFile === true
+        // A reaction answers a message, but never reports on work done with other tools.
+        // After a report nudge the earlier pass's work still owes its report.
+        const reactionOnly = state.reacted === true && !outcome.usedTools && !nudged
+        const delivered = state.deliveredFile === true || reactionOnly
+        // A turn the user's reaction started may rightly say nothing, when it asked nothing.
+        const answeredByNothing = turn.reactionPrompt === true && silent && !outcome.usedTools
         const unreported = outcome.usedTools && !outcome.reportedAfterTools && !delivered
         const resumeId = outcome.sessionId ?? sessionId
 
@@ -2228,7 +2244,7 @@ export class TurnRunner {
         // if the persona answered. Written for an unreported turn as well as a wholly
         // silent one, because they are the same thing to whoever opens the thread: the
         // work happened and nobody was told what came of it.
-        if (!quietRoutine && !outcome.completedByTool && !delivered && (silent || unreported)) {
+        if (!quietRoutine && !outcome.completedByTool && !delivered && !answeredByNothing && (silent || unreported)) {
           await this.append(chat, chatId, {
             type: 'system_note',
             kind: 'info',
@@ -2244,6 +2260,7 @@ export class TurnRunner {
           outcome,
           answerText,
           hasReply: !silent && !unreported,
+          quiet: silent && (reactionOnly || answeredByNothing),
           carriedUsage,
           carriedMemoryReads,
           acting,
@@ -2317,6 +2334,8 @@ export class TurnRunner {
       readonly sessionId: string | undefined
       readonly routineOutcome: 'publish' | 'quiet' | undefined
       readonly routineIncomplete: boolean
+      /** No words on purpose (see `turn_result.quiet`): no row, no silence line, no notification. */
+      readonly quiet?: boolean
     },
   ): Promise<TurnResult> {
     const { chat, chatId, agent } = turn
@@ -2324,7 +2343,7 @@ export class TurnRunner {
     const { injectedMemoryReads, memoryTraceEnabled, structuredMemory, agentNotes, notesPath, notesBefore, files, runningOn } = setup
     const {
       outcome, answerText, hasReply, carriedUsage, carriedMemoryReads, acting, volatileBlocks, skillChars, mcpServers,
-      offered, sessionId, routineOutcome, routineIncomplete,
+      offered, sessionId, routineOutcome, routineIncomplete, quiet = false,
     } = answer
     const usage = sumUsage(carriedUsage, outcome.usage)
     const reads = mergeMemoryReads(
@@ -2400,8 +2419,11 @@ export class TurnRunner {
       ...(memoryChanges.length === 0 ? {} : { memoryChanges }),
       ...(notesUpdate === undefined ? {} : { notesUpdate }),
       ...(instructionsOffer === undefined ? {} : { instructionsOffer: { line: instructionsOffer } }),
+      ...(quiet ? { quiet: true as const } : {}),
     })
     this.options.emit({ type: 'usage', chatId, perAgent: await this.usage(chatId) })
+    // A badge or nothing at all is not news worth a notice.
+    if (quiet) state.notice = 'silent'
     this.emitTerminal(chatId, state, 'done', routineOutcome)
     if (judgeMemory) {
       const indexPaths = structuredMemory.sources.filter((source) => source.kind === 'index').map((source) => source.path)

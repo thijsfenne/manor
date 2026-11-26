@@ -1,5 +1,6 @@
 import { CODE_REVIEWER_ID, DEFAULT_PROJECT_COLOR, DEFAULT_PROJECT_ICON, GOAL_CHOICES_SHOWN, MAX_GOAL_POINTS, SINGLE_CHAT_VOICE, isCommandGoal, isProjectThreadFile, isProseFile, projectFileWriteDetail, projectFileWriteLabel, splitUserMessage, writtenFileName } from '@manor/contracts'
 import type {
+  MessageReaction,
   ConnectCardKind,
   DeliveredFile,
   SlackRichText,
@@ -140,6 +141,8 @@ export interface SayStep {
   interrupted?: true
   /** Streamed text not yet durable. Only projected for a turn with an inline steer. */
   live?: boolean
+  /** The user's emoji on this message, in a DM. */
+  reaction?: MessageReaction
 }
 
 export type TurnActivity = ToolStep | ReasoningStep | SayStep
@@ -162,7 +165,13 @@ export interface TurnReply {
   interrupted?: true
   /** Streamed text not yet durable. Only projected for a turn with an inline steer. */
   live?: boolean
+  /** The user's emoji on this message, in a DM. */
+  reaction?: MessageReaction
 }
+
+/** The stored message a DM reply beat stands for, which a reaction is set on. */
+export const reactionTargetOf = (reply: TurnReply): string | undefined =>
+  reply.live === true || reply.quoteSources.length !== 1 ? undefined : reply.quoteSources[0]?.eventId
 
 /** Rejoins slices of one provider message without adding paragraph breaks at a steer. */
 export function answerTextOf(replies: readonly TurnReply[]): string {
@@ -484,6 +493,8 @@ export interface TurnRow {
   routineTrigger?: RoutineTrigger
   /** Lets a continuing DM hide an explicitly quiet historical run, including old reply rows. */
   routineOutcome?: 'quiet' | 'publish'
+  /** The turn rightly said nothing: its reaction was the answer, or the user's reaction needed none. */
+  quiet?: true
 }
 
 /**
@@ -498,12 +509,28 @@ export interface TurnRow {
 export const finishedSilent = (turn: TurnRow): boolean =>
   turn.live === undefined &&
   turn.note === undefined &&
+  turn.quiet !== true &&
   turn.hasSentRelay !== true &&
   turn.answer.length === 0 &&
   (turn.asks ?? []).length === 0 &&
   (turn.drafts ?? []).length === 0 &&
   (turn.files ?? []).length === 0 &&
   (turn.connects ?? []).length === 0
+
+/**
+ * A finished turn that rightly said nothing: its only result is a reaction badge on the
+ * user's message, or none at all. Clients drop the row, so no face or fold stands empty.
+ */
+export const endedQuietly = (turn: TurnRow): boolean =>
+  turn.quiet === true &&
+  turn.live === undefined &&
+  turn.note === undefined &&
+  turn.tail.length === 0 &&
+  (turn.files ?? []).length === 0 &&
+  (turn.connects ?? []).length === 0
+
+/** The agent's `react` call: its badge on the user's message is the whole trace it leaves. */
+export const isReactTool = (tool: string): boolean => /^(?:mcp__manor__|manor\.)react$/i.test(tool)
 
 /** A card a running DM turn shows before its reply is whole: a draft, a todo list, or a question already answered. */
 export const dmLiveCard = (segment: TurnSegment): boolean =>
@@ -2227,6 +2254,7 @@ function appendSay(turn: TurnRow, event: AgentEvent): void {
     ...(event.messageId === undefined ? {} : { messageId: event.messageId }),
     quoteSources: [{ eventId: event.id, text: event.text }],
     ...(event.interrupted === true ? { interrupted: true as const } : {}),
+    ...(event.reaction === undefined ? {} : { reaction: event.reaction }),
   }
   turn.activities.push(step)
   turn.timeline.push(step)
@@ -2422,6 +2450,7 @@ function segmentsOf(
         kind: 'reply', key: step.key, text: step.text, images: step.images, quoteSources: step.quoteSources,
         ...(step.interrupted === true ? { interrupted: true as const } : {}),
         ...(step.live === true ? { live: true } : {}),
+        ...(step.reaction === undefined ? {} : { reaction: step.reaction }),
       })
       continue
     }
@@ -2825,6 +2854,7 @@ function durableRowsOf(events: ThreadEvent[], dmBeats: boolean): DurableRows {
       }
       case 'tool_use': {
         const turn = turnFor(event.turnId, event.agentId, event.ts)
+        if (isReactTool(event.tool)) break
         // A resumed background agent reports under its launch's call again: that row
         // runs again with its steps kept, and its next answer replaces the last one.
         const launched = event.background === true && event.toolCallId !== undefined
@@ -3049,6 +3079,7 @@ function durableRowsOf(events: ThreadEvent[], dmBeats: boolean): DurableRows {
         if (event.fileChangeRoots !== undefined) turn.fileChangeRoots = event.fileChangeRoots
         if (event.fileChangeUnmeasured !== undefined) turn.fileChangeUnmeasured = event.fileChangeUnmeasured
         if (event.routineOutcome !== undefined) turn.routineOutcome = event.routineOutcome
+        if (event.quiet === true) turn.quiet = true
         turn.completed = true
         open.delete(turnIdentity(event.turnId, event.agentId))
         break

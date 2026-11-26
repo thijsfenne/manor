@@ -15,6 +15,7 @@ import {
 import { parseDmRoutineOutcome } from './composer.js'
 import { collectMemoryReads } from './memoryTrace.js'
 import { isSubagentLaunchTool } from './mcp/interactionAttachment.js'
+import { isManorTool } from './goalReview.js'
 import { createLiveContext } from './liveContext.js'
 import { endedBackgroundNote, unconfirmedBackgroundNote } from './turnSweep.js'
 import type { DraftEvent } from './store.js'
@@ -287,7 +288,8 @@ export function createTurnStream({
               const promoted = id !== undefined && event.background === true && foregroundCalls.has(id) &&
                 (pendingTools.has(id) || launchCalls.has(id))
               if (id !== undefined && event.background !== true) foregroundCalls.add(id)
-              if (!promoted) {
+              // A reaction is an answer the user sees, not work that owes a report.
+              if (!promoted && !isManorTool(event.tool, 'react')) {
                 usedTools = true
                 reportedAfterTools = false
               }

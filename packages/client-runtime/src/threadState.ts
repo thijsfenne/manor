@@ -189,7 +189,10 @@ export function reduceThread(state: ThreadState, msg: ThreadMessage, now: number
       const existing = state.events.findIndex((known) => known.id === event.id)
       if (existing !== -1) {
         const current = state.events[existing]
-        if (current?.type === 'user_message' && event.type === 'user_message' && current.dispatchState !== event.dispatchState) {
+        // A reaction lands, changes or goes as a patched copy of the message it sits on.
+        if ((current?.type === 'user_message' && event.type === 'user_message' &&
+          (current.dispatchState !== event.dispatchState || current.reaction?.emoji !== event.reaction?.emoji)) ||
+          (current?.type === 'agent_message' && event.type === 'agent_message' && current.reaction?.emoji !== event.reaction?.emoji)) {
           const events = [...state.events]
           events[existing] = event
           return { ...state, events }

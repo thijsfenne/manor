@@ -469,6 +469,12 @@ export interface Store {
   appendEvent(chatId: string, draft: DraftEvent, originals?: readonly DocumentOriginal[]): Promise<ThreadEvent>
   /** Overwrites one existing event, same id. Used to settle a live compact note. */
   replaceEvent(chatId: string, event: ThreadEvent): Promise<void>
+  /**
+   * Rewrites one event from its stored copy in a single transaction, so two writers that
+   * each change their own field (a dispatch state, a reaction) never undo each other.
+   * `change` returns undefined to leave the event as it is; the result is the new copy.
+   */
+  patchEvent(chatId: string, eventId: string, change: (event: ThreadEvent) => ThreadEvent | undefined): Promise<ThreadEvent | undefined>
   /** Latest submission claims still at `started`, used once during server startup. */
   listUnresolvedOutboundSubmissions(): Promise<UnresolvedOutboundSubmission[]>
   /** Durable routine filter for one provider thread on one exact outbound route. */

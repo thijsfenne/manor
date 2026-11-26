@@ -1,6 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { isModelOnlyMessage, modelTextOf, splitUserMessage } from './userMessage.js'
+import { isReactionEmoji } from './reactions.js'
 import { DriverSchema, EffortSchema, EventImageSchema, GoalClaimsSchema, GoalReportSchema, GOAL_CHOICE_QUESTION_MAX, GOAL_POINT_MAX, SystemNoteEventSchema, placeQuotesAfterText, ImageAttachmentSchema, McpServerDraftSchema, SKIPPED_ANSWER, SingleRuntimeSchema, defaultSingleRuntime, isOpenRoom, isSkippedAnswer, isSoloRoom } from './index.js'
 
 test('single mode preserves the wire choice and closes household routing', () => {
@@ -376,4 +377,9 @@ test('a house settings record saved before dictation existed reads its defaults,
   assert.equal(chosen.dictationMicrophone, 'usb-mic-1')
   assert.equal(HouseSettingsSchema.safeParse({ ...saved, dictationModel: 'nope' }).success, false)
   assert.equal(HouseSettingsSchema.safeParse({ ...saved, dictationLanguage: 'fr' }).success, false)
+})
+
+test('a reaction is exactly one emoji, joined, toned and flagged ones included', () => {
+  for (const emoji of ['👍', '❤️', '👍🏽', '👨‍👩‍👧', '🇳🇱', '1️⃣', '🏴󠁧󠁢󠁥󠁮󠁧󠁿', '❤️‍🔥', '🧑🏽‍💻']) assert.equal(isReactionEmoji(emoji), true, emoji)
+  for (const value of ['👍🎉', '1👍', 'yes', '1', '', '👍 ', '🇳', '#', '😀🏽', Array(12).fill('👍').join('\u200D')]) assert.equal(isReactionEmoji(value), false, value)
 })

@@ -64,6 +64,7 @@ export const Markdown = memo(function Markdown({
   sources = sent === undefined,
   bleed = false,
   vaultImages = false,
+  selectable = true,
 }: {
   text: string
   agents: readonly AgentConfig[]
@@ -88,17 +89,24 @@ export const Markdown = memo(function Markdown({
    * itself. Off for a message, which keeps refusing every relative path.
    */
   vaultImages?: boolean
+  /**
+   * Off where the text's own long press opens Manor's actions (a reply, a sent bubble that
+   * quotes), so the system's selection menu never opens on top of them.
+   */
+  selectable?: boolean
 }) {
   const blocks = parseBlocks(text)
   return (
     <SentContext.Provider value={sent}>
-      <CitesSources.Provider value={sources}>
-        <VaultImages.Provider value={vaultImages}>
-          <View style={styles.body}>
-            {blocks.map((block, index) => <Block agents={agents} bleed={bleed} block={block} key={index} links={links} small={small} />)}
-          </View>
-        </VaultImages.Provider>
-      </CitesSources.Provider>
+      <Selectable.Provider value={selectable && sent?.onLongPress === undefined}>
+        <CitesSources.Provider value={sources}>
+          <VaultImages.Provider value={vaultImages}>
+            <View style={styles.body}>
+              {blocks.map((block, index) => <Block agents={agents} bleed={bleed} block={block} key={index} links={links} small={small} />)}
+            </View>
+          </VaultImages.Provider>
+        </CitesSources.Provider>
+      </Selectable.Provider>
     </SentContext.Provider>
   )
 })
@@ -140,22 +148,25 @@ function sentRefs(text: string, message: SentMessage | undefined): SentRef[] {
 }
 
 const SentContext = createContext<SentMessage | undefined>(undefined)
+const Selectable = createContext(true)
 
 /**
- * Props every top-level line of a sent message carries: the bubble's ink and its long
- * press, and the wash a block surface (a code fence) sits on so the ink stays legible.
+ * Props every top-level line carries: the bubble's ink, whether the system may select
+ * it, a sent message's long press, and the wash a block surface (a code fence) sits on so the ink stays legible.
  */
 function useLineProps(): {
   ink: TextStyle | undefined
   wash: ViewStyle | undefined
-  press: { onLongPress?: () => void; accessibilityHint?: string }
+  press: { onLongPress?: () => void; accessibilityHint?: string; selectable: boolean }
 } {
   const sent = useContext(SentContext)
   const tint = useBubbleTint()
+  const selectable = useContext(Selectable)
   return {
     ink: tint === undefined ? undefined : { color: tint.ink },
     wash: tint === undefined ? undefined : { backgroundColor: tint.wash },
-    press: sent === undefined ? {} : {
+    press: sent === undefined ? { selectable } : {
+      selectable,
       ...(sent.onLongPress === undefined ? {} : { onLongPress: sent.onLongPress }),
       ...(sent.accessibilityHint === undefined ? {} : { accessibilityHint: sent.accessibilityHint }),
     },
@@ -344,19 +355,19 @@ function Block({
   switch (block.kind) {
     case 'paragraph': {
       const parts = imageParts(block.text)
-      if (parts === undefined) return <Text {...press} selectable style={[styles.paragraph, size, ink]}><Inline agents={agents} links={links} text={block.text} /></Text>
+      if (parts === undefined) return <Text {...press} style={[styles.paragraph, size, ink]}><Inline agents={agents} links={links} text={block.text} /></Text>
       // A picture cannot sit inside a line of text here, so the paragraph breaks around it.
       return (
         <View style={styles.imageParagraph}>
           {parts.map((part, index) => part.kind === 'text'
-            ? <Text {...press} key={index} selectable style={[styles.paragraph, size, ink]}><Inline agents={agents} links={links} text={part.text} /></Text>
+            ? <Text {...press} key={index} style={[styles.paragraph, size, ink]}><Inline agents={agents} links={links} text={part.text} /></Text>
             : <MarkdownImage alt={part.alt} href={part.href} key={`${index}:${part.src}`} src={part.src} />)}
         </View>
       )
     }
     case 'heading':
       return (
-        <Text {...press} selectable style={[styles.paragraph, styles.heading, headingRank(block.level, small), ink]}>
+        <Text {...press} style={[styles.paragraph, styles.heading, headingRank(block.level, small), ink]}>
           <Inline agents={agents} links={links} text={block.text} />
         </Text>
       )
@@ -365,7 +376,7 @@ function Block({
     case 'quote':
       return (
         <View style={styles.quote}>
-          <Text {...press} selectable style={[styles.paragraph, size, styles.quoteText, ink]}><Inline agents={agents} links={links} text={block.text} /></Text>
+          <Text {...press} style={[styles.paragraph, size, styles.quoteText, ink]}><Inline agents={agents} links={links} text={block.text} /></Text>
         </View>
       )
     case 'code':
@@ -398,7 +409,7 @@ function Block({
                   </View>
                 )}
                 <PlainLinks.Provider value={source !== undefined}>
-                  <Text {...press} selectable style={[styles.paragraph, size, styles.itemText, ink]}><Inline agents={agents} links={links} text={item.text} /></Text>
+                  <Text {...press} style={[styles.paragraph, size, styles.itemText, ink]}><Inline agents={agents} links={links} text={item.text} /></Text>
                 </PlainLinks.Provider>
               </View>
             )
@@ -453,7 +464,7 @@ function CodeBlock({ text }: { text: string }) {
         showsHorizontalScrollIndicator={false}
         style={[styles.codeBlock, wash]}
       >
-        <Text {...press} selectable style={[styles.code, ink]}>{text}</Text>
+        <Text {...press} style={[styles.code, ink]}>{text}</Text>
       </ScrollView>
     </GestureDetector>
   )
@@ -560,7 +571,7 @@ function Table({
             const side = { textAlign: block.align[column] ?? 'left' } as const
             const cell = (row: number, text: string) => (
               <View key={row} style={[row === 0 ? styles.headBox : styles.cellBox, { minHeight: rowHeights[row] === undefined ? undefined : rowHeights[row] + (row === 0 ? 1 : StyleSheet.hairlineWidth) }]}>
-                <Text {...press} onLayout={(event: LayoutChangeEvent) => measure(row, column, event.nativeEvent.layout.height)} selectable style={[styles.cell, row === 0 && styles.headCell, side, ink]}>
+                <Text {...press} onLayout={(event: LayoutChangeEvent) => measure(row, column, event.nativeEvent.layout.height)} style={[styles.cell, row === 0 && styles.headCell, side, ink]}>
                   <Inline agents={agents} links={links} text={text} />
                 </Text>
               </View>

@@ -13,7 +13,7 @@ import GitBranchIcon from '@hugeicons/core-free-icons/GitBranchIcon'
 import LockIcon from '@hugeicons/core-free-icons/LockIcon'
 import Undo02Icon from '@hugeicons/core-free-icons/Undo02Icon'
 import { HugeiconsIcon } from '@hugeicons/react-native'
-import { dmReferenceAgents, imageRefSpans, isModelOnlyMessage, originalImageIndexes, isSoloRoom, placeQuotesAfterText, projectThreadOf, withQuoteExcerpts, ROUTINE_LATE_AFTER_MS, SINGLE_CHAT_VOICE, SUBAGENT_VOICE, userInputAnswerText, type AgentConfig, type ChatOverride, type EventDocument, type EventImage, type FileAttachment, type ImageAttachment, type InlineQuote, type MessageQuote, type MessageReply, type NoteQuote, type SkillConfig, type ThreadEvent } from '@manor/contracts'
+import { dmReferenceAgents, imageRefSpans, isModelOnlyMessage, originalImageIndexes, isSoloRoom, placeQuotesAfterText, projectThreadOf, withQuoteExcerpts, ROUTINE_LATE_AFTER_MS, SINGLE_CHAT_VOICE, SUBAGENT_VOICE, userInputAnswerText, type AgentConfig, type ChatOverride, type MessageReaction, type EventDocument, type EventImage, type FileAttachment, type ImageAttachment, type InlineQuote, type MessageQuote, type MessageReply, type NoteQuote, type SkillConfig, type ThreadEvent } from '@manor/contracts'
 import type { StagedFile } from '@manor/client-runtime/attachments'
 import { avatarBubbleTint, projectBubbleTint, type BubbleTint } from '@manor/client-runtime/avatar-bubble'
 import { liveSessionContext, singleWorkContext } from '@manor/client-runtime/context-meter'
@@ -26,6 +26,7 @@ import { chatChangedFiles, resolveMarkdownRepoLink } from '@manor/client-runtime
 import { defaultSingleRuntime, effectiveDriver, isAutoPending, readSingleRuntime, runtimeLabel, runtimeParts, singleChatOverride, singleRuntimeVoice } from '@manor/client-runtime/runtime-choices'
 import type { ChangeableAnswer, OpenAsk, PendingDocument, QuietWorkspace, RelayExchange, Row, SessionLink, ThreadShape, TurnConsultation, TurnRow, WorkHandoffRow } from '@manor/client-runtime/state'
 import { activityOf, chatOf, dmMemoryMarks, isHomeRoom, isProjectThread, roomOf, sitsSettled, messageBrief, projectSessionOverview, sessionsDot, openAsk, sessionLiveOf, threadQuestionIn, openSubagentQuestion, subagentSummaryOf, changeableAnswers, personaOf, projectWorkHandoffs, repoListingKey, rowHasQuoteSource, rowsOf, createRowMemory, createValueMemory, feedIndexOf, NO_OPEN_THREAD_BUNDLES, openThreadBundleAt, setThreadBundleOpen, threadBundleOpen, threadBundleOpenItems, threadStretch, onlyConsulted, runtimeStartedAgentIds, sessionReadyRow, sessionThreadOf, stackedConsultationMarkers, relayExchanges, relayMarkerAction, projectThreadFeed, threadQuestionAdvice, threadOf, withSessionTitle, threadSpacing, workDecisionOpen, type ScreenSpan } from '@manor/client-runtime/state'
+import { actionNotice } from '@manor/client-runtime/notices'
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router'
 import { KeyboardAwareLegendList, useKeyboardScrollToEnd } from '@legendapp/list/keyboard'
 import { dateDividers } from '@manor/client-runtime/date-dividers'
@@ -63,6 +64,8 @@ import { GlassSurface } from '@/components/GlassSurface'
 import { BubbleTintContext } from '@/components/bubbleTint'
 import { Markdown, scrollsSideways, type MarkdownLinks, type RepoLinks } from '@/components/Markdown'
 import { AgentRuntimeSheet, RuntimeSheet, SingleRuntimeSheet } from '@/components/RuntimeSheet'
+import { ReactionBadge } from '@/components/Reactions'
+import { noticeStore } from '@/lib/notices'
 import { ReplyContextChip } from '@/components/ReplyContextChip'
 import { NoteQuoteContextChip, QuoteBlock } from '@/components/QuoteContextChip'
 import { LANDING_WASH_MS, LandedMessageContext, LandingWash, type LandedMessage } from '@/components/LandingWash'
@@ -176,7 +179,7 @@ function useTranscriptRows(thread: ThreadShape, workspace: QuietWorkspace, chatI
 
 function ChatContent({ chatId }: { chatId: string | undefined }) {
   const hostAuto = useHostAuto()
-  const { workspace, status, askProjectCheckout, askCheckoutStatus, openChat, leaveChat, sendMessage, stopTurn, stopBackground, stopSubagent, answerUserInput, answerSecretRequest, changeSessionAnswer, submitOutboundDraft, discardOutboundDraft, snoozeOutboundDraft, ignoreOutboundDraft, restoreOutboundDraft, readOutboundThread, setChatOverride, setChatSettled, rejectWorkHandoff, listRepoFiles, readRepoFile } = useWorkspace()
+  const { workspace, status, askProjectCheckout, askCheckoutStatus, openChat, leaveChat, sendMessage, setReaction, stopTurn, stopBackground, stopSubagent, answerUserInput, answerSecretRequest, changeSessionAnswer, submitOutboundDraft, discardOutboundDraft, snoozeOutboundDraft, ignoreOutboundDraft, restoreOutboundDraft, readOutboundThread, setChatOverride, setChatSettled, rejectWorkHandoff, listRepoFiles, readRepoFile } = useWorkspace()
   const [replyTo, setReplyTo] = useState<MessageReply | undefined>(() => readDraft(chatId).replyTo)
   const [quote, setQuote] = useState<MessageQuote | undefined>(() => readDraft(chatId).quote)
   const [quoteSelection, setQuoteSelection] = useState<QuoteSelectionSource | null>(null)
@@ -238,6 +241,11 @@ function ChatContent({ chatId }: { chatId: string | undefined }) {
     setReplyTo(reply)
     writeDraft(chatId, { ...readDraft(chatId), replyTo: reply })
   }, [chatId])
+  const react = useCallback((eventId: string, emoji: string | null) => {
+    if (chatId === undefined) return
+    setReaction(chatId, eventId, emoji).catch((error: unknown) =>
+      noticeStore.push(actionNotice('error', error instanceof Error ? error.message : 'Could not react')))
+  }, [chatId, setReaction])
   const removeReply = useCallback(() => {
     setReplyTo(undefined)
     const current = readDraft(chatId)
@@ -909,6 +917,7 @@ function ChatContent({ chatId }: { chatId: string | undefined }) {
         onOpenSubagent={openSubagent}
         onOpenQuoteSource={openQuoteSourceStable}
         onReply={chooseReply}
+        onReact={react}
         onQuoteSource={quoteSource}
         {...(chat?.kind === 'dm' ? { arrival: { motion: arrivalMotion, still, followEnd: !showJump, flightId: fieldFlight?.id ?? 0 } } : {})}
       />
@@ -1364,6 +1373,7 @@ interface LiveTranscriptProps {
   onOpenSubagent: (toolCallId: string) => void
   onOpenQuoteSource: (eventId: string) => void
   onReply: (reply: MessageReply) => void
+  onReact: (eventId: string, emoji: string | null) => void
   onQuoteSource: (source: QuoteSelectionSource) => void
   /** A DM's arrival motion, see `ArrivalMotion`. Other rooms keep rows that just appear. */
   arrival?: TranscriptArrival
@@ -1387,7 +1397,7 @@ interface TranscriptArrival {
 function LiveTranscript({
   chatId, listRef, sessionLive, projectThread, firstKey, onLoadOlder, openBundles, onBundleOpen, connected, covered, links, draftActions,
   repoFiles, userBubbleTint, topInset, keyboardSink, contentInsetEndAdjustment, freeze, onScroll, onContentSizeChange, onOpenAgentRelay, onRejectWork, onReveal,
-  onOpenSubagent, onOpenQuoteSource, onReply, onQuoteSource, arrival,
+  onOpenSubagent, onOpenQuoteSource, onReply, onReact, onQuoteSource, arrival,
 }: LiveTranscriptProps) {
   const { workspace } = useWorkspaceData()
   const thread = useLiveThread(chatId)
@@ -1556,6 +1566,7 @@ function LiveTranscript({
       onOpenSubagent={onOpenSubagent}
       onOpenQuoteSource={onOpenQuoteSource}
       {...(chatKind === 'dm' || chatKind === 'group' ? { onReply } : {})}
+      {...(chatKind === 'dm' ? { onReact } : {})}
       {...(isPair ? {} : { onQuoteSource })}
     />
   )
@@ -1667,6 +1678,7 @@ interface TranscriptRowProps {
   threadProject?: NonNullable<ReturnType<typeof useWorkspace>['workspace']['projects'][number]>
   compactUser: boolean
   onReply?: (reply: MessageReply) => void
+  onReact?: (eventId: string, emoji: string | null) => void
   onQuoteSource?: (source: QuoteSelectionSource) => void
   onOpenQuoteSource: (eventId: string) => void
   draftActions: DraftActions
@@ -1717,6 +1729,7 @@ const TranscriptRow = memo(function TranscriptRowBody(props: TranscriptRowProps)
     threadProject,
     compactUser,
     onReply,
+    onReact,
     onQuoteSource,
     onOpenQuoteSource,
     draftActions,
@@ -1790,6 +1803,10 @@ const TranscriptRow = memo(function TranscriptRowBody(props: TranscriptRowProps)
           onOpenQuoteSource={onOpenQuoteSource}
           {...(links?.repo === undefined ? {} : { repo: links.repo })}
           {...(eventRow.event.noteQuote === undefined ? {} : { noteQuote: eventRow.event.noteQuote })}
+          {...(bubbleReplies && eventRow.event.reaction?.agentId !== undefined ? {
+            reaction: eventRow.event.reaction,
+            reactionColor: personaOf(agents, eventRow.event.reaction.agentId).color,
+          } : {})}
         />
     // In a project thread: the Session this message went on to. In that Session: who sent it.
     const forwards = eventRow.forwards ?? []
@@ -1886,6 +1903,7 @@ const TranscriptRow = memo(function TranscriptRowBody(props: TranscriptRowProps)
       waitingOnAgentId={waitingOnAgentId}
       {...(memoryChanges === undefined ? {} : { memoryChanges })}
       {...(onReply === undefined ? {} : { onReply })}
+      {...(onReact === undefined ? {} : { onReact })}
       {...(onQuoteSource === undefined ? {} : { onQuoteSource })}
     />
   )
@@ -1980,9 +1998,12 @@ function FoldedMessage({ clamp, children }: { clamp: boolean; children: ReactNod
 }
 
 /** `tint` fills a DM bubble with the face he is talking to; its chips read the same tint. A dimmed (pending) bubble stays grey so its fade cannot pull the tinted ink below AA. */
-function Bubble({ text, images: sent, agents, files = [], documents = [], replyTo, quote, noteQuote, quotes = NO_INLINE_QUOTES, sourceEventId, onQuoteSource, onOpenQuoteSource, dim = false, tint, quoteAuthors = false, skills, repo }: { text: string; images: readonly EventImage[]; agents: readonly AgentConfig[]; files?: readonly FileAttachment[]; documents?: readonly (EventDocument | PendingDocument)[]; replyTo?: MessageReply; quote?: MessageQuote; noteQuote?: NoteQuote; quotes?: readonly InlineQuote[]; sourceEventId?: string; onQuoteSource?: (source: QuoteSelectionSource) => void; onOpenQuoteSource?: (eventId: string) => void; dim?: boolean; tint?: BubbleTint; quoteAuthors?: boolean; skills: readonly SkillConfig[]
+function Bubble({ text, images: sent, agents, files = [], documents = [], replyTo, quote, noteQuote, quotes = NO_INLINE_QUOTES, sourceEventId, onQuoteSource, onOpenQuoteSource, dim = false, tint, quoteAuthors = false, skills, repo, reaction, reactionColor }: { text: string; images: readonly EventImage[]; agents: readonly AgentConfig[]; files?: readonly FileAttachment[]; documents?: readonly (EventDocument | PendingDocument)[]; replyTo?: MessageReply; quote?: MessageQuote; noteQuote?: NoteQuote; quotes?: readonly InlineQuote[]; sourceEventId?: string; onQuoteSource?: (source: QuoteSelectionSource) => void; onOpenQuoteSource?: (eventId: string) => void; dim?: boolean; tint?: BubbleTint; quoteAuthors?: boolean; skills: readonly SkillConfig[]
   /** The chat's repo listing, so a file path he wrote opens in Files. */
-  repo?: RepoLinks }) {
+  repo?: RepoLinks
+  /** The agent's reaction, a badge in its accent on the bubble's bottom right edge. */
+  reaction?: MessageReaction
+  reactionColor?: string }) {
   // A marked picture's unmarked original rides at the end for the persona; the bubble shows only the marked one.
   const originals = originalImageIndexes(sent)
   const images = originals.size === 0 ? sent : sent.filter((_, index) => !originals.has(index))
@@ -1996,9 +2017,15 @@ function Bubble({ text, images: sent, agents, files = [], documents = [], replyT
     <BubbleTintContext.Provider value={tint}>
     <View style={[styles.userMessage, wide && styles.userMessageWide, dim && styles.pending]}>
       {/* Sent pictures sit above the bubble, as on desktop; a press opens the gallery. */}
-      <Attachments alignEnd images={images} numbered={numbered} />
+      {hasBubble || reaction === undefined ? <Attachments alignEnd images={images} numbered={numbered} /> : (
+        // A message of pictures only wears the agent's reaction on them.
+        <View style={styles.userBubbleReacted}>
+          <Attachments alignEnd images={images} numbered={numbered} />
+          <ReactionBadge reaction={reaction} {...(reactionColor === undefined ? {} : { color: reactionColor })} />
+        </View>
+      )}
       {hasBubble ? (
-        <View style={[styles.userBubble, wide && styles.userBubbleWide, tint && { backgroundColor: tint.fill }]}>
+        <View style={[styles.userBubble, wide && styles.userBubbleWide, tint && { backgroundColor: tint.fill }, reaction !== undefined && styles.userBubbleReacted]}>
           {sourceEventId === undefined ? null : <LandingWash eventId={sourceEventId} style={styles.userBubbleWash} />}
           {quote === undefined ? null : <QuoteBlock agents={agents} quote={quote} showAuthor={quoteAuthors} {...(onOpenQuoteSource === undefined ? {} : { onOpen: () => onOpenQuoteSource(quote.eventId) })} />}
           {noteQuote === undefined ? null : <NoteQuoteContextChip quote={noteQuote} />}
@@ -2022,6 +2049,7 @@ function Bubble({ text, images: sent, agents, files = [], documents = [], replyT
               />
             </FoldedMessage>
           )}
+          {reaction === undefined ? null : <ReactionBadge reaction={reaction} {...(reactionColor === undefined ? {} : { color: reactionColor })} />}
         </View>
       ) : null}
       {openImage === null ? null : <ImageViewer images={images} initialIndex={openImage} onClose={() => setOpenImage(null)} />}
@@ -2062,6 +2090,7 @@ const styles = StyleSheet.create({
   userBubbleWide: { alignSelf: 'stretch' },
   userBubble: { maxWidth: '100%', gap: spacing.sm, borderRadius: radius.composer, ...squircle, backgroundColor: colors.userBubble, paddingHorizontal: SENT_BUBBLE_PAD.x, paddingVertical: SENT_BUBBLE_PAD.y },
   userBubbleWash: { borderRadius: radius.composer, ...squircle },
+  userBubbleReacted: { marginBottom: spacing.md },
   pending: { opacity: 0.55 },
   note: { color: colors.muted, fontFamily: fonts.sans, fontSize: 13, lineHeight: 19, textAlign: 'center' },
   // The branch chip sits 10 above its brief, the room a helper's chips leave.

@@ -1,13 +1,16 @@
-import { Brain02Icon, Copy01Icon, NoteEditIcon, ReplyIcon, Tick02Icon } from '@hugeicons/core-free-icons'
-import { Fragment, useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
+import { Brain02Icon, Copy01Icon, MoreHorizontalIcon, NoteEditIcon, ReplyIcon, Tick02Icon } from '@hugeicons/core-free-icons'
+import { Fragment, useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from 'react'
 import { createPortal } from 'react-dom'
 import { motion } from 'motion/react'
-import type { MemoryChange, MemoryChangeLine, MemoryTrace } from '@manor/contracts'
+import type { MemoryChange, MemoryChangeLine, MessageReaction, MemoryTrace } from '@manor/contracts'
 import type { IconSvgElement } from '@hugeicons/react'
 import { LATE_MARK } from '../motion'
 import { distinctReadPaths, messageTime, readsLabel } from '../messageMeta'
 import { baseName, FileMark } from './fileMark'
+import { copyText } from '../clipboard'
+import { ReactionButton } from './Reactions'
 import { IconButton } from './ui/IconButton'
+import { Menu, MenuItem, useMenu } from './ui/Menu'
 import { Popover } from './ui/Popover'
 import { useDismiss } from './ui/useDismiss'
 
@@ -100,26 +103,10 @@ export function MessageActions({
   onReply?: () => void
   className?: string
 }) {
-  const [copied, setCopied] = useState(false)
+  const [copied, copy] = useCopied(text)
   // Changes already there when the row mounted are history, and history does not
   // animate. Only the writer's diff landing under an answer already on screen fades in.
   const [changesAtMount] = useState(() => hasMemoryChanges(memoryChanges))
-  const timer = useRef<number | undefined>(undefined)
-
-  useEffect(() => () => window.clearTimeout(timer.current), [])
-
-  const copy = async () => {
-    try {
-      await navigator.clipboard.writeText(text)
-    } catch {
-      // A denied clipboard is not something to report under every message: the tick
-      // simply never appears, which is the honest answer to "did that copy".
-      return
-    }
-    setCopied(true)
-    window.clearTimeout(timer.current)
-    timer.current = window.setTimeout(() => setCopied(false), COPIED_MS)
-  }
 
   return (
     <div className={`flex flex-none items-center gap-0.5 ${className}`}>
@@ -157,6 +144,141 @@ export function MessageActions({
       ) : null}
     </div>
   )
+}
+
+/**
+ * The hover row beside one DM bubble: react, reply, and a menu with copy and the memory
+ * the turn read or wrote. It stands while its picker, menu or card is open, so a
+ * pointer leaving the bubble does not pull the row out from under a choice.
+ */
+/**
+ * A message's copy control: whether the tick shows, and the copy itself. A copy that did
+ * not land shows no tick, which is the honest answer to "did that copy".
+ */
+function useCopied(text: string): [boolean, () => Promise<void>] {
+  const [copied, setCopied] = useState(false)
+  const timer = useRef<number | undefined>(undefined)
+  useEffect(() => () => window.clearTimeout(timer.current), [])
+  const copy = async () => {
+    if (!await copyText(text)) return
+    setCopied(true)
+    window.clearTimeout(timer.current)
+    timer.current = window.setTimeout(() => setCopied(false), COPIED_MS)
+  }
+  return [copied, copy]
+}
+
+/** The rows of a DM bubble's three-dots menu, in order. */
+export const bubbleMenu = (text: string, trace: MemoryTrace | undefined, changes: MemoryChange[] | undefined) => [
+  ...(text.length > 0 ? [{ key: 'copy' as const, label: 'Copy' }] : []),
+  ...(trace === undefined ? [] : [{ key: 'trace' as const, label: markLabel(trace) }]),
+  ...(changes === undefined ? [] : [{ key: 'changes' as const, label: changesLabel(changes) }]),
+]
+
+export function BubbleActions({ text, trace, memoryChanges, onReply, reaction, onReact }: {
+  text: string
+  trace?: MemoryTrace
+  memoryChanges?: MemoryChange[]
+  onReply?: () => void
+  /** The user's current reaction on this message. */
+  reaction?: MessageReaction
+  /** Absent where the bubble cannot take a reaction, such as one still arriving. */
+  onReact?: (emoji: string | null) => void
+}) {
+  const [copied, copy] = useCopied(text)
+  const [picking, setPicking] = useState(false)
+  const [card, setCard] = useState<'trace' | 'changes' | null>(null)
+  const [menu, trigger] = useMenu({ maxHeight: 240, minHeight: 80, minWidth: 220 })
+  const changes = hasMemoryChanges(memoryChanges) ? memoryChanges : undefined
+  const entries = bubbleMenu(text, trace, changes)
+  const standing = picking || menu.open || card !== null || copied
+  return (
+    <div className={`mb-0.5 flex flex-none items-center gap-0.5 transition-opacity ${standing ? 'opacity-100' : 'opacity-0 group-hover/beat:opacity-100 focus-within:opacity-100'}`}>
+      {onReact === undefined ? null : <ReactionButton {...(reaction === undefined ? {} : { current: reaction })} onPick={onReact} onOpenChange={setPicking} />}
+      {onReply === undefined || text.length === 0 ? null : (
+        <IconButton icon={ReplyIcon} iconSize={14} size={28} label="Reply to this message" onClick={onReply} />
+      )}
+      {entries.length > 0 ? (
+        <>
+          <IconButton
+            ref={trigger}
+            icon={copied ? Tick02Icon : MoreHorizontalIcon}
+            swapKey={copied ? 'copied' : 'more'}
+            iconSize={14}
+            size={28}
+            label={copied ? 'Copied' : 'More actions'}
+            selected={menu.open || card !== null}
+            aria-haspopup="menu"
+            aria-expanded={menu.open}
+            onClick={menu.toggle}
+          />
+          <Menu menu={menu} label="Message actions">
+            {entries.map((entry) => (
+              <MenuItem
+                key={entry.key}
+                icon={entry.key === 'copy' ? Copy01Icon : entry.key === 'trace' ? Brain02Icon : NoteEditIcon}
+                onClick={() => {
+                  if (entry.key === 'copy') { menu.close(); void copy(); return }
+                  menu.close(false)
+                  setCard(entry.key)
+                }}
+              >
+                {entry.label}
+              </MenuItem>
+            ))}
+          </Menu>
+          <AnchoredCard anchor={trigger} open={card !== null} onClose={() => setCard(null)}>
+            {card === 'trace' && trace !== undefined ? <MemoryTraceCard trace={trace} />
+              : card === 'changes' && changes !== undefined ? <MemoryChangesCard changes={changes} /> : null}
+          </AnchoredCard>
+        </>
+      ) : null}
+    </div>
+  )
+}
+
+/** A memory card opened from a menu row, hung off the button that opened the menu. */
+function AnchoredCard({ anchor, open, onClose, children }: {
+  anchor: RefObject<HTMLButtonElement>
+  open: boolean
+  onClose: () => void
+  children: ReactNode
+}) {
+  const [placement, setPlacement] = useState<Placement | null>(null)
+  const card = useRef<HTMLDivElement>(null)
+  useLayoutEffect(() => {
+    const trigger = anchor.current
+    if (!open || trigger === null) return
+    const region = trigger.closest(`[${BOUNDS_ATTRIBUTE}]`)?.getBoundingClientRect() ?? null
+    setPlacement(placeCard(trigger.getBoundingClientRect(), region, { width: window.innerWidth, height: window.innerHeight }))
+  }, [open, anchor])
+  useDismiss(open, onClose, { within: [card], layoutMoved: true, escape: true, windowBlur: true })
+  if (typeof document === 'undefined') return null
+  return createPortal(
+    <Popover
+      ref={card}
+      open={open && placement !== null}
+      origin={placement?.upward === false ? 'top-left' : 'bottom-left'}
+      className="fixed z-30 overflow-y-auto rounded-xl border border-line surface-floating shadow-popover"
+      style={{
+        left: placement?.left ?? 0,
+        width: placement?.width ?? CARD_WIDTH,
+        maxHeight: placement?.maxHeight,
+        ...(placement?.top === undefined ? {} : { top: placement.top }),
+        ...(placement?.bottom === undefined ? {} : { bottom: placement.bottom }),
+      }}
+      contentClassName="px-4 py-3.5"
+      role="dialog"
+    >
+      {children}
+    </Popover>,
+    document.body,
+  )
+}
+
+const changesLabel = (changes: MemoryChange[]) => {
+  const count = changes.reduce((total, change) => total + change.lines.length, 0)
+  return `Memory updated, ${count === 1 ? '1 change' : `${count} changes`}`
 }
 
 interface Placement {
@@ -210,9 +332,8 @@ function MemoryMark({ trace }: { trace: MemoryTrace }) {
 }
 
 function MemoryChangesMark({ changes }: { changes: MemoryChange[] }) {
-  const count = changes.reduce((total, change) => total + change.lines.length, 0)
   return (
-    <CardMark icon={NoteEditIcon} label={`Memory updated, ${count === 1 ? '1 change' : `${count} changes`}`}>
+    <CardMark icon={NoteEditIcon} label={changesLabel(changes)}>
       <MemoryChangesCard changes={changes} />
     </CardMark>
   )

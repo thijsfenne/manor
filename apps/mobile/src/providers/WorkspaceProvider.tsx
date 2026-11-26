@@ -157,6 +157,8 @@ export interface WorkspaceActions {
   removeFolder: (projectId: string) => Promise<void>
   /** Undo on one line a memory tool wrote; rejects with the server's reason when that line changed since. */
   undoMemoryWrite: (chatId: string, writeId: string) => Promise<void>
+  /** Sets or, with `null`, takes off the user's reaction on an agent's message in a DM. */
+  setReaction: (chatId: string, eventId: string, emoji: string | null) => Promise<void>
   /** Saves the project form as a whole, as the Mac's Edit project does; resolves on the ack, rejects with the notice. */
   updateProject: (projectId: string, edit: ProjectEdit) => Promise<void>
   /** Deletes the project with its thread, Sessions and chats. */
@@ -738,6 +740,10 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     (chatId: string, writeId: string) => answered((id) => send({ type: 'undo_memory_write', chatId, writeId, requestId: id })),
     [answered, send],
   )
+  const setReaction = useCallback(
+    (chatId: string, eventId: string, emoji: string | null) => answered((id) => send({ type: 'set_reaction', chatId, eventId, emoji, requestId: id })),
+    [answered, send],
+  )
 
   const setChatOverride = useCallback(
     (chatId: string, agentId: string, override: ChatOverride) => {
@@ -854,6 +860,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       addFolder,
       removeFolder,
       undoMemoryWrite,
+      setReaction,
       updateProject,
       saveAgent,
       deleteProject,
@@ -873,7 +880,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       listArtifacts,
       loadMoreArtifacts,
     }),
-    [acceptWorkHandoff, answerSecretRequest, answerUserInput, changeSessionAnswer, askCheckoutStatus, askProjectCheckout, clearCreatedChat, clearCreatedProject, closeDirs, confirmWorkGoal, acceptWorkResult, reviseWorkResult, retryWorkResult, approveMergeFix, createChat, addFolder, removeFolder, undoMemoryWrite, deleteProject, discardOutboundDraft, ignoreOutboundDraft, listWorkflowSuggestions, listArtifacts, getDmFiles, findRepoIcon, listDirs, listRepoFiles, listVault, loadMoreArtifacts, openChat, leaveChat, openSubagentThread, readOutboundThread, readRepoFile, readVaultFile, rejectWorkHandoff, search, restoreOutboundDraft, runRoutine, sendMessage, setChatOverride, setChatSettled, forget, snoozeOutboundDraft, stopBackground, stopSubagent, stopTurn, submitOutboundDraft, updateProject, saveAgent],
+    [acceptWorkHandoff, answerSecretRequest, answerUserInput, changeSessionAnswer, askCheckoutStatus, askProjectCheckout, clearCreatedChat, clearCreatedProject, closeDirs, confirmWorkGoal, acceptWorkResult, reviseWorkResult, retryWorkResult, approveMergeFix, createChat, addFolder, removeFolder, undoMemoryWrite, setReaction, deleteProject, discardOutboundDraft, ignoreOutboundDraft, listWorkflowSuggestions, listArtifacts, getDmFiles, findRepoIcon, listDirs, listRepoFiles, listVault, loadMoreArtifacts, openChat, leaveChat, openSubagentThread, readOutboundThread, readRepoFile, readVaultFile, rejectWorkHandoff, search, restoreOutboundDraft, runRoutine, sendMessage, setChatOverride, setChatSettled, forget, snoozeOutboundDraft, stopBackground, stopSubagent, stopTurn, submitOutboundDraft, updateProject, saveAgent],
   )
 
   const data = useMemo<WorkspaceData>(

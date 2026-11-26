@@ -58,6 +58,7 @@ import { createAutoRulesFile, type AutoRulesFile } from './autoRules.js'
 import { HostModule } from './hostModule.js'
 import type { EditNote } from './noteEdit.js'
 import { Orchestrator, type RevocableSkillMcp } from './orchestrator.js'
+import { ReactionRefusal } from './reactions.js'
 import type { OutboundDraftPort } from './outboundDrafts.js'
 import { ProjectModule } from './projectModule.js'
 import { RoutineModule } from './routineModule.js'
@@ -142,6 +143,8 @@ export interface ManorServiceOptions {
       allowRelay: boolean
       allowSubagents: boolean
       allowDeliver: boolean
+      /** A DM turn: `react`, which only the turn the user's own message started may use. */
+      allowReact?: boolean
       /** A turn with the user present; absent means off. */
       allowSecret?: boolean
       /** Where a secret command runs; absent where this turn has no shell. */
@@ -730,6 +733,11 @@ export class ManorService {
     }
   }
 
+  /** The `react` tool's broker call; a `ReactionRefusal` goes back to the model. */
+  react(context: UserInputContext, emoji: string): Promise<void> {
+    return this.orchestrator.recordAgentReaction(context, emoji)
+  }
+
   /** Checks and stores a file from `deliver_file`; the returned note goes back to the persona. */
   async deliverFile(context: UserInputContext, filePath: string, name?: string, viewport?: DeliveredViewport): Promise<string> {
     const { file, bytes } = await readDeliverable(filePath, name, undefined, viewport)
@@ -1244,6 +1252,16 @@ export class ManorService {
       }
       case 'undo_memory_write':
         await this.undoMemoryWrite(message, reply, ack)
+        return
+      case 'set_reaction':
+        try {
+          await this.orchestrator.reactions.setUserReaction(message.chatId, message.eventId, message.emoji)
+        } catch (error) {
+          if (!(error instanceof ReactionRefusal)) throw error
+          reply({ type: 'notice', kind: 'info', text: error.message })
+          return
+        }
+        ack()
         return
       case 'get_project_memory':
       case 'list_repo_files':

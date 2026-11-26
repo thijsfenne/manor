@@ -1125,6 +1125,12 @@ function reply(chatId, agentId, text, images = [], quotes = []) {
   })
   at(100, () => dispatch('started'))
   at(120, () => broadcast({ type: 'turn_state', chatId, turnId, agentId, state: 'running', startedAt: Date.now() }))
+  // A message that names a reaction gets the agent's 🎉 on it, as the `react` tool puts one there.
+  if (/\breact\b/i.test(text)) at(1_200, () => {
+    message = { ...message, reaction: { emoji: '🎉', at: Date.now(), agentId } }
+    snapshots[chatId] = (snapshots[chatId] ?? []).map((event) => event.id === message.id ? message : event)
+    broadcast({ type: 'event', chatId, event: message })
+  })
   at(400, () => record({ id: `${id}-tool`, ts: Date.now(), type: 'tool_use', turnId, agentId, toolCallId: `${id}-read`, tool: 'Read', subject: 'CHANGELOG.md', detail: 'CHANGELOG.md' }))
   at(900, () => record({ id: `${id}-tool-r`, ts: Date.now(), type: 'tool_result', turnId, agentId, toolCallId: `${id}-read`, outcome: 'success' }))
   // The thread and the Single Session both edit a file, so a changed-files pill would show
@@ -2068,6 +2074,19 @@ server.on('connection', (socket) => {
       const undone = { ...write, projectFileWrite: { ...write.projectFileWrite, undone: true } }
       snapshots[message.chatId] = snapshots[message.chatId].map((event) => event === write ? undone : event)
       broadcast({ type: 'event', chatId: message.chatId, event: undone })
+    }
+    // The user's reaction on an agent message: stored on it and broadcast as its patched copy.
+    if (message.type === 'set_reaction') {
+      const target = (snapshots[message.chatId] ?? []).find((event) => event.id === message.eventId && event.type === 'agent_message')
+      if (target === undefined) {
+        send(socket, { type: 'notice', kind: 'info', text: 'You can react only to an agent message in a direct chat.', requestId: message.requestId })
+        return
+      }
+      const { reaction: _removed, ...bare } = target
+      const patched = message.emoji === null ? bare : { ...bare, reaction: { emoji: message.emoji, at: Date.now() } }
+      snapshots[message.chatId] = snapshots[message.chatId].map((event) => event === target ? patched : event)
+      broadcast({ type: 'event', chatId: message.chatId, event: patched })
+      console.log(`set_reaction ${message.chatId} ${message.eventId} ${message.emoji ?? 'removed'}`)
     }
     const command = message.type === 'send_message' ? chatCommandOf(message) : undefined
     if (command !== undefined) runCommand(message.chatId, command)

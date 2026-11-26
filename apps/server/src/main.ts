@@ -150,6 +150,7 @@ import { USER_INPUT_CAPABILITY_ENV, askModeFor, interactionMcpAttachment } from 
 import { interactionMcpServer } from './mcp/interactionServer.js'
 import { answerInstructionsCall, answerInstructionsOffer } from './agentInterview.js'
 import { FileDeliveryError } from './fileDelivery.js'
+import { ReactionRefusal } from './reactions.js'
 import { ROUTINE_BROKER_CAPABILITY_ENV, routineMcpAttachment } from './mcp/routineAttachment.js'
 import { routineMcpServer } from './mcp/routineServer.js'
 import { WORK_BROKER_CAPABILITY_ENV, workMcpAttachment } from './mcp/workAttachment.js'
@@ -997,6 +998,7 @@ async function main(): Promise<void> {
         allowRelay: permissions?.allowRelay ?? false,
         ...(permissions?.allowSubagents === true ? { subagents: service.subagentCatalog(agent.id) } : {}),
         allowDeliver: permissions?.allowDeliver ?? false,
+        allowReact: permissions?.allowReact ?? false,
         allowGoal: permissions?.allowGoal ?? false,
         allowReview: permissions?.allowReview ?? false,
         allowProjectFiles: permissions?.allowProjectFiles ?? false,
@@ -1432,6 +1434,10 @@ async function main(): Promise<void> {
     }
     if (request.url === '/internal/deliver-file') {
       void handleFileDeliveryRequest(request, response, service, userInputCapabilities)
+      return
+    }
+    if (request.url === '/internal/react') {
+      void handleReactRequest(request, response, service, userInputCapabilities)
       return
     }
     if (request.url === '/internal/goal-claims') {
@@ -2289,6 +2295,35 @@ async function handleFileDeliveryRequest(
       return
     }
     json(response, 503, { error: `Manor could not store the file: ${error instanceof Error ? error.message : 'unknown error'}` })
+  }
+}
+
+/** The `react` tool: one emoji on the user's message that started the calling DM turn. */
+async function handleReactRequest(
+  request: IncomingMessage,
+  response: ServerResponse,
+  service: ManorService,
+  capabilities: UserInputCapabilities,
+): Promise<void> {
+  if (request.method !== 'POST' || !isLoopback(request.socket.remoteAddress)) {
+    json(response, 404, { error: 'Not found.' })
+    return
+  }
+  try {
+    const body = await readJsonBody(request)
+    const provided = Array.isArray(request.headers['x-manor-user-input-capability'])
+      ? request.headers['x-manor-user-input-capability'][0]
+      : request.headers['x-manor-user-input-capability']
+    const context = capabilities.take(provided, 'react')
+    if (!isRecord(body) || typeof body.emoji !== 'string') throw new ReactionRefusal('react needs one emoji.')
+    await service.react(context, body.emoji)
+    json(response, 200, { note: `Reacted ${body.emoji}. Do not mention it in your text.` })
+  } catch (error: unknown) {
+    if (error instanceof InvalidUserInputCapabilityError) {
+      json(response, 404, { error: 'Not found.' })
+      return
+    }
+    json(response, error instanceof ReactionRefusal ? 422 : 503, { error: error instanceof Error ? error.message : 'The reaction failed.' })
   }
 }
 

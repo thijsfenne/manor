@@ -152,6 +152,8 @@ export interface Manor {
   getAgentNotes: (agentId: string, requestId: string) => boolean
   /** Undo on one line a memory tool wrote; the server refuses it when that line changed since. */
   undoMemoryWrite: (chatId: string, writeId: string, requestId: string) => boolean
+  /** Sets or, with `null`, takes off the user's reaction on an agent's message in a DM. */
+  setReaction: (chatId: string, eventId: string, emoji: string | null) => boolean
   /** The same Undo from a memory notice, whose card is gone: the outcome comes back as a toast. */
   undoNoticeWrite: (chatId: string, writeId: string) => boolean
   /** One palette query; the answer arrives on `requestEvents` as `search_results` with this id. */
@@ -1234,6 +1236,16 @@ export function useWorkspace(url: string, auth?: WorkspaceAuth): Manor {
     (chatId: string, writeId: string, requestId: string) => send({ type: 'undo_memory_write', chatId, writeId, requestId }),
     [send],
   )
+  const setReaction = useCallback(
+    (chatId: string, eventId: string, emoji: string | null) => {
+      const requestId = crypto.randomUUID()
+      const sent = send({ type: 'set_reaction', chatId, eventId, emoji, requestId })
+      if (sent) refusalToasts.current.add(requestId)
+      else toast.error('Could not react while offline')
+      return sent
+    },
+    [send],
+  )
   const undoNoticeWrite = useCallback(
     (chatId: string, writeId: string) => {
       const requestId = crypto.randomUUID()
@@ -1776,6 +1788,7 @@ export function useWorkspace(url: string, auth?: WorkspaceAuth): Manor {
     getChatSummary,
     getAgentNotes,
     undoMemoryWrite,
+    setReaction,
     undoNoticeWrite,
     search,
     browserActivity,

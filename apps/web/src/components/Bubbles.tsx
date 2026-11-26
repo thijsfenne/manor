@@ -126,6 +126,7 @@ export function UserBubble({
   pending = false,
   tint,
   dm = false,
+  badge,
 }: {
   text: string
   /** The roster the mentions are resolved against; an unknown handle stays prose. */
@@ -159,6 +160,8 @@ export function UserBubble({
   tint?: BubbleTint
   /** A DM reads as a chat: the wider, rounder bubble its replies share. */
   dm?: boolean
+  /** The agent's reaction badge on the bubble's bottom right edge, in a DM. */
+  badge?: ReactNode
 }) {
   const hasFiles = files.length > 0 || documents.length > 0
   const author = quote === undefined ? undefined : quoteAuthorName(quote, agents, quoteAuthors)
@@ -185,7 +188,7 @@ export function UserBubble({
       {/* Sent pictures sit above the bubble as a row of fixed squares, so a message
           keeps the same rhythm whatever their size; a press opens the full picture. */}
       {images.length > 0 ? (
-        <div className="flex max-w-[78%] flex-wrap justify-end gap-1.5">
+        <div className={`relative flex max-w-[78%] flex-wrap justify-end gap-1.5${hasBubble || badge === undefined ? '' : ' mb-3'}`}>
           {images.map((image, index) => originals.has(index) ? null : (
             <TranscriptImage
               key={`${image.name}-${index}`}
@@ -196,10 +199,12 @@ export function UserBubble({
               marks={single ? undefined : image.annotation}
             />
           ))}
+          {/* A message of pictures only wears the agent's reaction on them. */}
+          {hasBubble ? null : badge}
         </div>
       ) : null}
       {hasBubble ? <div
-        className={`min-w-0 text-[length:var(--msg-size,16px)] ${dm ? `max-w-bubble ${DM_BUBBLE}` : 'max-w-[78%] rounded-xl rounded-br-sm px-[13px] pt-[9px] pb-[11px]'} ${tint === undefined ? 'bg-user-bubble' : ''}`}
+        className={`relative min-w-0 text-[length:var(--msg-size,16px)] ${dm ? `max-w-bubble ${DM_BUBBLE}` : 'max-w-[78%] rounded-xl rounded-br-sm px-[13px] pt-[9px] pb-[11px]'} ${tint === undefined ? 'bg-user-bubble' : ''}${badge === undefined ? '' : ' mb-3'}`}
         {...(tint === undefined ? {} : { style: { backgroundColor: tint.fill } })}
       >
         {quote === undefined ? null : (
@@ -253,6 +258,7 @@ export function UserBubble({
             </ClampedMessage>
           </div>
         ) : null}
+        {badge}
       </div> : null}
     </div>
   )
@@ -552,13 +558,15 @@ interface AgentBubbleProps {
   /** Durable messages inside this visual answer; adjacent Work beats may be joined. */
   quoteSources?: readonly MessageQuoteSource[]
   quoteAgentId?: string
+  /** A reaction badge on the bubble's bottom right edge, in a DM. */
+  badge?: ReactNode
 }
 
 /**
  * One beat inside a signed turn group. Identity and actions live on the group; a DM
  * adds the incoming-message cloud while Work leaves the answer on the page.
  */
-function AgentBubbleView({ color, text, agents, images = [], live = false, bubble = false, quoteSources, quoteAgentId }: AgentBubbleProps) {
+function AgentBubbleView({ color, text, agents, images = [], live = false, bubble = false, quoteSources, quoteAgentId, badge }: AgentBubbleProps) {
   const { plugins, components } = useAgentMentions(agents)
   const annotate = useContext(AnnotateImageContext)
   // The file viewer over this message's pictures only, opened at the one pressed.
@@ -576,7 +584,7 @@ function AgentBubbleView({ color, text, agents, images = [], live = false, bubbl
     </div>
   ) : null
   return (
-    <div className={bubble ? 'flex w-fit max-w-bubble min-w-0 flex-col gap-1.5' : 'flex min-w-0'}>
+    <div className={bubble ? `relative flex w-fit max-w-bubble min-w-0 flex-col gap-1.5${badge === undefined ? '' : ' mb-3'}` : 'flex min-w-0'}>
       {bubble ? pictures : null}
       {viewing === null ? null : (
         <FileViewer files={eventImageFiles(images)} index={viewing} onIndex={setViewing} onClose={() => setViewing(null)} />
@@ -611,6 +619,7 @@ function AgentBubbleView({ color, text, agents, images = [], live = false, bubbl
           ) : null}
         </div>
       )}
+      {bubble ? badge : null}
     </div>
   )
 }

@@ -106,6 +106,7 @@ const BROKER_PATHS: Readonly<Record<string, Readonly<Record<string, string>>>> =
   builtin_manor: {
     '--broker-url': '/internal/user-input', '--relay-url': '/internal/agent-relay', '--subagent-url': '/internal/subagent',
     '--deliver-url': '/internal/deliver-file', '--goal-url': '/internal/goal-claims', '--secret-url': '/internal/secret-request',
+    '--react-url': '/internal/react',
   },
   builtin_work: { '--broker-url': '/internal/work-tool' },
   builtin_browser: { '--broker-url': '/internal/browser-tool' },
@@ -146,6 +147,21 @@ function mockNoteEdit(input: TurnInput, queue: AsyncQueue<RuntimeEvent>): TurnHa
       queue.close()
     },
   }
+}
+
+/**
+ * A reply that skips the scripted run. "mock question: <text>" makes the agent ask exactly
+ * that. The user's reaction notice gets a yes to a question answered on a 👍, and no words
+ * for any other reaction. Undefined for any other turn.
+ */
+function shortReplyFor(input: TurnInput): string | undefined {
+  const last = [...input.catchUp].reverse().find((event) => event.type === 'user_message')
+  if (last?.type !== 'user_message') return undefined
+  const question = /^mock question:\s*(.+)$/is.exec(last.text.trim())
+  if (question !== null) return question[1]!
+  if (last.reactionTo === undefined) return undefined
+  const asked = /: ".*\?(?:…)?"\. /s.test(last.instruction ?? '')
+  return asked && last.reactionTo.emoji === '👍' ? 'On it, doing that now.' : ''
 }
 
 /** Last thing the human said in the catch-up, so the scripted reply looks responsive. */
@@ -503,6 +519,18 @@ function workScriptFor(input: TurnInput, request: typeof fetch): MockWorkStep | 
           notes.push(body?.note ?? 'Delivered.')
         }
         return notes.join('\n')
+      },
+    }
+  }
+  // "mock react: 👍" reacts and answers; "mock react only: 👍" reacts and writes nothing.
+  const reaction = /\bmock react( only)?:\s*(\S+)/i.exec(line)
+  const reactor = manorEndpoint(input, 'react', '--react-url')
+  if (reaction !== null && reactor !== undefined) {
+    return {
+      tool: 'mcp__manor__react',
+      run: async (signal) => {
+        await postManor(request, reactor, { emoji: reaction[2] }, signal)
+        return reaction[1] === undefined ? 'Good to hear, I will keep it that way.' : ''
       },
     }
   }
@@ -1036,6 +1064,13 @@ export function createMockDriver(options: MockDriverOptions = {}): Driver {
 
       void (async () => {
         const messageId = 'message_1'
+        const shortReply = shortReplyFor(input)
+        if (shortReply !== undefined) {
+          if (shortReply !== '') queue.push({ type: 'message', messageId, text: shortReply })
+          queue.push({ type: 'result', text: shortReply, usage: { inputTokens: 60, outputTokens: 4, costUsd: 0.0004 }, sessionId: sessionIdFor(input) })
+          queue.close()
+          return
+        }
         // Reasoning before the first tool call, so the mock exercises the same
         // interleaving a real provider produces rather than a tidier one.
         queue.push({
@@ -1088,7 +1123,7 @@ export function createMockDriver(options: MockDriverOptions = {}): Driver {
             queue.push({ type: 'tool_result', toolCallId, outcome })
             if (outcome === 'error') break
           }
-          queue.push({ type: 'message', messageId, text: answer })
+          if (answer !== '') queue.push({ type: 'message', messageId, text: answer })
           queue.push({
             type: 'result',
             text: answer,

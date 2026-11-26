@@ -1,7 +1,7 @@
 import type { AgentConfig, MemoryTrace, Project, SkillConfig, ThreadEvent } from '@manor/contracts'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
-import { CARD_WIDTH, MemoryChangesCard, MemoryTraceCard, placeCard } from '../src/components/MessageFooter'
+import { CARD_WIDTH, MemoryChangesCard, MemoryTraceCard, bubbleMenu, placeCard } from '../src/components/MessageFooter'
 import { Transcript } from '../src/components/Transcript'
 import { messageTime, readsLabel } from '../src/messageMeta'
 import { emptyThread, emptyWorkspace, reduce, rowsOf, type ThreadState } from '../src/state'
@@ -325,28 +325,29 @@ describe('the footer under a turn', () => {
     const patched = state.threads.chat_1!
 
     expect(patched.events).toHaveLength(2)
-    for (const kind of ['project', 'dm'] as const) {
-      const html = renderToStaticMarkup(
-        <Transcript rows={rowsOf(patched, kind)} agents={[sage]} skills={SKILLS} hasSnapshot bubbleReplies={kind === 'dm'} />,
-      )
-      expect(html).toContain('Memory used, 1 note')
-    }
+    const html = renderToStaticMarkup(<Transcript rows={rowsOf(patched, 'project')} agents={[sage]} skills={SKILLS} hasSnapshot />)
+    expect(html).toContain('Memory used, 1 note')
+    // A DM bubble keeps the mark in its three-dots menu, beside Copy.
+    expect(bubbleMenu('Na de dev-check.', used, undefined).map((entry) => entry.label)).toEqual(['Copy', 'Memory used, 1 note'])
   })
 
   it('adds the memory-changes mark once the writer diff lands, in Work and in DMs', () => {
     const daily = '/Users/sam/notes/memory/daily/2026-09-28.md'
+    const memoryChanges = [{ path: daily, lines: [{ kind: 'added' as const, text: '- [m/sage] Kickoff after dev check.' }] }]
     const events = [
       event({ type: 'agent_message', agentId: 'sage', turnId: 'turn_3', messageId: 'm1', text: 'Klaar.' }, START + 1_000),
       event({
         type: 'turn_result',
         agentId: 'sage',
         turnId: 'turn_3',
-        memoryChanges: [{ path: daily, lines: [{ kind: 'added', text: '- [m/sage] Kickoff after dev check.' }] }],
+        memoryChanges,
       }, START + 2_000),
     ]
 
     expect(render(events)).toContain('Memory updated, 1 change')
-    expect(render(events, [], undefined, true)).toContain('Memory updated, 1 change')
+    // A DM bubble moves the mark into its three-dots menu.
+    expect(render(events, [], undefined, true)).toContain('More actions')
+    expect(bubbleMenu('', undefined, memoryChanges).map((entry) => entry.label)).toEqual(['Memory updated, 1 change'])
     expect(render(events.slice(0, 1).concat(event({ type: 'turn_result', agentId: 'sage', turnId: 'turn_3' }, START + 2_000))))
       .not.toContain('Memory updated')
     // A DM turn with no reply anywhere has no bubble for the notepad, and no row of its own.

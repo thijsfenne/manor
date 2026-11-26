@@ -248,7 +248,7 @@ export async function completionNotice(
 
   const events = await store.loadEvents(chatId)
   const result = events.filter((event) => event.type === 'turn_result' && event.ts >= startedAt).at(-1)
-  if (result?.type === 'turn_result' && result.routineOutcome === 'quiet') return null
+  if (result?.type === 'turn_result' && (result.routineOutcome === 'quiet' || result.quiet === true)) return null
   const latest = latestReply(events, startedAt)
   const nameOf = (agentId: string | undefined) =>
     agentId === undefined ? undefined : agents.find((agent) => agent.id === agentId)?.name

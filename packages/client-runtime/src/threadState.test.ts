@@ -56,6 +56,19 @@ describe('live turn replacement', () => {
     state = reduceThread(state, { type: 'event', chatId: 'chat', event: { ...event, dispatchState: 'completed' } }, 3)
     expect(state.events).toEqual([{ ...event, dispatchState: 'completed' }])
   })
+  it('takes a reaction landing, changing and going on a message already shown', () => {
+    const reply: ThreadEvent = { type: 'agent_message', id: 'reply', ts: 1, turnId: 'turn_1', agentId: 'sage', text: 'Shall I book it?' }
+    const asked: ThreadEvent = { type: 'user_message', id: 'ask', ts: 0, text: 'Book it', mentions: [] }
+    let state = reduceThread(emptyThread, { type: 'event', chatId: 'chat', event: asked }, 1)
+    state = reduceThread(state, { type: 'event', chatId: 'chat', event: reply }, 1)
+    for (const emoji of ['❤️', '👍']) {
+      state = reduceThread(state, { type: 'event', chatId: 'chat', event: { ...reply, reaction: { emoji, at: 2 } } }, 2)
+      expect(state.events[1]).toMatchObject({ reaction: { emoji } })
+    }
+    state = reduceThread(state, { type: 'event', chatId: 'chat', event: reply }, 3)
+    state = reduceThread(state, { type: 'event', chatId: 'chat', event: { ...asked, reaction: { emoji: '🎉', at: 3, agentId: 'sage' } } }, 3)
+    expect(state.events).toEqual([{ ...asked, reaction: { emoji: '🎉', at: 3, agentId: 'sage' } }, reply])
+  })
   it('takes the daily-log writer lines on a turn that already finished', () => {
     const result: ThreadEvent = { type: 'turn_result', id: 'result', ts: 1, turnId: 'turn_1', agentId: 'smith' }
     const memoryChanges = [{ path: '/Notes/memory/daily/2026-09-28.md', lines: [{ kind: 'added' as const, text: '- [m/smith] Line.' }] }]

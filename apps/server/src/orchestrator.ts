@@ -100,11 +100,12 @@ import { checkoutBranches, leftStartBranch, prepareWorkCompletion } from './work
 import { liveSessionFiles } from './sessionGit.js'
 import { effectiveRepoPaths } from './worktree.js'
 import type { RuntimeDiagnostics } from './runtimeDiagnostics.js'
+import { ReactionRefusal, Reactions, type ReactionNotice } from './reactions.js'
 
 export { PROVIDER_RECOVERY_NUDGE, REPORT_BACK_NUDGE, usageFrom, withOverride }
 
 type UserMessageEvent = Extract<ThreadEvent, { type: 'user_message' }>
-type MessageContent = Pick<UserMessageEvent, 'text' | 'instruction' | 'images' | 'files' | 'pageContexts' | 'replyTo' | 'quotes' | 'skillIds' | 'forwardedFrom'> & {
+type MessageContent = Pick<UserMessageEvent, 'text' | 'instruction' | 'images' | 'files' | 'pageContexts' | 'replyTo' | 'quotes' | 'skillIds' | 'forwardedFrom' | 'reactionTo'> & {
   /** The stored event's id, when the message was stored before it is routed. */
   id?: string
   mentions?: string[]
@@ -113,6 +114,8 @@ type MessageContent = Pick<UserMessageEvent, 'text' | 'instruction' | 'images' |
 }
 
 export interface OrchestratorOptions {
+  /** How long a user's reaction stands before it is delivered; tests shorten it. */
+  reactionSettleMs?: number
   onExchangeFinished?: (chatId: string) => Promise<void>
   /** Questions a turn's provider stopped waiting on; their answers start its next attempt. */
   openQuestions?: OpenQuestions
@@ -180,6 +183,8 @@ export interface OrchestratorOptions {
       /** This turn may start subagents through delegate_task within the policy. */
       allowSubagents: boolean
       allowDeliver: boolean
+      /** A DM turn: `react`, which only the turn the user's own message started may use. */
+      allowReact?: boolean
       /** A turn with the user present; absent means off. */
       allowSecret?: boolean
       /** Where a secret command runs; absent where this turn has no shell. */
@@ -479,8 +484,16 @@ export class Orchestrator {
   /** Receiver DMs with a handoff take-up turn queued but not started. */
   private readonly queuedTakeUps = new Set<string>()
   readonly subagents: Subagents
+  readonly reactions: Reactions
 
   constructor(private readonly options: OrchestratorOptions) {
+    this.reactions = new Reactions({
+      store: options.store,
+      emit: (message) => options.emit(message),
+      runningTurnId: (chatId) => this.runningTurnId(chatId),
+      deliver: (chatId, compose) => this.acceptReactionNotice(chatId, compose),
+      ...(options.reactionSettleMs === undefined ? {} : { settleMs: options.reactionSettleMs }),
+    })
     this.turnContext = createTurnContext({ store: options.store, agents: options.agents })
     this.agentRelay = new AgentRelay({
       store: options.store,
@@ -832,6 +845,34 @@ export class Orchestrator {
     })
   }
 
+  /** A user's reaction, told to the DM agent the way their own message would go. */
+  private async acceptReactionNotice(chatId: string, compose: () => Promise<ReactionNotice | undefined>): Promise<void> {
+    const chat = this.runtimeFor(chatId)
+    chat.inflight += 1
+    const accepted = chat.acceptanceTail.then(async () => {
+      const notice = await compose()
+      return notice === undefined ? undefined
+        : this.acceptUserMessage(chat, chatId, { text: '', instruction: notice.instruction, reactionTo: notice.reactionTo })
+    }).finally(() => { chat.inflight -= 1 })
+    chat.acceptanceTail = accepted.catch(() => undefined)
+    const receipt = await accepted
+    void receipt?.finished.catch(() => undefined)
+  }
+
+  /**
+   * The `react` tool: the DM agent's emoji on the user's message that started its turn.
+   * Refused outside that turn, so it cannot reach another message or another chat.
+   */
+  async recordAgentReaction(context: UserInputContext, emoji: string): Promise<void> {
+    const active = this.chats.get(context.chatId)?.active
+    if (active?.turnId !== context.turnId || active.agentId !== context.agentId || active.aborted) {
+      throw new ReactionRefusal('This turn has already ended.')
+    }
+    if (active.reactTarget === undefined) throw new ReactionRefusal('There is no message of the user\'s to react to in this turn.')
+    await this.reactions.setAgentReaction(context.chatId, active.reactTarget, context.agentId, emoji)
+    active.reacted = true
+  }
+
   /**
    * The user's message that their project thread sent on to this Session. It is stored and
    * routed exactly like one they typed here, steering the running answer when its
@@ -887,7 +928,7 @@ export class Orchestrator {
   }
 
   private async acceptUserMessage(chat: ChatRuntime, chatId: string, message: MessageContent, origin?: MessageOrigin): Promise<{ stored?: Promise<ThreadEvent | undefined>; finished: Promise<void> } | undefined> {
-    const { text, images = [], files = [], pageContexts = [], replyTo, uploads = [], forwardedFrom } = message
+    const { text, images = [], files = [], pageContexts = [], replyTo, uploads = [], forwardedFrom, reactionTo } = message
     const quotes = await this.placedQuotes(chatId, message.quotes ?? [])
     const { documents: sent = [], ...attachments } = MessageAttachmentsSchema.parse({ images, files, documents: uploads })
     const room = origin === undefined ? await this.options.store.getChat(chatId) : undefined
@@ -895,6 +936,12 @@ export class Orchestrator {
     // Read now, kept only by the append that writes the message, so a refused or
     // discarded message never leaves an original behind.
     const { documents, originals } = await readDocuments(sent)
+    // Reactions on older messages ride once, ahead of whatever the user says next in a DM.
+    const untold = room?.kind === 'dm' ? await this.reactions.untold(chatId) : undefined
+    const instruction = untold === undefined ? message.instruction : `${untold.lines}${message.instruction ?? ''}`
+    const told = (event: ThreadEvent | undefined) => {
+      if (event?.type === 'user_message') void untold?.markTold().catch(() => undefined)
+    }
     const active = chat.active
     const addressedElsewhere = room !== undefined && (
       (!isSoloRoom(room) && (parseMentions(text, this.options.agents()).some((id) => id !== active?.agentId) ||
@@ -914,10 +961,14 @@ export class Orchestrator {
     // safety boundaries can make them wait; no model classifies their intent.
     if (origin === undefined && !addressedElsewhere && !chat.halted && active?.steerable === true && !active.aborted && !restartsWork(active)) {
       const stored = active.steeringTail.then(async () => {
+        // A reaction removed or changed while earlier additions were delivered is not told.
+        if (reactionTo !== undefined && !await this.reactions.stands(chatId, reactionTo)) return undefined
         const streaming = room?.kind === 'dm' ? undefined : [...active.liveMessages].at(-1)
         const event = await this.appendEvent(chat, chatId, {
           type: 'user_message',
           text,
+          ...(instruction === undefined ? {} : { instruction }),
+          ...(reactionTo === undefined ? {} : { reactionTo }),
           mentions: [],
           steersTurnId: active.turnId,
           ...(streaming === undefined ? {} : { steerAfter: { messageId: streaming[0], textOffset: streaming[1].length } }),
@@ -930,7 +981,8 @@ export class Orchestrator {
           ...(replyTo === undefined ? {} : { replyTo }),
           ...(quotes.length === 0 ? {} : { quotes }),
         }, originals)
-        if (event?.type === 'user_message') this.options.onUserMessageStored?.(chatId, text)
+        told(event)
+        if (event?.type === 'user_message' && text !== '') this.options.onUserMessageStored?.(chatId, text)
         return event
       })
       const write = stored.then(async (event) => {
@@ -986,8 +1038,11 @@ export class Orchestrator {
       if (room === undefined) throw new Error('This chat no longer exists.')
       const handoff = await this.options.store.workHandoffForTarget(chatId)
       if (handoff?.acceptedAt === null) throw new Error('Accept this session in the source chat before starting a turn.')
+      if (reactionTo !== undefined && !await this.reactions.stands(chatId, reactionTo)) return
       const event = await this.appendEvent(chat, chatId, {
         type: 'user_message', text, dispatchState: 'pending',
+        ...(instruction === undefined ? {} : { instruction }),
+        ...(reactionTo === undefined ? {} : { reactionTo }),
         ...this.queuedFields(room, text),
         ...(forwardedFrom === undefined ? {} : { forwardedFrom }),
         ...(attachments.images?.length ? { images: attachments.images } : {}),
@@ -998,7 +1053,8 @@ export class Orchestrator {
         ...(quotes.length === 0 ? {} : { quotes }),
       }, originals)
       if (event?.type !== 'user_message') return
-      this.options.onUserMessageStored?.(chatId, text)
+      told(event)
+      if (text !== '') this.options.onUserMessageStored?.(chatId, text)
       chat.halted = false
       return { finished: this.enqueueAcceptedMessage(chat, chatId, event) }
     }
@@ -1056,8 +1112,12 @@ export class Orchestrator {
         break
       }
     }
-    const updated = { ...event, dispatchState, ...(queuedAfter === undefined ? {} : { queuedAfter }) }
-    await this.options.store.replaceEvent(chatId, updated)
+    const fields = { dispatchState, ...(queuedAfter === undefined ? {} : { queuedAfter }) }
+    // From the stored row: the agent's reaction may have landed on it since `event` was read.
+    const patched = await this.options.store.patchEvent(chatId, event.id, (stored) =>
+      stored.type === 'user_message' ? { ...stored, ...fields } : undefined)
+    const updated = patched?.type === 'user_message' ? patched : { ...event, ...fields }
+    if (patched === undefined) await this.options.store.replaceEvent(chatId, updated)
     this.options.emit({ type: 'event', chatId, event: updated })
     return updated
   }
@@ -2366,6 +2426,10 @@ export class Orchestrator {
         ...(origin?.source === 'background_wake' ? { backgroundWake: true as const } : {}),
         ...(room?.kind === 'dm' && message.id !== undefined && this.options.interviewKickoff?.(next.agent.id, message.id) === true
           ? { instructionsInterview: true as const } : {}),
+        // In a DM the agent may react to the user's own message; a reaction notice is Manor's, not theirs.
+        ...(room?.kind !== 'dm' || origin !== undefined ? {}
+          : message.reactionTo !== undefined ? { reactionPrompt: true as const }
+            : userEventId === undefined ? {} : { reactTarget: userEventId }),
       })
       if (outcome.kind === 'discarded') break
       // A child that ended during the turn and was never read wakes its persona now.

@@ -283,6 +283,35 @@ const deliverTool = {
   },
 } as const
 
+const reactTool = {
+  name: 'react',
+  description: 'Put one emoji on the user\'s message that started this turn, shown as a small badge on their bubble. A second call replaces it. React sparingly, only for a clear moment: thanks, good news, a confirmation, frustration. Skip neutral or informational messages, and never react on every turn. When the message needs no words (a thank you, a plain confirmation) the reaction may be your whole answer: react and end the turn without text. Otherwise the reaction comes beside your normal answer and never replaces or shortens it. Never mention the reaction in your text.',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      emoji: { type: 'string', minLength: 1, maxLength: 32, description: 'One emoji, such as 👍, ❤️, 🎉 or 😅.' },
+    },
+    required: ['emoji'],
+    additionalProperties: false,
+  },
+} as const
+
+async function react(reactUrl: string, capability: string, arguments_: JsonRecord): Promise<string> {
+  if (typeof arguments_.emoji !== 'string' || arguments_.emoji.length === 0 || arguments_.emoji.length > 32) {
+    throw new Error('react needs one emoji.')
+  }
+  const response = await fetch(reactUrl, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'x-manor-user-input-capability': capability },
+    body: JSON.stringify({ emoji: arguments_.emoji }),
+  })
+  const payload: unknown = await response.json().catch(() => undefined)
+  if (!response.ok) {
+    throw new Error(isRecord(payload) && typeof payload.error === 'string' ? payload.error : `React returned HTTP ${response.status}.`)
+  }
+  return isRecord(payload) && typeof payload.note === 'string' ? payload.note : 'Reacted.'
+}
+
 // Nothing to broker: Manor reads the successful call off the turn's own tool stream.
 const goalTool = {
   name: 'goal_reached',
@@ -740,6 +769,7 @@ export function interactionMcpServer(argv: readonly string[]): McpToolServer {
   const catalog = subagentCatalog(argv)
   const deliverUrl = option('--deliver-url', argv)
   const goalUrl = option('--goal-url', argv)
+  const reactUrl = argv.includes('--react-url') ? option('--react-url', argv) : undefined
   const projectUrl = option('--project-url', argv)
   const secretUrl = option('--secret-url', argv)
   const instructionsUrl = argv.includes('--instructions-url') ? option('--instructions-url', argv) : undefined
@@ -754,7 +784,7 @@ export function interactionMcpServer(argv: readonly string[]): McpToolServer {
     name: 'manor-interaction',
     tools: [
       askTool(askMode), secretTool(askMode), draftTool, relayTool(relayMode), ...(catalog === undefined ? [] : subagentTools(catalog)),
-      deliverTool, goalTool, reviewTool, projectFileTool, notesTool, sessionAnswerTool, projectReportTool, sessionForwardTool, sessionStatusTool,
+      deliverTool, reactTool, goalTool, reviewTool, projectFileTool, notesTool, sessionAnswerTool, projectReportTool, sessionForwardTool, sessionStatusTool,
       instructionsTool, instructionsOfferTool,
     ].filter((tool) => enabled.has(tool.name)),
     failureMessage: 'The Manor tool failed.',
@@ -770,6 +800,7 @@ export function interactionMcpServer(argv: readonly string[]): McpToolServer {
       if (name === 'write_instructions' && instructionsUrl !== undefined) return text(await writeInstructions(instructionsUrl, capability, arguments_))
       if (name === 'offer_instructions_line' && instructionsUrl !== undefined) return text(await offerInstructionsLine(instructionsUrl, capability, arguments_))
       if (name === 'deliver_file') return text(await deliverFile(deliverUrl, capability, arguments_))
+      if (name === 'react' && reactUrl !== undefined) return text(await react(reactUrl, capability, arguments_))
       if (name === 'message_agent') return text(await messageAgent(relayUrl, capability, arguments_))
       if ((SUBAGENT_TOOLS as readonly string[]).includes(name)) return text(await subagentCall(subagentUrl, capability, name, arguments_))
       if (name === 'request_secret') return text(await requestSecret(secretUrl, capability, arguments_, askMode))
