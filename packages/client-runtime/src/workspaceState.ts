@@ -43,6 +43,7 @@ import { DEFAULT_PROJECT_COLOR, DEFAULT_PROJECT_ICON, HOME_PROJECT_ID, MAX_SESSI
 import { confirmTasks } from './confirmTasks'
 import { plainPreview } from './plainPreview'
 import { NO_REMINDERS_YET, reduceReminders, type RemindersState } from './reminders'
+import { NO_MAIL_YET, reduceMail, type MailState } from './mail'
 import { IDLE, withActivity, type ChatActivity } from './activityState'
 import { repoListingKey } from './workspaceActions'
 import {
@@ -448,6 +449,8 @@ export interface WorkspaceState {
   artifacts: ArtifactsState
   /** Apple Reminders on the Mac host, loaded while the Reminders door is open. */
   reminders: RemindersState
+  /** The user's mailbox Inbox, once the host has answered `mail_load`. */
+  mail: MailState
   /**
    * How much of each subscription is spent, house-wide. Workspace state for the
    * same reason the roster is: one account per provider, shared by every chat.
@@ -696,6 +699,7 @@ export const emptyWorkspace: WorkspaceState = {
   vault: NO_VAULT_YET,
   artifacts: NO_ARTIFACTS_YET,
   reminders: NO_REMINDERS_YET,
+  mail: NO_MAIL_YET,
   providerUsage: [],
   providerUpdates: [],
   providerConnections: [],
@@ -1103,6 +1107,13 @@ export function reduce(
     case 'reminders_completed': {
       const reminders = reduceReminders(state.reminders, msg)
       return reminders === state.reminders ? state : { ...state, reminders }
+    }
+    case 'mail_state':
+    case 'mail_thread':
+    case 'mail_draft':
+    case 'mail_result': {
+      const mail = reduceMail(state.mail, msg)
+      return mail === state.mail ? state : { ...state, mail }
     }
 
     case 'browser_tool_request':

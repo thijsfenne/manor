@@ -56,6 +56,8 @@ import { InteractionBroker, askedByModel, preferenceAnswerText } from './interac
 import { OutboundDrafts } from './outboundDrafts.js'
 import { readMailThread } from './mcp/mailMcp.js'
 import { createMockOutboundSendPort, createOutboundSendPort } from './outboundSend.js'
+import { MailFixtureSource } from './mailFixtureSource.js'
+import { mailImapSourceFromEnv } from './mailImapSource.js'
 import { InvalidUserInputCapabilityError, UserInputCapabilities } from './interactionCapability.js'
 import { closeTerminalTurn } from './agentRelayLifecycle.js'
 import { EffectBroker } from './effectBroker.js'
@@ -663,6 +665,9 @@ async function main(): Promise<void> {
   const composioOutbound = composio?.outbound ?? liveComposioOutbound()
   // The spike sends only through its mock Composio: no host mailbox or Slack session is read.
   const outboundSend = forceMock ? createMockOutboundSendPort(composioOutbound) : createOutboundSendPort(composioOutbound)
+  // The Mail door's mailbox, chosen like the send port: the spike reads an in-memory
+  // fixture and keeps its cache in memory, so it never sees a real mailbox or its cache.
+  const mailSource = forceMock ? new MailFixtureSource() : mailImapSourceFromEnv(process.env)
   const outboundDrafts = new OutboundDrafts({
     store,
     send: outboundSend,
@@ -1124,6 +1129,11 @@ async function main(): Promise<void> {
     composioKey,
     ...(remindersSource === undefined ? {} : { reminders: remindersSource }),
     ...(openLoops === undefined ? {} : { openLoops }),
+    ...(mailSource === undefined ? {} : { mailSource, mailCacheFile: forceMock ? ':memory:' : paths.mailCache }),
+    // The Mail door sends through the same port as a draft card's Submit; the spike's is the mock Composio one.
+    mailSend: outboundSend,
+    // Served here in every mode, the mock too: its triage script calls the real endpoint.
+    mailToolHost: mcpHost,
     systemInfo: createSystemInfo({
       memoryDir: memoryFolder ?? null,
       vaultDir: vaultDir.ok ? vaultDir.dir : null,
@@ -1352,6 +1362,16 @@ async function main(): Promise<void> {
       void runRoutines().catch((error: unknown) => console.error('[manor] a routine tick failed', error))
     }, ROUTINE_TICK_INTERVAL_MS)
     routineTicking.unref?.()
+  }
+
+  // The Mail door's daily triage at 07:30 rides the same flag: only the server that runs
+  // routines labels on a schedule, and the first tick after a wake catches up a missed one.
+  let mailTriageTicking: NodeJS.Timeout | undefined
+  if (routines.on) {
+    const tickMail = () => void service.tickMailTriage()
+    tickMail()
+    mailTriageTicking = setInterval(tickMail, ROUTINE_TICK_INTERVAL_MS)
+    mailTriageTicking.unref?.()
   }
 
   let compressing: NodeJS.Timeout | undefined
@@ -1586,6 +1606,7 @@ async function main(): Promise<void> {
     clearInterval(pulse)
     clearInterval(settling)
     if (routineTicking !== undefined) clearInterval(routineTicking)
+    if (mailTriageTicking !== undefined) clearInterval(mailTriageTicking)
     if (compressing !== undefined) clearInterval(compressing)
     usage.stop()
     providerUpdates.stop()
@@ -1651,6 +1672,11 @@ async function main(): Promise<void> {
     // Where the Composio key comes from, never the key: the Connectors page offers the form on none.
     reply(composioKey.status())
     reply(service.sessionCommits())
+    // A capability like the vault status: `off` hides the Mail door, anything else carries the cached cards.
+    void service
+      .mailState()
+      .then(reply)
+      .catch((error: unknown) => console.error('[manor] could not send the mail state', error))
 
     socket.on('message', (raw) => {
       let parsed: unknown
@@ -1751,6 +1777,8 @@ async function main(): Promise<void> {
       browser.unregister(browserHost)
       const orphaned = desktopLease.detachHost(browserHost)
       if (orphaned !== undefined) void service.handle({ type: 'stop', turnId: orphaned }, () => undefined)
+      // The socket's mail draft was streaming to nobody now.
+      service.mailSocketClosed(reply)
       usage.setClientCount(clients.size)
       providerUpdates.setClientCount(clients.size)
       providerConnections.setClientCount(clients.size)

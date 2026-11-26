@@ -7,6 +7,7 @@ import {
   CellsIcon,
   CheckListIcon,
   Globe02Icon,
+  Mail01Icon,
   PuzzleIcon,
 } from '@hugeicons/core-free-icons'
 import {
@@ -16,6 +17,7 @@ import {
   CellsIcon as CellsSolidIcon,
   CheckListIcon as CheckListSolidIcon,
   Globe02Icon as Globe02SolidIcon,
+  Mail01Icon as Mail01SolidIcon,
   PuzzleIcon as PuzzleSolidIcon,
 } from '@manor/client-runtime/solid-icons'
 import type { AgentConfig, ProviderConnection, ProviderUpdate, ProviderUsage } from '@manor/contracts'
@@ -52,6 +54,7 @@ const DOORS: RailDoor[] = [
   { id: 'reminders', label: 'Reminders', icon: CheckListIcon, activeIcon: CheckListSolidIcon },
   { id: 'artifacts', label: 'Artifacts', icon: Archive02Icon, activeIcon: Archive02SolidIcon },
   { id: 'routines', label: 'Scheduled tasks', icon: Clock01Icon, activeIcon: Clock01SolidIcon },
+  { id: 'mail', label: 'Mail', icon: Mail01Icon, activeIcon: Mail01SolidIcon },
   { id: 'plugins', label: 'Plugins', icon: PuzzleIcon, activeIcon: PuzzleSolidIcon },
 ]
 
@@ -90,11 +93,14 @@ export interface RailPin {
 interface NavRailProps {
   /** The one door the stage is behind; null while Usage is open, which has no door. */
   destination: NavDestination | null
-  /** Knowledge, Reminders, Artifacts and Browser exist only where their host does. */
+  /** Knowledge, Reminders, Artifacts, Browser and Mail exist only where their host does. */
   hasVault: boolean
   hasReminders: boolean
   hasArtifacts: boolean
   hasBrowser: boolean
+  hasMail?: boolean
+  /** A mail card is unread. Shown wherever the stage is. */
+  mailAttention?: boolean
   /** A chat asking for the user outranks one that is merely unread. Shown while another door is open. */
   agentsAttention: DoorAttention
   /** A finished run nobody has opened, shown on the Routines door wherever the stage is. */
@@ -137,6 +143,8 @@ function NavRailDoors({
   hasReminders,
   hasArtifacts,
   hasBrowser,
+  hasMail = false,
+  mailAttention = false,
   agentsAttention,
   routineAttention,
   sessionsAttention,
@@ -161,7 +169,8 @@ function NavRailDoors({
       (door.id !== 'knowledge' || hasVault) &&
       (door.id !== 'reminders' || hasReminders) &&
       (door.id !== 'artifacts' || hasArtifacts) &&
-      (door.id !== 'browser' || hasBrowser),
+      (door.id !== 'browser' || hasBrowser) &&
+      (door.id !== 'mail' || hasMail),
   )
   const size = mobile ? 44 : 36
   const reduceMotion = useReducedMotion() ?? false
@@ -211,6 +220,8 @@ function NavRailDoors({
           const attention: DoorAttention =
             door.id === 'routines'
               ? routineAttention ? 'done' : null
+              : door.id === 'mail'
+              ? mailAttention ? 'unread' : null
               : current
                 ? null
                 : door.id === 'chats' ? agentsAttention
@@ -221,7 +232,7 @@ function NavRailDoors({
             ? door.label
             : door.id === 'plugins'
               ? `${door.label}, Composio needs a key`
-              : `${door.label}, ${attention === 'waiting' ? 'waiting for you' : door.id === 'chats' ? 'unread messages' : door.id === 'work' ? 'a session is done' : 'a run is done'}`
+              : `${door.label}, ${attention === 'waiting' ? 'waiting for you' : door.id === 'chats' ? 'unread messages' : door.id === 'mail' ? 'unread mail' : door.id === 'work' ? 'a session is done' : 'a run is done'}`
           return (
             <button
               key={door.id}

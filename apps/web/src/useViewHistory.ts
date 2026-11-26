@@ -11,6 +11,7 @@ export type WorkspaceLocation =
   | { kind: 'routines'; routineId: string | null }
   | { kind: 'knowledge' }
   | { kind: 'reminders' }
+  | { kind: 'mail' }
   | { kind: 'artifacts' }
   | { kind: 'browser' }
   | { kind: 'usage' }
@@ -48,6 +49,7 @@ function locationFrom(value: unknown): WorkspaceLocation | null {
     case 'suggestions':
     case 'knowledge':
     case 'reminders':
+    case 'mail':
     case 'artifacts':
     case 'browser':
     case 'usage':

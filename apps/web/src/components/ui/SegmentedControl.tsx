@@ -34,6 +34,11 @@ type SegmentedControlProps<Value extends string> = {
   compact?: boolean
   /** Inside a floating menu: the pick takes `menu-selected` and the rest hover on `user-bg`. */
   floating?: boolean
+  /**
+   * Labels in a narrow column: 12px segments, and one that does not fit wraps to the next
+   * line. Only Left and Right move between them; Up and Down stay with the list below.
+   */
+  dense?: boolean
 } & (
   | { options: readonly SegmentOption<Value>[]; variant?: 'labels' }
   | { options: readonly SymbolSegmentOption<Value>[]; variant: 'symbols' }
@@ -53,6 +58,7 @@ export function SegmentedControl<Value extends string>({
   orientation = 'horizontal',
   compact = false,
   floating = false,
+  dense = false,
 }: SegmentedControlProps<Value>) {
   const instanceId = useId()
   const buttons = useRef<Array<HTMLButtonElement | null>>([])
@@ -81,6 +87,7 @@ export function SegmentedControl<Value extends string>({
       }
       return undefined
     }
+    if (dense && (event.key === 'ArrowUp' || event.key === 'ArrowDown')) return
     let nextIndex: number | undefined
     if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') {
       nextIndex = step(selectedIndex, -1)
@@ -107,7 +114,7 @@ export function SegmentedControl<Value extends string>({
           ? orientation === 'vertical'
             ? 'flex-col gap-1'
             : compact ? 'gap-0.5' : 'w-full gap-1'
-          : 'gap-0.5 rounded-full'
+          : `gap-0.5 rounded-full ${dense ? 'flex-wrap' : ''}`
       }`}
       role={variant === 'symbols' ? 'radiogroup' : 'tablist'}
       aria-label={label}
@@ -142,7 +149,7 @@ export function SegmentedControl<Value extends string>({
                   : orientation === 'vertical'
                     ? 'grid h-10 w-10 place-items-center rounded-lg p-0'
                     : 'grid h-10 min-w-0 flex-1 place-items-center rounded-lg p-0'
-                : 'h-7 rounded-full px-3 text-label font-medium'
+                : dense ? 'h-6 rounded-full px-2 text-[12px] font-medium' : 'h-7 rounded-full px-3 text-label font-medium'
             } ${
               selected ? 'text-text' : `text-muted hover:text-text ${floating ? 'hover:bg-user-bg' : ''}`
             }`}

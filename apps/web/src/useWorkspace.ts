@@ -1,4 +1,5 @@
 import { createWorkAcceptance, createWorkspaceCommands, type WorkAcceptanceOptions } from '@manor/client-runtime/commands'
+import type { MailCommands } from './components/mail/MailView'
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { markFields, type ProjectMarkChoice } from './projectAppearance'
 import {
@@ -543,6 +544,8 @@ export interface Manor {
    * window focus and on a timer; an answer that changed nothing repaints nothing.
    */
   loadReminders: () => boolean
+  /** Every Mail request. The identity holds for the life of the hook. */
+  mailCommands: MailCommands
   /** One page of completed reminders, newest first, from `offset`. */
   loadCompletedReminders: (offset: number) => boolean
   /**
@@ -824,6 +827,8 @@ export function useWorkspace(url: string, auth?: WorkspaceAuth): Manor {
         if (desktopBrowser() !== undefined) {
           send({ type: 'browser_host_ready', ...(desktopComputer() === undefined ? {} : { computerStop: true as const }) })
         }
+        // Whether the Mail door shows at all is the answer to this one.
+        send({ type: 'mail_load' })
         // The server has no memory of what this client was reading. The focused
         // thread first, then any other pane still on screen, so a split's second
         // transcript does not stay stale until it is clicked.
@@ -975,6 +980,8 @@ export function useWorkspace(url: string, auth?: WorkspaceAuth): Manor {
           framesRef.current?.push(parsed)
           return
         }
+        // A refused Archive, Undo or Send says why, wherever the user has gone since.
+        if (parsed.type === 'mail_result' && !parsed.ok) toast.error(parsed.message ?? 'Mail action failed')
         if (parsed.type === 'side_chat') {
           // The panel's thread is in no directory and nothing has ever opened it, so
           // this is where its events are asked for. Only while the chat it hangs off
@@ -1917,6 +1924,7 @@ export function useWorkspace(url: string, auth?: WorkspaceAuth): Manor {
     forgetVaultImageSave: dropVaultImageSave,
     closeVaultNote: closeNote,
     loadReminders,
+    mailCommands: commands,
     loadCompletedReminders,
     writeReminder,
     dismissNotice,

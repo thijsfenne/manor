@@ -38,6 +38,7 @@ import { mcpBearerEnvKey } from '../mcp/oauth.js'
 import { mcpHttpHeaderEnvMap } from '../mcp/httpHeaders.js'
 import { BUILT_IN_SKILL_MCP_ID } from '../mcp/skillAttachment.js'
 import { SUBAGENT_TOOLS } from '../mcp/interactionAttachment.js'
+import { MAIL_TRIAGE_MCP_ID, MAIL_TRIAGE_TOOL } from '../mcp/mailTriageServer.js'
 import { WORK_TOOL_NAME } from '../workTool.js'
 import { describeCommand } from './commands.js'
 import { describeMcpTool, describeTool, errorText, redactToolActivity, subagentLaunch, subagentOutput } from './toolActivity.js'
@@ -282,6 +283,11 @@ export function buildCodexMcpArgs(attached: readonly AttachedMcpServer[]): strin
     if (server.id === BUILT_IN_SKILL_MCP_ID) {
       fields.push(`enabled_tools=${tomlArray(['read_skill'])}`)
       fields.push('tools={read_skill={approval_mode="approve"}}')
+    }
+    // The triage run's one tool writes only Manor's own label and is bound to the run.
+    if (server.id === MAIL_TRIAGE_MCP_ID) {
+      fields.push(`enabled_tools=${tomlArray([MAIL_TRIAGE_TOOL])}`)
+      fields.push(`tools={${MAIL_TRIAGE_TOOL}={approval_mode="approve"}}`)
     }
     if (server.id === 'builtin_work') {
       fields.push(`enabled_tools=${tomlArray([WORK_TOOL_NAME])}`)

@@ -3,10 +3,10 @@ import type { WorkspaceView } from './components/Sidebar'
 import type { SidebarView } from './useSidebar'
 
 /** The places the left rail leads to, in the order it lists them. */
-export type NavDestination = 'chats' | 'work' | 'browser' | 'knowledge' | 'reminders' | 'artifacts' | 'routines' | 'plugins'
+export type NavDestination = 'chats' | 'work' | 'browser' | 'knowledge' | 'reminders' | 'artifacts' | 'routines' | 'mail' | 'plugins'
 
 /** The destinations that bring a list of their own into the sidebar. */
-export type SidebarPanel = 'work' | 'chats' | 'knowledge' | 'reminders'
+export type SidebarPanel = 'work' | 'chats' | 'knowledge' | 'reminders' | 'mail'
 
 /**
  * Which rail item the stage is in, so exactly one reads as current. A thread belongs
@@ -30,6 +30,7 @@ export function navDestinationOf(
     case 'artifacts':
     case 'browser':
     case 'routines':
+    case 'mail':
       return view
     case 'skills':
     case 'connectors':
@@ -51,13 +52,13 @@ export function navDestinationOf(
 }
 
 /**
- * The list the sidebar shows beside the stage. Knowledge's note tree and Reminders'
- * tiles and lists live there like the Work inbox does. Artifacts, Browser, Plugins and Scheduled tasks carry their own
+ * The list the sidebar shows beside the stage. Knowledge's note tree, Reminders'
+ * tiles and lists and Mail's threads live there like the Work inbox does. Artifacts, Browser, Plugins and Scheduled tasks carry their own
  * navigation inside the stage, so they get no sidebar at all rather than a panel
  * holding some other destination's list.
  */
 export function sidebarPanelOf(destination: NavDestination | null): SidebarPanel | null {
-  return destination === 'work' || destination === 'chats' || destination === 'knowledge' || destination === 'reminders'
+  return destination === 'work' || destination === 'chats' || destination === 'knowledge' || destination === 'reminders' || destination === 'mail'
     ? destination
     : null
 }

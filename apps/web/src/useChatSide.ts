@@ -80,9 +80,9 @@ export function usePageContexts() {
   const [pageContextsByChat, setPageContextsByChat] = useState<Record<string, PageContextAttachment[]>>({})
 
   const addPageContext = useCallback((chatId: string, context: PageContextAttachment) => {
-    // A selection is a quote and takes its place in the sentence. Only a whole artifact
-    // has no words to put there, and stays a source above the text.
-    if (context.kind !== 'artifact') {
+    // A selection is a quote and takes its place in the sentence. A whole artifact or
+    // mail thread has no words to put there, and stays a source above the text.
+    if (context.kind !== 'artifact' && context.kind !== 'mail') {
       insertQuoteIntoDraft(chatId, { kind: 'page', context })
       return
     }
@@ -90,7 +90,12 @@ export function usePageContexts() {
       const contexts = current[chatId] ?? []
       // The same source twice is one slot spent on nothing, and now that a source can
       // be aimed at a chat it is not open in, sending the same one again is easy.
-      if (contexts.some((staged) => staged.id === context.id)) return current
+      if (contexts.some((staged) => staged.id === context.id)) {
+        // A mail thread grows. Added again, its slot takes the text just previewed.
+        return context.kind !== 'mail'
+          ? current
+          : { ...current, [chatId]: contexts.map((staged) => staged.id === context.id ? context : staged) }
+      }
       if (contexts.length >= MAX_PAGE_CONTEXT_ATTACHMENTS) return current
       return { ...current, [chatId]: [...contexts, context] }
     })

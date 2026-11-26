@@ -15,6 +15,8 @@ import { gitBinary } from '../gitBinary.js'
 import { NOTE_EDIT_AGENT_ID, noteEditParts } from '../noteEdit.js'
 import { DM_ROUTINE_PUBLISH_MARKER } from '../composer.js'
 import { REACTION_QUIET_MARKER } from '../reactions.js'
+import { MAIL_DRAFT_THREAD_PREFIX, MAIL_REVISION_MARK, MAIL_TRIAGE_THREAD_PREFIX, untrustedMailPayload } from '../mailPrompt.js'
+import { MAIL_TRIAGE_MCP_NAME, MAIL_TRIAGE_TOOL } from '../mcp/mailTriageServer.js'
 
 const MOCK_COMPACT_MS = 1_500
 
@@ -145,6 +147,134 @@ function mockNoteEdit(input: TurnInput, queue: AsyncQueue<RuntimeEvent>): TurnHa
     events: queue,
     stop() {
       clearTimeout(timer)
+      queue.close()
+    },
+  }
+}
+
+const MOCK_MAIL_REPLY = {
+  en: [
+    'Hi,',
+    '',
+    'Thank you for your message, and for taking the time to write it all out so clearly. I have read it through and I would be glad to take this further.',
+    '',
+    'Thursday at ten works well for me. I will plan to arrive a few minutes early, and if there is anything I should prepare or bring along, please let me know beforehand so I can have it ready.',
+    '',
+    'Looking forward to it.',
+    '',
+    'Best regards',
+  ].join('\n'),
+  nl: [
+    'Hoi,',
+    '',
+    'Wat leuk dat je het vraagt, en dank voor de uitnodiging. Zondag komen we heel graag bij jullie eten, en half zes past ons prima.',
+    '',
+    'Zal ik een toetje of iets te drinken meenemen? Laat het gerust weten, dan neem ik het zaterdag mee als ik toch boodschappen doe. En als er iets verandert aan de tijd, hoor ik het wel.',
+    '',
+    'Tot zondag en liefs',
+  ].join('\n'),
+}
+
+const MOCK_MAIL_REVISION = {
+  en: 'Hi,\n\nThursday at ten suits me well. See you then.\n\nBest regards',
+  nl: 'Hoi,\n\nZondag om half zes komen we graag. Tot dan!\n\nLiefs',
+}
+
+/**
+ * A reply draft for the Mail door: a reply of well over sixty words streamed a word at a
+ * time, so the streaming state shows, in Dutch when the thread is. A revision request
+ * streams a visibly shorter text; one whose instruction says "mock draft error" fails.
+ */
+function mockMailDraft(input: TurnInput, queue: AsyncQueue<RuntimeEvent>, delayMs: number): TurnHandle {
+  const first = input.catchUp[0]
+  const prompt = first?.type === 'user_message' ? first.text : ''
+  const revision = prompt.includes(MAIL_REVISION_MARK)
+  const dutch = /\b(jullie|hoi|liefs|groetjes|bedankt|zondag)\b/i.test(JSON.stringify(untrustedMailPayload(prompt) ?? ''))
+  const text = (revision ? MOCK_MAIL_REVISION : MOCK_MAIL_REPLY)[dutch ? 'nl' : 'en']
+  let stopped = false
+  void (async () => {
+    if (revision && /mock draft error/i.test(prompt.slice(prompt.indexOf(MAIL_REVISION_MARK)))) {
+      await sleep(delayMs)
+      queue.push({ type: 'error', message: 'The provider dropped the connection.' })
+      queue.close()
+      return
+    }
+    for (const word of text.split(/(?<=\s)/)) {
+      await sleep(delayMs)
+      if (stopped) return
+      queue.push({ type: 'delta', messageId: 'message_1', text: word })
+    }
+    queue.push({ type: 'result', text, usage: mockUsage(input.agent, Math.ceil(text.length / 4)), sessionId: sessionIdFor(input) })
+    queue.close()
+  })()
+  return {
+    events: queue,
+    stop() {
+      stopped = true
+      queue.close()
+    },
+  }
+}
+
+/** The mock's triage rule: who wrote, whether it is automatic, whether it asks something. */
+function mockMailLabel(entry: Record<string, unknown>): { label: 'reply' | 'wait' | 'fyi'; reason: string } {
+  const text = `${String(entry.from ?? '')} ${String(entry.subject ?? '')} ${String(entry.newestMessageStart ?? '')}`
+  if (entry.fromTheUser === true) return { label: 'wait', reason: 'You wrote last and are waiting for an answer.' }
+  if (/no-?reply|digest|newsletter|do not reply|automatic/i.test(text)) return { label: 'fyi', reason: 'An automatic message; nothing to answer.' }
+  if (/\?|please|renew|laat .*weten/i.test(String(entry.newestMessageStart ?? ''))) return { label: 'reply', reason: 'Asks you to answer or act.' }
+  return { label: 'fyi', reason: 'For your information.' }
+}
+
+/**
+ * A triage turn for the Mail door: one `mail_set_label` call per mail in its prompt,
+ * through the run's real tool endpoint on the MCP HTTP host, as a provider would.
+ */
+function mockMailTriage(input: TurnInput, queue: AsyncQueue<RuntimeEvent>, request: typeof fetch): TurnHandle {
+  const controller = new AbortController()
+  const first = input.catchUp[0]
+  const payload = untrustedMailPayload(first?.type === 'user_message' ? first.text : '')
+  const entries = Array.isArray(payload) ? payload.filter((entry): entry is Record<string, unknown> => typeof entry === 'object' && entry !== null) : []
+  const tool = input.mcpServers?.find(({ server }) => server.name === MAIL_TRIAGE_MCP_NAME)
+  void (async () => {
+    const url = tool?.server.url
+    if (tool === undefined || url === undefined) {
+      queue.push({ type: 'error', message: 'The triage turn was handed no label tool.' })
+      queue.close()
+      return
+    }
+    const headers: Record<string, string> = { 'content-type': 'application/json', accept: 'application/json' }
+    for (const header of tool.server.httpHeaders ?? []) {
+      const value = tool.runtimeEnv?.[header.envKey]
+      if (value !== undefined) headers[header.name] = value
+    }
+    let labelled = 0
+    for (const [at, entry] of entries.entries()) {
+      const toolCallId = `mock-label-${at + 1}`
+      queue.push({ type: 'tool_use', toolCallId, tool: `mcp__${MAIL_TRIAGE_MCP_NAME}__${MAIL_TRIAGE_TOOL}`, detail: String(entry.id) })
+      let ok = false
+      try {
+        const response = await request(url, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ jsonrpc: '2.0', id: at + 1, method: 'tools/call', params: { name: MAIL_TRIAGE_TOOL, arguments: { id: entry.id, ...mockMailLabel(entry) } } }),
+          signal: controller.signal,
+        })
+        const answer = await response.json().catch(() => undefined) as { result?: { isError?: boolean } } | undefined
+        ok = response.ok && answer?.result !== undefined && answer.result.isError !== true
+      } catch {
+        if (controller.signal.aborted) return
+      }
+      if (ok) labelled += 1
+      queue.push({ type: 'tool_result', toolCallId, outcome: ok ? 'success' : 'error' })
+    }
+    const text = `Labelled ${labelled} of ${entries.length} mails.`
+    queue.push({ type: 'result', text, usage: mockUsage(input.agent, 12), sessionId: sessionIdFor(input) })
+    queue.close()
+  })()
+  return {
+    events: queue,
+    stop() {
+      controller.abort()
       queue.close()
     },
   }
@@ -1020,6 +1150,8 @@ export function createMockDriver(options: MockDriverOptions = {}): Driver {
       const queue = new AsyncQueue<RuntimeEvent>()
       const { agent } = input
       if (agent.id === NOTE_EDIT_AGENT_ID) return mockNoteEdit(input, queue)
+      if (input.threadId.startsWith(MAIL_DRAFT_THREAD_PREFIX)) return mockMailDraft(input, queue, options.deltaDelayMs ?? 40)
+      if (input.threadId.startsWith(MAIL_TRIAGE_THREAD_PREFIX)) return mockMailTriage(input, queue, options.request ?? fetch)
       // The persona's next turn takes its live session over; with nothing left running it ends there.
       const attached = input.live === true ? live.get(liveKey(input.threadId, agent.id)) : undefined
       if (attached !== undefined && attached.info.running.length === 0) {

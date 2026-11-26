@@ -5,6 +5,7 @@ import {
   ArrowLeftRightIcon,
   CheckListIcon,
   DashboardSpeed02Icon,
+  Mail01Icon,
   Note01Icon,
   PuzzleIcon,
   SidebarLeftIcon,
@@ -36,7 +37,7 @@ interface WorkspaceHeaderProps {
    * title, with no badge, since the badge would only repeat the name beside it.
    */
   projectThread?: boolean
-  section?: 'plugins' | 'routines' | 'knowledge' | 'reminders' | 'artifacts' | 'usage'
+  section?: 'plugins' | 'routines' | 'knowledge' | 'reminders' | 'mail' | 'artifacts' | 'usage'
   /** A compact control that changes the named section, kept beside that section title. */
   accessory?: ReactNode
   /** Lets a feature-owned toolbar use the remaining header width. Compact switches stay content-sized. */
@@ -346,6 +347,8 @@ function Crumb({
           <Icon icon={Note01Icon} size={17} className="flex-none text-muted" />
         ) : section === 'reminders' ? (
           <Icon icon={CheckListIcon} size={17} className="flex-none text-muted" />
+        ) : section === 'mail' ? (
+          <Icon icon={Mail01Icon} size={17} className="flex-none text-muted" />
         ) : section === 'artifacts' ? (
           <Icon icon={Archive02Icon} size={17} className="flex-none text-muted" />
         ) : section === 'usage' ? (

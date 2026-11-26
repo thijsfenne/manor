@@ -2,6 +2,7 @@ import {
   Archive02Icon,
   Cancel01Icon,
   CursorRectangleSelection01Icon,
+  Mail01Icon,
   TextSelectionIcon,
 } from '@hugeicons/core-free-icons'
 import type { PageContextAttachment } from '@manor/contracts'
@@ -15,20 +16,24 @@ export function PageContextChip({
   context: PageContextAttachment
   onRemove?: () => void
 }) {
-  const title = context.title.trim() || hostOf(context.url)
+  // A mail has no page to name it by, and its label only repeats its subject.
+  const mail = context.kind === 'mail'
+  const title = context.title.trim() || (mail ? context.label : hostOf(context.url))
   return (
     <SourceContextChip
-      detail={context.label}
+      {...(mail ? {} : { detail: context.label })}
       icon={
-        context.kind === 'artifact'
-          ? Archive02Icon
-          : context.kind === 'text'
-            ? TextSelectionIcon
-            : CursorRectangleSelection01Icon
+        mail
+          ? Mail01Icon
+          : context.kind === 'artifact'
+            ? Archive02Icon
+            : context.kind === 'text'
+              ? TextSelectionIcon
+              : CursorRectangleSelection01Icon
       }
       name={title}
       removeLabel={`Remove context from ${title}`}
-      title={`${title}\n${context.label}\n${context.url}`}
+      title={mail ? title : `${title}\n${context.label}\n${context.url}`}
       {...(onRemove === undefined ? {} : { onRemove })}
     />
   )
@@ -46,7 +51,8 @@ export function SourceContextChip({
 }: {
   icon: Parameters<typeof Icon>[0]['icon']
   name: string
-  detail: string
+  /** Without one, the name has the chip to itself. */
+  detail?: string
   title: string
   removeLabel?: string
   appearance?: 'default' | 'composer'
@@ -58,8 +64,8 @@ export function SourceContextChip({
       title={title}
     >
       <Icon icon={icon} size={13} className="flex-none" />
-      <span className="max-w-[150px] flex-none truncate font-medium text-text">{name}</span>
-      <span className="min-w-0 truncate">{detail}</span>
+      <span className={`truncate font-medium text-text ${detail === undefined ? 'max-w-[260px] min-w-0' : 'max-w-[150px] flex-none'}`}>{name}</span>
+      {detail === undefined ? null : <span className="min-w-0 truncate">{detail}</span>}
       {onRemove === undefined ? null : (
         <button
           type="button"

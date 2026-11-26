@@ -33,6 +33,7 @@
     "./file-tree": "./src/fileTree.ts",
     "./vault-notes": "./src/vaultNotes.ts",
     "./reminders": "./src/reminders.ts",
+    "./mail": "./src/mail.ts",
     "./highlight": "./src/highlight.ts",
     "./languages": "./src/languages.ts",
     "./mentions": "./src/mentions.ts",

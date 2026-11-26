@@ -8,6 +8,7 @@ import type {
   FileAttachment,
   ImageAttachment,
   InlineQuote,
+  MailLabel,
   PageContextAttachment,
   ServerMessage,
   SingleRuntime,
@@ -29,6 +30,16 @@ import {
   withRoutineRunsRead,
 } from './workspaceActions'
 import type { WorkspaceState } from './workspaceState'
+import {
+  archivingMailThread,
+  labelledMailThread,
+  linkedMailSender,
+  openedMailThread,
+  startingMailDraft,
+  stoppedMailDraft,
+  unarchivingMailThread,
+  type MailState,
+} from './mail'
 
 export type NewChatTarget =
   | { kind: 'project'; projectId: string; mode?: ChatMode }
@@ -219,6 +230,11 @@ export function createWorkspaceCommands(send: Send, update: Update) {
     if (sent) update(change)
     return sent
   }
+  const askMail = (message: ClientMessage, change: (mail: MailState) => MailState) =>
+    ask(message, (state) => {
+      const mail = change(state.mail)
+      return mail === state.mail ? state : { ...state, mail }
+    })
   return {
     readRepoFile: (projectId: string, path: string, chatId?: string) =>
       ask(
@@ -305,5 +321,28 @@ export function createWorkspaceCommands(send: Send, update: Update) {
       update((state) => settleChatOverride(state, chatId, requestId))
       return false
     },
+    /** Answered at once from the host's cache; `refresh` also makes it poll the mailbox. */
+    loadMail: (refresh = false) => send({ type: 'mail_load', ...(refresh ? { refresh } : {}) }),
+    openMailThread: (requestId: string, threadId: string) =>
+      askMail({ type: 'mail_open', requestId, threadId }, (mail) => openedMailThread(mail, threadId)),
+    setMailLabel: (threadId: string, label: MailLabel) =>
+      askMail({ type: 'mail_set_label', threadId, label }, (mail) => labelledMailThread(mail, threadId, label)),
+    /** Null removes the sender's link. */
+    linkMailSender: (address: string, projectId: string | null) =>
+      askMail({ type: 'mail_link_sender', address, projectId }, (mail) => linkedMailSender(mail, address, projectId)),
+    archiveMailThread: (requestId: string, threadId: string) =>
+      askMail({ type: 'mail_archive', requestId, threadId }, (mail) => archivingMailThread(mail, requestId, threadId)),
+    unarchiveMailThread: (requestId: string, threadId: string) =>
+      askMail({ type: 'mail_unarchive', requestId, threadId }, (mail) => unarchivingMailThread(mail, requestId, threadId)),
+    runMailTriage: () => send({ type: 'mail_triage_run' }),
+    /** `instruction` with `current` asks for a new version of the text in the draft pane. */
+    startMailDraft: (draftId: string, threadId: string, instruction?: string, current?: string) =>
+      askMail({ type: 'mail_draft_start', draftId, threadId, ...(instruction === undefined ? {} : { instruction }),
+        ...(current === undefined ? {} : { current }) }, (mail) => startingMailDraft(mail, draftId, threadId)),
+    stopMailDraft: (draftId: string) =>
+      askMail({ type: 'mail_draft_stop', draftId }, (mail) => stoppedMailDraft(mail, draftId)),
+    /** The user's own Send. `mail_result` under `requestId` says whether delivery was confirmed. */
+    sendMail: (requestId: string, threadId: string, to: string, body: string, cc?: string) =>
+      send({ type: 'mail_send', requestId, threadId, to, body, ...(cc === undefined || cc === '' ? {} : { cc }) }),
   }
 }

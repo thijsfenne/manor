@@ -28,6 +28,7 @@ export type WorkspaceView =
   | 'routines'
   | 'knowledge'
   | 'reminders'
+  | 'mail'
   | 'artifacts'
   | 'browser'
   | 'usage'
@@ -52,6 +53,9 @@ interface SidebarProps {
   knowledgeActionSlot?: (node: HTMLDivElement | null) => void
   /** Where the Reminders door mounts its tiles and lists, on the same terms as Knowledge. */
   remindersSlot?: (node: HTMLDivElement | null) => void
+  /** Where the Mail door mounts its search, tabs and cards, and its triage button in the title row. */
+  mailSlot?: (node: HTMLDivElement | null) => void
+  mailActionSlot?: (node: HTMLDivElement | null) => void
   hasDirectory: boolean
   width: number
   /** Phone lets this overlay own the whole viewport and makes its controls touch-sized. */
@@ -133,7 +137,7 @@ interface SidebarProps {
   onRemoveProjectThread: (projectId: string) => void
 }
 
-const PANEL_TITLE: Record<SidebarPanel, string> = { work: 'Sessions', chats: 'Agents', knowledge: 'Knowledge', reminders: 'Reminders' }
+const PANEL_TITLE: Record<SidebarPanel, string> = { work: 'Sessions', chats: 'Agents', knowledge: 'Knowledge', reminders: 'Reminders', mail: 'Mail' }
 
 /** Arrow keys follow visible work rows across unsettled and settled; DMs stay separate. */
 export function navigateSidebarRows(event: KeyboardEvent<HTMLElement>) {
@@ -165,6 +169,8 @@ function SidebarNav({
   knowledgeSlot,
   knowledgeActionSlot,
   remindersSlot,
+  mailSlot,
+  mailActionSlot,
   hasDirectory,
   width,
   mobile = false,
@@ -270,7 +276,8 @@ function SidebarNav({
       <IconButton icon={AddTeam02Icon} iconSize={17} size={actionSize} label="New group" onClick={onNewGroup} />
       <IconButton icon={AddAgentIcon} iconSize={17} size={actionSize} label="New agent" onClick={onNewAgent} />
     </>
-  ) : panel === 'knowledge' ? <div ref={knowledgeActionSlot} className="flex items-center" /> : null
+  ) : panel === 'knowledge' ? <div ref={knowledgeActionSlot} className="flex items-center" />
+    : panel === 'mail' ? <div ref={mailActionSlot} className="flex items-center" /> : null
   const list = panel === 'work' ? (
     <div className="flex h-full flex-col">
     <ProjectThreadsSection
@@ -336,6 +343,8 @@ function SidebarNav({
     />
   ) : panel === 'knowledge' ? (
     <div ref={knowledgeSlot} className="min-w-0" />
+  ) : panel === 'mail' ? (
+    <div ref={mailSlot} className="min-w-0" />
   ) : panel === 'reminders' ? (
     <div ref={remindersSlot} className="min-w-0" />
   ) : null

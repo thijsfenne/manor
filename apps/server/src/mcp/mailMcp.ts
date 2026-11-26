@@ -370,7 +370,7 @@ const addressList = (list: readonly { name?: string; address?: string }[] | unde
  * mistyped path gets the list back rather than the server's bare `NO`, so the model can
  * correct itself instead of reporting a dead end.
  */
-async function openMailbox(client: ImapFlow, requested: string): Promise<{ path: string; release: () => void }> {
+async function openMailbox(client: Pick<ImapFlow, 'list' | 'getMailboxLock'>, requested: string): Promise<{ path: string; release: () => void }> {
   const mailboxes = await client.list()
   const path =
     requested === DEFAULT_MAILBOX
@@ -872,4 +872,4 @@ if (process.argv[1] !== undefined && /mailMcp\.(?:ts|mjs)$/.test(process.argv[1]
   })
 }
 
-export { htmlToText, stripQuotes, textNode, headerValue, recipient }
+export { htmlToText, stripQuotes, textNode, headerValue, recipient, decode, downloadCharset, readStream, openMailbox, DEFAULT_MAILBOX }

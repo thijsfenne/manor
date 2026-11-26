@@ -50,5 +50,7 @@ export function dataPaths(
     localAccessToken: path.join(sharedRoot, LOCAL_ACCESS_FILE),
     // One JSON line per finished turn with its stage timings, for latency work.
     turnStages: path.join(sharedRoot, 'logs', 'turn-stages.jsonl'),
+    // The Mail door's disposable cache. Safe to delete at any time; the next poll refills it.
+    mailCache: path.join(root, 'mail-cache.db'),
   }
 }

@@ -15,6 +15,7 @@ import {
 } from './optimisticOverrides'
 import type { PendingMessage } from './threadState'
 import { UNHEARD, type WorkspaceState } from './workspaceState'
+import { mailAfterReconnect } from './mail'
 
 /** Ids for optimistic bubbles. Local and short-lived; nothing durable keys on them. */
 let pendingCounter = 0
@@ -250,9 +251,11 @@ function withoutKey<T>(record: Record<string, T>, key: string): Record<string, T
 export function clearRunningTurns(state: WorkspaceState): WorkspaceState {
   const entries = Object.entries(state.activity)
   const relight = { ended: [] }
-  if (entries.every(([, activity]) => activity.runningTurns.length === 0)) return { ...state, relight, unheard: UNHEARD }
+  const mail = mailAfterReconnect(state.mail)
+  if (entries.every(([, activity]) => activity.runningTurns.length === 0)) return { ...state, mail, relight, unheard: UNHEARD }
   return {
     ...state,
+    mail,
     relight,
     unheard: UNHEARD,
     activity: Object.fromEntries(

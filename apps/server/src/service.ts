@@ -78,6 +78,10 @@ import { MyMindModule } from './mymindModule.js'
 import type { RemindersSource } from './reminders.js'
 import type { OpenLoopsSync } from './openLoopsSync.js'
 import { RemindersModule } from './remindersModule.js'
+import { MailModule } from './mailModule.js'
+import type { MailSource } from './mailSource.js'
+import type { MailToolHost } from './mailTriage.js'
+import type { OutboundSendPort } from './outboundSend.js'
 import { MergeTargetMoved, WorkModule } from './workModule.js'
 import { ProjectThreads, type FileWriteInput } from './projectThreads.js'
 import { PROJECT_THREAD_WRITER } from './projectFiles.js'
@@ -306,6 +310,14 @@ export interface ManorServiceOptions {
   reminders?: RemindersSource
   /** The memory folder's open-loops ledger and its Reminders list kept in step, where both are local. */
   openLoops?: OpenLoopsSync
+  /** The Mail door's mailbox. Absent means no mailbox is configured and the door stays hidden. */
+  mailSource?: MailSource
+  /** The Mail door's disposable cache file; in memory when absent. */
+  mailCacheFile?: string
+  /** The port the Mail door's Send goes through; absent refuses every send. */
+  mailSend?: OutboundSendPort
+  /** Serves the mail triage run's one tool; absent leaves the run unavailable. */
+  mailToolHost?: MailToolHost
   /** What Settings shows about this Mac, and the log files `reveal_log` may open. */
   systemInfo?: () => Promise<SystemInfo>
   /** Model list prices for the Usage view. Absent, only provider-reported cost is counted. */
@@ -330,6 +342,7 @@ export class ManorService {
   private readonly routineModule: RoutineModule
   private readonly myMindModule: MyMindModule
   private readonly remindersModule: RemindersModule
+  private readonly mailModule: MailModule
   private readonly connectionModule: ConnectionModule
   private readonly projectModule: ProjectModule
   private readonly agentModule: AgentModule
@@ -564,6 +577,15 @@ export class ManorService {
       ...(options.reminders === undefined ? {} : { source: options.reminders }),
       ...(options.openLoops === undefined ? {} : { openLoops: options.openLoops }),
       broadcast: options.broadcast,
+    })
+    this.mailModule = new MailModule({
+      ...(options.mailSource === undefined ? {} : { source: options.mailSource }),
+      cacheFile: options.mailCacheFile ?? ':memory:',
+      projectIds: async () => (await options.store.listProjects()).map((project) => project.id),
+      broadcast: options.broadcast,
+      runtime: { agents: options.agents, resolveDriver: options.resolveDriver, ensureScratchDir: options.ensureScratchDir },
+      ...(options.mailSend === undefined ? {} : { send: options.mailSend }),
+      ...(options.mailToolHost === undefined ? {} : { toolHost: options.mailToolHost }),
     })
     this.hostModule = new HostModule({
       reminders: options.reminders !== undefined,
@@ -916,6 +938,21 @@ export class ManorService {
    */
   async routines(): Promise<ServerMessage> {
     return this.routineModule.document()
+  }
+
+  /** The Mail door's cached state, sent on connect; `status: 'off'` tells the client to hide the door. */
+  mailState(): Promise<ServerMessage> {
+    return this.mailModule.state()
+  }
+
+  /** The Mail door's daily triage, on the server that runs routines; runs only when today's is owed. */
+  tickMailTriage(): Promise<void> {
+    return this.mailModule.tickTriage()
+  }
+
+  /** `socket` is the reply function the socket's messages were handled with; its mail draft stops. */
+  mailSocketClosed(socket: object): void {
+    this.mailModule.closeSocket(socket)
   }
 
   /** One open-loops sync, for the poll that catches ticks made outside Manor. */
@@ -1382,6 +1419,19 @@ export class ManorService {
       case 'reminders_load_completed':
       case 'reminders_write':
         await this.remindersModule.handle(message, reply, ack)
+        return
+      case 'mail_load':
+      case 'mail_open':
+      case 'mail_set_label':
+      case 'mail_link_sender':
+      case 'mail_archive':
+      case 'mail_unarchive':
+      case 'mail_triage_run':
+      case 'mail_draft_start':
+      case 'mail_draft_stop':
+      case 'mail_send':
+        // `sendReply` is the same object for every message of one socket, so it names the socket.
+        await this.mailModule.handle(message, reply, sendReply)
         return
       case 'save_mcp_server':
       case 'verify_mcp_server':

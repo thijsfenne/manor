@@ -31,6 +31,7 @@ const RoutinesView = retryableLazy(() => import('../routines/RoutinesView').then
 const KnowledgePanel = retryableLazy(() => import('../knowledge/KnowledgePanel').then((module) => module.KnowledgePanel))
 const ArtifactsView = retryableLazy(() => import('../artifacts/ArtifactsView').then((module) => module.ArtifactsView))
 const RemindersView = retryableLazy(() => import('../reminders/RemindersView').then((module) => module.RemindersView))
+const MailView = retryableLazy(() => import('../mail/MailView').then((module) => module.MailView))
 
 /** Every rail destination that is not the chat stage. */
 export type DestinationViewId = Exclude<WorkspaceView, 'chat' | 'new-chat' | 'empty-chat'>
@@ -72,6 +73,7 @@ export function DestinationView({
   onPickScheduledKind,
   onSelectRoutine,
   onOpenChat,
+  onOpenDm,
   onStartChat,
   onShowBrowserPanel,
   onOpenConnectors,
@@ -87,8 +89,14 @@ export function DestinationView({
   sidebarCollapsed: boolean
   /** The "show sidebar" handle, only where there is a sidebar to show. */
   onToggleSidebar: (() => void) | undefined
-  /** Where Knowledge and Reminders portal their lists into the workspace sidebar. */
-  slots: { knowledge: HTMLDivElement | null; knowledgeAction: HTMLDivElement | null; reminders: HTMLDivElement | null }
+  /** Where Knowledge, Reminders and Mail portal their lists into the workspace sidebar. */
+  slots: {
+    knowledge: HTMLDivElement | null
+    knowledgeAction: HTMLDivElement | null
+    reminders: HTMLDivElement | null
+    mail: HTMLDivElement | null
+    mailAction: HTMLDivElement | null
+  }
   noteRequest: { path: string; beside: string | null; id: number } | null
   onNoteRequestHandled: (id: number) => void
   reminderRequest: { reminderId: string; id: number } | null
@@ -111,6 +119,8 @@ export function DestinationView({
   onPickScheduledKind: (kind: ScheduleKind) => void
   onSelectRoutine: (routineId: string | null) => void
   onOpenChat: (chatId: string) => void
+  /** An agent's DM, or the stage addressed to that agent when there is none yet. */
+  onOpenDm: (agentId: string) => void
   onStartChat: () => void
   onShowBrowserPanel: (chatId: string) => void
   onOpenConnectors: () => void
@@ -186,6 +196,25 @@ export function DestinationView({
         onWrite={manor.writeReminder}
         selectRequest={reminderRequest}
         onSelectRequestHandled={onReminderRequestHandled}
+      />
+    )
+  }
+  if (view === 'mail') {
+    return (
+      // Like Reminders: the threads in the workspace sidebar, the open one on the stage.
+      <MailView
+        mail={workspace.mail}
+        agents={workspace.agents}
+        projects={workspace.projects}
+        chats={workspace.chats}
+        chatDoor={{ staged: pageContextsByChat, creating, stage: onAddPageContext, openChat: onOpenChat, openDm: onOpenDm }}
+        status={status}
+        commands={manor.mailCommands}
+        settingsOpen={settingsOpen}
+        sidebarSlot={slots.mail}
+        actionSlot={slots.mailAction}
+        sidebarCollapsed={sidebarCollapsed}
+        {...sidebarToggle}
       />
     )
   }

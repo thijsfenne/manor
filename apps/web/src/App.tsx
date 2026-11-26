@@ -33,6 +33,7 @@ import { FRAME_GUTTER, TOP_BAR_HEIGHT, TopBar, TopBarSlotContext, type TopBarSlo
 import { NoticeStack } from './components/NoticeStack'
 import { providerUpdateNotice, useProviderUpdates } from './components/ProviderUpdates'
 import { sessionGitNotice, useSessionGitToast } from './components/session/SessionGitToast'
+import { useMailArchivedNotice } from './components/mail/mailArchivedNotice'
 import { SESSION_SCOPE } from './components/session/DiffPanel'
 import { FileMarkSprite } from './components/fileMark'
 import { chatKindOffersSideChat } from './components/RightRail'
@@ -245,6 +246,8 @@ function Workspace({
   const hasArtifacts = workspace.artifacts.status === 'ready'
   // The phone has Apple's own Reminders app, which syncs; the door is a Mac-width surface.
   const hasReminders = workspace.reminders.available && !phone
+  // A Mac-width surface too, and there only where the host has a mailbox configured.
+  const hasMail = workspace.mail.snapshot !== null && workspace.mail.snapshot.status !== 'off' && !phone
   // A folder taken off the picker is never where a new Session lands on its own.
   const listedProjects = workspace.projects.filter((project) => project.unlisted !== true)
   const defaultProjectId = lastCreatedProjectId(workspace.chats, listedProjects)
@@ -269,6 +272,8 @@ function Workspace({
     hasArtifacts,
     hasArtifactsStatus: workspace.artifacts.status !== 'unknown',
     hasReminders,
+    hasMail,
+    hasMailStatus: workspace.mail.snapshot !== null,
     hasBrowser: browserBridge !== undefined,
     hasRoutines: workspace.hasRoutines,
     canStartChat,
@@ -306,6 +311,7 @@ function Workspace({
     openRoutineDetail,
     openKnowledge,
     openReminders,
+    openMail,
     openArtifacts,
     openBrowser,
     openUsage,
@@ -342,6 +348,8 @@ function Workspace({
   const [knowledgeSlot, setKnowledgeSlot] = useState<HTMLDivElement | null>(null)
   const [knowledgeActionSlot, setKnowledgeActionSlot] = useState<HTMLDivElement | null>(null)
   const [remindersSlot, setRemindersSlot] = useState<HTMLDivElement | null>(null)
+  const [mailSlot, setMailSlot] = useState<HTMLDivElement | null>(null)
+  const [mailActionSlot, setMailActionSlot] = useState<HTMLDivElement | null>(null)
   // The phone drawer always opens, because it carries the rail; on the desktop a
   // destination without a list simply has no sidebar.
   const sidebarAvailable = phone || sidebarPanel !== null
@@ -372,6 +380,7 @@ function Workspace({
     else if (next === 'artifacts') openArtifacts()
     else if (next === 'browser') openBrowser()
     else if (next === 'routines') openRoutines()
+    else if (next === 'mail') openMail()
     else openPlugins()
     closeSidebarOverlay()
   }
@@ -441,7 +450,9 @@ function Workspace({
 
   const providerUpdates = useProviderUpdates(workspace.providerUpdates)
   const sessionGitToast = useSessionGitToast(workspace.sessionGitResults, workspace.sessionCommits, manor.status === 'live')
+  const mailNotice = useMailArchivedNotice(workspace.mail, manor.mailCommands.unarchiveMailThread)
   const houseNotices = [
+    mailNotice,
     providerUpdateNotice(providerUpdates.toast, manor.updateProviders, providerUpdates.dismissToast),
     sessionGitNotice(sessionGitToast.notice, sessionGitToast.dismiss),
   ].filter((notice) => notice !== null)
@@ -707,6 +718,7 @@ function Workspace({
       phone={phone}
       hasVault={hasVault}
       hasReminders={hasReminders}
+      hasMail={hasMail}
       hasArtifacts={hasArtifacts}
       hasBrowser={browserBridge !== undefined}
       doors={settingsDoors}
@@ -822,6 +834,8 @@ function Workspace({
         knowledgeSlot={setKnowledgeSlot}
         knowledgeActionSlot={setKnowledgeActionSlot}
         remindersSlot={setRemindersSlot}
+        mailSlot={setMailSlot}
+        mailActionSlot={setMailActionSlot}
         hasDirectory={workspace.hasDirectory}
         width={phone ? (sidebarPanel === null ? NAV_RAIL_WIDTH : viewportWidth) : sidebarWidth}
         mobile={phone}
@@ -930,7 +944,7 @@ function Workspace({
           settingsOpen={settingsOpen}
           sidebarCollapsed={sidebarCollapsed}
           onToggleSidebar={sidebarHandle}
-          slots={{ knowledge: knowledgeSlot, knowledgeAction: knowledgeActionSlot, reminders: remindersSlot }}
+          slots={{ knowledge: knowledgeSlot, knowledgeAction: knowledgeActionSlot, reminders: remindersSlot, mail: mailSlot, mailAction: mailActionSlot }}
           noteRequest={noteRequest}
           onNoteRequestHandled={clearNoteRequest}
           reminderRequest={reveals.reminderRequest}
@@ -952,6 +966,7 @@ function Workspace({
           onPickScheduledKind={setPickedScheduledKind}
           onSelectRoutine={selectRoutine}
           onOpenChat={openChat}
+          onOpenDm={openDm}
           onStartChat={startChat}
           onShowBrowserPanel={showBrowserPanel}
           onOpenConnectors={openConnectors}

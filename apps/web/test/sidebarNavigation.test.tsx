@@ -126,6 +126,16 @@ describe('navigation rail', () => {
     expect(html).toContain('aria-label="Plugins"')
   })
 
+  it('shows Mail after Scheduled tasks where the host has a mailbox, with its dot even while open', () => {
+    expect(renderRail()).not.toContain('aria-label="Mail')
+    const html = renderRail({ hasMail: true })
+    expect(html.indexOf('aria-label="Mail"')).toBeGreaterThan(html.indexOf('aria-label="Scheduled tasks"'))
+    expect(html.indexOf('aria-label="Mail"')).toBeLessThan(html.indexOf('aria-label="Plugins"'))
+    expect(renderRail({ hasMail: true, mailAttention: true, destination: 'mail' })).toMatch(/aria-label="Mail, unread mail" aria-current="page"/)
+    expect(navDestinationOf('mail', null, 'chats')).toBe('mail')
+    expect(sidebarPanelOf('mail')).toBe('mail')
+  })
+
   it('carries unread chats on the Agents door only while another place is open', () => {
     expect(renderRail({ destination: 'work', agentsAttention: 'unread' })).toContain('aria-label="Agents, unread messages"')
     expect(renderRail({ destination: 'chats', agentsAttention: 'unread' })).not.toContain('unread messages')
@@ -329,7 +339,7 @@ describe('workspace startup navigation', () => {
       ] as Chat[],
       agents: [{ id: 'iris' }] as AgentConfig[], routines: [],
       hasDirectory: false, hasRoster: false, hasVault: true, hasVaultStatus: true,
-      hasArtifacts: true, hasArtifactsStatus: true, hasReminders: true, hasBrowser: true,
+      hasArtifacts: true, hasArtifactsStatus: true, hasReminders: true, hasMail: true, hasMailStatus: true, hasBrowser: true,
       hasRoutines: true, canStartChat: true, sidebarView: 'chats',
       showSidebarView: vi.fn(), openChatOnServer: vi.fn(), dismissNotice: vi.fn(),
       listSkillCandidates: vi.fn(), listWorkflowSuggestions: vi.fn(),

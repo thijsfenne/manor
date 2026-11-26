@@ -15,6 +15,8 @@ export * from './noteMarker.js'
 export * from './userMessage.js'
 export * from './chatCommands.js'
 export * from './reactions.js'
+export * from './mail.js'
+import { MailClientMessageSchemas, MailServerMessageSchemas } from './mail.js'
 import { MessageReactionSchema, ReactionEmojiSchema, ReactionPromptSchema } from './reactions.js'
 import { ConnectRequestEventSchema, ConnectStatusEventSchema, OpenConnectCardMessageSchema } from './connectCard.js'
 export * from './composioApps.js'
@@ -1244,20 +1246,24 @@ export const MAX_PAGE_CONTEXT_ATTACHMENTS = 3
  */
 export const PageContextAttachmentSchema = z.object({
   id: z.string().min(1).max(120),
-  kind: z.enum(['text', 'element', 'artifact']),
-  url: z.string().max(10_000).refine((value) => {
-    try {
-      const { protocol } = new URL(value)
-      return protocol === 'http:' || protocol === 'https:'
-    } catch {
-      return false
-    }
-  }, 'must be an http or https website URL'),
+  // `mail` is a thread from the Mail door: its text is the whole source and it has no page,
+  // so its url is the mailbox's web link when there is one and empty otherwise.
+  kind: z.enum(['text', 'element', 'artifact', 'mail']),
+  url: z.string().max(10_000),
   title: z.string().max(500),
   label: z.string().min(1).max(240),
   text: z.string().max(6_000),
   html: z.string().max(8_000),
   selector: z.string().max(2_000).optional(),
+}).superRefine((context, issues) => {
+  if (context.kind === 'mail' && context.url === '') return
+  try {
+    const { protocol } = new URL(context.url)
+    if (protocol === 'http:' || protocol === 'https:') return
+  } catch {
+    // Falls through to the issue below.
+  }
+  issues.addIssue({ code: z.ZodIssueCode.custom, path: ['url'], message: 'must be an http or https website URL' })
 })
 export type PageContextAttachment = z.infer<typeof PageContextAttachmentSchema>
 
@@ -4934,6 +4940,7 @@ const ClientMessageWireSchema = z.discriminatedUnion('type', [
   // before a scheduler is trusted with it, and it leaves `nextRunAt` alone: a hand
   // run is not the scheduled run and must not consume it.
   z.object({ type: z.literal('run_routine_now'), routineId: z.string(), ...optionalRequestId }),
+  ...MailClientMessageSchemas,
 ])
 export const ClientMessageSchema = ClientMessageWireSchema.superRefine((message, context) => {
   const attachments = message.type === 'send_message' || message.type === 'revise_work_goal'
@@ -5637,6 +5644,7 @@ export const ServerMessageSchema = z.discriminatedUnion('type', [
     total: z.number().int().min(0),
     nextOffset: z.number().int().min(0).nullable(),
   }),
+  ...MailServerMessageSchemas,
 ])
 export type ServerMessage = z.infer<typeof ServerMessageSchema>
 

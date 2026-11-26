@@ -46,6 +46,7 @@ export function locationOf(
     case 'suggestions':
     case 'knowledge':
     case 'reminders':
+    case 'mail':
     case 'artifacts':
     case 'browser':
     case 'usage':
@@ -64,6 +65,9 @@ interface WorkspaceNavInput {
   hasVaultStatus: boolean
   hasArtifacts: boolean
   hasArtifactsStatus: boolean
+  hasMail: boolean
+  /** The host has said whether it has a mailbox. */
+  hasMailStatus: boolean
   /** RemCTL or remindctl on this host. Announced on connect just before the vault status. */
   hasReminders: boolean
   /** The Electron host is present. Known at mount, so there is no pending status. */
@@ -111,6 +115,8 @@ export function useWorkspaceNav({
   hasArtifacts,
   hasArtifactsStatus,
   hasReminders,
+  hasMail,
+  hasMailStatus,
   hasBrowser,
   hasRoutines,
   canStartChat,
@@ -192,6 +198,10 @@ export function useWorkspaceNav({
   useEffect(() => {
     if (!hasReminders && activeView === 'reminders') setActiveView('chat')
   }, [hasReminders, activeView])
+
+  useEffect(() => {
+    if (!hasMail && activeView === 'mail') setActiveView('chat')
+  }, [hasMail, activeView])
 
   useEffect(() => {
     if (!hasBrowser && activeView === 'browser') setActiveView('chat')
@@ -349,6 +359,12 @@ export function useWorkspaceNav({
     setActiveView('reminders')
   }, [leaveStage])
 
+  // Like Reminders, the Mail door asks the host to look again when it mounts.
+  const openMail = useCallback(() => {
+    leaveStage()
+    setActiveView('mail')
+  }, [leaveStage])
+
   const openArtifacts = useCallback(() => {
     leaveStage()
     setActiveView('artifacts')
@@ -483,6 +499,9 @@ export function useWorkspaceNav({
         case 'reminders':
           openReminders()
           return
+        case 'mail':
+          openMail()
+          return
         case 'artifacts':
           openArtifacts()
           return
@@ -505,6 +524,7 @@ export function useWorkspaceNav({
       openRoutineDetail,
       openKnowledge,
       openReminders,
+      openMail,
       openArtifacts,
       openBrowser,
       openUsage,
@@ -526,6 +546,7 @@ export function useWorkspaceNav({
       // whether this host has Reminders.
       if ((location.kind === 'knowledge' || location.kind === 'reminders') && !hasVaultStatus) return
       if (location.kind === 'artifacts' && !hasArtifactsStatus) return
+      if (location.kind === 'mail' && !hasMailStatus) return
       pendingReload.current = null
       const target = location.kind === 'new-chat' ? location.target : null
       const available = location.kind === 'chat'
@@ -536,6 +557,7 @@ export function useWorkspaceNav({
             : agents.some((agent) => agent.id === target.agentId)
           : location.kind === 'knowledge' ? hasVault
             : location.kind === 'reminders' ? hasReminders
+            : location.kind === 'mail' ? hasMail
             : location.kind === 'artifacts' ? hasArtifacts
               : location.kind === 'browser' ? hasBrowser : true
       if (available) {
@@ -546,7 +568,7 @@ export function useWorkspaceNav({
       }
     }
     showSidebarDestination(sidebarView)
-  }, [activeView, selectedChat, draftTarget, hasDirectory, hasRoster, hasRoutines, hasVaultStatus, hasArtifactsStatus,
+  }, [activeView, selectedChat, draftTarget, hasDirectory, hasRoster, hasRoutines, hasVaultStatus, hasArtifactsStatus, hasMail, hasMailStatus,
     chats, projects, agents, routines, hasVault, hasReminders, hasArtifacts, hasBrowser, showSidebarView, applyLocation, showSidebarDestination, sidebarView])
 
   useEffect(() => {
@@ -615,6 +637,7 @@ export function useWorkspaceNav({
     openRoutineDetail,
     openKnowledge,
     openReminders,
+    openMail,
     openArtifacts,
     openBrowser,
     openUsage,

@@ -1,4 +1,5 @@
 import { DEFAULT_USER_PROFILE } from '@manor/contracts'
+import { mailCards } from '@manor/client-runtime/mail'
 import { DEFAULT_PROFILE_PHOTO } from '../AccountPopover'
 import { NavRail, type DoorAttention } from '../NavRail'
 import type { useProviderUpdates } from '../ProviderUpdates'
@@ -28,6 +29,7 @@ export function WorkspaceNavRail({
   hasReminders,
   hasArtifacts,
   hasBrowser,
+  hasMail,
   doors,
   onSelect,
   onOpenUsage,
@@ -47,6 +49,7 @@ export function WorkspaceNavRail({
   hasReminders: boolean
   hasArtifacts: boolean
   hasBrowser: boolean
+  hasMail: boolean
   doors: ReturnType<typeof useSettingsDoors>
   onSelect: (destination: NavDestination) => void
   onOpenUsage: () => void
@@ -88,6 +91,8 @@ export function WorkspaceNavRail({
       hasReminders={hasReminders}
       hasArtifacts={hasArtifacts}
       hasBrowser={hasBrowser}
+      hasMail={hasMail}
+      mailAttention={mailCards(workspace.mail).some((card) => card.unread)}
       agentsAttention={agentsAttention}
       routineAttention={routineAttention}
       sessionsAttention={sessionsAttention}
