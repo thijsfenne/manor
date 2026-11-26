@@ -1,11 +1,12 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from 'vitest'
-import { readMailHtml, safeMailHref, type MailHtmlOptions } from './mailHtml'
+import { mailHtmlSetsColours, readMailHtml, safeMailHref, type MailHtmlOptions } from './mailHtml'
 
 const ORIGIN = 'http://127.0.0.1:43179'
 const options: MailHtmlOptions = {
   origin: ORIGIN,
   later: false,
+  paper: false,
   theme: { scheme: 'dark', text: 'oklch(0.9 0 0)', link: 'oklch(0.7 0.1 250)' },
 }
 
@@ -102,11 +103,12 @@ describe('readMailHtml', () => {
     expect(own?.textContent).toBe('p{margin:4px}')
   })
 
-  it('draws a mail with its own colours as paper', () => {
-    const doc = prepared('<body style="background-color: navy"><p style="color: red">x</p></body>')
+  it('draws a mail of a thread on paper as paper, with its own colours kept', () => {
+    const doc = prepared('<body style="background-color: navy"><p style="color: red">x</p></body>', { paper: true })
     const base = doc.head.querySelector('style')?.textContent ?? ''
-    expect(base).toContain(':root{color-scheme:light}html{background:Canvas;color:CanvasText}body{padding:16px}')
+    expect(base).toContain(':root{color-scheme:light}html{background:Canvas;color:CanvasText}')
     expect(base).not.toContain(options.theme.text)
+    expect(base).not.toContain('padding')
     expect(doc.querySelector('p')?.getAttribute('style')).toBe('color: red')
   })
 
@@ -131,7 +133,7 @@ describe('readMailHtml', () => {
   })
 })
 
-describe('a mail drawn as paper', () => {
+describe('mailHtmlSetsColours', () => {
   it.each([
     ['a bgcolor attribute', '<table bgcolor="white"><tr><td>x</td></tr></table>'],
     ['a background in a style attribute', '<div style="background: white">x</div>'],
@@ -140,7 +142,7 @@ describe('a mail drawn as paper', () => {
     ['a colour in a style element', '<style>.a { color: black }</style><p class="a">x</p>'],
     ['a font colour', '<font color="red">x</font>'],
   ])('is true for %s', (_name, html) => {
-    expect(readMailHtml(html, options).paper).toBe(true)
+    expect(mailHtmlSetsColours(html, false)).toBe(true)
   })
 
   it.each([
@@ -148,7 +150,13 @@ describe('a mail drawn as paper', () => {
     ['a border colour only', '<div style="border-color: red; border: 1px solid">x</div>'],
     ['a background image only', '<style>.a{background-image:none}</style><p class="a">x</p>'],
   ])('is false for %s', (_name, html) => {
-    expect(readMailHtml(html, options).paper).toBe(false)
+    expect(mailHtmlSetsColours(html, false)).toBe(false)
+  })
+
+  it('does not count colours in the quoted history a later message drops', () => {
+    const reply = '<p>Fine by me.</p><div class="gmail_quote"><p style="color: navy">Earlier</p></div>'
+    expect(mailHtmlSetsColours(reply, true)).toBe(false)
+    expect(mailHtmlSetsColours(reply, false)).toBe(true)
   })
 })
 

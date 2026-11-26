@@ -7,10 +7,12 @@ import {
   mailCardsInTab,
   mailKeyAction,
   mailNeighbour,
+  mailRange,
   mailTimeLabel,
   mailViewShowing,
   searchMailCards,
   steppedMailSelection,
+  toggledMailSelection,
   unlabelledMailCount,
 } from './mail'
 
@@ -33,8 +35,8 @@ const three = cards.slice(0, 3)
 const ids = (listed: MailCard[]) => listed.map((entry) => entry.threadId)
 
 describe('mail helpers', () => {
-  it('has three tabs, Needs reply first, and lists neither Other nor unlabelled cards in any', () => {
-    expect(MAIL_TABS.map((tab) => tab.label)).toEqual(['Needs reply', 'Waiting', 'FYI'])
+  it('has three tabs, Needs attention first, and lists neither Other nor unlabelled cards in any', () => {
+    expect(MAIL_TABS.map((tab) => tab.label)).toEqual(['Needs attention', 'Waiting', 'FYI'])
     expect(ids(mailCardsInTab(cards, 'reply'))).toEqual(['a'])
     expect(ids(mailCardsInTab(cards, 'wait'))).toEqual(['b'])
     expect(mailCardsInTab(cards, 'fyi')).toEqual([])
@@ -58,11 +60,27 @@ describe('mail helpers', () => {
     expect(mailViewShowing(cards[2]!, 'reply', 'robin')).toEqual({})
   })
 
-  it('selects the next card after an archive, else the previous one', () => {
-    expect(mailNeighbour(three, 'a')).toBe('b')
-    expect(mailNeighbour(three, 'c')).toBe('b')
-    expect(mailNeighbour([cards[0]!], 'a')).toBeNull()
-    expect(mailNeighbour(three, 'gone')).toBeNull()
+  it('opens the card after the last archived one, else the nearest before it that stays', () => {
+    expect(mailNeighbour(three, ['a'])).toBe('b')
+    expect(mailNeighbour(three, ['c'])).toBe('b')
+    expect(mailNeighbour(cards, ['b', 'a'])).toBe('c')
+    expect(mailNeighbour(cards, ['c', 'd'])).toBe('b')
+    expect(mailNeighbour(three, ['a', 'c'])).toBe('b')
+    expect(mailNeighbour(cards, ['b', 'gone'])).toBe('c')
+    expect(mailNeighbour([cards[0]!], ['a'])).toBeNull()
+    expect(mailNeighbour(three, ['gone'])).toBeNull()
+    expect(mailNeighbour(three, [])).toBeNull()
+  })
+
+  it('toggles a card in the selection and picks a range in list order', () => {
+    expect(toggledMailSelection(['a'], 'c')).toEqual(['a', 'c'])
+    expect(toggledMailSelection(['a', 'c'], 'a')).toEqual(['c'])
+    expect(toggledMailSelection([], 'b')).toEqual(['b'])
+    expect(mailRange(cards, 'a', 'c')).toEqual(['a', 'b', 'c'])
+    expect(mailRange(cards, 'd', 'b')).toEqual(['b', 'c', 'd'])
+    expect(mailRange(cards, 'b', 'b')).toEqual(['b'])
+    expect(mailRange(cards, null, 'c')).toEqual(['c'])
+    expect(mailRange(cards, 'gone', 'c')).toEqual(['c'])
   })
 
   it('steps through the listed cards and stops at the ends', () => {

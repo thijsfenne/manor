@@ -4,7 +4,9 @@ import { RefreshIcon } from '@hugeicons/core-free-icons'
 import type { AgentConfig, Chat, Project } from '@manor/contracts'
 import type { createWorkspaceCommands } from '@manor/client-runtime/commands'
 import { mailCards, type MailState } from '@manor/client-runtime/mail'
-import { listedMailCards, mailKeyAction, mailNeighbour, steppedMailSelection, unlabelledMailCount, type MailKeyAction } from '../../mail'
+import {
+  listedMailCards, mailKeyAction, mailNeighbour, mailRange, steppedMailSelection, toggledMailSelection, unlabelledMailCount, type MailKeyAction,
+} from '../../mail'
 import { cosOf } from '../../persona'
 import type { ConnectionStatus } from '../../useWorkspace'
 import { useStableCallback } from '../../useStableCallback'
@@ -14,7 +16,7 @@ import { IconButton } from '../ui/IconButton'
 import { MailAddToChatDialog, type MailChatDoor } from './MailAddToChatDialog'
 import { MailDraftPane } from './MailDraftPane'
 import { MailReader } from './MailReader'
-import { MailSidebar, MailTriageButton } from './MailSidebar'
+import { MailSidebar, MailTriageButton, type MailPick } from './MailSidebar'
 import { setMailView, useMailView } from './mailViewStore'
 
 export type MailCommands = Pick<ReturnType<typeof createWorkspaceCommands>,
@@ -56,15 +58,22 @@ export function MailView({ mail, agents, projects, chats, chatDoor, status, comm
   sidebarCollapsed: boolean
   onToggleSidebar?: () => void
 }) {
-  const { selectedId, tab, query } = useMailView()
+  const { selectedId, tab, query, picked } = useMailView()
   const cards = mailCards(mail)
   const listed = listedMailCards(cards, tab, query)
   const unlabelled = unlabelledMailCount(cards)
   const [reply, setReply] = useState<Reply | null>(null)
   // A thread stays open when a new label or search takes its card off the list, but an
   // empty list has the stage to itself, unless a reply is being written there.
-  const card = listed.length === 0 && reply === null ? null : cards.find((entry) => entry.threadId === selectedId) ?? null
+  const current = listed.length === 0 && reply === null ? null : cards.find((entry) => entry.threadId === selectedId) ?? null
+  // Only listed cards count as picked, in list order; a pick of two or more hides the thread.
+  const pickedListed = listed.filter((entry) => picked.includes(entry.threadId)).map((entry) => entry.threadId)
+  const many = pickedListed.length > 1
+  const selection = many ? pickedListed : []
+  const card = many ? null : current
   const openId = card?.threadId ?? null
+  // Where a Shift click starts: the card last clicked, else the open mail.
+  const anchor = useRef<string | null>(null)
   const thread = openId === null ? null : mail.threads[openId] ?? null
   const agent = cosOf(agents)
   const headerRows = useHeaderRows()
@@ -124,22 +133,54 @@ export function MailView({ mail, agents, projects, chats, chatDoor, status, comm
   const openAdd = () => {
     if (thread !== null) setAdding(thread.threadId)
   }
-  const archive = () => {
-    if (openId === null) return
-    const requestId = newId('archive')
-    if (!commands.archiveMailThread(requestId, openId)) return
-    setMailView({ selectedId: mailNeighbour(listed, openId), archived: { requestId, threadId: openId } })
+  /**
+   * One request per thread. `clear` ends the pick and opens the neighbour; a single card
+   * archived from its menu does that only when it was the open mail.
+   */
+  const archive = (threadIds: readonly string[], clear: boolean) => {
+    const archived = threadIds.flatMap((threadId) => {
+      const requestId = newId('archive')
+      return commands.archiveMailThread(requestId, threadId) ? [{ requestId, threadId }] : []
+    })
+    if (archived.length === 0) return
+    const gone = archived.map((entry) => entry.threadId)
+    const reopen = clear || (selectedId !== null && gone.includes(selectedId))
+    setMailView({ archived, ...(clear ? { picked: [] } : {}), ...(reopen ? { selectedId: mailNeighbour(listed, gone) } : {}) })
+  }
+  const archiveSelected = () => archive(many ? selection : openId === null ? [] : [openId], true)
+  const archiveCard = (threadId: string) => {
+    if (selection.includes(threadId)) archiveSelected()
+    else archive([threadId], false)
   }
   const select = (threadId: string) => {
     // Picking the open card again retries a read that failed.
     if (threadId === openId && mail.threadErrors[threadId] !== undefined) read(threadId)
-    setMailView({ selectedId: threadId })
+    setMailView({ selectedId: threadId, picked: [] })
+  }
+  /** One card left is simply the open mail, and none leaves nothing open. */
+  const pickCards = (next: readonly string[]) => {
+    if (next.length > 1) setMailView({ picked: [...next] })
+    else if (next[0] === undefined) setMailView({ selectedId: null, picked: [] })
+    else select(next[0])
+  }
+  const click = (threadId: string, pick: MailPick) => {
+    // The open mail counts as picked, so the first Cmd click on another card picks both.
+    const listedOpen = current !== null && listed.includes(current) ? [current.threadId] : []
+    if (pick === 'range') {
+      const from = [anchor.current, ...listedOpen].find((id) => listed.some((entry) => entry.threadId === id)) ?? null
+      pickCards(mailRange(listed, from, threadId))
+      return
+    }
+    anchor.current = threadId
+    if (pick === 'toggle') pickCards(toggledMailSelection(many ? selection : listedOpen, threadId))
+    else select(threadId)
   }
 
   const run = (action: MailKeyAction): boolean => {
     switch (action.kind) {
       case 'step': {
-        const next = steppedMailSelection(listed, openId, action.step)
+        anchor.current = null
+        const next = steppedMailSelection(listed, current?.threadId ?? null, action.step)
         if (next !== null) select(next)
         return true
       }
@@ -150,7 +191,7 @@ export function MailView({ mail, agents, projects, chats, chatDoor, status, comm
         openReply()
         return true
       case 'archive':
-        archive()
+        archiveSelected()
         return true
       case 'add':
         openAdd()
@@ -161,6 +202,11 @@ export function MailView({ mail, agents, projects, chats, chatDoor, status, comm
         requestAnimationFrame(() => search.current?.focus())
         return true
       case 'close':
+        if (many) {
+          anchor.current = null
+          setMailView({ picked: [] })
+          return true
+        }
         if (replying === null) return false
         closeReply()
         return true
@@ -193,9 +239,9 @@ export function MailView({ mail, agents, projects, chats, chatDoor, status, comm
   return (
     <section aria-label="Mail" className={`relative grid min-h-0 min-w-0 ${headerRows} overflow-hidden bg-bg`}>
       {sidebarSlot === null ? null : createPortal(
-        <MailSidebar cards={listed} projects={projects} selectedId={openId} tab={tab} query={query} problems={problems}
-          searchRef={search} onSelect={select}
-          onTab={(next) => setMailView({ tab: next })} onQuery={(next) => setMailView({ query: next })} />,
+        <MailSidebar cards={listed} projects={projects} selectedId={openId} picked={selection} tab={tab} query={query} problems={problems}
+          searchRef={search} onSelect={click} onArchive={archiveCard}
+          onTab={(next) => setMailView({ tab: next, picked: [] })} onQuery={(next) => setMailView({ query: next, picked: [] })} />,
         sidebarSlot,
       )}
       {actionSlot === null || snapshot === null ? null : createPortal(
@@ -212,9 +258,9 @@ export function MailView({ mail, agents, projects, chats, chatDoor, status, comm
       <div className="flex min-h-0 min-w-0">
         <div className={PANE_TRAVEL} style={{ flex: '1 1 0%' }}>
           <MailReader card={card} thread={thread} error={openId === null ? undefined : mail.threadErrors[openId]}
-            listed={snapshot === null ? null : listed.length} tab={tab} query={query} triage={snapshot?.triage ?? null}
+            listed={snapshot === null ? null : listed.length} selected={selection.length} tab={tab} query={query} triage={snapshot?.triage ?? null}
             unlabelled={unlabelled} projects={projects} split={replying !== null}
-            onReply={openReply} onAdd={openAdd} onArchive={archive} onTriage={runTriage}
+            onReply={openReply} onAdd={openAdd} onArchive={archiveSelected} onTriage={runTriage}
             onLink={(address, projectId) => { commands.linkMailSender(address, projectId) }} />
         </div>
         {/* Always here at no width, so the pane travels both ways. It gives way to the reader on a narrow stage. */}

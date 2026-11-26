@@ -12,15 +12,18 @@ import { mailView, setMailView, useMailView } from './mailViewStore'
 const UNDO_VISIBLE_MS = 6_000
 
 /**
- * The `Archived` card in the window's notice stack, with its Undo. It stays while the
- * pointer or focus rests on it, and goes at once when the host refused the Archive: the
- * card is back then and the refusal has its own notice.
+ * The `Archived` card in the window's notice stack, with its Undo, for one Archive of one
+ * or more threads. It stays while the pointer or focus rests on it. A thread the host
+ * refused leaves it, and it goes at once when all were refused: those cards are back
+ * then and each refusal has its own notice.
  */
 export function useMailArchivedNotice(mail: MailState, unarchive: (requestId: string, threadId: string) => boolean): HouseNotice | null {
   const { archived } = useMailView()
   const [held, setHeld] = useState<string | null>(null)
-  const refused = archived !== null && mail.results[archived.requestId]?.ok === false
-  const paused = archived !== null && held === archived.requestId
+  const kept = archived?.filter((entry) => mail.results[entry.requestId]?.ok !== false) ?? []
+  const key = archived?.[0] === undefined ? null : `mail-${archived[0].requestId}`
+  const refused = archived !== null && kept.length === 0
+  const paused = key !== null && held === key
 
   useEffect(() => {
     if (refused) setMailView({ archived: null })
@@ -31,24 +34,31 @@ export function useMailArchivedNotice(mail: MailState, unarchive: (requestId: st
     return () => clearTimeout(timer)
   }, [archived, paused])
 
-  if (archived === null || refused) return null
-  const { requestId, threadId } = archived
-  const dismiss = () => setMailView({ archived: null })
+  if (key === null || refused) return null
+  // A card on its way out, replaced by the next Archive, no longer acts: the notice up now is not its own.
+  const replaced = () => mailView().archived !== archived
+  const dismiss = () => {
+    if (!replaced()) setMailView({ archived: null })
+  }
   const undo = () => {
+    if (replaced()) return
     // Offline nothing leaves, and the card stays up to be pressed again.
-    if (!unarchive(`mail-unarchive-${crypto.randomUUID()}`, threadId)) return
+    const back = kept.filter((entry) => unarchive(`mail-unarchive-${crypto.randomUUID()}`, entry.threadId))
+    const threadId = back[0]?.threadId
+    if (threadId === undefined) return
     const card = mail.archived[threadId] ?? mailCards(mail).find((entry) => entry.threadId === threadId)
     const { tab, query } = mailView()
     // A tab or search that would hide the returned card gives way, so it can be seen selected.
-    setMailView({ selectedId: threadId, archived: null, ...(card === undefined ? {} : mailViewShowing(card, tab, query)) })
+    setMailView({ selectedId: threadId, picked: [], archived: null, ...(card === undefined ? {} : mailViewShowing(card, tab, query)) })
   }
   return {
-    key: `mail-${requestId}`,
+    key,
     dismiss,
     node: (
-      <div onPointerEnter={() => setHeld(requestId)} onPointerLeave={() => setHeld(null)}
-        onFocus={() => setHeld(requestId)} onBlur={() => setHeld(null)}>
-        <NoticeCard mark={<Icon icon={Archive02Icon} size={20} className="text-muted" />} title="Archived"
+      <div onPointerEnter={() => setHeld(key)} onPointerLeave={() => setHeld(null)}
+        onFocus={() => setHeld(key)} onBlur={() => setHeld(null)}>
+        <NoticeCard mark={<Icon icon={Archive02Icon} size={20} className="text-muted" />}
+          title={kept.length === 1 ? 'Archived' : `Archived ${kept.length} mails`}
           action={<Button size="small" onClick={undo}>Undo</Button>} onDismiss={dismiss} />
       </div>
     ),

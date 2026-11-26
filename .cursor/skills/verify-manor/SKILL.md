@@ -131,7 +131,7 @@ Drive commands print one JSON line (`{"ok":true,…}`), `launch`, `doctor` and `
 | `open --url <path or URL>` | Navigate on the spike origin only, e.g. a delivered file's `?view=1` page |
 | `snapshot [--aria] [locator] [--path <file>]` | Page text, or the ARIA tree with `--aria`; a locator reads one element instead of the page. Without `--path` it prints to stdout |
 | `screenshot --path <file.png> [locator]` | Viewport PNG, or cropped to that element (e.g. `--role navigation --name "Agents navigation"`), plus `<file>.preview.png` at 800px wide |
-| `click <locator> [--button right] [--count 3]` | Click, or a right-click for a row menu; `--count 3` is a triple click. A delivered HTML preview is `--frame "Preview of <name>><name>"` (outer frame, then the page's own sandboxed frame); the same page opened top-level is `--frame <name>` |
+| `click <locator> [--button right] [--count 3] [--modifiers Meta,Shift]` | Click, or a right-click for a row menu; `--count 3` is a triple click; `--modifiers` holds those keys for the click. A delivered HTML preview is `--frame "Preview of <name>><name>"` (outer frame, then the page's own sandboxed frame); the same page opened top-level is `--frame <name>` |
 | `fill <locator> --value <text>` | Replace field text; `fill --composer --value` for the message box |
 | `type --text <text>` | Type into whatever has focus |
 | `press --key <key>` | One key or chord in Playwright form: `Enter`, `Escape`, `Meta+k`, `Shift+Tab` |

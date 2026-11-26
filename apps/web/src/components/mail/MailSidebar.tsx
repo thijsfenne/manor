@@ -1,11 +1,12 @@
-import { useEffect, useRef, type RefObject } from 'react'
-import { LoaderCircleIcon, Search01Icon, Tag01Icon } from '@hugeicons/core-free-icons'
+import { useEffect, useRef, useState, type MouseEvent, type RefObject } from 'react'
+import { Archive02Icon, LoaderCircleIcon, Search01Icon, Tag01Icon } from '@hugeicons/core-free-icons'
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import { MAIL_LABEL_NAME, type AgentConfig, type MailCard, type MailTriageState, type Project } from '@manor/contracts'
 import { EASE_OUT, INSTANT } from '../../motion'
 import { MAIL_TABS, mailSearching, mailSenderName, mailTimeLabel, type MailTab } from '../../mail'
 import { useMinuteClock } from '../../useMinuteClock'
 import { Icon } from '../Icon'
+import { ContextMenu } from '../ui/ContextMenu'
 import { SegmentedControl } from '../ui/SegmentedControl'
 import { MailProjectSquare } from './MailProjectSquare'
 
@@ -38,26 +39,43 @@ export function MailTriageButton({ agent, triage, unlabelled, onRun }: {
   )
 }
 
+/** What a click on a card asks for: open it, Cmd or Ctrl to pick it, Shift to pick a range. */
+export type MailPick = 'open' | 'toggle' | 'range'
+
+const pickOf = (event: MouseEvent): MailPick =>
+  event.shiftKey ? 'range' : event.metaKey || event.ctrlKey ? 'toggle' : 'open'
+
 const CHIP_TONE = { reply: 'text-warn', wait: 'text-busy', fyi: 'text-dim', other: 'text-dim' } as const
 
-function MailRow({ card, selected, showLabel, project, now, onSelect }: {
+function MailRow({ card, open, picked, showLabel, project, now, archiveLabel, onSelect, onArchive }: {
   card: MailCard
-  selected: boolean
+  /** The thread on the stage. */
+  open: boolean
+  /** Part of a pick of two or more cards. */
+  picked: boolean
   showLabel: boolean
   project: Project | undefined
   now: number
-  onSelect: () => void
+  archiveLabel: string
+  onSelect: (pick: MailPick) => void
+  onArchive: () => void
 }) {
+  const [menu, setMenu] = useState<{ x: number; y: number } | null>(null)
+  const select = (event: MouseEvent) => onSelect(pickOf(event))
   const sender = mailSenderName(card.from)
   const time = mailTimeLabel(card.at, now)
   const label = showLabel ? card.label ?? null : null
-  const name = [card.unread ? 'Unread' : null, card.subject, sender, time, label === null ? null : MAIL_LABEL_NAME[label], project?.name ?? null]
+  const name = [picked ? 'Selected' : null, card.unread ? 'Unread' : null, card.subject, sender, time, label === null ? null : MAIL_LABEL_NAME[label], project?.name ?? null]
     .filter((part) => part !== null).join(', ')
   return (
-    <div className={`relative rounded-lg px-3 py-2.5 ${selected ? 'bg-user-bg text-text' : 'text-muted hover:bg-surface-2 hover:text-text'}`}>
+    <div className={`relative rounded-lg px-3 py-2.5 ${open || picked ? 'bg-user-bg text-text' : 'text-muted hover:bg-surface-2 hover:text-text'}`}
+      onContextMenu={(event) => {
+        event.preventDefault()
+        setMenu({ x: event.clientX, y: event.clientY })
+      }}>
       {/* The whole card is one button; what it says lies over it and lets the press through. */}
       <button type="button" className="absolute inset-0 cursor-pointer rounded-[inherit] border-0 bg-transparent p-0"
-        aria-label={name} aria-current={selected ? 'true' : undefined} data-mail-card={card.threadId} onClick={onSelect} />
+        aria-label={name} aria-current={open ? 'true' : undefined} data-mail-card={card.threadId} onClick={select} />
       <div className="pointer-events-none relative flex items-center gap-2">
         <span aria-hidden="true" className={`size-1.5 flex-none rounded-full ${card.unread ? 'bg-busy' : ''}`} />
         <span className={`min-w-0 flex-1 truncate text-[13px] ${card.unread ? 'font-medium text-text' : ''}`}>{card.subject}</span>
@@ -67,14 +85,18 @@ function MailRow({ card, selected, showLabel, project, now, onSelect }: {
         <span className="flex-none tabular-nums">{time}</span>
         {label === null ? null : (
           // Takes the pointer only to show why the label was given; a press still opens the card.
-          <span className={`pointer-events-auto flex-none ${CHIP_TONE[label]}`} title={card.reason} onClick={onSelect}>{MAIL_LABEL_NAME[label]}</span>
+          <span className={`pointer-events-auto flex-none ${CHIP_TONE[label]}`} title={card.reason} onClick={select}>{MAIL_LABEL_NAME[label]}</span>
         )}
         {project === undefined ? null : (
-          <span className="pointer-events-auto flex flex-none items-center" onClick={onSelect}>
+          <span className="pointer-events-auto flex flex-none items-center" onClick={select}>
             <MailProjectSquare name={project.name} color={project.color} named />
           </span>
         )}
       </div>
+      {menu === null ? null : (
+        <ContextMenu x={menu.x} y={menu.y} items={[{ label: archiveLabel, icon: Archive02Icon, onSelect: onArchive }]}
+          onClose={() => setMenu(null)} />
+      )}
     </div>
   )
 }
@@ -84,17 +106,22 @@ function MailRow({ card, selected, showLabel, project, now, onSelect }: {
  * stage. A search lists every match whatever its label, so it hides the tabs and each row
  * names its label instead.
  */
-export function MailSidebar({ cards, projects, selectedId, tab, query, problems, searchRef, onSelect, onTab, onQuery }: {
+export function MailSidebar({ cards, projects, selectedId, picked, tab, query, problems, searchRef, onSelect, onArchive, onTab, onQuery }: {
   /** Already narrowed to the tab, or to the search. */
   cards: readonly MailCard[]
   projects: readonly Project[]
+  /** The thread on the stage; null while several cards are picked. */
   selectedId: string | null
+  /** Two or more listed cards picked at once, else empty. */
+  picked: readonly string[]
   tab: MailTab
   query: string
   /** What the host reported about the mailbox or the last triage run. */
   problems: readonly string[]
   searchRef: RefObject<HTMLInputElement>
-  onSelect: (threadId: string) => void
+  onSelect: (threadId: string, pick: MailPick) => void
+  /** The right click Archive: the whole pick when the card is in it, else this card alone. */
+  onArchive: (threadId: string) => void
   onTab: (tab: MailTab) => void
   onQuery: (query: string) => void
 }) {
@@ -137,9 +164,10 @@ export function MailSidebar({ cards, projects, selectedId, tab, query, problems,
             {cards.map((card) => (
               <motion.li key={card.threadId} className="mb-0.5 overflow-hidden"
                 exit={reduce ? { opacity: 0, transition: INSTANT } : { ...CARD_AWAY, transition: CARD_LEAVE }}>
-                <MailRow card={card} selected={card.threadId === selectedId} showLabel={searching} now={now}
-                  project={projects.find((project) => project.id === card.projectId)}
-                  onSelect={() => onSelect(card.threadId)} />
+                <MailRow card={card} open={card.threadId === selectedId} picked={picked.includes(card.threadId)}
+                  showLabel={searching} now={now} project={projects.find((project) => project.id === card.projectId)}
+                  archiveLabel={picked.includes(card.threadId) ? `Archive ${picked.length} mails` : 'Archive'}
+                  onSelect={(pick) => onSelect(card.threadId, pick)} onArchive={() => onArchive(card.threadId)} />
               </motion.li>
             ))}
           </AnimatePresence>

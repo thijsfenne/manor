@@ -19,7 +19,7 @@ export type MailLabel = z.infer<typeof MailLabelSchema>
 export const MAIL_TAB_LABELS = ['reply', 'wait', 'fyi'] as const satisfies readonly MailLabel[]
 
 export const MAIL_LABEL_NAME: Record<MailLabel, string> = {
-  reply: 'Needs reply',
+  reply: 'Needs attention',
   wait: 'Waiting',
   fyi: 'FYI',
   other: 'Other',

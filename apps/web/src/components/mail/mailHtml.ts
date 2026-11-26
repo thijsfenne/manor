@@ -5,15 +5,15 @@ export type MailHtmlOptions = {
   origin: string
   /** A later message of a thread, whose quoted history the earlier messages already show. */
   later: boolean
-  /** The app theme, worn only by a mail that sets no colours of its own. */
+  /** The thread is drawn on paper, decided by the reader with `mailHtmlSetsColours`. */
+  paper: boolean
+  /** The app theme, worn only by a mail of a thread that is not on paper. */
   theme: { scheme: 'light' | 'dark'; text: string; link: string }
 }
 
-/** What the reader needs from one parse: the frame document and how to draw around it. */
+/** What the reader needs from one parse: the frame document and whether it shows anything. */
 export type PreparedMail = {
   srcDoc: string
-  /** The mail sets its own colours and is drawn on light paper. */
-  paper: boolean
   /** Nothing visible survived: no text and no picture. The reader falls back to plain text. */
   empty: boolean
 }
@@ -65,11 +65,10 @@ export function safeMailHref(href: string | null): string | undefined {
  */
 export function readMailHtml(html: string, options: MailHtmlOptions): PreparedMail {
   const doc = parse(html)
-  const paper = setsColours(doc)
 
   for (const element of doc.querySelectorAll(REMOVED)) element.remove()
   for (const form of doc.querySelectorAll('form')) form.replaceWith(...form.childNodes)
-  if (options.later) for (const quote of doc.querySelectorAll(QUOTED)) quote.remove()
+  if (options.later) dropQuoted(doc)
 
   for (const element of doc.querySelectorAll('*')) {
     for (const { name } of [...element.attributes]) {
@@ -96,12 +95,12 @@ export function readMailHtml(html: string, options: MailHtmlOptions): PreparedMa
   const head = [
     meta(doc, { charset: 'utf-8' }),
     meta(doc, { 'http-equiv': 'Content-Security-Policy', content: framePolicy(options.origin) }),
-    style(doc, BASE_STYLE + colourStyle(paper, options.theme)),
+    style(doc, BASE_STYLE + colourStyle(options.paper, options.theme)),
   ]
   doc.head.prepend(...head)
 
   const srcDoc = `<!doctype html>${doc.documentElement.outerHTML}`
-  return { srcDoc, paper, empty: mailBodyBlank(doc.body) }
+  return { srcDoc, empty: mailBodyBlank(doc.body) }
 }
 
 function parse(html: string) {
@@ -109,9 +108,21 @@ function parse(html: string) {
 }
 
 /**
- * Whether the mail paints any colour of its own. Such a mail was designed on white and
- * is drawn as paper; a mail without colours wears the app theme instead.
+ * Whether the mail paints any colour of its own. Such a mail was designed on white, so
+ * the reader puts its whole thread on paper; a thread without one wears the app theme.
+ * Throws where there is no DOM parser, as `readMailHtml` does.
  */
+export function mailHtmlSetsColours(html: string, later: boolean): boolean {
+  const doc = parse(html)
+  // Asked of the mail as it is drawn: colours in history the frame drops do not count.
+  if (later) dropQuoted(doc)
+  return setsColours(doc)
+}
+
+function dropQuoted(doc: Document) {
+  for (const quote of doc.querySelectorAll(QUOTED)) quote.remove()
+}
+
 function setsColours(doc: Document) {
   if (doc.querySelector('[bgcolor], font[color]') !== null) return true
   for (const element of doc.querySelectorAll('[style]')) {
@@ -128,7 +139,7 @@ function framePolicy(origin: string) {
 }
 
 function colourStyle(paper: boolean, theme: MailHtmlOptions['theme']) {
-  if (paper) return ':root{color-scheme:light}html{background:Canvas;color:CanvasText}body{padding:16px}'
+  if (paper) return ':root{color-scheme:light}html{background:Canvas;color:CanvasText}'
   return `:root{color-scheme:${theme.scheme}}html{background:transparent;color:${cssValue(theme.text)}}a{color:${cssValue(theme.link)}}`
 }
 

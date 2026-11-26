@@ -103,6 +103,12 @@ const button = (name: string) => host((node) => node.type === 'button' && (node.
 const says = (text: string) => JSON.stringify(view.toJSON()).includes(text)
 const search = (query: string) => act(() => host((node) => node.props['aria-label'] === 'Search mail')[0]!.props.onChange({ target: { value: query } }))
 const paneOpen = () => host((node) => node.props['aria-label'] === 'Reply draft').length === 1
+/** A click on a card with the modifiers held, and a right click on it. */
+const clickCard = (id: string, keys: object = {}) =>
+  act(() => cardsShown().find((node) => node.props['data-mail-card'] === id)!.props.onClick({ metaKey: false, ctrlKey: false, shiftKey: false, ...keys }))
+const menuOn = (id: string) =>
+  act(() => cardsShown().find((node) => node.props['data-mail-card'] === id)!.parent!.props.onContextMenu({ preventDefault: () => {}, clientX: 10, clientY: 10 }))
+const menuItems = () => host((node) => node.props.role === 'menuitem')
 const ofType = <T extends ClientMessage['type']>(type: T) =>
   sent.filter((message): message is Extract<ClientMessage, { type: T }> => message.type === type)
 
@@ -111,11 +117,12 @@ beforeEach(() => {
   dialogOpen = false
   page = new EventTarget()
   vi.stubGlobal('window', page)
-  vi.stubGlobal('document', { querySelector: () => (dialogOpen ? {} : null), body: {} })
+  vi.stubGlobal('document', { querySelector: () => (dialogOpen ? {} : null), body: {}, addEventListener: () => {}, removeEventListener: () => {} })
+  Object.assign(page, { setTimeout, clearTimeout })
   vi.stubGlobal('HTMLElement', FakeElement)
   vi.stubGlobal('requestAnimationFrame', (run: () => void) => { run(); return 0 })
   vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
-  setMailView({ selectedId: null, tab: 'reply', query: '', archived: null })
+  setMailView({ selectedId: null, tab: 'reply', query: '', picked: [], archived: null })
 })
 afterEach(() => {
   act(() => view.unmount())
@@ -134,10 +141,10 @@ describe('MailView', () => {
     expect(selected()).toBeNull()
   })
 
-  it('lists Needs reply first, without an All tab, and draws no actions until a mail is open', () => {
+  it('lists Needs attention first, without an All tab, and draws no actions until a mail is open', () => {
     mount()
     const tabs = host((node) => node.props.role === 'tab').map(textOf)
-    expect(tabs).toEqual(['Needs reply', 'Waiting', 'FYI'])
+    expect(tabs).toEqual(['Needs attention', 'Waiting', 'FYI'])
     expect(shown()).toEqual(['a', 'b', 'c'])
     for (const name of ['Reply', 'Add to chat', 'Archive']) expect(button(name)).toBeUndefined()
     expect(says('Select a mail to read.')).toBe(true)
@@ -149,7 +156,7 @@ describe('MailView', () => {
 
   it('keeps Other and unlabelled mail out of every tab and finds it in a search, with its label', () => {
     mount()
-    for (const name of ['Needs reply', 'Waiting', 'FYI']) {
+    for (const name of ['Needs attention', 'Waiting', 'FYI']) {
       act(() => button(name).props.onClick())
       expect(shown()).not.toContain('d')
       expect(shown()).not.toContain('e')
@@ -173,7 +180,7 @@ describe('MailView', () => {
 
   it('says why each view is empty, and offers a run for the unlabelled cards', () => {
     mount([card('d', 5, 'other'), card('e', 4)])
-    expect(says('Nothing needs a reply.')).toBe(true)
+    expect(says('Nothing needs your attention.')).toBe(true)
     expect(says('Not labelled yet')).toBe(true)
     expect(button('1 new')).toBeDefined()
     act(() => button('Label 1 new').props.onClick())
@@ -256,7 +263,7 @@ describe('MailView', () => {
     act(() => button('Waiting').props.onClick())
     press('e')
     expect(JSON.stringify(view.toJSON())).toContain('Archived')
-    act(() => button('Needs reply').props.onClick())
+    act(() => button('Needs attention').props.onClick())
     act(() => button('Undo').props.onClick())
     expect(ofType('mail_unarchive').map((message) => message.threadId)).toEqual(['a'])
     // The tab that would hide it gives way to its own.
@@ -264,6 +271,42 @@ describe('MailView', () => {
     expect(shown()).toEqual(['a'])
     expect(selected()).toBe('a')
     expect(button('Undo')).toBeUndefined()
+  })
+
+  it('archives a pick of several cards with one request each, and undoes them all', () => {
+    mount()
+    press('j')
+    clickCard('c', { metaKey: true })
+    expect(says('2 mails selected')).toBe(true)
+    expect(selected()).toBeNull()
+    expect(button('Reply')).toBeUndefined()
+    press('Escape')
+    expect(selected()).toBe('a')
+    clickCard('c', { shiftKey: true })
+    expect(says('3 mails selected')).toBe(true)
+    expect(button('Archive')).toBeDefined()
+    menuOn('b')
+    expect(menuItems().map(textOf)).toEqual(['Archive 3 mails'])
+    act(() => menuItems()[0]!.props.onClick())
+    expect(ofType('mail_archive').map((message) => message.threadId)).toEqual(['a', 'b', 'c'])
+    expect(shown()).toEqual([])
+    expect(says('Archived 3 mails')).toBe(true)
+    act(() => button('Undo').props.onClick())
+    expect(ofType('mail_unarchive').map((message) => message.threadId)).toEqual(['a', 'b', 'c'])
+    expect(shown()).toEqual(['a', 'b', 'c'])
+    expect(selected()).toBe('a')
+  })
+
+  it('archives a card that is not open from its right click menu and leaves the open mail open', () => {
+    mount()
+    press('j')
+    menuOn('c')
+    expect(menuItems().map(textOf)).toEqual(['Archive'])
+    act(() => menuItems()[0]!.props.onClick())
+    expect(ofType('mail_archive').map((message) => message.threadId)).toEqual(['c'])
+    expect(shown()).toEqual(['a', 'b'])
+    expect(selected()).toBe('a')
+    expect(says('Archived')).toBe(true)
   })
 
   it('drops the Archived notice when the host refuses', () => {

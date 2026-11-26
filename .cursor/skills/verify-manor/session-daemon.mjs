@@ -145,7 +145,9 @@ async function handle(body) {
   if (cmd === 'click') {
     const clickCount = Number(flags.count ?? 1)
     if (!Number.isInteger(clickCount) || clickCount < 1) throw new Error('click --count takes a whole number above 0')
-    await locatorFor(flags).click({ clickCount, ...(flags.button === 'right' ? { button: 'right' } : {}) })
+    // `--modifiers Meta,Shift` holds those keys for the click, as a pick of several rows does.
+    const modifiers = String(flags.modifiers ?? '').split(',').filter(Boolean)
+    await locatorFor(flags).click({ clickCount, modifiers, ...(flags.button === 'right' ? { button: 'right' } : {}) })
     await page.waitForTimeout(200)
     return { clicked: flags.name ?? flags.placeholder }
   }

@@ -526,6 +526,7 @@
  * pairs the app can render, and regresses on none of them. The holdout is `dim` on
  * a user bubble, where dark manages 2.61 and this manages 4.13.
  */
+.mail-paper,
 :root[data-theme='light'] {
   /* The canvas sits close to white, but white cards on it still read (1.06:1 plus
      their shadow). Every fill is darker than the canvas, never lighter: surface-2
@@ -666,8 +667,20 @@
 :root[data-theme='light'],
 :root[data-theme='light'] *,
 :root[data-theme='light'] ::before,
-:root[data-theme='light'] ::after {
+:root[data-theme='light'] ::after,
+.mail-paper,
+.mail-paper *,
+.mail-paper ::before,
+.mail-paper ::after {
   --accent-fg: oklch(from var(--accent) min(l, 0.45) c h);
+}
+
+/* The Mail reader's scrolling area when a thread sets its own colours: white from edge
+   to edge in either theme, with the light tokens above, so the mail frames sit on the
+   same white. `color` is set again because the inherited one was resolved at the root. */
+.mail-paper {
+  background: Canvas;
+  color: var(--color-text);
 }
 
 /* Bare `rounded` is the one radius Tailwind hardcodes instead of reading a token, so it

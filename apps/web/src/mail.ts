@@ -46,11 +46,30 @@ export function mailViewShowing(card: MailCard, tab: MailTab, query: string): { 
   return { query: [card.subject, card.from.address, card.from.name].find((text) => text.trim() !== '') ?? '' }
 }
 
-/** What to select when a listed card is archived: the next one, else the previous one. */
-export function mailNeighbour(listed: readonly MailCard[], threadId: string): string | null {
-  const index = listed.findIndex((card) => card.threadId === threadId)
-  if (index === -1) return null
-  return (listed[index + 1] ?? listed[index - 1])?.threadId ?? null
+/**
+ * What to open once listed cards are archived: the card after the last archived one, else
+ * the nearest card before it that stays. Null when none of them was listed.
+ */
+export function mailNeighbour(listed: readonly MailCard[], archived: readonly string[]): string | null {
+  const last = listed.map((card) => archived.includes(card.threadId)).lastIndexOf(true)
+  if (last === -1) return null
+  const before = listed.slice(0, last).filter((card) => !archived.includes(card.threadId))
+  return (listed[last + 1] ?? before.at(-1))?.threadId ?? null
+}
+
+/** A Cmd or Ctrl click: the card joins the selection, or leaves it when it was in. */
+export const toggledMailSelection = (selection: readonly string[], threadId: string): string[] =>
+  selection.includes(threadId) ? selection.filter((id) => id !== threadId) : [...selection, threadId]
+
+/**
+ * A Shift click: the listed cards from the anchor to the clicked card, in list order.
+ * Only the clicked card when the anchor is not listed.
+ */
+export function mailRange(listed: readonly MailCard[], anchorId: string | null, threadId: string): string[] {
+  const from = listed.findIndex((card) => card.threadId === anchorId)
+  const to = listed.findIndex((card) => card.threadId === threadId)
+  if (from === -1 || to === -1) return [threadId]
+  return listed.slice(Math.min(from, to), Math.max(from, to) + 1).map((card) => card.threadId)
 }
 
 /**

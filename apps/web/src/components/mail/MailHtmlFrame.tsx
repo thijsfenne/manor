@@ -7,11 +7,12 @@ const START_HEIGHT = 48
 /**
  * One untrusted mail drawn from its own HTML, mounted by the reader per message. The
  * frame is sandboxed without scripts; same origin only lets this page measure it, catch
- * its clicks and forward its keys. `onFail` asks the reader for the plain text instead.
+ * its clicks and forward its keys. `paper` is the thread's decision, which the reader
+ * takes once for all its messages. `onFail` asks the reader for the plain text instead.
  */
-export function MailHtmlFrame({ html, later, onFail }: { html: string; later: boolean; onFail: () => void }) {
+export function MailHtmlFrame({ html, later, paper, onFail }: { html: string; later: boolean; paper: boolean; onFail: () => void }) {
   const theme = usePageTheme()
-  const prepared = useMemo(() => prepare(html, later, theme), [html, later, theme])
+  const prepared = useMemo(() => prepare(html, later, paper, theme), [html, later, paper, theme])
   const frame = useRef<HTMLIFrameElement>(null)
   const [height, setHeight] = useState(START_HEIGHT)
   const fail = useOnce(html, onFail)
@@ -48,14 +49,14 @@ export function MailHtmlFrame({ html, later, onFail }: { html: string; later: bo
       srcDoc={prepared.srcDoc}
       onLoad={onLoad}
       style={{ height }}
-      className={`block w-full border-0 ${prepared.paper ? 'rounded-panel' : ''}`}
+      className="block w-full border-0"
     />
   )
 }
 
-function prepare(html: string, later: boolean, theme: MailHtmlOptions['theme']) {
+function prepare(html: string, later: boolean, paper: boolean, theme: MailHtmlOptions['theme']) {
   try {
-    return readMailHtml(html, { origin: window.location.origin, later, theme })
+    return readMailHtml(html, { origin: window.location.origin, later, paper, theme })
   } catch {
     return undefined
   }

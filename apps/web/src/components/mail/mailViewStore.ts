@@ -10,11 +10,16 @@ export interface MailViewState {
   selectedId: string | null
   tab: MailTab
   query: string
-  /** The latest Archive, while its notice offers Undo. */
-  archived: { requestId: string; threadId: string } | null
+  /**
+   * Two or more cards picked with Cmd or Shift, which hide the open thread until they are
+   * cleared; empty otherwise. `selectedId` stays the thread that comes back then.
+   */
+  picked: string[]
+  /** The latest Archive, one entry per thread, while its notice offers Undo. */
+  archived: { requestId: string; threadId: string }[] | null
 }
 
-let view: MailViewState = { selectedId: null, tab: 'reply', query: '', archived: null }
+let view: MailViewState = { selectedId: null, tab: 'reply', query: '', picked: [], archived: null }
 const listeners = new Set<() => void>()
 
 const subscribe = (listener: () => void) => {

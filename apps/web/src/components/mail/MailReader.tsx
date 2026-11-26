@@ -1,14 +1,13 @@
-import { useState } from 'react'
-import { Archive02Icon } from '@hugeicons/core-free-icons'
+import { useMemo, useState } from 'react'
 import { MAIL_LABEL_NAME, type MailCard, type MailMessage, type MailThread, type MailTriageState, type Project } from '@manor/contracts'
 import { mailAttachmentSize, mailSearching, mailSenderName, mailTimeLabel, type MailTab } from '../../mail'
 import { useMinuteClock } from '../../useMinuteClock'
 import { Button } from '../ui/Button'
-import { IconButton } from '../ui/IconButton'
 import { Menu, MenuItem, useMenu } from '../ui/Menu'
 import { MailEmptyState } from './MailEmptyState'
 import { MailHtmlFrame } from './MailHtmlFrame'
 import { MailProjectSquare } from './MailProjectSquare'
+import { mailHtmlSetsColours } from './mailHtml'
 
 const LABEL_TONE = { reply: 'text-warn', wait: 'text-busy', fyi: '', other: '' } as const
 
@@ -58,7 +57,7 @@ function MailProjectLink({ projects, projectId, onLink }: {
  * one without, or one whose HTML will not draw, shows its plain text, in which no markup
  * is read and nothing becomes a link.
  */
-function MailMessageView({ message, first, newest, now }: { message: MailMessage; first: boolean; newest: boolean; now: number }) {
+function MailMessageView({ message, first, newest, paper, now }: { message: MailMessage; first: boolean; newest: boolean; paper: boolean; now: number }) {
   const [unfolded, setUnfolded] = useState(false)
   const [plain, setPlain] = useState(false)
   const html = plain ? undefined : message.html
@@ -80,10 +79,10 @@ function MailMessageView({ message, first, newest, now }: { message: MailMessage
         </button>
       )}
       {!open ? null : (
-        <div className={`mt-2 ${html === undefined ? 'max-w-[640px]' : 'max-w-[720px]'}`}>
+        <div className={`mt-2 ${html === undefined ? 'max-w-[640px]' : ''}`}>
           {html === undefined ? (
             <div className="text-[14px] leading-[1.6] break-words whitespace-pre-wrap text-text select-text">{message.text}</div>
-          ) : <MailHtmlFrame html={html} later={!first} onFail={() => setPlain(true)} />}
+          ) : <MailHtmlFrame html={html} later={!first} paper={paper} onFail={() => setPlain(true)} />}
           {/* HTML travels whole or not at all, so only the plain text can be cut. */}
           {html !== undefined || !message.truncated ? null : <p className="m-0 mt-2 text-[12px] text-dim">The rest of this message is not shown.</p>}
           {message.attachments.length === 0 ? null : (
@@ -103,10 +102,23 @@ function MailMessageView({ message, first, newest, now }: { message: MailMessage
 }
 
 /**
- * The Mail stage's left pane: the bar of what can be done with the open thread, and the
- * thread. With none open the bar keeps its height empty and the stage says why.
+ * A thread is on paper when any of its mails sets its own colours, whichever are folded
+ * open, so the pane never flips while it is read. Without a DOM parser it is not.
  */
-export function MailReader({ card, thread, error, listed, tab, query, triage, unlabelled, projects, split, onReply, onAdd, onArchive, onLink, onTriage }: {
+function threadOnPaper(thread: MailThread | null) {
+  try {
+    return thread?.messages.some((message, index) => message.html !== undefined && mailHtmlSetsColours(message.html, index > 0)) ?? false
+  } catch {
+    return false
+  }
+}
+
+/**
+ * The Mail stage's left pane: the bar of what can be done with the open thread, and the
+ * thread. With none open the bar keeps its height, holding only Archive while several cards
+ * are picked, and the stage says why.
+ */
+export function MailReader({ card, thread, error, listed, selected = 0, tab, query, triage, unlabelled, projects, split, onReply, onAdd, onArchive, onLink, onTriage }: {
   /** The open thread's card; null when none is open. */
   card: MailCard | null
   /** Its messages, once read. */
@@ -115,6 +127,8 @@ export function MailReader({ card, thread, error, listed, tab, query, triage, un
   error: string | undefined
   /** How many cards the sidebar lists; null until the mailbox has been read. */
   listed: number | null
+  /** How many cards are picked at once; two or more take the place of a thread. */
+  selected?: number
   tab: MailTab
   query: string
   triage: MailTriageState | null
@@ -130,36 +144,40 @@ export function MailReader({ card, thread, error, listed, tab, query, triage, un
   onTriage?: (() => void) | undefined
 }) {
   const now = useMinuteClock()
+  const paper = useMemo(() => threadOnPaper(thread), [thread])
   const empty = card !== null || listed === null || triage === null ? null : (
-    <MailEmptyState kind={listed > 0 ? 'pick' : mailSearching(query) ? 'search' : tab}
-      triage={triage} unlabelled={unlabelled} onTriage={onTriage} />
+    <MailEmptyState kind={selected > 1 ? 'selected' : listed > 0 ? 'pick' : mailSearching(query) ? 'search' : tab}
+      selected={selected} triage={triage} unlabelled={unlabelled} onTriage={onTriage} />
   )
   return (
     <div className="relative flex h-full min-h-0 min-w-0 flex-col">
       <div role="toolbar" aria-label="Mail actions" className="flex min-h-14 flex-none items-center gap-1.5 px-4 py-3">
+        {/* Archive leads, so it keeps its place with several mails picked and stays clear of the notice stack. */}
+        {card === null && selected < 2 ? null : <Button size="small" title="Archive (E)" onClick={onArchive}>Archive</Button>}
         {card === null ? null : (
           <>
             <Button size="small" disabled={thread === null} title="Draft a reply (R)" onClick={onReply}>Reply</Button>
             <Button size="small" disabled={thread === null} title="Add to chat (A)" onClick={onAdd}>Add to chat</Button>
-            <span className="flex-1" />
-            <IconButton icon={Archive02Icon} iconSize={17} label="Archive" title="Archive (E)" onClick={onArchive} />
           </>
         )}
       </div>
       {empty}
       {card === null ? null : (
-        <div className={`min-h-0 flex-1 overflow-y-auto pt-2 pb-10 ${split ? 'px-7' : 'px-10'}`}>
-          <h2 className="m-0 mb-2 text-[20px] font-medium break-words text-text">{card.subject}</h2>
-          <div className="mb-6 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-dim">
-            <span className="min-w-0 break-all select-text">{card.from.address}</span>
-            {card.label === undefined ? null : <span className={LABEL_TONE[card.label]} title={card.reason}>{MAIL_LABEL_NAME[card.label]}</span>}
-            {/* Keyed so an open menu never carries over to another sender. */}
-            <MailProjectLink key={card.threadId} projects={projects} projectId={card.projectId} onLink={(projectId) => onLink(card.from.address, projectId)} />
+        <div className={`min-h-0 flex-1 overflow-y-auto pt-6 pb-10 ${split ? 'px-7' : 'px-10'} ${paper ? 'mail-paper' : ''}`}>
+          {/* One column for every mail, on paper or not, so the layout holds between mails. */}
+          <div className="mx-auto w-full max-w-[720px]">
+            <h2 className="m-0 mb-2 text-[20px] font-medium break-words text-text">{card.subject}</h2>
+            <div className="mb-6 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-dim">
+              <span className="min-w-0 break-all select-text">{card.from.address}</span>
+              {card.label === undefined ? null : <span className={LABEL_TONE[card.label]} title={card.reason}>{MAIL_LABEL_NAME[card.label]}</span>}
+              {/* Keyed so an open menu never carries over to another sender. */}
+              <MailProjectLink key={card.threadId} projects={projects} projectId={card.projectId} onLink={(projectId) => onLink(card.from.address, projectId)} />
+            </div>
+            {error === undefined ? null : <p role="alert" className="m-0 mb-4 text-[13px] break-words text-warn">{error}</p>}
+            {thread === null ? null : thread.messages.map((message, index) => (
+              <MailMessageView key={`${thread.threadId}:${message.id}`} message={message} first={index === 0} newest={index === thread.messages.length - 1} paper={paper} now={now} />
+            ))}
           </div>
-          {error === undefined ? null : <p role="alert" className="m-0 mb-4 text-[13px] break-words text-warn">{error}</p>}
-          {thread === null ? null : thread.messages.map((message, index) => (
-            <MailMessageView key={`${thread.threadId}:${message.id}`} message={message} first={index === 0} newest={index === thread.messages.length - 1} now={now} />
-          ))}
         </div>
       )}
     </div>
