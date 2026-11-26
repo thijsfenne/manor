@@ -195,7 +195,18 @@ async function withClientForPrefix<T>(selectedPrefix: string, run: (client: Imap
  * which is the whole reason this connector is affordable.
  */
 function textNode(structure: MessageStructureObject | undefined): { part: string; type: string } | undefined {
-  if (structure === undefined) return undefined
+  const candidates = textParts(structure)
+  return candidates.find((candidate) => candidate.type === 'text/plain') ?? candidates[0]
+}
+
+/** The message's own HTML part, for a client that draws the mail as its sender wrote it. */
+function htmlNode(structure: MessageStructureObject | undefined): { part: string; type: string } | undefined {
+  return textParts(structure).find((candidate) => candidate.type === 'text/html')
+}
+
+/** Every text/plain and text/html leaf that is not an attachment, in structure order. */
+function textParts(structure: MessageStructureObject | undefined): { part: string; type: string }[] {
+  if (structure === undefined) return []
   const candidates: { part: string; type: string }[] = []
   const walk = (node: MessageStructureObject) => {
     const children = node.childNodes
@@ -218,7 +229,7 @@ function textNode(structure: MessageStructureObject | undefined): { part: string
     })
   }
   walk(structure)
-  return candidates.find((candidate) => candidate.type === 'text/plain') ?? candidates[0]
+  return candidates
 }
 
 export interface AttachmentSummary {
@@ -872,4 +883,4 @@ if (process.argv[1] !== undefined && /mailMcp\.(?:ts|mjs)$/.test(process.argv[1]
   })
 }
 
-export { htmlToText, stripQuotes, textNode, headerValue, recipient, decode, downloadCharset, readStream, openMailbox, DEFAULT_MAILBOX }
+export { htmlToText, stripQuotes, textNode, htmlNode, headerValue, recipient, decode, downloadCharset, readStream, openMailbox, DEFAULT_MAILBOX }

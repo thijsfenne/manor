@@ -4,7 +4,7 @@ import type { AddressInfo } from 'node:net'
 import os from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { mailNewRecipients, type Driver, type MailThread, type ServerMessage, type TurnInput } from '@manor/contracts'
+import { MAIL_INBOX_WINDOW, mailNewRecipients, type Driver, type MailThread, type ServerMessage, type TurnInput } from '@manor/contracts'
 import { mockComposio } from '../src/composioMarketplacePorts.js'
 import { buildArgs as buildClaudeArgs } from '../src/drivers/claudeDriver.js'
 import { buildCodexAppServerArgs, buildCodexThreadRequest } from '../src/drivers/codexDriver.js'
@@ -14,9 +14,9 @@ import { createMockDriver } from '../src/drivers/mockDriver.js'
 import { FIXTURE_THREAD, MailFixtureSource } from '../src/mailFixtureSource.js'
 import { MAIL_DRAFT_TURN_MS } from '../src/mailDraft.js'
 import { MailModule } from '../src/mailModule.js'
-import { MAIL_REVISION_MARK, MAIL_UNTRUSTED_CLOSE, MAIL_UNTRUSTED_OPEN } from '../src/mailPrompt.js'
+import { MAIL_REVISION_MARK, MAIL_UNTRUSTED_CLOSE, MAIL_UNTRUSTED_OPEN, untrustedMailPayload } from '../src/mailPrompt.js'
 import type { MailInbox } from '../src/mailSource.js'
-import { MAIL_TRIAGE_CLAIM_STALE_MS, mailTriageDue } from '../src/mailTriage.js'
+import { MAIL_TRIAGE_BATCHES, MAIL_TRIAGE_CLAIM_STALE_MS, mailTriageDue } from '../src/mailTriage.js'
 import { McpHttpHost } from '../src/mcp/httpHost.js'
 import { MAIL_TRIAGE_MCP_NAME, MAIL_TRIAGE_TOOL } from '../src/mcp/mailTriageServer.js'
 import { createMockOutboundSendPort, RecordingOutboundSend, type OutboundSendPort, type OutboundSendRequest, type OutboundSendResult } from '../src/outboundSend.js'
@@ -43,8 +43,7 @@ async function toolHost(): Promise<McpHttpHost> {
 }
 
 /** The mock driver behind a recorder: every `TurnInput` it was handed, and every Stop. */
-function recordingDriver(deltaDelayMs = 0) {
-  const inner = createMockDriver({ deltaDelayMs })
+function recordingDriver(deltaDelayMs = 0, inner: Driver = createMockDriver({ deltaDelayMs })) {
   const inputs: TurnInput[] = []
   let stops = 0
   const driver: Driver = {
@@ -80,11 +79,13 @@ async function setup(options: {
   cacheFile?: string
   now?: () => number
   deltaDelayMs?: number
+  /** Stands in for the mock driver behind the recorder. */
+  driver?: Driver
 } = {}) {
   const dir = mkdtempSync(path.join(os.tmpdir(), 'manor-mail-agent-'))
   dirs.push(dir)
   const source = options.source ?? new MailFixtureSource({ now: Date.UTC(2026, 10, 26, 12) })
-  const recorder = recordingDriver(options.deltaDelayMs)
+  const recorder = recordingDriver(options.deltaDelayMs, options.driver)
   const broadcasts: ServerMessage[] = []
   const send = options.send ?? new RecordingOutboundSend()
   const module = new MailModule({
@@ -117,6 +118,51 @@ async function setup(options: {
 const promptOf = (input: TurnInput) => {
   const first = input.catchUp[0]
   return first?.type === 'user_message' ? first.text : ''
+}
+
+/** More unlabelled Inbox threads than one triage batch holds. */
+function deliverMany(source: MailFixtureSource, count: number) {
+  for (let index = 1; index <= count; index += 1) {
+    source.deliver({
+      threadId: String(1791000000000000000n + BigInt(index)),
+      subject: `Order ${index} has shipped`,
+      from: { name: 'Shop', address: 'orders@shop.example' },
+      text: 'Your order is on its way.',
+      at: Date.UTC(2026, 10, 25, 12) - index * 60_000,
+    })
+  }
+}
+
+/**
+ * A provider that labels, over the run's real endpoint, the ids `choose` picks from each
+ * batch's prompt; answering a string instead ends the turn with that error.
+ */
+function choosingDriver(choose: (ids: string[], batch: number) => string[] | string): Driver {
+  let batch = 0
+  return {
+    startTurn: (input) => ({
+      events: (async function* () {
+        batch += 1
+        const ids = (untrustedMailPayload(promptOf(input)) as { id: string }[]).map((entry) => entry.id)
+        const chosen = choose(ids, batch)
+        if (typeof chosen === 'string') {
+          yield { type: 'error' as const, message: chosen }
+          return
+        }
+        const tool = input.mcpServers![0]!
+        const header = tool.server.httpHeaders![0]!
+        for (const id of chosen) {
+          await fetch(tool.server.url!, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json', [header.name]: tool.runtimeEnv![header.envKey]! },
+            body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: MAIL_TRIAGE_TOOL, arguments: { id, label: 'fyi', reason: 'Read.' } } }),
+          })
+        }
+        yield { type: 'result' as const, text: 'Done.' }
+      })(),
+      stop: () => undefined,
+    }),
+  }
 }
 
 /** Everything in a turn's config that could hand the model a tool. */
@@ -190,7 +236,9 @@ describe('the draft turn', () => {
     const [initial, revision] = recorder.inputs.map(promptOf)
     expect(initial).not.toContain(MAIL_REVISION_MARK)
     const block = initial!.slice(initial!.indexOf(MAIL_UNTRUSTED_OPEN), initial!.indexOf(MAIL_UNTRUSTED_CLOSE))
-    expect(block).toContain(JSON.stringify('Hi,\n\nThursday at 10:00 works for the team lead. Would that suit you? The interview takes about an hour, at our office.\n\nKind regards,\nNora Example'))
+    expect(block).toContain(JSON.stringify('Hi,\n\nThursday at 10:00 works for the team lead. Would that suit you? The interview takes about an hour, at our office.\n\nThe route and parking are on our visitor page: https://talent.example/visit\n\nKind regards,\nNora Example'))
+    // The newest message has an HTML part; only its text reaches the model.
+    expect(initial).not.toMatch(/<div|<a href/)
     expect(revision).toContain(MAIL_REVISION_MARK)
     expect(revision).toContain(JSON.stringify(current))
     // After the untrusted block: the user's words are not inside the quoted mail.
@@ -295,7 +343,8 @@ describe('the triage run', () => {
     expect(card(FIXTURE_THREAD.interview)).toMatchObject({ label: 'reply', reason: 'Asks you to answer or act.' })
     expect(card(FIXTURE_THREAD.parking)).toMatchObject({ label: 'reply' })
     expect(card(FIXTURE_THREAD.waiting)).toMatchObject({ label: 'wait', reason: 'You wrote last and are waiting for an answer.' })
-    expect(card(FIXTURE_THREAD.digest)).toMatchObject({ label: 'fyi', reason: 'An automatic message; nothing to answer.' })
+    expect(card(FIXTURE_THREAD.digest)).toMatchObject({ label: 'other', reason: 'A newsletter or notification; nothing needs your attention.' })
+    expect(card(FIXTURE_THREAD.newsletter)).toMatchObject({ label: 'other' })
     expect(card(FIXTURE_THREAD.application)).toMatchObject({ label: 'fyi' })
     expect(card(FIXTURE_THREAD.family)).toEqual(expect.objectContaining({ label: 'fyi' }))
     expect(card(FIXTURE_THREAD.family)?.reason).toBeUndefined()
@@ -313,6 +362,140 @@ describe('the triage run', () => {
     expect(states.at(-1)!.triage).toMatchObject({ running: false })
     expect(states.at(-1)!.triage.lastRunAt).toEqual(expect.any(Number))
     expect(states.at(-1)!.triage.error).toBeUndefined()
+  })
+
+  it('works through batch after batch until nothing is unlabelled, polling once, each batch with its own tool mount', async () => {
+    const { socket, source, recorder, lastState } = await setup()
+    deliverMany(source, 60)
+    const list = vi.spyOn(source, 'listInbox')
+    await socket('a').send({ type: 'mail_triage_run' })
+    expect(recorder.inputs).toHaveLength(3)
+    expect(list).toHaveBeenCalledTimes(1)
+    expect(lastState().cards).toHaveLength(67)
+    expect(lastState().cards.every((entry) => entry.label !== undefined)).toBe(true)
+    expect(lastState().triage.error).toBeUndefined()
+    // A fresh capability per batch: a turn's capability is unmounted before the next turn starts.
+    expect(new Set(recorder.inputs.map((input) => JSON.stringify(input.mcpServers![0]!.runtimeEnv))).size).toBe(3)
+  })
+
+  it('offers each thread once per run, so skipped threads never crowd out older ones', async () => {
+    const { socket, source, recorder, lastState } = await setup({ driver: choosingDriver((ids) => ids.slice(0, 1)) })
+    deliverMany(source, 60)
+    await socket('a').send({ type: 'mail_triage_run' })
+    expect(MAIL_TRIAGE_BATCHES).toBe(Math.ceil(MAIL_INBOX_WINDOW / 30))
+    // 67 threads in batches of 30, one label each: the third batch reaches the oldest.
+    expect(recorder.inputs).toHaveLength(3)
+    expect(lastState().cards.filter((entry) => entry.label !== undefined)).toHaveLength(3)
+    expect(lastState().triage.error).toBeUndefined()
+  })
+
+  it('labels new mail when the Mail view looks, and never repeats a run for what one left behind', async () => {
+    // The agent labels all but the first thread it is offered.
+    const { socket, source, recorder, lastState } = await setup({ driver: choosingDriver((ids) => ids.slice(1)) })
+    const look = () => socket('a').send({ type: 'mail_load', refresh: true })
+    await look()
+    expect(recorder.inputs).toHaveLength(1)
+    expect(lastState().cards.filter((entry) => entry.label === undefined)).toHaveLength(1)
+    expect(lastState().triage.running).toBe(false)
+
+    // The skipped thread alone starts nothing, however often the view looks.
+    await look()
+    await look()
+    expect(recorder.inputs).toHaveLength(1)
+
+    // New mail does, and the run offers the skipped thread again with it.
+    deliverMany(source, 1)
+    await look()
+    expect(recorder.inputs).toHaveLength(2)
+    await look()
+    expect(recorder.inputs).toHaveLength(2)
+
+    // A plain load without a poll never starts a run.
+    deliverMany(source, 1)
+    await socket('a').send({ type: 'mail_load' })
+    expect(recorder.inputs).toHaveLength(2)
+  })
+
+  it('starts no run on a look whose poll failed', async () => {
+    const { socket, source, recorder } = await setup()
+    const list = vi.spyOn(source, 'listInbox').mockRejectedValueOnce(new Error('The mail server did not answer.'))
+    await socket('a').send({ type: 'mail_load', refresh: true })
+    expect(list).toHaveBeenCalledTimes(1)
+    expect(recorder.inputs).toHaveLength(0)
+    await socket('a').send({ type: 'mail_load', refresh: true })
+    expect(recorder.inputs).toHaveLength(1)
+  })
+
+  it('does not retry a failed run on the next look', async () => {
+    const { socket, recorder, lastState } = await setup({ driver: choosingDriver(() => 'The provider is out of quota.') })
+    await socket('a').send({ type: 'mail_load', refresh: true })
+    await socket('a').send({ type: 'mail_load', refresh: true })
+    expect(recorder.inputs).toHaveLength(1)
+    expect(lastState().triage.error).toBe('The provider is out of quota.')
+    // The user's own click still runs.
+    await socket('a').send({ type: 'mail_triage_run' })
+    expect(recorder.inputs).toHaveLength(2)
+  })
+
+  it('stops at the first batch that fails or sets no label, and says why', async () => {
+    const failing = await setup({ driver: choosingDriver((ids, batch) => (batch === 1 ? ids : 'The provider is out of quota.')) })
+    deliverMany(failing.source, 60)
+    await failing.socket('a').send({ type: 'mail_triage_run' })
+    expect(failing.recorder.inputs).toHaveLength(2)
+    expect(failing.lastState().triage.error).toBe('The provider is out of quota.')
+
+    const silent = await setup({ driver: choosingDriver(() => []) })
+    await silent.socket('a').send({ type: 'mail_triage_run' })
+    expect(silent.recorder.inputs).toHaveLength(1)
+    expect(silent.lastState().triage.error).toBe('Marlow set no labels in this run.')
+  })
+
+  it('stops at a batch that runs out of time', async () => {
+    let started!: () => void
+    const running = new Promise<void>((resolve) => { started = resolve })
+    const hanging: Driver = {
+      startTurn: () => {
+        let end!: () => void
+        const ended = new Promise<void>((resolve) => { end = resolve })
+        return { events: (async function* () { started(); await ended })(), stop: () => end() }
+      },
+    }
+    const { socket, source, recorder, lastState } = await setup({ driver: hanging })
+    deliverMany(source, 60)
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    try {
+      const run = socket('a').send({ type: 'mail_triage_run' })
+      await running
+      await vi.advanceTimersByTimeAsync(MAIL_TRIAGE_CLAIM_STALE_MS)
+      await run
+    } finally {
+      vi.useRealTimers()
+    }
+    expect(recorder.inputs).toHaveLength(1)
+    expect(recorder.stops()).toBe(1)
+    expect(lastState().triage.error).toBe('Marlow took too long; 0 of 30 mails in the last batch were labelled.')
+  })
+
+  it('renews its claim before every batch, so a run longer than the stale time is not taken over', async () => {
+    let now = Date.UTC(2026, 10, 26, 12)
+    const start = now
+    const claims: number[] = []
+    const mock = createMockDriver({ deltaDelayMs: 0 })
+    let cache: MailModule['cache']
+    const slow: Driver = {
+      startTurn(input) {
+        claims.push((JSON.parse(cache!.getMeta('triageClaim')!) as { at: number }).at)
+        now += 6 * 60_000
+        return mock.startTurn(input)
+      },
+    }
+    const { socket, source, module, lastState } = await setup({ now: () => now, driver: slow })
+    cache = module.cache
+    deliverMany(source, 60)
+    await socket('a').send({ type: 'mail_triage_run' })
+    expect(claims).toEqual([start, start + 6 * 60_000, start + 12 * 60_000])
+    expect(now - start).toBeGreaterThan(MAIL_TRIAGE_CLAIM_STALE_MS)
+    expect(lastState().cards.every((entry) => entry.label !== undefined)).toBe(true)
   })
 
   it('refuses an id that is not of this run and records a run that set nothing as failed', async () => {

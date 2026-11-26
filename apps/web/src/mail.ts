@@ -1,19 +1,26 @@
-import { MAIL_LABEL_NAME, MAIL_LABELS, type MailAddress, type MailCard, type MailLabel } from '@manor/contracts'
+import { MAIL_LABEL_NAME, MAIL_LABELS, MAIL_TAB_LABELS, type MailAddress, type MailCard, type MailLabel } from '@manor/contracts'
 
 /** What the Mail view shows and what its keys do, kept apart from the components so it can be tested. */
 
-export type MailTab = 'all' | MailLabel
+export type MailTab = (typeof MAIL_TAB_LABELS)[number]
 
-export const MAIL_TABS: readonly { value: MailTab; label: string }[] = [
-  { value: 'all', label: 'All' },
-  ...MAIL_LABELS.map((label) => ({ value: label, label: MAIL_LABEL_NAME[label] })),
-]
+export const MAIL_TABS = MAIL_TAB_LABELS.map((label) => ({ value: label, label: MAIL_LABEL_NAME[label] }))
+
+const isMailTab = (label: MailLabel | undefined): label is MailTab => MAIL_TAB_LABELS.some((tab) => tab === label)
 
 export const mailSenderName = (from: MailAddress): string => from.name === '' ? from.address : from.name
 
+/** A tab holds only its own label; Other and unlabelled cards are reached by search. */
 export function mailCardsInTab(cards: readonly MailCard[], tab: MailTab): MailCard[] {
-  return tab === 'all' ? [...cards] : cards.filter((card) => card.label === tab)
+  return cards.filter((card) => card.label === tab)
 }
+
+/** A query of only spaces is no search, so the tabs stay. */
+export const mailSearching = (query: string): boolean => query.trim() !== ''
+
+/** The cards no labelling run has reached yet, which the triage button and the empty states count. */
+export const unlabelledMailCount = (cards: readonly MailCard[]): number =>
+  cards.filter((card) => card.label === undefined).length
 
 /** Matches on the subject and on the sender's name or address, ignoring case. */
 export function searchMailCards(cards: readonly MailCard[], query: string): MailCard[] {
@@ -23,9 +30,20 @@ export function searchMailCards(cards: readonly MailCard[], query: string): Mail
     [card.subject, card.from.name, card.from.address].some((text) => text.toLowerCase().includes(needle)))
 }
 
-/** The cards the sidebar lists, in the order the host sent them. */
+/** The cards the sidebar lists, in the order the host sent them: the tab's, or every match of a search. */
 export function listedMailCards(cards: readonly MailCard[], tab: MailTab, query: string): MailCard[] {
-  return searchMailCards(mailCardsInTab(cards, tab), query)
+  return mailSearching(query) ? searchMailCards(cards, query) : mailCardsInTab(cards, tab)
+}
+
+/**
+ * The view change that lists a card the current tab or search hides: its own tab, or a
+ * search for its subject (its sender when it has none) when its label has no tab. Empty
+ * when it is listed already.
+ */
+export function mailViewShowing(card: MailCard, tab: MailTab, query: string): { tab?: MailTab; query?: string } {
+  if (listedMailCards([card], tab, query).length > 0) return {}
+  if (isMailTab(card.label)) return { tab: card.label, query: '' }
+  return { query: [card.subject, card.from.address, card.from.name].find((text) => text.trim() !== '') ?? '' }
 }
 
 /** What to select when a listed card is archived: the next one, else the previous one. */

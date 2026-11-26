@@ -1,8 +1,9 @@
 import { createElement, forwardRef, type ReactNode } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AgentConfig, ClientMessage, MailCard, MailThread, ServerMessage } from '@manor/contracts'
+import type { AgentConfig, ClientMessage, MailCard, MailLabel, MailThread, MailTriageState, ServerMessage } from '@manor/contracts'
 import { createWorkspaceCommands } from '@manor/client-runtime/commands'
+import { mailTimeLabel } from '../../mail'
 import { emptyWorkspace, reduce } from '../../state'
 import { useMailArchivedNotice } from './mailArchivedNotice'
 import { MailView } from './MailView'
@@ -26,10 +27,16 @@ vi.mock('motion/react', () => {
   })
   return { motion, AnimatePresence: ({ children }: { children: ReactNode }) => children, useReducedMotion: () => true }
 })
+// The shared composer needs a browser editor; its own tests cover it.
+vi.mock('../Composer', () => ({ Composer: ({ placeholder }: { placeholder?: string }) => createElement('div', { 'data-composer': placeholder }) }))
 
-const card = (threadId: string, at: number): MailCard => ({
+const card = (threadId: string, at: number, label?: MailLabel): MailCard => ({
   threadId, subject: `Subject ${threadId}`, from: { name: 'Robin Example', address: 'robin@example.com' }, at, unread: true, messageCount: 1,
+  ...(label === undefined ? {} : { label }),
 })
+/** Three cards that need a reply, one labelled Other and one no run has reached. */
+const CARDS = [card('a', 30, 'reply'), card('b', 20, 'reply'), card('c', 10, 'reply'), card('d', 5, 'other'), card('e', 4)]
+const NO_RUN: MailTriageState = { lastRunAt: null, running: false }
 const thread = (threadId: string): MailThread => ({
   threadId,
   subject: `Subject ${threadId}`,
@@ -59,11 +66,8 @@ let hear: (message: ServerMessage) => void
 let dialogOpen: boolean
 let page: EventTarget
 
-function mount() {
-  let state = reduce(emptyWorkspace, {
-    type: 'mail_state', status: 'ready', cards: [card('a', 30), card('b', 20), card('c', 10)], syncedAt: 1,
-    triage: { lastRunAt: null, running: false },
-  })
+function mount(cards = CARDS, triage = NO_RUN) {
+  let state = reduce(emptyWorkspace, { type: 'mail_state', status: 'ready', cards, syncedAt: 1, triage })
   const render = () => (
     <>
       <MailView mail={state.mail} agents={[agent]} projects={[]} chats={[]} chatDoor={chatDoor} status="live" commands={commands} settingsOpen={false}
@@ -81,7 +85,7 @@ function mount() {
   )
   hear = (message) => act(() => change(reduce(state, message)))
   act(() => { view = create(render(), { unstable_isConcurrent: true } as never) })
-  for (const id of ['a', 'b', 'c']) hear({ type: 'mail_thread', requestId: `seed-${id}`, threadId: id, result: { status: 'ready', thread: thread(id) } })
+  for (const { threadId: id } of cards) hear({ type: 'mail_thread', requestId: `seed-${id}`, threadId: id, result: { status: 'ready', thread: thread(id) } })
 }
 
 function press(key: string, target: object = new FakeElement(), extra: object = {}) {
@@ -96,6 +100,8 @@ const shown = () => cardsShown().map((node) => node.props['data-mail-card'])
 const selected = () => cardsShown().find((node) => node.props['aria-current'] === 'true')?.props['data-mail-card'] ?? null
 const textOf = (node: ReactTestInstance): string => node.children.map((child) => (typeof child === 'string' ? child : textOf(child))).join('')
 const button = (name: string) => host((node) => node.type === 'button' && (node.props['aria-label'] === name || textOf(node) === name))[0]!
+const says = (text: string) => JSON.stringify(view.toJSON()).includes(text)
+const search = (query: string) => act(() => host((node) => node.props['aria-label'] === 'Search mail')[0]!.props.onChange({ target: { value: query } }))
 const paneOpen = () => host((node) => node.props['aria-label'] === 'Reply draft').length === 1
 const ofType = <T extends ClientMessage['type']>(type: T) =>
   sent.filter((message): message is Extract<ClientMessage, { type: T }> => message.type === type)
@@ -109,7 +115,7 @@ beforeEach(() => {
   vi.stubGlobal('HTMLElement', FakeElement)
   vi.stubGlobal('requestAnimationFrame', (run: () => void) => { run(); return 0 })
   vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
-  setMailView({ selectedId: null, tab: 'all', query: '', archived: null })
+  setMailView({ selectedId: null, tab: 'reply', query: '', archived: null })
 })
 afterEach(() => {
   act(() => view.unmount())
@@ -126,7 +132,77 @@ describe('MailView', () => {
     expect(ofType('mail_load')).toHaveLength(before + 1)
     expect(ofType('mail_open')).toEqual([])
     expect(selected()).toBeNull()
-    for (const name of ['Reply', 'Add to chat', 'Archive']) expect(button(name).props.disabled).toBe(true)
+  })
+
+  it('lists Needs reply first, without an All tab, and draws no actions until a mail is open', () => {
+    mount()
+    const tabs = host((node) => node.props.role === 'tab').map(textOf)
+    expect(tabs).toEqual(['Needs reply', 'Waiting', 'FYI'])
+    expect(shown()).toEqual(['a', 'b', 'c'])
+    for (const name of ['Reply', 'Add to chat', 'Archive']) expect(button(name)).toBeUndefined()
+    expect(says('Select a mail to read.')).toBe(true)
+    press('j')
+    for (const name of ['Reply', 'Add to chat', 'Archive']) expect(button(name)).toBeDefined()
+    expect(button('Reply').props.title).toBe('Draft a reply (R)')
+    expect(says('Select a mail to read.')).toBe(false)
+  })
+
+  it('keeps Other and unlabelled mail out of every tab and finds it in a search, with its label', () => {
+    mount()
+    for (const name of ['Needs reply', 'Waiting', 'FYI']) {
+      act(() => button(name).props.onClick())
+      expect(shown()).not.toContain('d')
+      expect(shown()).not.toContain('e')
+    }
+    search('subject')
+    expect(shown()).toEqual(['a', 'b', 'c', 'd', 'e'])
+    expect(host((node) => node.props.role === 'tab')).toEqual([])
+    expect(says('Other')).toBe(true)
+    search('')
+    expect(host((node) => node.props.role === 'tab')).toHaveLength(3)
+    expect(says('Other')).toBe(false)
+  })
+
+  it('sets Other with key 4, which takes the card off its tab', () => {
+    mount()
+    press('j')
+    press('4')
+    expect(ofType('mail_set_label')).toEqual([{ type: 'mail_set_label', threadId: 'a', label: 'other' }])
+    expect(shown()).toEqual(['b', 'c'])
+  })
+
+  it('says why each view is empty, and offers a run for the unlabelled cards', () => {
+    mount([card('d', 5, 'other'), card('e', 4)])
+    expect(says('Nothing needs a reply.')).toBe(true)
+    expect(says('Not labelled yet')).toBe(true)
+    expect(button('1 new')).toBeDefined()
+    act(() => button('Label 1 new').props.onClick())
+    expect(ofType('mail_triage_run')).toHaveLength(1)
+    act(() => button('Waiting').props.onClick())
+    expect(says('Nothing is waiting on someone.')).toBe(true)
+    act(() => button('FYI').props.onClick())
+    expect(says('Nothing to read.')).toBe(true)
+    search('nothing like it')
+    expect(says('No mail matches this search.')).toBe(true)
+    expect(says('Not labelled yet')).toBe(false)
+    search('subject')
+    expect(says('Select a mail to read.')).toBe(true)
+  })
+
+  it('says a run is going instead of offering one', () => {
+    mount([card('e', 4)], { lastRunAt: null, running: true })
+    expect(says('Labelling new mail…')).toBe(true)
+    expect(says('Not labelled yet')).toBe(false)
+    expect(button('Label 1 new')).toBeUndefined()
+  })
+
+  it('names the last run when every card is labelled', () => {
+    const at = Date.now() - 60_000
+    mount([card('a', 30, 'reply')], { lastRunAt: at, running: false })
+    act(() => button('Waiting').props.onClick())
+    expect(says(`Last labelled ${mailTimeLabel(at, Date.now())}`)).toBe(true)
+    expect(button(mailTimeLabel(at, Date.now()))).toBeDefined()
+    expect(button('Label 1 new')).toBeUndefined()
   })
 
   it('walks the list by key, reads each thread, and folds all but the newest message', () => {
@@ -180,12 +256,12 @@ describe('MailView', () => {
     act(() => button('Waiting').props.onClick())
     press('e')
     expect(JSON.stringify(view.toJSON())).toContain('Archived')
-    act(() => button('All').props.onClick())
     act(() => button('Needs reply').props.onClick())
     act(() => button('Undo').props.onClick())
     expect(ofType('mail_unarchive').map((message) => message.threadId)).toEqual(['a'])
-    // The tab that would hide it gives way to All.
-    expect(shown()).toEqual(['a', 'b', 'c'])
+    // The tab that would hide it gives way to its own.
+    expect(host((node) => node.props.role === 'tab' && node.props['aria-selected'] === true).map(textOf)).toEqual(['Waiting'])
+    expect(shown()).toEqual(['a'])
     expect(selected()).toBe('a')
     expect(button('Undo')).toBeUndefined()
   })
@@ -208,8 +284,8 @@ describe('MailView', () => {
     expect(shown()).toEqual(['a'])
     press('3')
     expect(shown()).toEqual([])
-    expect(JSON.stringify(view.toJSON())).toContain('No mail in this view.')
-    expect(button('Archive').props.disabled).toBe(true)
+    expect(says('Nothing is waiting on someone.')).toBe(true)
+    expect(button('Archive')).toBeUndefined()
   })
 
   it('opens the reply split with one draft, and ends it on Escape, another card and leaving', () => {
@@ -234,6 +310,16 @@ describe('MailView', () => {
     const draftId = ofType('mail_draft_start')[2]!.draftId
     act(() => view.update(<></>))
     expect(ofType('mail_draft_stop').at(-1)?.draftId).toBe(draftId)
+  })
+
+  it('keeps a reply open when a search empties the list', () => {
+    mount()
+    press('j')
+    press('r')
+    search('nothing like it')
+    expect(shown()).toEqual([])
+    expect(paneOpen()).toBe(true)
+    expect(ofType('mail_draft_stop')).toEqual([])
   })
 
   it('opens Add to chat from its key and its button', () => {

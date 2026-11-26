@@ -55,7 +55,7 @@ export function mailTriageToolServer(label: MailTriageLabeller, limit: number): 
     instructions: 'Sets one triage label on one mail of the current run. It never sends, archives or changes mail.',
     tools: [{
       name: MAIL_TRIAGE_TOOL,
-      description: 'Label one mail of this run: reply (the user must answer or act), wait (the user waits for someone else) or fyi (nothing to do). Give the reason in one short line.',
+      description: 'Label one mail of this run: reply (the user must answer or act), wait (the user waits for someone else), fyi (worth reading, no answer needed) or other (newsletters, promotions, automated notifications). Give the reason in one short line.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -73,7 +73,7 @@ export function mailTriageToolServer(label: MailTriageLabeller, limit: number): 
       calls += 1
       if (calls > limit) throw new Error(`This run allows at most ${limit} label calls.`)
       const input = SetLabelInputSchema.safeParse(arguments_)
-      if (!input.success) throw new Error('mail_set_label needs an id from this run, a label (reply, wait or fyi) and a one-line reason.')
+      if (!input.success) throw new Error('mail_set_label needs an id from this run, a label (reply, wait, fyi or other) and a one-line reason.')
       return [{ type: 'text', text: label(input.data.id, input.data.label, input.data.reason) }]
     },
   }

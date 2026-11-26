@@ -14,7 +14,10 @@ interface FixtureMessage {
   seen: boolean
   /** False for the account's own sent replies, which live outside the Inbox. */
   inbox: boolean
+  /** The plain version, which is all an agent reads. */
   text: string
+  /** The sender's own HTML part, for the client's mail view. */
+  html?: string
   attachments: { name: string; kb: number }[]
 }
 
@@ -29,6 +32,73 @@ const studio = person('Ruben Example', 'ruben@studio.example')
 const tracker = person('Issue Tracker', 'digest@issues.example')
 const family = person('Ingrid Example', 'ingrid@family.example')
 const careers = person('Careers', 'no-reply@jobs.example')
+const shop = person('Garden Supply', 'news@garden-supply.example')
+
+/**
+ * Two public, stable pictures from a free media archive. The isolated verify server
+ * really fetches them through the image proxy, so they must stay reachable without cookies.
+ */
+export const FIXTURE_NEWSLETTER_IMAGES = [
+  'https://upload.wikimedia.org/wikipedia/commons/thumb/3/3f/Fronalpstock_big.jpg/500px-Fronalpstock_big.jpg',
+  'https://upload.wikimedia.org/wikipedia/commons/thumb/a/a7/Camponotus_flavomarginatus_ant.jpg/500px-Camponotus_flavomarginatus_ant.jpg',
+] as const
+
+/** A marketing mail as a sender's template writes it: a table layout with inline styles. */
+const NEWSLETTER_HTML = `<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><title>Spring newsletter</title></head>
+<body style="margin:0;padding:0;background-color:whitesmoke;font-family:Arial,Helvetica,sans-serif;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:whitesmoke;">
+  <tr>
+    <td align="center" style="padding:24px 12px;">
+      <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;background-color:white;border-radius:6px;">
+        <tr>
+          <td style="background-color:darkgreen;color:white;padding:20px 28px;font-size:22px;font-weight:bold;border-radius:6px 6px 0 0;">
+            Garden Supply &middot; Spring newsletter
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:0;">
+            <img src="${FIXTURE_NEWSLETTER_IMAGES[0]}" width="600" alt="Mountain meadow in spring" style="display:block;width:100%;height:auto;">
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:24px 28px;color:darkslategray;font-size:15px;line-height:1.5;">
+            <p style="margin:0 0 16px;">New arrivals for the season are in: seed trays, hand tools and raised beds. This week everything in the spring range is 20% off.</p>
+            <table role="presentation" cellpadding="0" cellspacing="0">
+              <tr>
+                <td style="background-color:darkorange;border-radius:4px;">
+                  <a href="https://example.com/offers?utm_source=newsletter&amp;utm_medium=email" style="display:inline-block;padding:12px 22px;color:white;font-weight:bold;text-decoration:none;">See the offers</a>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:0 28px 24px;">
+            <img alt="A close look at the garden" src='${FIXTURE_NEWSLETTER_IMAGES[1]}' width="260" style="display:block;border-radius:4px;">
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:16px 28px;background-color:gainsboro;color:dimgray;font-size:12px;">
+            You receive this mail because you signed up at our shop. <a href="https://example.com/unsubscribe" style="color:dimgray;">Unsubscribe</a>
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>
+</body>
+</html>`
+
+/** A reply written in a mail program's HTML editor: plain blocks, no colours. */
+const INTERVIEW_HTML = `<div>Hi,</div>
+<div><br></div>
+<div>Thursday at 10:00 works for the team lead. Would that suit you? The interview takes about an hour, at our office.</div>
+<div><br></div>
+<div>The route and parking are on <a href="https://talent.example/visit">our visitor page</a>.</div>
+<div><br></div>
+<div>Kind regards,<br>Nora Example</div>`
 
 /** Gmail-shaped thread ids, so a send path that needs one finds one. */
 export const FIXTURE_THREAD = {
@@ -38,9 +108,10 @@ export const FIXTURE_THREAD = {
   digest: '1790000000000000004',
   family: '1790000000000000005',
   application: '1790000000000000006',
+  newsletter: '1790000000000000007',
 } as const
 
-/** Six threads modelled on the design's Inbox; `now` anchors their times. */
+/** Seven threads modelled on the design's Inbox; `now` anchors their times. Two carry HTML, the rest plain text only. */
 function seed(now: number): FixtureMessage[] {
   let uid = 100
   const message = (fields: Omit<FixtureMessage, 'uid' | 'messageId' | 'cc' | 'attachments'> & Partial<Pick<FixtureMessage, 'cc' | 'attachments'>>): FixtureMessage => {
@@ -101,6 +172,17 @@ function seed(now: number): FixtureMessage[] {
       text: 'Your weekly summary\n\n12 issues were updated this week.\n3 issues were closed.\n2 new issues are assigned to you.\n\nOpen the tracker to see the full list.',
     }),
     message({
+      threadId: FIXTURE_THREAD.newsletter,
+      subject: 'Spring newsletter: new arrivals and 20% off',
+      from: shop,
+      to: [ACCOUNT],
+      at: now - 14 * HOUR,
+      seen: false,
+      inbox: true,
+      text: 'Garden Supply - Spring newsletter\n\nNew arrivals for the season are in: seed trays, hand tools and raised beds. This week everything in the spring range is 20% off.\n\nSee the offers: https://example.com/offers\n\nYou receive this mail because you signed up at our shop. Unsubscribe: https://example.com/unsubscribe',
+      html: NEWSLETTER_HTML,
+    }),
+    message({
       threadId: FIXTURE_THREAD.parking,
       subject: 'Your parking permit expires on 31 December',
       from: council,
@@ -129,7 +211,8 @@ function seed(now: number): FixtureMessage[] {
       at: now - 2 * HOUR,
       seen: false,
       inbox: true,
-      text: 'Hi,\n\nThursday at 10:00 works for the team lead. Would that suit you? The interview takes about an hour, at our office.\n\nKind regards,\nNora Example',
+      text: 'Hi,\n\nThursday at 10:00 works for the team lead. Would that suit you? The interview takes about an hour, at our office.\n\nThe route and parking are on our visitor page: https://talent.example/visit\n\nKind regards,\nNora Example',
+      html: INTERVIEW_HTML,
     }),
   ]
 }
@@ -167,6 +250,7 @@ export class MailFixtureSource implements MailSource {
         cc: message.cc,
         at: message.at,
         text: message.text,
+        ...(message.html === undefined ? {} : { html: message.html }),
         truncated: false,
         attachments: message.attachments,
         mine: message.from.address === ACCOUNT.address,

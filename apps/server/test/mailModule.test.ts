@@ -55,6 +55,7 @@ describe('MailModule', () => {
       FIXTURE_THREAD.interview,
       FIXTURE_THREAD.family,
       FIXTURE_THREAD.parking,
+      FIXTURE_THREAD.newsletter,
       FIXTURE_THREAD.digest,
       FIXTURE_THREAD.waiting,
       FIXTURE_THREAD.application,
@@ -85,6 +86,23 @@ describe('MailModule', () => {
     expect(card(FIXTURE_THREAD.interview)).toMatchObject({ unread: true, messageCount: 3 })
     await send({ type: 'mail_open', requestId: 'r3', threadId: FIXTURE_THREAD.interview })
     expect(read).toHaveBeenCalledTimes(2)
+  })
+
+  it('keeps a message\'s HTML part through the cache file, beside its plain text', async () => {
+    const { send, replies, module, cacheFile, source } = setup()
+    await module.refresh()
+    await send({ type: 'mail_open', requestId: 'r1', threadId: FIXTURE_THREAD.newsletter })
+    const answer = replies.at(-1)
+    const opened = answer?.type === 'mail_thread' && answer.result.status === 'ready' ? answer.result.thread : undefined
+    expect(opened?.messages[0]?.html).toContain('<table')
+    expect(opened?.messages[0]?.text).not.toMatch(/[<>]/)
+    module.cache!.close()
+
+    const read = vi.spyOn(source, 'readThread')
+    const reopened = setup({ cacheFile, source })
+    await reopened.module.refresh()
+    expect(reopened.module.cachedThread(FIXTURE_THREAD.newsletter)).toEqual(opened)
+    expect(read).not.toHaveBeenCalled()
   })
 
   it('archive removes the thread from the Inbox and the state; unarchive brings it back with its label', async () => {
@@ -150,7 +168,7 @@ describe('MailModule', () => {
     vi.spyOn(source, 'listInbox').mockRejectedValueOnce(new Error('Connection timed out'))
     await module.refresh()
     expect(lastState()).toMatchObject({ status: 'error', error: 'Connection timed out' })
-    expect(lastState().cards).toHaveLength(6)
+    expect(lastState().cards).toHaveLength(7)
     await module.refresh()
     expect(lastState().status).toBe('ready')
     expect(lastState().error).toBeUndefined()
@@ -263,7 +281,7 @@ describe('MailModule', () => {
     })
     expect((await module.state()).cards).toEqual([])
     await module.refresh()
-    expect(lastState().cards).toHaveLength(6)
+    expect(lastState().cards).toHaveLength(7)
   })
 
   it('refuses a send on a host without a send port', async () => {
@@ -288,7 +306,7 @@ describe('the cache file is disposable', () => {
     await second.send({ type: 'mail_load' })
     expect(second.replies.at(-1)).toMatchObject({ type: 'mail_state', cards: [] })
     await second.module.refresh()
-    expect(second.lastState().cards).toHaveLength(6)
+    expect(second.lastState().cards).toHaveLength(7)
     expect(second.card(FIXTURE_THREAD.family)?.label).toBeUndefined()
   }
 
@@ -312,6 +330,19 @@ describe('the cache file is disposable', () => {
     expect((await second.module.state()).cards).toEqual([])
     await second.module.refresh()
     expect(second.card(FIXTURE_THREAD.family)?.label).toBeUndefined()
+  })
+
+  it('a version 1 file keeps its labels and loses only its bodies', async () => {
+    const { cacheFile } = await labelledAndClosed()
+    const db = new DatabaseSync(cacheFile)
+    db.exec("INSERT INTO bodies (thread_id, uids, thread_json) VALUES ('old', '1', '{}'); PRAGMA user_version = 1")
+    db.close()
+    const second = setup({ cacheFile })
+    const check = new DatabaseSync(cacheFile)
+    expect(check.prepare('SELECT count(*) AS bodies FROM bodies').get()).toEqual({ bodies: 0 })
+    check.close()
+    await second.module.refresh()
+    expect(second.card(FIXTURE_THREAD.family)?.label).toBe('reply')
   })
 
   it('a file on another schema version is emptied', async () => {

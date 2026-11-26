@@ -8,8 +8,10 @@ import {
   mailKeyAction,
   mailNeighbour,
   mailTimeLabel,
+  mailViewShowing,
   searchMailCards,
   steppedMailSelection,
+  unlabelledMailCount,
 } from './mail'
 
 const card = (threadId: string, over: Partial<MailCard> = {}): MailCard => ({
@@ -25,48 +27,60 @@ const cards = [
   card('a', { label: 'reply', subject: 'Quote for the roof' }),
   card('b', { label: 'wait', from: { name: '', address: 'billing@garden.example' } }),
   card('c'),
+  card('d', { label: 'other', subject: 'Robin weekly digest' }),
 ]
+const three = cards.slice(0, 3)
 const ids = (listed: MailCard[]) => listed.map((entry) => entry.threadId)
 
 describe('mail helpers', () => {
-  it('filters by tab, and All keeps the unlabelled ones', () => {
-    expect(MAIL_TABS.map((tab) => tab.label)).toEqual(['All', 'Needs reply', 'Waiting', 'FYI'])
-    expect(ids(mailCardsInTab(cards, 'all'))).toEqual(['a', 'b', 'c'])
+  it('has three tabs, Needs reply first, and lists neither Other nor unlabelled cards in any', () => {
+    expect(MAIL_TABS.map((tab) => tab.label)).toEqual(['Needs reply', 'Waiting', 'FYI'])
+    expect(ids(mailCardsInTab(cards, 'reply'))).toEqual(['a'])
     expect(ids(mailCardsInTab(cards, 'wait'))).toEqual(['b'])
     expect(mailCardsInTab(cards, 'fyi')).toEqual([])
+    expect(MAIL_TABS.flatMap((tab) => ids(listedMailCards(cards, tab.value, ' ')))).toEqual(['a', 'b'])
+    expect(unlabelledMailCount(cards)).toBe(1)
   })
 
-  it('searches subject and sender, and combines with the tab', () => {
+  it('searches subject and sender across every label, whatever the tab', () => {
     expect(ids(searchMailCards(cards, '  ROOF '))).toEqual(['a'])
     expect(ids(searchMailCards(cards, 'garden'))).toEqual(['b'])
-    expect(ids(searchMailCards(cards, 'robin ex'))).toEqual(['a', 'c'])
-    expect(ids(searchMailCards(cards, ''))).toEqual(['a', 'b', 'c'])
-    expect(ids(listedMailCards(cards, 'reply', 'robin'))).toEqual(['a'])
-    expect(listedMailCards(cards, 'wait', 'roof')).toEqual([])
+    expect(ids(searchMailCards(cards, 'robin ex'))).toEqual(['a', 'c', 'd'])
+    expect(ids(listedMailCards(cards, 'wait', 'robin'))).toEqual(['a', 'c', 'd'])
+    expect(listedMailCards(cards, 'wait', 'nothing like it')).toEqual([])
+  })
+
+  it('finds the tab or search that lists a hidden card', () => {
+    expect(mailViewShowing(cards[0]!, 'reply', '')).toEqual({})
+    expect(mailViewShowing(cards[0]!, 'wait', '')).toEqual({ tab: 'reply', query: '' })
+    expect(mailViewShowing(cards[3]!, 'reply', '')).toEqual({ query: 'Robin weekly digest' })
+    expect(mailViewShowing({ ...cards[3]!, subject: ' ' }, 'reply', '')).toEqual({ query: cards[3]!.from.address })
+    expect(mailViewShowing(cards[2]!, 'reply', 'robin')).toEqual({})
   })
 
   it('selects the next card after an archive, else the previous one', () => {
-    expect(mailNeighbour(cards, 'a')).toBe('b')
-    expect(mailNeighbour(cards, 'c')).toBe('b')
+    expect(mailNeighbour(three, 'a')).toBe('b')
+    expect(mailNeighbour(three, 'c')).toBe('b')
     expect(mailNeighbour([cards[0]!], 'a')).toBeNull()
-    expect(mailNeighbour(cards, 'gone')).toBeNull()
+    expect(mailNeighbour(three, 'gone')).toBeNull()
   })
 
   it('steps through the listed cards and stops at the ends', () => {
-    expect(steppedMailSelection(cards, 'a', 1)).toBe('b')
-    expect(steppedMailSelection(cards, 'c', 1)).toBe('c')
-    expect(steppedMailSelection(cards, 'a', -1)).toBe('a')
-    expect(steppedMailSelection(cards, null, 1)).toBe('a')
-    expect(steppedMailSelection(cards, 'gone', -1)).toBe('c')
+    expect(steppedMailSelection(three, 'a', 1)).toBe('b')
+    expect(steppedMailSelection(three, 'c', 1)).toBe('c')
+    expect(steppedMailSelection(three, 'a', -1)).toBe('a')
+    expect(steppedMailSelection(three, null, 1)).toBe('a')
+    expect(steppedMailSelection(three, 'gone', -1)).toBe('c')
     expect(steppedMailSelection([], 'a', 1)).toBeNull()
   })
 
   it('reads the keys of the view', () => {
     expect(mailKeyAction('j')).toEqual({ kind: 'step', step: 1 })
     expect(mailKeyAction('ArrowUp')).toEqual({ kind: 'step', step: -1 })
-    expect(['1', '2', '3'].map(mailKeyAction)).toEqual([
-      { kind: 'label', label: 'reply' }, { kind: 'label', label: 'wait' }, { kind: 'label', label: 'fyi' },
+    expect(['1', '2', '3', '4'].map(mailKeyAction)).toEqual([
+      { kind: 'label', label: 'reply' }, { kind: 'label', label: 'wait' }, { kind: 'label', label: 'fyi' }, { kind: 'label', label: 'other' },
     ])
+    expect(mailKeyAction('5')).toBeUndefined()
     expect(['r', 'e', 'a', '/', 'Escape'].map((key) => mailKeyAction(key)?.kind)).toEqual(['reply', 'archive', 'add', 'search', 'close'])
     expect(mailKeyAction('x')).toBeUndefined()
     expect(mailKeyAction('toString')).toBeUndefined()

@@ -68,6 +68,74 @@ export function markdownImageUrls(text: string): string[] {
   return urls
 }
 
+const IMG_START = /<!--|<img\b/gi
+
+/**
+ * The attribute text of every `<img>` start tag outside a comment, read in one pass over
+ * the mail so a sender cannot make the scan slow. A quoted value may hold a `>`, and a
+ * tag or comment the mail never closes ends the scan, as it ends the document for a browser.
+ */
+function imgTags(html: string): string[] {
+  const tags: string[] = []
+  IMG_START.lastIndex = 0
+  for (let start = IMG_START.exec(html); start !== null; start = IMG_START.exec(html)) {
+    const from = IMG_START.lastIndex
+    if (start[0] === '<!--') {
+      const close = html.indexOf('-->', from)
+      if (close === -1) break
+      IMG_START.lastIndex = close + 3
+      continue
+    }
+    let quote = ''
+    let end = from
+    for (; end < html.length; end += 1) {
+      const char = html[end]
+      if (quote !== '') {
+        if (char === quote) quote = ''
+      } else if (char === '"' || char === "'") quote = char
+      else if (char === '>') break
+    }
+    if (end === html.length) break
+    tags.push(html.slice(from, end))
+    IMG_START.lastIndex = end + 1
+  }
+  return tags
+}
+/** One attribute of a start tag, its value double quoted, single quoted, unquoted or absent. */
+const ATTRIBUTE = /([^\s"'>/=]+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+)))?/g
+const NAMED_REFERENCES: Record<string, string> = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: '\u00a0' }
+
+const fromCodePoint = (value: number) =>
+  value === 0 || value > 0x10ffff || (value >= 0xd800 && value <= 0xdfff) ? '\ufffd' : String.fromCodePoint(value)
+
+/** The character references an attribute value commonly carries, decoded the way a browser's parser does. */
+const decodeReferences = (value: string) => value.replace(
+  /&(?:#x([0-9a-f]+);?|#(\d+);?|(amp|lt|gt|quot|apos|nbsp);)/gi,
+  (whole, hex: string | undefined, decimal: string | undefined, name: string | undefined) =>
+    hex !== undefined ? fromCodePoint(Number.parseInt(hex, 16))
+      : decimal !== undefined ? fromCodePoint(Number.parseInt(decimal, 10))
+        : NAMED_REFERENCES[name!.toLowerCase()] ?? whole,
+)
+
+/**
+ * The remote picture of every `<img src>` in a mail's HTML, in the spelling the client
+ * asks for: it reads `src` from the parsed document and rewrites it to the proxy. Only
+ * `src` counts; `srcset`, CSS and links are not shown through the proxy.
+ */
+export function mailImageUrls(html: string): string[] {
+  const urls: string[] = []
+  for (const tag of imgTags(html)) {
+    for (const attribute of tag.matchAll(ATTRIBUTE)) {
+      if (attribute[1]!.toLowerCase() !== 'src') continue
+      // A repeated attribute is ignored by the parser, so only the first src stands.
+      const url = remoteImageUrl(decodeReferences(attribute[2] ?? attribute[3] ?? attribute[4] ?? ''))
+      if (url !== undefined) urls.push(url)
+      break
+    }
+  }
+  return urls
+}
+
 /** A redirect's next address; a `Location` that does not parse ends the fetch instead of throwing. */
 function redirectTarget(location: string, base: URL): string | undefined {
   try {
@@ -123,7 +191,8 @@ export interface RemoteImages {
 }
 
 /**
- * Remote pictures in chat markdown, fetched by the Mac and served on Manor's origin.
+ * Remote pictures in chat markdown and in a mail's HTML, fetched by the Mac and served
+ * on Manor's origin.
  *
  * The proxy fetches only an address a message on the wire actually showed, so it is no
  * open proxy for whoever can reach the port, and it needs no credential in the image
@@ -306,6 +375,8 @@ export function createRemoteImages(options: {
         live.delete(key)
         live.set(key, text.slice(-LIVE_TAIL))
         if (live.size > MAX_LIVE) live.delete(live.keys().next().value!)
+      } else if (message.type === 'mail_thread' && message.result.status === 'ready') {
+        for (const entry of message.result.thread.messages) if (entry.html !== undefined) learn(known, mailImageUrls(entry.html))
       }
     },
     handle(request, response) {

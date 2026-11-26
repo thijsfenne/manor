@@ -14,7 +14,7 @@ export interface MailViewState {
   archived: { requestId: string; threadId: string } | null
 }
 
-let view: MailViewState = { selectedId: null, tab: 'all', query: '', archived: null }
+let view: MailViewState = { selectedId: null, tab: 'reply', query: '', archived: null }
 const listeners = new Set<() => void>()
 
 const subscribe = (listener: () => void) => {

@@ -92,9 +92,10 @@ export function mailReplyFor(messages: readonly MailMessage[], account: string, 
  * The Mail door's protocol. It owns the mailbox source and the disposable cache: the
  * cache answers at once, a poll on focus brings it up to date, and the only mailbox
  * write is the user's Archive and its Undo, and the only send is the user's Send.
- * Incoming mail never starts an agent turn: only a reply draft the user asked for and
- * the triage run (scheduled, or the user's click) do, through `MailDrafts` and
- * `MailTriage`, neither of which can reach Archive or Send.
+ * Mail that arrives never starts an agent turn by itself: only a reply draft the user
+ * asked for and the triage run (scheduled, the user's click, or the open Mail view
+ * finding new mail on its poll) do, through `MailDrafts` and `MailTriage`, neither of
+ * which can reach Archive or Send.
  *
  * Source calls that change what the Inbox holds (polls, archive, restore) run one at a
  * time, so a poll that listed the Inbox before an archive can never land after it.
@@ -273,9 +274,9 @@ export class MailModule {
    * triage run. Reads uncached bodies through the source (never marking them read, and
    * not marking them opened); a thread that will not read gets an empty snippet.
    */
-  async unlabelled(limit = 30): Promise<{ card: MailCard; snippet: string }[]> {
+  async unlabelled(limit = 30, offered: ReadonlySet<string> = new Set()): Promise<{ card: MailCard; snippet: string }[]> {
     if (this.cache === undefined) return []
-    const cards = (await this.state()).cards.filter((card) => card.label === undefined).slice(0, limit)
+    const cards = (await this.state()).cards.filter((card) => card.label === undefined && !offered.has(card.threadId)).slice(0, limit)
     const out: { card: MailCard; snippet: string }[] = []
     for (const card of cards) {
       let snippet = ''
@@ -333,7 +334,10 @@ export class MailModule {
     switch (message.type) {
       case 'mail_load':
         reply(await this.state())
-        if (message.refresh === true) await this.refresh()
+        if (message.refresh !== true) return
+        await this.refresh()
+        // Only a listing that came in says what is new; a failed poll leaves old cards standing.
+        if (this.pollError === undefined) await this.triage.look()
         return
       case 'mail_open': {
         try {

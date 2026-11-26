@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Archive02Icon } from '@hugeicons/core-free-icons'
 import { mailCards, type MailState } from '@manor/client-runtime/mail'
-import { listedMailCards } from '../../mail'
+import { mailViewShowing } from '../../mail'
 import { Icon } from '../Icon'
 import type { HouseNotice } from '../NoticeStack'
 import { Button } from '../ui/Button'
@@ -39,9 +39,8 @@ export function useMailArchivedNotice(mail: MailState, unarchive: (requestId: st
     if (!unarchive(`mail-unarchive-${crypto.randomUUID()}`, threadId)) return
     const card = mail.archived[threadId] ?? mailCards(mail).find((entry) => entry.threadId === threadId)
     const { tab, query } = mailView()
-    // A tab or search that would hide the returned card is cleared, so it can be seen selected.
-    const hidden = card !== undefined && listedMailCards([card], tab, query).length === 0
-    setMailView({ selectedId: threadId, archived: null, ...(hidden ? { tab: 'all', query: '' } : {}) })
+    // A tab or search that would hide the returned card gives way, so it can be seen selected.
+    setMailView({ selectedId: threadId, archived: null, ...(card === undefined ? {} : mailViewShowing(card, tab, query)) })
   }
   return {
     key: `mail-${requestId}`,

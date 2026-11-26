@@ -18,10 +18,12 @@ import { normalAddress, type MailEnvelope, type MailInbox, type MailThreadRef } 
 const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite') as typeof import('node:sqlite')
 
 /**
- * Bumped whenever a table below changes. The cache is disposable, so there are no
- * migrations: a file on another version is emptied and the next poll refills it.
+ * Bumped whenever a table below or the thread JSON in `bodies` changes. The cache is
+ * disposable, so there are no migrations: a file on another version is emptied and the
+ * next poll refills it. Version 2 only added each message's HTML part to the thread
+ * JSON, so a version 1 file loses its bodies and keeps its labels, links and claims.
  */
-export const MAIL_CACHE_SCHEMA_VERSION = 1
+export const MAIL_CACHE_SCHEMA_VERSION = 2
 
 const SCHEMA = `
 CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
@@ -143,7 +145,12 @@ function openOnSchema(file: string): SqliteDatabase {
     // would be replayed into the fresh one.
     db.exec('PRAGMA busy_timeout = 5000')
     const version = Number(db.prepare('PRAGMA user_version').get()?.user_version)
-    if (version !== MAIL_CACHE_SCHEMA_VERSION) {
+    if (version === 1) {
+      transaction(db, () => {
+        db.exec('DELETE FROM bodies')
+        db.exec(`PRAGMA user_version = ${MAIL_CACHE_SCHEMA_VERSION}`)
+      })
+    } else if (version !== MAIL_CACHE_SCHEMA_VERSION) {
       transaction(db, () => {
         const tables = db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'").all()
         for (const table of tables) db.exec(`DROP TABLE IF EXISTS "${String(table.name).replace(/"/g, '""')}"`)
@@ -345,7 +352,7 @@ export class MailCache {
     }
   }
 
-  /** The cached plain-text thread, only while its Inbox messages are still the ones it was read with. */
+  /** The cached thread, only while its Inbox messages are still the ones it was read with. */
   cachedThread(threadId: string): MailThread | undefined {
     const inbox = this.inboxThread(threadId)
     if (inbox === undefined) return undefined

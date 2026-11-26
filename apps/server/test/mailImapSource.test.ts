@@ -1,5 +1,6 @@
 import { Readable } from 'node:stream'
 import { describe, expect, it } from 'vitest'
+import { MAIL_MESSAGE_HTML_MAX, MAIL_THREAD_HTML_MAX } from '@manor/contracts'
 import { MailImapSource, mailImapSourceFromEnv, type MailImapClient } from '../src/mailImapSource.js'
 
 interface FakeMessage {
@@ -19,6 +20,8 @@ interface FakeMessage {
   folder?: string
   structure: Record<string, unknown>
   body: string
+  /** Bodies by part number, for a message with more than one text part. */
+  parts?: Record<string, string>
 }
 
 const plain = { type: 'text/plain', parameters: { charset: 'utf-8' } }
@@ -91,7 +94,7 @@ function fakeServer(options: { gmail: boolean; messages: FakeMessage[]; move?: b
     },
     async download(uid: string, part: string) {
       const found = byUids(uid)[0]!
-      return { meta: { charset: 'utf-8', part }, content: Readable.from([Buffer.from(found.message.body)]) }
+      return { meta: { charset: 'utf-8', part }, content: Readable.from([Buffer.from(found.message.parts?.[part] ?? found.message.body)]) }
     },
     async messageMove(range: string, destination: string) {
       for (const { message } of byUids(range)) {
@@ -194,8 +197,31 @@ describe('MailImapSource against a recording client', () => {
     expect(message?.text).toBe('Your order has shipped.\nTotal & tax: 12 EUR')
     expect(message?.text).not.toMatch(/[<>]|color/)
     expect(message?.attachments).toEqual([{ name: 'invoice.pdf', kb: 40 }])
-    // Only the text node was downloaded, never the attachment's part.
+    // The HTML is the text's own download, and never the attachment's part.
+    expect(message?.html).toContain('<b>shipped</b>')
     expect(calls.filter((call) => call.method === 'download').map((call) => call.args[1])).toEqual(['1'])
+  })
+
+  it('reads the plain part as text and the HTML alternative as html, but only whole and within the caps', async () => {
+    const alternative = { type: 'multipart/alternative', childNodes: [{ part: '1', ...plain }, { part: '2', ...htmlOnly }] }
+    const markup = (fill: number) => `<p>${'x'.repeat(fill - 7)}</p>`
+    // Newest last: four parts just under the message cap fill the thread budget, so the oldest loses its HTML.
+    const near = MAIL_MESSAGE_HTML_MAX - 1_000
+    expect(near * 4).toBeLessThanOrEqual(MAIL_THREAD_HTML_MAX)
+    expect(near * 5).toBeGreaterThan(MAIL_THREAD_HTML_MAX)
+    const sizes = [near, MAIL_MESSAGE_HTML_MAX + 1, near, near, near, near]
+    const messages: FakeMessage[] = sizes.map((size, index) => ({
+      emailId: `h${index}`, threadId: '1790000000000000066', messageId: `<h${index}@one.example>`, subject: 'News', from: sam, to: [me],
+      date: new Date(Date.UTC(2026, 10, 20 + index)), seen: false, allUid: 30 + index, inboxUid: 30 + index,
+      structure: alternative, body: '', parts: { '1': `Plain ${index}`, '2': markup(size) },
+    }))
+    const { client, calls } = fakeServer({ gmail: true, messages })
+    const source = new MailImapSource({ account: 'you@home.example', createClient: () => client })
+    const thread = await source.readThread({ threadId: '1790000000000000066', gmailThreadId: '1790000000000000066', uidValidity: '7', uids: [] })
+    expect(thread.map((message) => message.text)).toEqual(['Plain 0', 'Plain 1', 'Plain 2', 'Plain 3', 'Plain 4', 'Plain 5'])
+    expect(thread.map((message) => message.html?.length)).toEqual([undefined, undefined, near, near, near, near])
+    expect(thread.every((message) => !message.truncated)).toBe(true)
+    expect(calls.filter((call) => call.method === 'download').map((call) => call.args[1])).toEqual(sizes.flatMap(() => ['1', '2']))
   })
 
   it('archives a Gmail thread by moving its Inbox messages to all mail, and restore copies them back', async () => {

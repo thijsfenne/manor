@@ -1,11 +1,19 @@
 import { ImapFlow, type FetchMessageObject, type MessageAddressObject, type MessageStructureObject } from 'imapflow'
-import { MAIL_MESSAGE_TEXT_MAX, MAIL_THREAD_MESSAGES_MAX, type MailAddress, type MailMessage } from '@manor/contracts'
+import {
+  MAIL_MESSAGE_HTML_MAX,
+  MAIL_MESSAGE_TEXT_MAX,
+  MAIL_THREAD_HTML_MAX,
+  MAIL_THREAD_MESSAGES_MAX,
+  type MailAddress,
+  type MailMessage,
+} from '@manor/contracts'
 import {
   attachments,
   decode,
   DEFAULT_MAIL_ENV_PREFIX,
   DEFAULT_MAILBOX,
   downloadCharset,
+  htmlNode,
   htmlToText,
   mailEnvKeys,
   mailOptionalEnvKeys,
@@ -53,8 +61,8 @@ type Receipt =
 const INBOX = 'INBOX'
 /** One character over the cap is enough to know a mail was cut; four bytes per character covers multibyte text. */
 const TEXT_BYTES = MAIL_MESSAGE_TEXT_MAX * 4 + 64
-/** HTML carries markup around its text, so it gets more room before the cut. */
-const HTML_BYTES = TEXT_BYTES * 4
+/** Room for the largest HTML part a message may carry, plus one character to know it was over. */
+const HTML_BYTES = MAIL_MESSAGE_HTML_MAX * 4 + 64
 
 const address = (entry: MessageAddressObject | undefined): MailAddress => ({
   name: (entry?.name ?? '').slice(0, 400),
@@ -102,9 +110,9 @@ const messageTime = (message: FetchMessageObject) => timeOf(message.envelope?.da
 const uidList = (found: number[] | false) => (Array.isArray(found) ? [...found].sort((left, right) => left - right) : [])
 
 /**
- * The real mailbox, over IMAP with the connector's app password. Reads headers and the
- * text part only, never attachment bytes, and never sets a flag. Archive is a move out
- * of the Inbox and its Undo the way back.
+ * The real mailbox, over IMAP with the connector's app password. Reads headers, the
+ * text part and the HTML part only, never attachment bytes, and never sets a flag.
+ * Archive is a move out of the Inbox and its Undo the way back.
  */
 export class MailImapSource implements MailSource {
   constructor(private readonly options: MailImapSourceOptions) {}
@@ -198,23 +206,34 @@ export class MailImapSource implements MailSource {
     }
     fetched.sort((left, right) => messageTime(left) - messageTime(right) || left.uid - right.uid)
     const account = this.account()
+    /** One part as a string; `whole` is false when the byte limit cut it short. */
+    const readPart = async (uid: number, part: string, limit: number) => {
+      const download = await client.download(String(uid), part, { uid: true })
+      const bytes = await readStream(download.content, limit)
+      return { raw: decode(bytes, downloadCharset(download)), whole: bytes.length < limit }
+    }
     const messages: MailMessage[] = []
     for (const [index, message] of fetched.entries()) {
       const structure = withoutAttachedMessages(message.bodyStructure as MessageStructureObject | undefined)
       const node = textNode(structure)
+      const htmlPart = htmlNode(structure)
       let text = ''
       let cut = false
+      let htmlRead: { raw: string; whole: boolean } | undefined
       if (node !== undefined) {
-        const limit = node.type === 'text/html' ? HTML_BYTES : TEXT_BYTES
-        const download = await client.download(String(message.uid), node.part, { uid: true })
-        const bytes = await readStream(download.content, limit)
-        cut = bytes.length >= limit
-        const raw = decode(bytes, downloadCharset(download))
-        text = node.type === 'text/html' ? htmlToText(raw) : raw
+        const read = await readPart(message.uid, node.part, node.type === 'text/html' ? HTML_BYTES : TEXT_BYTES)
+        // A mail whose only text is HTML is downloaded once, for its text and its HTML.
+        if (node.type === 'text/html') htmlRead = read
+        cut = !read.whole
+        text = node.type === 'text/html' ? htmlToText(read.raw) : read.raw
         // The thread view already shows the earlier messages, so each later one loses its
         // quoted history. The oldest keeps everything: nothing above it carries that text.
         text = index === 0 ? text.replace(/\r\n/g, '\n').trim() : stripQuotes(text)
       }
+      // The text is already here, so an HTML part that will not download costs only the look.
+      if (htmlPart !== undefined && htmlRead === undefined) htmlRead = await readPart(message.uid, htmlPart.part, HTML_BYTES).catch(() => undefined)
+      // Cut HTML is broken markup, so a part the limit cut or over the cap is left out whole.
+      const html = htmlRead?.whole === true && htmlRead.raw.length <= MAIL_MESSAGE_HTML_MAX ? htmlRead.raw : undefined
       const from = address(message.envelope?.from?.[0])
       const truncated = cut || text.length > MAIL_MESSAGE_TEXT_MAX
       messages.push({
@@ -224,10 +243,18 @@ export class MailImapSource implements MailSource {
         cc: addresses(message.envelope?.cc),
         at: messageTime(message),
         text: text.slice(0, MAIL_MESSAGE_TEXT_MAX),
+        ...(html === undefined ? {} : { html }),
         truncated,
         attachments: attachments(structure).slice(0, 50).map((entry) => ({ name: entry.name.slice(0, 400), kb: entry.kb })),
         mine: normalAddress(from.address) === account,
       })
+    }
+    // The thread's HTML budget goes to the newest messages; an older one over it shows its text.
+    let htmlLeft = MAIL_THREAD_HTML_MAX
+    for (const message of [...messages].reverse()) {
+      if (message.html === undefined) continue
+      if (message.html.length <= htmlLeft) htmlLeft -= message.html.length
+      else delete message.html
     }
     return messages
   }

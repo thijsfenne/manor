@@ -2,7 +2,7 @@ import { createServer, type Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { afterEach, describe, expect, it } from 'vitest'
 import { REMOTE_FAVICON_PATH, REMOTE_IMAGE_PATH } from '@manor/contracts'
-import { createRemoteImages, isPrivateAddress, linkedSites, markdownImageUrls, type RemoteImages } from '../src/remoteImages.js'
+import { createRemoteImages, isPrivateAddress, linkedSites, mailImageUrls, markdownImageUrls, type RemoteImages } from '../src/remoteImages.js'
 
 const PNG = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.alloc(64)])
 
@@ -20,7 +20,7 @@ const listen = async (handler: Parameters<typeof createServer>[1]) => {
 
 /** A third-party host: one real picture, a page, a picture too big, and a page that claims to be a picture. */
 const upstream = () => listen((request, response) => {
-  if (request.url === '/photo.png') {
+  if (request.url?.split('?')[0] === '/photo.png') {
     response.writeHead(200, { 'content-type': 'image/png', 'set-cookie': 'tracker=1' })
     response.end(PNG)
   } else if (request.url === '/page') {
@@ -74,6 +74,42 @@ describe('markdownImageUrls', () => {
   })
 })
 
+describe('mailImageUrls', () => {
+  it('reads every img src in any attribute form and order, decoding character references', () => {
+    const html = [
+      '<IMG alt="a > b" SRC="https://example.com/a.png?x=1&amp;y=2">',
+      "<img width=10 src='https://example.com/b.png?x=1&#38;y=2' />",
+      '<img src=https://example.com/c.png?x=1&#x26;y=2 alt=c>',
+      '<img data-src="https://example.com/lazy.png" alt="src=https://example.com/alt.png" src="https://example.com/d.png" src="https://example.com/second.png">',
+    ].join('\n')
+    expect(mailImageUrls(html)).toEqual([
+      'https://example.com/a.png?x=1&y=2',
+      'https://example.com/b.png?x=1&y=2',
+      'https://example.com/c.png?x=1&y=2',
+      'https://example.com/d.png',
+    ])
+  })
+
+  it('reads only img src: no srcset, CSS, link, local or credentialed address', () => {
+    const html = [
+      '<img srcset="https://example.com/set.png 2x" src="cid:logo@mail">',
+      '<div style="background:url(https://example.com/css.png)"></div>',
+      '<a href="https://example.com/link.png">https://example.com/text.png</a>',
+      '<img src="https://user:secret@example.com/x.png">',
+      '<!-- <img src="https://example.com/comment.png" alt="it\'s"> -->',
+    ].join('\n')
+    expect(mailImageUrls(html)).toEqual([])
+    expect(mailImageUrls(`<!-- <img alt="don't -->\n<img src="https://example.com/after.png">`)).toEqual(['https://example.com/after.png'])
+  })
+
+  it('reads a mail of unclosed tags in one pass', () => {
+    const started = performance.now()
+    expect(mailImageUrls('<img "'.repeat(50_000))).toEqual([])
+    expect(mailImageUrls(`<img src="https://example.com/a.png">${'<img a'.repeat(50_000)}`)).toEqual(['https://example.com/a.png'])
+    expect(performance.now() - started).toBeLessThan(500)
+  })
+})
+
 describe('isPrivateAddress', () => {
   it('treats loopback, LAN, tailnet and link-local as private', () => {
     for (const address of ['127.0.0.1', '10.1.2.3', '192.168.1.1', '100.101.102.103', '169.254.169.254', '::1', 'fd00::1', '::ffff:127.0.0.1']) {
@@ -99,6 +135,34 @@ describe('createRemoteImages', () => {
     const host = await upstream()
     const response = await (await proxy(createRemoteImages({ allowPrivateHosts: true })))(`${host}/photo.png`)
     expect(response.status).toBe(404)
+  })
+
+  it('serves a picture a mail\'s HTML showed, not an address it only linked to or wrote out', async () => {
+    const host = await upstream()
+    const images = createRemoteImages({ allowPrivateHosts: true })
+    const message = (id: string, html?: string) => ({
+      id, from: { name: '', address: 'news@shop.example' }, to: [], cc: [], at: 1, text: `${host}/moved`, truncated: false, attachments: [], mine: false,
+      ...(html === undefined ? {} : { html }),
+    })
+    images.observe({
+      type: 'mail_thread',
+      requestId: 'r1',
+      threadId: 't1',
+      result: {
+        status: 'ready',
+        thread: {
+          threadId: 't1',
+          subject: 'News',
+          messages: [message('m1'), message('m2', `<p><img alt="x" src="${host}/photo.png?a=1&amp;b=2"> <a href="${host}/big.png">offers</a></p>`)],
+          reply: { to: '', cc: '', subject: '' },
+        },
+      },
+    })
+    const fetchVia = await proxy(images)
+    // The client asks with the src as the DOM decodes it.
+    expect((await fetchVia(`${host}/photo.png?a=1&b=2`)).status).toBe(200)
+    expect((await fetchVia(`${host}/big.png`)).status).toBe(404)
+    expect((await fetchVia(`${host}/moved`)).status).toBe(404)
   })
 
   it('learns an address that arrives split over streamed deltas', async () => {

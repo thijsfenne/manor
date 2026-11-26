@@ -7,15 +7,22 @@ import { z } from 'zod'
  * The only mailbox write is the user's own Archive, and the only send is the user's Send.
  */
 
-/** The three triage labels. Keys `1` to `3` set them in this order. */
-export const MAIL_LABELS = ['reply', 'wait', 'fyi'] as const
+/**
+ * The triage labels. Keys `1` to `4` set them in this order. `other` holds newsletters,
+ * promotions and automated notices: it has no tab and shows only in a search.
+ */
+export const MAIL_LABELS = ['reply', 'wait', 'fyi', 'other'] as const
 export const MailLabelSchema = z.enum(MAIL_LABELS)
 export type MailLabel = z.infer<typeof MailLabelSchema>
+
+/** The labels that have a tab, in tab order. */
+export const MAIL_TAB_LABELS = ['reply', 'wait', 'fyi'] as const satisfies readonly MailLabel[]
 
 export const MAIL_LABEL_NAME: Record<MailLabel, string> = {
   reply: 'Needs reply',
   wait: 'Waiting',
   fyi: 'FYI',
+  other: 'Other',
 }
 
 /** One line, shown as the label's tooltip. */
@@ -23,6 +30,10 @@ export const MAIL_REASON_MAX = 160
 export const MAIL_THREAD_ID_MAX = 200
 /** Plain text kept per message; longer mail is cut and marked `truncated`. */
 export const MAIL_MESSAGE_TEXT_MAX = 20_000
+/** A message's HTML part travels whole or not at all; a longer one is left out and the text stands in. */
+export const MAIL_MESSAGE_HTML_MAX = 300_000
+/** HTML of one thread on the wire, spent on the newest messages first. */
+export const MAIL_THREAD_HTML_MAX = 1_200_000
 export const MAIL_THREAD_MESSAGES_MAX = 50
 /** The recent Inbox window the cache holds. */
 export const MAIL_INBOX_WINDOW = 200
@@ -65,8 +76,13 @@ export const MailMessageSchema = z.object({
   to: z.array(MailAddressSchema).max(100),
   cc: z.array(MailAddressSchema).max(100),
   at: z.number().int(),
-  /** Plain text only: the text part, or HTML stripped to text on the host. */
+  /** The text part, or HTML stripped to text on the host. This is all an agent ever reads of a mail. */
   text: z.string().max(MAIL_MESSAGE_TEXT_MAX),
+  /**
+   * The message's own HTML part as the sender wrote it, absent when it has none or it is
+   * over the cap. Untrusted: a client draws it only in a sandboxed frame without scripts.
+   */
+  html: z.string().max(MAIL_MESSAGE_HTML_MAX).optional(),
   truncated: z.boolean(),
   attachments: z.array(z.object({ name: z.string().max(400), kb: z.number().int().min(0) })).max(50),
   /** Sent by the mailbox's own account. */
@@ -100,9 +116,10 @@ export type MailTriageState = z.infer<typeof MailTriageStateSchema>
 /** Client to server. Spread into the wire union in `index.ts`. */
 export const MailClientMessageSchemas = [
   // Answers the asker with the cached `mail_state` at once. With `refresh` the host then
-  // polls the mailbox and broadcasts the fresh state. The Mail view sends it on focus.
+  // polls the mailbox, broadcasts the fresh state and labels the mail that is new to it.
+  // The Mail view sends it when it opens and on focus.
   z.object({ type: z.literal('mail_load'), refresh: z.boolean().optional() }),
-  // Reads one thread as plain text, answered with `mail_thread`. Never marks it read.
+  // Reads one thread, answered with `mail_thread`. Never marks it read.
   z.object({ type: z.literal('mail_open'), requestId: z.string().min(1).max(120), threadId: MailThreadIdSchema }),
   z.object({ type: z.literal('mail_set_label'), threadId: MailThreadIdSchema, label: MailLabelSchema }),
   // Links every mail from this sender to a project, or removes the link with null.

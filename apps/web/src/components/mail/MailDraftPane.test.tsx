@@ -20,6 +20,14 @@ vi.mock('motion/react', () => {
   return { motion, AnimatePresence: ({ children }: { children: ReactNode }) => children, useReducedMotion: () => true }
 })
 const toasts = vi.hoisted(() => [] as string[])
+// The shared composer needs a browser editor; the pane is tested through the props it hands it.
+const composer = vi.hoisted(() => ({ props: null as null | Record<string, unknown> }))
+vi.mock('../Composer', () => ({
+  Composer: (props: Record<string, unknown>) => {
+    composer.props = props
+    return null
+  },
+}))
 vi.mock('../../notices', () => ({ toast: { success: (title: string) => toasts.push(title), error: () => {} } }))
 
 const thread: MailThread = {
@@ -43,7 +51,7 @@ const draft = (status: MailDraft['status'], text: string, draftId = 'd1', messag
 const pane = () => (
   <MailDraftPane thread={thread} agent={agent} drafts={state}
     onClose={() => { calls.close += 1 }}
-    onStart={(instruction, current) => { calls.start.push([instruction, current]) }}
+    onStart={(instruction, current) => { calls.start.push([instruction, current]); return true }}
     onStop={() => { calls.stop += 1 }}
     onSend={(to, cc, body) => { calls.send.push([to, cc, body]) }} />
 )
@@ -63,6 +71,12 @@ const sendButton = () => {
   return node
 }
 const text = () => labelled('Reply text').props.value as string
+const asked = (instruction: string) => {
+  let accepted = false
+  act(() => { accepted = (composer.props!.onSend as (text: string) => boolean)(instruction) })
+  return accepted
+}
+const textOf = (node: ReactTestInstance): string => node.children.map((child) => (typeof child === 'string' ? child : textOf(child))).join('')
 
 beforeEach(() => {
   toasts.length = 0
@@ -76,7 +90,8 @@ describe('MailDraftPane', () => {
   it('asks for one draft on open and lets the stream replace the text', () => {
     expect(calls.start).toEqual([[undefined, undefined]])
     show({ draft: draft('streaming', '') })
-    expect(host((node) => node.props.role === 'status')).toHaveLength(1)
+    expect(host((node) => node.props.role === 'status').map(textOf)).toEqual(['Writing…'])
+    expect(composer.props!.running).toBe(true)
     show({ draft: draft('streaming', 'Thank you, Thursday') })
     expect(text()).toBe('Thank you, Thursday')
     expect(labelled('Reply text').props.readOnly).toBe(true)
@@ -93,11 +108,8 @@ describe('MailDraftPane', () => {
     show({ draft: draft('done', 'First version.') })
     expect(text()).toBe('My own words.')
 
-    act(() => labelled('Change the draft').props.onChange({ target: { value: 'Shorter' } }))
-    const [form] = host((node) => node.type === 'form')
-    act(() => form!.props.onSubmit({ preventDefault: () => {} }))
+    expect(asked('Shorter')).toBe(true)
     expect(calls.start.at(-1)).toEqual(['Shorter', 'My own words.'])
-    expect(labelled('Change the draft').props.value).toBe('')
 
     show({ draft: draft('streaming', 'Short.', 'd2') })
     expect(text()).toBe('Short.')
@@ -108,8 +120,9 @@ describe('MailDraftPane', () => {
   it('disables Send while the draft streams and while a send is on its way', () => {
     show({ draft: draft('streaming', 'Half a') })
     expect(sendButton().props.disabled).toBe(true)
-    expect(host((node) => node.props['aria-label'] === 'Stop')).toHaveLength(1)
-    act(() => labelled('Stop').props.onClick())
+    expect(composer.props!.canSend).toBe(false)
+    expect(asked('Longer')).toBe(false)
+    act(() => (composer.props!.onStop as () => void)())
     expect(calls.stop).toBe(1)
 
     show({ draft: draft('done', 'Half a sentence.') })
@@ -137,12 +150,26 @@ describe('MailDraftPane', () => {
     expect(marked[0]!.children).toEqual(['stranger@else.example'])
   })
 
-  it('closes on Escape in its own fields', () => {
+  it('closes on Escape in its own text and in an idle composer', () => {
     const key = { key: 'Escape', preventDefault: vi.fn(), stopPropagation: vi.fn() }
     act(() => labelled('Reply text').props.onKeyDown(key))
-    act(() => labelled('Change the draft').props.onKeyDown(key))
+    expect(key.stopPropagation).toHaveBeenCalledTimes(1)
+    act(() => (composer.props!.onEscapeIdle as () => void)())
     expect(calls.close).toBe(2)
-    expect(key.stopPropagation).toHaveBeenCalledTimes(2)
+  })
+
+  it('heads the pane Reply without the agent, and asks the agent by name in the composer', () => {
+    const header = host((node) => node.type === 'h2').map(textOf)
+    expect(header).toEqual(['Reply'])
+    expect(JSON.stringify(view.toJSON())).not.toContain('Avery')
+    expect(composer.props).toMatchObject({ placeholder: 'Ask Avery to change it', draftKey: 'mail:t1', compact: true, allowAttachments: false })
+  })
+
+  it('refuses a request over the cap and keeps it in the composer', () => {
+    show({ draft: draft('done', 'Text.') })
+    expect(asked('x'.repeat(2_001))).toBe(false)
+    expect(calls.start).toHaveLength(1)
+    expect(host((node) => node.props.role === 'alert')).toHaveLength(1)
   })
 
   it('stays open on a refused send, and confirms a delivered one with a notice and closes', () => {

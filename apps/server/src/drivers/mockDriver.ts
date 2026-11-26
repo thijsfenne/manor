@@ -1,4 +1,4 @@
-import { REASONING_LIMIT, apiPricedInputEquivalent, modelTextOf, type AgentConfig, type AttachedMcpServer, type Driver, type LiveSessionEvent, type LiveSessionInfo, type ProviderUsage, type RuntimeEvent, type Usage, type TurnHandle, type TurnInput } from '@manor/contracts'
+import { REASONING_LIMIT, apiPricedInputEquivalent, modelTextOf, type AgentConfig, type AttachedMcpServer, type Driver, type LiveSessionEvent, type LiveSessionInfo, type MailLabel, type ProviderUsage, type RuntimeEvent, type Usage, type TurnHandle, type TurnInput } from '@manor/contracts'
 import { execFile } from 'node:child_process'
 import { appendFile, mkdir, readFile, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
@@ -217,10 +217,11 @@ function mockMailDraft(input: TurnInput, queue: AsyncQueue<RuntimeEvent>, delayM
 }
 
 /** The mock's triage rule: who wrote, whether it is automatic, whether it asks something. */
-function mockMailLabel(entry: Record<string, unknown>): { label: 'reply' | 'wait' | 'fyi'; reason: string } {
+function mockMailLabel(entry: Record<string, unknown>): { label: MailLabel; reason: string } {
   const text = `${String(entry.from ?? '')} ${String(entry.subject ?? '')} ${String(entry.newestMessageStart ?? '')}`
   if (entry.fromTheUser === true) return { label: 'wait', reason: 'You wrote last and are waiting for an answer.' }
-  if (/no-?reply|digest|newsletter|do not reply|automatic/i.test(text)) return { label: 'fyi', reason: 'An automatic message; nothing to answer.' }
+  if (/digest|newsletter|unsubscribe/i.test(text)) return { label: 'other', reason: 'A newsletter or notification; nothing needs your attention.' }
+  if (/no-?reply|do not reply|automatic/i.test(text)) return { label: 'fyi', reason: 'An automatic message; nothing to answer.' }
   if (/\?|please|renew|laat .*weten/i.test(String(entry.newestMessageStart ?? ''))) return { label: 'reply', reason: 'Asks you to answer or act.' }
   return { label: 'fyi', reason: 'For your information.' }
 }

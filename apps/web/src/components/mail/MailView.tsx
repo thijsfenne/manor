@@ -4,7 +4,7 @@ import { RefreshIcon } from '@hugeicons/core-free-icons'
 import type { AgentConfig, Chat, Project } from '@manor/contracts'
 import type { createWorkspaceCommands } from '@manor/client-runtime/commands'
 import { mailCards, type MailState } from '@manor/client-runtime/mail'
-import { listedMailCards, mailKeyAction, mailNeighbour, steppedMailSelection, type MailKeyAction } from '../../mail'
+import { listedMailCards, mailKeyAction, mailNeighbour, steppedMailSelection, unlabelledMailCount, type MailKeyAction } from '../../mail'
 import { cosOf } from '../../persona'
 import type { ConnectionStatus } from '../../useWorkspace'
 import { useStableCallback } from '../../useStableCallback'
@@ -59,15 +59,16 @@ export function MailView({ mail, agents, projects, chats, chatDoor, status, comm
   const { selectedId, tab, query } = useMailView()
   const cards = mailCards(mail)
   const listed = listedMailCards(cards, tab, query)
+  const unlabelled = unlabelledMailCount(cards)
+  const [reply, setReply] = useState<Reply | null>(null)
   // A thread stays open when a new label or search takes its card off the list, but an
-  // empty list has the stage to itself.
-  const card = listed.length === 0 ? null : cards.find((entry) => entry.threadId === selectedId) ?? null
+  // empty list has the stage to itself, unless a reply is being written there.
+  const card = listed.length === 0 && reply === null ? null : cards.find((entry) => entry.threadId === selectedId) ?? null
   const openId = card?.threadId ?? null
   const thread = openId === null ? null : mail.threads[openId] ?? null
   const agent = cosOf(agents)
   const headerRows = useHeaderRows()
   const search = useRef<HTMLInputElement>(null)
-  const [reply, setReply] = useState<Reply | null>(null)
   const [adding, setAdding] = useState<string | null>(null)
   const replying = reply !== null && thread !== null && reply.threadId === thread.threadId ? reply : null
   const live = status === 'live'
@@ -106,13 +107,14 @@ export function MailView({ mail, agents, projects, chats, chatDoor, status, comm
   const openReply = () => {
     if (thread !== null && replying === null) setReply({ threadId: thread.threadId })
   }
+  /** False when the request could not leave, so the pane keeps what was asked. */
   const startDraft = (instruction?: string, current?: string) => {
-    if (replying === null) return
+    if (replying === null) return false
     stopDraft(replying.draftId)
     const draftId = newId('draft')
-    if (commands.startMailDraft(draftId, replying.threadId, instruction, current)) {
-      setReply({ threadId: replying.threadId, draftId })
-    }
+    const left = commands.startMailDraft(draftId, replying.threadId, instruction, current)
+    if (left) setReply({ threadId: replying.threadId, draftId })
+    return left
   }
   const send = (to: string, cc: string, body: string) => {
     if (replying === null) return
@@ -186,6 +188,7 @@ export function MailView({ mail, agents, projects, chats, chatDoor, status, comm
     sendResult: replying?.sendId === undefined ? undefined : mail.results[replying.sendId],
   }
   const added = adding === null ? undefined : mail.threads[adding]
+  const runTriage = agent === null ? undefined : () => { commands.runMailTriage() }
 
   return (
     <section aria-label="Mail" className={`relative grid min-h-0 min-w-0 ${headerRows} overflow-hidden bg-bg`}>
@@ -198,7 +201,9 @@ export function MailView({ mail, agents, projects, chats, chatDoor, status, comm
       {actionSlot === null || snapshot === null ? null : createPortal(
         <>
           <IconButton icon={RefreshIcon} size={28} label="Check for new mail" onClick={refresh} />
-          {agent === null ? null : <MailTriageButton agent={agent} triage={snapshot.triage} onRun={() => { commands.runMailTriage() }} />}
+          {agent === null ? null : (
+            <MailTriageButton agent={agent} triage={snapshot.triage} unlabelled={unlabelled} onRun={() => { commands.runMailTriage() }} />
+          )}
         </>,
         actionSlot,
       )}
@@ -207,8 +212,9 @@ export function MailView({ mail, agents, projects, chats, chatDoor, status, comm
       <div className="flex min-h-0 min-w-0">
         <div className={PANE_TRAVEL} style={{ flex: '1 1 0%' }}>
           <MailReader card={card} thread={thread} error={openId === null ? undefined : mail.threadErrors[openId]}
-            empty={snapshot !== null && listed.length === 0} agent={agent} projects={projects} split={replying !== null}
-            onReply={openReply} onAdd={openAdd} onArchive={archive}
+            listed={snapshot === null ? null : listed.length} tab={tab} query={query} triage={snapshot?.triage ?? null}
+            unlabelled={unlabelled} projects={projects} split={replying !== null}
+            onReply={openReply} onAdd={openAdd} onArchive={archive} onTriage={runTriage}
             onLink={(address, projectId) => { commands.linkMailSender(address, projectId) }} />
         </div>
         {/* Always here at no width, so the pane travels both ways. It gives way to the reader on a narrow stage. */}

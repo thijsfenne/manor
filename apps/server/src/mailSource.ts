@@ -12,7 +12,10 @@ export interface MailSource {
   account(): string
   /** The newest `limit` messages of the Inbox, headers and flags only. */
   listInbox(limit: number): Promise<MailInbox>
-  /** Every message of one thread as plain text, oldest first, including the account's own replies. */
+  /**
+   * Every message of one thread, oldest first, including the account's own replies. Each
+   * carries its plain text, and its HTML part when that came whole and within the caps.
+   */
   readThread(thread: MailThreadRef): Promise<MailMessage[]>
   /** Takes the thread's Inbox messages out of the Inbox. The receipt is what `restore` needs. */
   archive(thread: MailThreadRef): Promise<MailArchiveReceipt>
