@@ -68,6 +68,7 @@ import {
   parseDmRoutineOutcome,
   GOAL_REACHED_TOOL,
 } from './composer.js'
+import { isReactionQuiet } from './reactions.js'
 import { preferencesBlock, projectThreadPaths, readThreadFile, threadFileBody } from './projectFiles.js'
 import { liveProjectThread, threadSessions, threadSessionsBlock, type ProjectThreadReason } from './projectThreads.js'
 import type { OrchestratorOptions } from './orchestrator.js'
@@ -2005,7 +2006,8 @@ export class TurnRunner {
           `attempt_${attempt}`,
           noteSelectedSkillsUsed,
           memoryTraceEnabled ? { roots: memoryRoots, cwd } : undefined,
-          requireWorkHandoff || quietRoutine,
+          // A reaction turn holds its words until it ends, so one that declines to answer shows none.
+          requireWorkHandoff || quietRoutine || turn.reactionPrompt === true,
           () => state.steeringVersion !== attemptSteeringVersion,
         )
         // A provider may finish while a durable addition is awaiting delivery.
@@ -2148,8 +2150,12 @@ export class TurnRunner {
         const declaredRoutineOutcome = quietRoutine
           ? parseDmRoutineOutcome(outcome.text)
           : undefined
-        const answerText = declaredRoutineOutcome?.text ?? outcome.text
         const deferredMessages = outcome.deferredMessages ?? []
+        const declaredText = declaredRoutineOutcome?.text ?? outcome.text
+        // A turn that declined to answer the user's reaction said nothing the user sees.
+        const quietReaction = turn.reactionPrompt === true &&
+          (isReactionQuiet(declaredText) || deferredMessages.some((message) => isReactionQuiet(message.text)))
+        const answerText = quietReaction ? '' : declaredText
         const hasDeferredAttachment = deferredMessages.some(
           (message) => (message.images?.length ?? 0) > 0,
         )
@@ -2178,9 +2184,16 @@ export class TurnRunner {
         const reactionOnly = state.reacted === true && !outcome.usedTools && !nudged
         const delivered = state.deliveredFile === true || reactionOnly
         // A turn the user's reaction started may rightly say nothing, when it asked nothing.
-        const answeredByNothing = turn.reactionPrompt === true && silent && !outcome.usedTools
+        // After work with other tools only its explicit quiet line counts as that choice.
+        const answeredByNothing = turn.reactionPrompt === true && silent && (quietReaction || !outcome.usedTools)
         const unreported = outcome.usedTools && !outcome.reportedAfterTools && !delivered
         const resumeId = outcome.sessionId ?? sessionId
+
+        if (turn.reactionPrompt === true && !quietReaction) {
+          for (const message of deferredMessages) {
+            if (message.text.trim().length > 0 || (message.images?.length ?? 0) > 0) await this.append(chat, chatId, message)
+          }
+        }
 
         if (requireWorkHandoff) {
           const handoff = await this.options.store.workHandoffForSourceTurn(chatId, turnId)

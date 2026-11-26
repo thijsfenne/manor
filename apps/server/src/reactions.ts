@@ -13,6 +13,15 @@ import type { Store } from './store.js'
 type AgentMessage = Extract<ThreadEvent, { type: 'agent_message' }>
 type UserMessage = Extract<ThreadEvent, { type: 'user_message' }>
 
+/**
+ * What the agent answers when the user's reaction asks nothing of it. A model rarely writes
+ * nothing at all, so it is given this line instead, and the turn's words are never shown.
+ */
+export const REACTION_QUIET_MARKER = '[MANOR_REACTION: no reply]'
+
+/** True for text that declined to answer a reaction; that turn then shows none of its words. */
+export const isReactionQuiet = (text: string): boolean => text.includes(REACTION_QUIET_MARKER)
+
 /** Older reactions told in one message at most; the rest of a burst is noise to the model. */
 const MAX_CONTEXT_LINES = 5
 
@@ -142,7 +151,8 @@ export class Reactions {
         + (steers
           // A steered turn still owes its answer to the message that started it.
           ? 'Otherwise carry on with your answer.'
-          : 'Otherwise end the turn without a reply: write nothing at all.'),
+          : 'Otherwise the reaction needs no answer: do not reply, thank, react or say goodbye, '
+            + `and answer with exactly ${REACTION_QUIET_MARKER} and nothing else.`),
       reactionTo: { eventId, emoji: reaction.emoji },
     }
   }

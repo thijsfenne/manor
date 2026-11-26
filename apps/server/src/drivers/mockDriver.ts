@@ -14,6 +14,7 @@ import { parseOutboundDraftIntent } from '../outboundDraftIntent.js'
 import { gitBinary } from '../gitBinary.js'
 import { NOTE_EDIT_AGENT_ID, noteEditParts } from '../noteEdit.js'
 import { DM_ROUTINE_PUBLISH_MARKER } from '../composer.js'
+import { REACTION_QUIET_MARKER } from '../reactions.js'
 
 const MOCK_COMPACT_MS = 1_500
 
@@ -151,8 +152,8 @@ function mockNoteEdit(input: TurnInput, queue: AsyncQueue<RuntimeEvent>): TurnHa
 
 /**
  * A reply that skips the scripted run. "mock question: <text>" makes the agent ask exactly
- * that. The user's reaction notice gets a yes to a question answered on a 👍, and no words
- * for any other reaction. Undefined for any other turn.
+ * that. The user's reaction notice gets a yes to a question answered on a 👍, and the quiet line
+ * for any other reaction on an idle turn. Undefined for any other turn.
  */
 function shortReplyFor(input: TurnInput): string | undefined {
   const last = [...input.catchUp].reverse().find((event) => event.type === 'user_message')
@@ -161,7 +162,9 @@ function shortReplyFor(input: TurnInput): string | undefined {
   if (question !== null) return question[1]!
   if (last.reactionTo === undefined) return undefined
   const asked = /: ".*\?(?:…)?"\. /s.test(last.instruction ?? '')
-  return asked && last.reactionTo.emoji === '👍' ? 'On it, doing that now.' : ''
+  if (asked && last.reactionTo.emoji === '👍') return 'On it, doing that now.'
+  // Like a real model, a turn the reaction started ends with the quiet line; a steered one carries on.
+  return last.instruction?.includes(REACTION_QUIET_MARKER) === true ? REACTION_QUIET_MARKER : undefined
 }
 
 /** Last thing the human said in the catch-up, so the scripted reply looks responsive. */
@@ -1066,7 +1069,7 @@ export function createMockDriver(options: MockDriverOptions = {}): Driver {
         const messageId = 'message_1'
         const shortReply = shortReplyFor(input)
         if (shortReply !== undefined) {
-          if (shortReply !== '') queue.push({ type: 'message', messageId, text: shortReply })
+          queue.push({ type: 'message', messageId, text: shortReply })
           queue.push({ type: 'result', text: shortReply, usage: { inputTokens: 60, outputTokens: 4, costUsd: 0.0004 }, sessionId: sessionIdFor(input) })
           queue.close()
           return

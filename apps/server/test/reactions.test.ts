@@ -2,7 +2,7 @@ import { CONTEXT_CLEARED_NOTE, modelTextOf, type Driver, type RuntimeEvent, type
 import { describe, expect, it, vi } from 'vitest'
 import { AsyncQueue } from '../src/asyncQueue.js'
 import { Orchestrator } from '../src/orchestrator.js'
-import { ReactionRefusal } from '../src/reactions.js'
+import { REACTION_QUIET_MARKER, ReactionRefusal } from '../src/reactions.js'
 import { createMemoryStore } from '../src/stores/memoryStore.js'
 import { roster, scratchFor, until } from './helpers.js'
 
@@ -149,27 +149,48 @@ describe('emoji reactions in a DM', () => {
     expect(modelTextOf(steered)).toContain('reacted 👍 to your message: "Shall I keep it short?"')
     // The steered turn still owes its answer, so it is never told to end without one.
     expect(modelTextOf(steered)).toContain('Otherwise carry on with your answer.')
-    expect(modelTextOf(steered)).not.toContain('write nothing')
+    expect(modelTextOf(steered)).not.toContain(REACTION_QUIET_MARKER)
     h.finish(1, 'Kept it short.')
     await running
     await until(() => h.runningTurn() === undefined, 'the steered turn to end')
   })
 
-  it('leaves no visible row when the reaction turn ends without words', async () => {
+  // A model rarely writes nothing; it answers with the quiet line, sometimes after a word.
+  it.each([
+    ['without words', []],
+    ['with the quiet line', [REACTION_QUIET_MARKER]],
+    ['with a word and the quiet line', [`🥂\n\n${REACTION_QUIET_MARKER}`]],
+    ['with a message before the quiet line', ['Cheers!', REACTION_QUIET_MARKER]],
+    ['with a message after the quiet line', [REACTION_QUIET_MARKER, 'Cheers!']],
+    ['with the quiet line after a tool call', [REACTION_QUIET_MARKER], true],
+  ])('leaves no visible row when the reaction turn ends %s', async (_case, messages, readFirst = false) => {
     const h = await dmHarness()
     await h.exchange('Thanks for the summary', 'Glad it helped.')
     const reply = await h.lastReply()
     const before = (await h.events()).length
+    const sentBefore = h.sent.length
 
     await h.orchestrator.reactions.setUserReaction(h.dm.id, reply.id, '❤️')
     await until(() => h.turns.length === 2, 'the reaction turn to start')
-    h.finish(1, '')
+    const queue = h.turns[1]!.queue
+    if (readFirst) {
+      queue.push({ type: 'tool_use', toolCallId: 'read-1', tool: 'Read', detail: 'notes.md' })
+      queue.push({ type: 'tool_result', toolCallId: 'read-1', outcome: 'success' })
+    }
+    for (const [at, text] of messages.entries()) {
+      queue.push({ type: 'delta', messageId: `r${at}`, text })
+      queue.push({ type: 'message', messageId: `r${at}`, text })
+    }
+    queue.push({ type: 'result', text: messages.at(-1) ?? '', sessionId: 'session-1' })
+    queue.close()
     await until(() => h.sent.filter((message) => message.type === 'event' && message.event.type === 'turn_result').length === 2, 'the quiet ending')
     await until(() => h.runningTurn() === undefined, 'the turn to end')
 
     const added = (await h.events()).slice(before)
-    expect(added.map((event) => event.type)).toEqual(['user_message', 'turn_result'])
-    expect(added[1]).toMatchObject({ quiet: true })
+    expect(added.filter((event) => !event.type.startsWith('tool_')).map((event) => event.type)).toEqual(['user_message', 'turn_result'])
+    expect(added.at(-1)).toMatchObject({ quiet: true })
+    const shown = h.sent.slice(sentBefore).flatMap((message) => message.type === 'delta' ? [message.text] : []).join('')
+    expect(shown).toBe('')
     expect(h.sent.filter((message) => message.type === 'turn_state' && message.chatId === h.dm.id).at(-1)).toMatchObject({ notice: 'silent' })
   })
 
