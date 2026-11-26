@@ -32,7 +32,7 @@ export function KickoffCard({ text, agents, images = [], files = [], role }: { t
             <View style={styles.divider} />
           </>
         )}
-        <Markdown agents={agents} small text={text} />
+        <Markdown agents={agents} size="small" text={text} />
       </FoldedBody>
     </View>
   )

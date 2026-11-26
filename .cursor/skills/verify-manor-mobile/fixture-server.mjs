@@ -842,6 +842,9 @@ const snapshots = {
     { id: 'we-say', ts: now - 20_000 + 1, type: 'agent_message', agentId: 'agent-marlow', turnId: 'turn-we', text: 'Het icoon en de planning als PDF.' },
     ...['splash-icon.png', 'planning.pdf'].map((name, index) => delivered(`we-f${index}`, now - 20_000 + 2 + index, 'turn-we', name)),
     { id: 'we-result', ts: now - 20_000 + 5, type: 'turn_result', agentId: 'agent-marlow', turnId: 'turn-we' },
+    // A short sent line led by a quote pill, for the pill's centre against the words.
+    { id: 'wq-short', ts: now - 10_000, type: 'user_message', mentions: [], text: '[Quote #1] al gedaan',
+      quotes: [{ kind: 'message', eventId: 'we-say', agentId: 'agent-marlow', text: 'Het icoon en de planning als PDF.' }] },
   ],
   'chat-background-wait': [
     { id: 'b1', ts: now - 60_000, type: 'user_message', text: 'Run background helpers, please.', mentions: [] },

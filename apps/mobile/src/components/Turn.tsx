@@ -80,7 +80,8 @@ import { DeliveredFiles } from '@/components/DeliveredFiles'
 import { ConnectCards } from '@/components/ConnectCards'
 import { Text } from '@/components/Text'
 import type { QuoteSelectionSource } from '@/components/QuoteSelectionSheet'
-import { colors, fonts, radius, spacing, squircle, useScheme } from '@/theme'
+import { bubbleCorner, SENT_BUBBLE_PAD, useBubbleCorner } from '@/components/bubbleShape'
+import { colors, fonts, radius, spacing, squircle, transcriptMark, useScheme } from '@/theme'
 import { useWindowInsets } from '@/lib/windowInsets'
 import { serverMediaUri } from '@/lib/connection'
 
@@ -406,7 +407,7 @@ export function Turn({
       {actionSource === null ? null : (
         <TurnActions
           {...(actionFrame === undefined ? {} : {
-            held: { frame: actionFrame, body: <Markdown agents={agents} bleed={false} links={links} selectable={false} text={actionSource.text} /> },
+            held: { frame: actionFrame, body: <Markdown agents={agents} bleed={false} links={links} selectable={false} size="bubble" text={actionSource.text} /> },
           })}
           {...(reactable && heldReply?.kind === 'reply' ? {
             reactions: {
@@ -510,7 +511,7 @@ export function ConsultedAgents({
         style={({ pressed }) => [styles.consultedTrigger, pressed && styles.pressed]}
       >
         <Text style={styles.consultedText}>{action}</Text>
-        <AgentStack agentIds={agentIds} agents={agents} size={14} />
+        <AgentStack agentIds={agentIds} agents={agents} size={transcriptMark.face} />
         <Text style={styles.consultedText}>{count} {count === 1 ? 'agent' : 'agents'}</Text>
       </Pressable>
       {anchor === null ? null : (
@@ -720,7 +721,7 @@ function TurnActions({
           />
         </Animated.View>
       )}
-      <Animated.View pointerEvents="none" style={[styles.replyBubble, styles.heldBubble, { top: y, left: frame.x, width: frame.width, height }, lifted]}>
+      <Animated.View pointerEvents="none" style={[styles.replyBubble, styles.heldBubble, { top: y, left: frame.x, width: frame.width, height, borderRadius: bubbleCorner(frame.height) }, lifted]}>
         {held.body}
       </Animated.View>
       {more && reactions !== undefined ? (
@@ -1272,6 +1273,7 @@ function Reply({
   const still = useReducedMotion()
   const drag = useSharedValue(0)
   const bubbleRef = useRef<View>(null)
+  const [corner, measureCorner] = useBubbleCorner()
   const hold = (source: QuoteSelectionSource) => {
     if (onLongPressSource === undefined) return
     const held = { ...source, ...(quoteAgentId === undefined ? {} : { agentId: quoteAgentId }) }
@@ -1317,7 +1319,7 @@ function Reply({
           <Animated.View style={[swipeStyle, styles.reply]}>
             {/* In a DM only the words sit in the bubble; the pictures stand on the chat itself. */}
             {said ? (
-              <View ref={bubbleRef} style={[styles.reply, bubble && styles.replyBubble, reaction !== undefined && (!lastInTurn || images.length > 0) && styles.replyReacted]}>
+              <View onLayout={bubble ? measureCorner : undefined} ref={bubbleRef} style={[styles.reply, bubble && [styles.replyBubble, { borderRadius: corner }], reaction !== undefined && (!lastInTurn || images.length > 0) && styles.replyReacted]}>
                 {quoteSources !== undefined && quoteSources.length > 0 ? quoteSources.map((source) => (
                   <Pressable
                     accessibilityHint={onLongPressSource === undefined ? undefined : 'Press and hold for actions'}
@@ -1327,9 +1329,9 @@ function Reply({
                     onLongPress={onLongPressSource === undefined ? undefined : () => hold(source)}
                   >
                     <LandingWash eventId={source.eventId} style={styles.replyWash} />
-                    <Markdown agents={agents} bleed={!bubble} links={links} selectable={onLongPressSource === undefined} text={source.text} />
+                    <Markdown agents={agents} bleed={!bubble} links={links} selectable={onLongPressSource === undefined} {...(bubble ? { size: 'bubble' as const } : {})} text={source.text} />
                   </Pressable>
-                )) : text === '' ? null : <Markdown agents={agents} bleed={!bubble} links={links} text={text} />}
+                )) : text === '' ? null : <Markdown agents={agents} bleed={!bubble} links={links} {...(bubble ? { size: 'bubble' as const } : {})} text={text} />}
                 {reaction === undefined ? null : <ReactionBadge reaction={reaction} {...(onRemoveReaction === undefined ? {} : { onRemove: onRemoveReaction })} />}
               </View>
             ) : null}
@@ -1433,8 +1435,8 @@ const styles = StyleSheet.create({
   // Room above the plan card, so it does not sit on the line of work above it.
   plan: { marginTop: spacing.sm },
   header: { minHeight: 32, flexDirection: 'row', alignItems: 'center', gap: 6 },
-  consultedTrigger: { alignSelf: 'center', minHeight: 30, flexDirection: 'row', alignItems: 'center', gap: 4, borderRadius: radius.sm, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs },
-  consultedText: { color: colors.dim, fontFamily: fonts.sans, fontSize: 12, lineHeight: 16 },
+  consultedTrigger: { alignSelf: 'center', minHeight: 30, flexDirection: 'row', alignItems: 'center', gap: 6, borderRadius: radius.sm, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs },
+  consultedText: { color: colors.dim, fontFamily: fonts.sans, fontSize: transcriptMark.fontSize, lineHeight: transcriptMark.lineHeight },
   consultedMenu: { position: 'absolute', width: 220, overflow: 'hidden', borderRadius: radius.lg, ...squircle, backgroundColor: colors.raised },
   consultedRow: { minHeight: 52, flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingHorizontal: spacing.lg },
   consultedName: { flex: 1, color: colors.text, fontFamily: fonts.sans, fontSize: 16 },
@@ -1484,7 +1486,7 @@ const styles = StyleSheet.create({
   replyWash: { top: -spacing.xs, right: -spacing.sm, bottom: -spacing.xs, left: -spacing.sm, borderRadius: radius.md, ...squircle },
   // Room for the badge over the turn's own gap; the gap between turns already holds it.
   replyReacted: { marginBottom: spacing.sm },
-  replyBubble: { alignSelf: 'flex-start', borderRadius: radius.composer, ...squircle, backgroundColor: colors.bubble, paddingHorizontal: spacing.md + 2, paddingVertical: spacing.sm + 1 },
+  replyBubble: { alignSelf: 'flex-start', borderRadius: radius.composer, ...squircle, backgroundColor: colors.bubble, paddingHorizontal: SENT_BUBBLE_PAD.x, paddingVertical: SENT_BUBBLE_PAD.y },
   messageFooter: { minHeight: 28, flexDirection: 'row', alignItems: 'center', gap: 2 },
   footerButton: { width: 28, height: 28, alignItems: 'center', justifyContent: 'center', borderRadius: radius.sm },
   footerButtonPressed: { backgroundColor: colors.surface2 },

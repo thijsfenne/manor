@@ -1,4 +1,4 @@
-import { memo, useContext, useId, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
+import { memo, useContext, useId, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from 'react'
 import type { FaceState } from '@manor/client-runtime/face-activity'
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import { DISCLOSURE } from '../motion'
@@ -96,10 +96,35 @@ export function TurnHeader({
 }
 
 /**
- * A DM bubble's shape, either side: round and roomy, the way a chat app draws one.
- * Both cap at 80% of the column; the agent's cap sits on her wrapper.
+ * A DM bubble's padding, either side. Both cap at 80% of the column; the agent's cap
+ * sits on her wrapper.
  */
-const DM_BUBBLE = 'rounded-2xl px-4 pt-[10px] pb-[12px]'
+const DM_BUBBLE = 'px-3.5 pt-2 pb-[10px]'
+
+/**
+ * A DM bubble's corner: a capsule while its content fits on one line, the softer block
+ * corner once it wraps or holds a chip row. Measured, because the line count depends on
+ * the column width. `enabled` is whether the bubble is drawn, so the observer follows it.
+ */
+function useBubbleCorner(enabled: boolean): [ref: RefObject<HTMLDivElement>, corner: string] {
+  const ref = useRef<HTMLDivElement>(null)
+  const [oneLine, setOneLine] = useState(false)
+  useLayoutEffect(() => {
+    const node = ref.current
+    if (!enabled || node === null) return
+    const measure = () => {
+      const style = getComputedStyle(node)
+      const content = node.clientHeight - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom)
+      setOneLine(content < parseFloat(style.lineHeight) * 1.5)
+    }
+    // Measured before the first paint, so a one-line bubble never shows the block corner.
+    measure()
+    const observer = new ResizeObserver(measure)
+    observer.observe(node)
+    return () => observer.disconnect()
+  }, [enabled])
+  return [ref, oneLine ? 'rounded-full' : 'rounded-2xl']
+}
 
 /**
  * The single human in the room. `pending` is the same bubble before the server has
@@ -178,6 +203,7 @@ export function UserBubble({
   // A message that refers to its pictures by number shows those numbers on them. One
   // that does not, every message from before numbering among them, stays as it was.
   const numbered = imageRefSpans(text, images.length).length > 0
+  const [bubbleRef, corner] = useBubbleCorner(dm && hasBubble)
   // The rows above the text take the tint's white veil; a grey bubble keeps the page surfaces.
   const chipRow = tint === undefined
     ? {}
@@ -204,7 +230,8 @@ export function UserBubble({
         </div>
       ) : null}
       {hasBubble ? <div
-        className={`relative min-w-0 text-[length:var(--msg-size,16px)] ${dm ? `max-w-bubble ${DM_BUBBLE}` : 'max-w-[78%] rounded-xl rounded-br-sm px-[13px] pt-[9px] pb-[11px]'} ${tint === undefined ? 'bg-user-bubble' : ''}${badge === undefined ? '' : ' mb-3'}`}
+        ref={bubbleRef}
+        className={`relative min-w-0 text-[length:var(--msg-size,16px)] ${dm ? `max-w-bubble ${corner} ${DM_BUBBLE}` : 'max-w-[78%] rounded-xl rounded-br-sm px-[13px] pt-[9px] pb-[11px]'} ${tint === undefined ? 'bg-user-bubble' : ''}${badge === undefined ? '' : ' mb-3'}`}
         {...(tint === undefined ? {} : { style: { backgroundColor: tint.fill } })}
       >
         {quote === undefined ? null : (
@@ -574,6 +601,7 @@ function AgentBubbleView({ color, text, agents, images = [], live = false, bubbl
   // The file viewer over this message's pictures only, opened at the one pressed.
   const [viewing, setViewing] = useState<number | null>(null)
   const said = quoteSources !== undefined && quoteSources.length > 0 ? quoteSources.some((source) => source.text.length > 0) : text.length > 0
+  const [bubbleRef, corner] = useBubbleCorner(bubble && said)
   // In a DM the pictures stand on the chat itself, above the bubble that holds the words.
   const pictures = images.length > 0 ? (
     <div className={`grid grid-cols-2 gap-1.5 ${said && !bubble ? 'mb-2' : ''}`}>
@@ -598,9 +626,10 @@ function AgentBubbleView({ color, text, agents, images = [], live = false, bubbl
           so the narrow side panel can read a step smaller than the stage. */}
       {bubble && !said ? null : (
         <div
+          ref={bubbleRef}
           className={
             bubble
-              ? `w-full min-w-0 bg-bubble text-[length:var(--msg-size,16px)] ${DM_BUBBLE}`
+              ? `w-full min-w-0 bg-bubble text-[length:var(--msg-size,16px)] ${corner} ${DM_BUBBLE}`
               : 'w-full min-w-0 py-[3px] text-[length:var(--msg-size,16px)]'
           }
           style={accentStyle(color)}

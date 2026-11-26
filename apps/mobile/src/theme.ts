@@ -219,5 +219,18 @@ export const tracking = {
   body: -0.3,
 } as const
 
+/**
+ * The words in a DM bubble, his and the agent's: a step above the transcript's 17pt
+ * reading size, set a little tighter. The fold, the send flight and the held lift
+ * measure with it, so they keep matching the bubble.
+ */
+export const bubbleText = { fontSize: 18, lineHeight: 24 } as const
+
+/**
+ * The quiet one-line marks between DM messages: the day and time line, and the line
+ * that says an agent messaged another. `face` is the avatar on the relay line.
+ */
+export const transcriptMark = { fontSize: 13, lineHeight: 17, face: 20 } as const
+
 /** Tallest the Slack draft editor grows before it scrolls inside its card. */
 export const outboundLayout = { inputMaxHeight: 256 } as const

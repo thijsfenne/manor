@@ -39,7 +39,7 @@ import { useKeyboardState } from 'react-native-keyboard-controller'
 import Animated, { useReducedMotion, useSharedValue, type SharedValue } from 'react-native-reanimated'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
-import { ARRIVAL_SPENT_MS, ArrivalRow, FIELD_FLIGHT_MS, SENT_BUBBLE_PAD, SendFlightField, armArrival, claimFlight, disarmArrival, requestFlight, useArrivalMotion, type ArrivalMotion, type FieldFlight } from '@/components/ArrivalMotion'
+import { ARRIVAL_SPENT_MS, ArrivalRow, FIELD_FLIGHT_MS, SendFlightField, armArrival, claimFlight, disarmArrival, requestFlight, useArrivalMotion, type ArrivalMotion, type FieldFlight } from '@/components/ArrivalMotion'
 import { AskCard } from '@/components/AskCard'
 import { SecretCard } from '@/components/SecretCard'
 import { DM_FACE_ROOM, DmWorkingIndicator } from '@/components/DmWorkingIndicator'
@@ -61,6 +61,7 @@ import { ProjectSessionsPage } from '@/components/ProjectSessionsPage'
 import { ThreadPager, ThreadSwipeArea } from '@/components/ThreadPager'
 import { GlassIconButton } from '@/components/GlassIconButton'
 import { GlassSurface } from '@/components/GlassSurface'
+import { SENT_BUBBLE_PAD, useBubbleCorner } from '@/components/bubbleShape'
 import { BubbleTintContext } from '@/components/bubbleTint'
 import { Markdown, scrollsSideways, type MarkdownLinks, type RepoLinks } from '@/components/Markdown'
 import { AgentRuntimeSheet, RuntimeSheet, SingleRuntimeSheet } from '@/components/RuntimeSheet'
@@ -87,7 +88,7 @@ import { glassRise, glassSink } from '@/lib/glassMotion'
 import { useScreenCovered } from '@/lib/useScreenCovered'
 import { useLiveThread, useWorkspace, useWorkspaceData } from '@/providers/WorkspaceProvider'
 import { Text } from '@/components/Text'
-import { colors, fonts, radius, spacing, squircle } from '@/theme'
+import { bubbleText, colors, fonts, radius, spacing, squircle, transcriptMark } from '@/theme'
 import { useHostAuto } from '@/useHostAuto'
 
 export default function ChatScreen() {
@@ -1798,6 +1799,7 @@ const TranscriptRow = memo(function TranscriptRowBody(props: TranscriptRowProps)
           quoteAuthors={quoteAuthors}
           skills={skills}
           {...(userBubbleTint === undefined ? {} : { tint: userBubbleTint })}
+          dm={bubbleReplies}
           files={eventRow.event.files ?? []}
           documents={eventRow.event.documents ?? []}
           images={eventRow.event.images ?? []}
@@ -1836,7 +1838,7 @@ const TranscriptRow = memo(function TranscriptRowBody(props: TranscriptRowProps)
   }
   const content = (() => {
   if (row.kind === 'pending') {
-    return <Bubble agents={agents} dim quoteAuthors={quoteAuthors} skills={skills} files={row.files} {...(row.documents === undefined ? {} : { documents: row.documents })} images={row.images} text={row.text} {...(row.replyTo === undefined ? {} : { replyTo: row.replyTo })} {...(row.quotes === undefined ? {} : { quotes: row.quotes })} onOpenQuoteSource={onOpenQuoteSource} />
+    return <Bubble agents={agents} dim dm={bubbleReplies} quoteAuthors={quoteAuthors} skills={skills} files={row.files} {...(row.documents === undefined ? {} : { documents: row.documents })} images={row.images} text={row.text} {...(row.replyTo === undefined ? {} : { replyTo: row.replyTo })} {...(row.quotes === undefined ? {} : { quotes: row.quotes })} onOpenQuoteSource={onOpenQuoteSource} />
   }
   if (row.kind === 'thread_bundle') {
     // Each item draws as it would stand on its own; none of the row's own spacing or stamps.
@@ -1985,8 +1987,8 @@ function RelayMarker({
         style={({ pressed }) => [styles.relayMarker, pressed && styles.pressed]}
       >
         <Text style={styles.relayMarkerText}>{action}</Text>
-        <Blobatar color={peer.color} name={peer.name} shape={peer.avatarShape} finish={peer.avatarFinish} tone={peer.avatarTone} size={13} src={peer.avatar} />
-        <Text style={styles.relayMarkerText}>{peer.name}</Text>
+        <Blobatar color={peer.color} name={peer.name} shape={peer.avatarShape} finish={peer.avatarFinish} tone={peer.avatarTone} size={transcriptMark.face} src={peer.avatar} />
+        <Text numberOfLines={1} style={[styles.relayMarkerText, styles.relayMarkerName]}>{peer.name}</Text>
       </Pressable>
     </View>
   )
@@ -1994,18 +1996,18 @@ function RelayMarker({
 
 const NO_INLINE_QUOTES: readonly InlineQuote[] = []
 
-/** A sent message's body in lines of the bubble's reading size (17pt on 25). */
-const BUBBLE_LINE = 25
 /** The same ten-line cut as the Mac's bubble. */
 const BUBBLE_FOLD_LINES = 10
+/** The transcript's reading line, which his bubble keeps outside a DM. */
+const READING_LINE = 25
 
 /** A long sent message folded behind Show more; a short one passes through untouched. */
-function FoldedMessage({ clamp, children }: { clamp: boolean; children: ReactNode }) {
-  return clamp ? <FoldedBody lineHeight={BUBBLE_LINE} lines={BUBBLE_FOLD_LINES}>{children}</FoldedBody> : <>{children}</>
+function FoldedMessage({ clamp, lineHeight, children }: { clamp: boolean; lineHeight: number; children: ReactNode }) {
+  return clamp ? <FoldedBody lineHeight={lineHeight} lines={BUBBLE_FOLD_LINES}>{children}</FoldedBody> : <>{children}</>
 }
 
-/** `tint` fills a DM bubble with the face he is talking to; its chips read the same tint. A dimmed (pending) bubble stays grey so its fade cannot pull the tinted ink below AA. */
-function Bubble({ text, images: sent, agents, files = [], documents = [], replyTo, quote, noteQuote, quotes = NO_INLINE_QUOTES, sourceEventId, onQuoteSource, onOpenQuoteSource, dim = false, tint, quoteAuthors = false, skills, repo, reaction, reactionColor }: { text: string; images: readonly EventImage[]; agents: readonly AgentConfig[]; files?: readonly FileAttachment[]; documents?: readonly (EventDocument | PendingDocument)[]; replyTo?: MessageReply; quote?: MessageQuote; noteQuote?: NoteQuote; quotes?: readonly InlineQuote[]; sourceEventId?: string; onQuoteSource?: (source: QuoteSelectionSource) => void; onOpenQuoteSource?: (eventId: string) => void; dim?: boolean; tint?: BubbleTint; quoteAuthors?: boolean; skills: readonly SkillConfig[]
+/** `tint` fills a DM bubble with the face he is talking to; its chips read the same tint. A dimmed (pending) bubble stays grey so its fade cannot pull the tinted ink below AA. `dm` sets the words at the DM bubble size and lets a taller bubble soften its corner. */
+function Bubble({ text, images: sent, agents, files = [], documents = [], replyTo, quote, noteQuote, quotes = NO_INLINE_QUOTES, sourceEventId, onQuoteSource, onOpenQuoteSource, dim = false, tint, dm = false, quoteAuthors = false, skills, repo, reaction, reactionColor }: { text: string; images: readonly EventImage[]; agents: readonly AgentConfig[]; files?: readonly FileAttachment[]; documents?: readonly (EventDocument | PendingDocument)[]; replyTo?: MessageReply; quote?: MessageQuote; noteQuote?: NoteQuote; quotes?: readonly InlineQuote[]; sourceEventId?: string; onQuoteSource?: (source: QuoteSelectionSource) => void; onOpenQuoteSource?: (eventId: string) => void; dim?: boolean; tint?: BubbleTint; dm?: boolean; quoteAuthors?: boolean; skills: readonly SkillConfig[]
   /** The chat's repo listing, so a file path he wrote opens in Files. */
   repo?: RepoLinks
   /** The agent's reaction, a badge in its accent on the bubble's bottom right edge. */
@@ -2018,6 +2020,7 @@ function Bubble({ text, images: sent, agents, files = [], documents = [], replyT
   const numbered = imageRefSpans(text, images.length).length > 0
   const [openImage, setOpenImage] = useState<number | null>(null)
   const [openQuote, setOpenQuote] = useState<number | null>(null)
+  const [corner, measureCorner] = useBubbleCorner()
   const hasBubble = text !== '' || files.length > 0 || documents.length > 0 || replyTo !== undefined || quote !== undefined || noteQuote !== undefined
   const wide = scrollsSideways(text)
   return (
@@ -2032,16 +2035,17 @@ function Bubble({ text, images: sent, agents, files = [], documents = [], replyT
         </View>
       )}
       {hasBubble ? (
-        <View style={[styles.userBubble, wide && styles.userBubbleWide, tint && { backgroundColor: tint.fill }, reaction !== undefined && styles.userBubbleReacted]}>
-          {sourceEventId === undefined ? null : <LandingWash eventId={sourceEventId} style={styles.userBubbleWash} />}
+        <View onLayout={dm ? measureCorner : undefined} style={[styles.userBubble, { borderRadius: corner }, wide && styles.userBubbleWide, tint && { backgroundColor: tint.fill }, reaction !== undefined && styles.userBubbleReacted]}>
+          {sourceEventId === undefined ? null : <LandingWash eventId={sourceEventId} style={[styles.userBubbleWash, { borderRadius: corner }]} />}
           {quote === undefined ? null : <QuoteBlock agents={agents} quote={quote} showAuthor={quoteAuthors} {...(onOpenQuoteSource === undefined ? {} : { onOpen: () => onOpenQuoteSource(quote.eventId) })} />}
           {noteQuote === undefined ? null : <NoteQuoteContextChip quote={noteQuote} />}
           {replyTo === undefined ? null : <ReplyContextChip name={agents.find((agent) => agent.id === replyTo.agentId)?.name ?? replyTo.agentId} reply={replyTo} />}
           <Attachments documents={documents} files={files} images={[]} />
           {text === '' ? null : (
-            <FoldedMessage clamp={isLongMessage(text)}>
+            <FoldedMessage clamp={isLongMessage(text)} lineHeight={dm ? bubbleText.lineHeight : READING_LINE}>
               <Markdown
                 agents={agents}
+                {...(dm ? { size: 'bubble' as const } : {})}
                 {...(repo === undefined ? {} : { links: { repo } })}
                 text={normalizeComposerLists(text)}
                 sent={{
@@ -2095,8 +2099,8 @@ const styles = StyleSheet.create({
   // A table or fenced block in a bubble that sizes to its words breaks the layout (`scrollsSideways`).
   userMessageWide: { width: `${SENT_BUBBLE_SHARE * 100}%` },
   userBubbleWide: { alignSelf: 'stretch' },
-  userBubble: { maxWidth: '100%', gap: spacing.sm, borderRadius: radius.composer, ...squircle, backgroundColor: colors.userBubble, paddingHorizontal: SENT_BUBBLE_PAD.x, paddingVertical: SENT_BUBBLE_PAD.y },
-  userBubbleWash: { borderRadius: radius.composer, ...squircle },
+  userBubble: { maxWidth: '100%', gap: spacing.sm, ...squircle, backgroundColor: colors.userBubble, paddingHorizontal: SENT_BUBBLE_PAD.x, paddingVertical: SENT_BUBBLE_PAD.y },
+  userBubbleWash: squircle,
   userBubbleReacted: { marginBottom: spacing.md },
   pending: { opacity: 0.55 },
   note: { color: colors.muted, fontFamily: fonts.sans, fontSize: 13, lineHeight: 19, textAlign: 'center' },
@@ -2114,9 +2118,10 @@ const styles = StyleSheet.create({
   sessionChipText: { flexShrink: 1, color: colors.muted, fontFamily: fonts.sans, fontSize: 13, lineHeight: 18 },
   transcriptItem: { gap: spacing.xl },
   compactUserItem: { marginTop: 6 - spacing.xl },
-  dateSeparator: { color: colors.dim, fontFamily: fonts.sans, fontSize: 12, textAlign: 'center' },
-  relayMarker: { alignSelf: 'center', flexDirection: 'row', alignItems: 'center', gap: 4, borderRadius: radius.sm, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs },
-  relayMarkerText: { color: colors.dim, fontFamily: fonts.sans, fontSize: 12, lineHeight: 16 },
+  dateSeparator: { color: colors.dim, fontFamily: fonts.sans, fontSize: transcriptMark.fontSize, lineHeight: transcriptMark.lineHeight, textAlign: 'center' },
+  relayMarker: { alignSelf: 'center', flexDirection: 'row', alignItems: 'center', gap: 6, borderRadius: radius.sm, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs },
+  relayMarkerText: { color: colors.dim, fontFamily: fonts.sans, fontSize: transcriptMark.fontSize, lineHeight: transcriptMark.lineHeight },
+  relayMarkerName: { flexShrink: 1 },
   relayColumn: { alignItems: 'center' },
   error: { color: colors.danger },
   footer: { position: 'absolute', right: 0, bottom: 0, left: 0 },

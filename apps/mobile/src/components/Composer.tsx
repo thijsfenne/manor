@@ -1014,6 +1014,8 @@ function Recipients({ recipients }: { recipients: AgentConfig[] | 'unknown' }) {
 
 /** Where the open field's first line starts, which a sent message's blue copy starts from. */
 export const OPEN_FIELD_INSET = { left: spacing.lg + 2, top: 13 }
+/** The field's own text, where a sent message's words start their flight to the bubble. */
+export const FIELD_TEXT = { fontSize: 17, lineHeight: 23 } as const
 
 const styles = StyleSheet.create({
   /* The same inset the pictures above them stand in: two strips of attachments on
@@ -1083,7 +1085,7 @@ const styles = StyleSheet.create({
      concentric with the capsule's ends. */
   pill: { minHeight: PILL_HEIGHT, flexDirection: 'row', alignItems: 'center', gap: spacing.xs, paddingHorizontal: (PILL_HEIGHT - 36) / 2 },
   body: { flexDirection: 'column' },
-  input: { maxHeight: 140, color: colors.text, fontFamily: fonts.sans, fontSize: 17, letterSpacing: tracking.body, lineHeight: 23 },
+  input: { maxHeight: 140, color: colors.text, fontFamily: fonts.sans, ...FIELD_TEXT, letterSpacing: tracking.body },
   inputResting: { flex: 1, minHeight: 36, paddingHorizontal: spacing.xs, paddingTop: 7, paddingBottom: 6 },
   inputOpen: { minHeight: 44, paddingHorizontal: OPEN_FIELD_INSET.left, paddingTop: OPEN_FIELD_INSET.top, paddingBottom: 3 },
   inputRestingEmpty: { height: 36 },

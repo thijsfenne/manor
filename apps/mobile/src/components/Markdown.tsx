@@ -23,7 +23,7 @@ import { Text } from '@/components/Text'
 import { PagerSwipe } from '@/components/ThreadPager'
 import { serverMediaUri } from '@/lib/connection'
 import { noteImageWidth } from '@/lib/noteImages'
-import { colors, fonts, radius, scrims, spacing, squircle } from '@/theme'
+import { bubbleText, colors, fonts, radius, scrims, spacing, squircle } from '@/theme'
 
 /** A vault's `[[wikilinks]]`: which note a name means, and how to open the one it found. */
 export interface NoteLinks {
@@ -60,7 +60,7 @@ export const Markdown = memo(function Markdown({
   agents,
   links,
   sent,
-  small = false,
+  size,
   sources = sent === undefined,
   bleed = false,
   vaultImages = false,
@@ -71,8 +71,11 @@ export const Markdown = memo(function Markdown({
   links?: MarkdownLinks
   /** Only for a message the user wrote: their routing pills, and the long press that quotes it. */
   sent?: SentMessage
-  /** A step below the reading size, for a card that should not outweigh the messages (a kickoff). */
-  small?: boolean
+  /**
+   * Off the reading size: `small` a step below, for a card that should not outweigh the
+   * messages (a kickoff); `bubble` a step above, for the words in a DM bubble.
+   */
+  size?: ReadingSize
   /**
    * Whether web links read as sources (pills inline, site icons on a Sources list), as on
    * the Mac. On for a reply, off for a note and for what the user wrote themselves.
@@ -97,17 +100,19 @@ export const Markdown = memo(function Markdown({
 }) {
   const blocks = parseBlocks(text)
   return (
+    <InBubble.Provider value={size === 'bubble'}>
     <SentContext.Provider value={sent}>
       <Selectable.Provider value={selectable && sent?.onLongPress === undefined}>
         <CitesSources.Provider value={sources}>
           <VaultImages.Provider value={vaultImages}>
             <View style={styles.body}>
-              {blocks.map((block, index) => <Block agents={agents} bleed={bleed} block={block} key={index} links={links} small={small} />)}
+              {blocks.map((block, index) => <Block agents={agents} bleed={bleed} block={block} key={index} links={links} size={size} />)}
             </View>
           </VaultImages.Provider>
         </CitesSources.Provider>
       </Selectable.Provider>
     </SentContext.Provider>
+    </InBubble.Provider>
   )
 })
 
@@ -148,6 +153,8 @@ function sentRefs(text: string, message: SentMessage | undefined): SentRef[] {
 }
 
 const SentContext = createContext<SentMessage | undefined>(undefined)
+/** Whether the lines are at the DM bubble size, where a pill takes that line's fit. */
+const InBubble = createContext(false)
 const Selectable = createContext(true)
 
 /**
@@ -341,17 +348,17 @@ function Block({
   agents,
   bleed,
   links,
-  small,
+  size: reading,
 }: {
   block: MdBlock
   agents: readonly AgentConfig[]
   bleed: boolean
   links?: MarkdownLinks
-  small: boolean
+  size: ReadingSize | undefined
 }) {
   const { ink, press } = useLineProps()
   const cites = useContext(CitesSources)
-  const size = small ? SMALL.body : undefined
+  const size = reading === undefined ? undefined : READING[reading].body
   switch (block.kind) {
     case 'paragraph': {
       const parts = imageParts(block.text)
@@ -367,7 +374,7 @@ function Block({
     }
     case 'heading':
       return (
-        <Text {...press} style={[styles.paragraph, styles.heading, headingRank(block.level, small), ink]}>
+        <Text {...press} style={[styles.paragraph, styles.heading, headingRank(block.level, reading), ink]}>
           <Inline agents={agents} links={links} text={block.text} />
         </Text>
       )
@@ -595,8 +602,8 @@ function Table({
  * last two fall below the body in the muted colour rather than climbing further: six
  * ranks cannot be told apart by a point of size each, and a chat rarely goes past two.
  */
-function headingRank(level: number, small: boolean): TextStyle {
-  const steps = small ? SMALL : styles
+function headingRank(level: number, reading: ReadingSize | undefined): TextStyle {
+  const steps = reading === undefined ? styles : READING[reading]
   if (level <= 1) return steps.h1
   if (level === 2) return steps.h2
   if (level <= 4) return steps.h3
@@ -971,8 +978,9 @@ function InlinePill({ label, title = label, tone, onPress }: {
   const sent = useContext(SentContext) !== undefined
   // In his own grey bubble every pill but a skill's is blue like a quote; in agent prose they
   // stay grey. A skill keeps its own purple, the way a persona keeps its face colour.
+  const inBubble = useContext(InBubble)
   const blue = tint === undefined && sent && tone !== 'skill'
-  const box = [styles.pill, PILL_FILL[tone], blue && PILL_FILL.carried, tint && { backgroundColor: tint.wash }]
+  const box = [styles.pill, inBubble && styles.pillInBubble, PILL_FILL[tone], blue && PILL_FILL.carried, tint && { backgroundColor: tint.wash }]
   const text = (
     <>
       {tone === 'file' ? <HugeiconsIcon color={tint?.ink ?? (blue ? colors.busy : colors.muted)} icon={File01Icon} size={12} strokeWidth={1.8} /> : null}
@@ -1001,8 +1009,9 @@ function AgentPill({ agent }: { agent: AgentConfig }) {
   const tint = useBubbleTint()
   // Persona colours are hex runtime data; 2E is the Mac chip's 18% wash.
   const wash = /^#[0-9a-f]{6}$/i.test(agent.color) ? `${agent.color}2E` : colors.chip
+  const inBubble = useContext(InBubble)
   return (
-    <View accessibilityLabel={`@${agent.name}`} style={[styles.pill, styles.agentPill, { backgroundColor: tint?.wash ?? wash }]}>
+    <View accessibilityLabel={`@${agent.name}`} style={[styles.pill, inBubble && styles.pillInBubble, styles.agentPill, inBubble && styles.agentPillInBubble, { backgroundColor: tint?.wash ?? wash }]}>
       <Blobatar color={agent.color} name={agent.name} shape={agent.avatarShape} size={14} src={agent.avatar} finish={agent.avatarFinish} tone={agent.avatarTone} />
       <Text numberOfLines={1} style={[styles.pillText, PILL_TEXT.chip, { color: tint?.ink ?? agent.color }]}>{agent.name}</Text>
     </View>
@@ -1025,13 +1034,23 @@ const PILL_TEXT = StyleSheet.create({
   skill: { color: colors.skill, fontWeight: '500' },
 })
 
-/** The `small` reading size, two points down with the headings the same steps above it. */
-const SMALL = StyleSheet.create({
-  body: { fontSize: 15, lineHeight: 22 },
-  h1: { fontSize: 19, lineHeight: 25 },
-  h2: { fontSize: 17, lineHeight: 23 },
-  h3: { fontSize: 16, lineHeight: 22 },
-})
+type ReadingSize = 'small' | 'bubble'
+
+/** The other reading sizes, each with its headings the same steps above its body. */
+const READING = {
+  small: StyleSheet.create({
+    body: { fontSize: 15, lineHeight: 22 },
+    h1: { fontSize: 19, lineHeight: 25 },
+    h2: { fontSize: 17, lineHeight: 23 },
+    h3: { fontSize: 16, lineHeight: 22 },
+  }),
+  bubble: StyleSheet.create({
+    body: bubbleText,
+    h1: { fontSize: 22, lineHeight: 28 },
+    h2: { fontSize: 20, lineHeight: 26 },
+    h3: { fontSize: 19, lineHeight: 25 },
+  }),
+}
 
 const styles = StyleSheet.create({
   body: { gap: spacing.sm },
@@ -1058,8 +1077,14 @@ const styles = StyleSheet.create({
     borderRadius: radius.round, ...squircle, transform: [{ translateY: 2 }],
   },
   pillText: { flexShrink: 1, color: colors.text, fontFamily: fonts.sans, fontSize: 14, lineHeight: 17 },
+  // A taller inline view lifts the line's top to its own, so at the bubble size a 19pt pill
+  // made a one-line bubble taller and pushed its words down. At 18 the line keeps a plain
+  // line's height. The half-point nudge (measured) splits the last point between the bubble's
+  // centre and the capitals', which sit a point apart.
+  pillInBubble: { height: 18, transform: [{ translateY: 0.5 }] },
   // The face makes this pill read low beside the text, so it takes 1 of the shared 2px nudge.
   agentPill: { gap: 4, paddingLeft: 3, transform: [{ translateY: 1 }] },
+  agentPillInBubble: { transform: [{ translateY: -0.5 }] },
   pillTextBlue: { color: colors.busy },
   rule: { height: StyleSheet.hairlineWidth, backgroundColor: colors.line, marginVertical: spacing.xs },
   imageParagraph: { gap: spacing.sm },

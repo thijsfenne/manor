@@ -14,10 +14,11 @@ import Animated, {
   type SharedValue,
 } from 'react-native-reanimated'
 
-import { OPEN_FIELD_INSET } from '@/components/Composer'
+import { SENT_BUBBLE_PAD, bubbleCorner } from '@/components/bubbleShape'
+import { FIELD_TEXT, OPEN_FIELD_INSET } from '@/components/Composer'
 import { Text } from '@/components/Text'
 import { ARRIVAL_SPRING, type Arrival } from '@/lib/arrival'
-import { fonts, radius, spacing, squircle } from '@/theme'
+import { bubbleText, fonts, radius, squircle } from '@/theme'
 
 /** How long after an arrival the list's own scroll to the end is taken as that arrival's. */
 const ARM_MS = 400
@@ -38,8 +39,10 @@ const FADE_MS = 130
 const STILL_FADE_MS = 150
 /** A sent row never stays hidden longer than this, whatever became of its flight; a flight not started by then is dropped. */
 const SEND_SAFETY_MS = 450
-/** The sent bubble's padding, which the chat's bubble and the field's copy both use. */
-export const SENT_BUBBLE_PAD = { x: spacing.md + 2, y: spacing.sm + 1 }
+/** Half of what the bubble's line adds to the field's, so their first lines share a centre. */
+const LINE_LEAD = (bubbleText.lineHeight - FIELD_TEXT.lineHeight) / 2
+/** The words start at the field's size and grow to the bubble's while the copy narrows. */
+const FIELD_SCALE = FIELD_TEXT.fontSize / bubbleText.fontSize
 
 const FLIGHT_IDLE = 0
 const FLIGHT_WAITING = 1
@@ -252,6 +255,7 @@ export function SendFlightField({ motion, flight, tint }: { motion: ArrivalMotio
   const narrow = useSharedValue(0)
   const bubbleWidth = useSharedValue(field.width)
   const bubbleHeight = useSharedValue(field.height)
+  const bubbleRadius = useSharedValue<number>(radius.composer)
   const fitted = useRef(false)
   const fit = (event: LayoutChangeEvent) => {
     if (fitted.current) return
@@ -259,6 +263,7 @@ export function SendFlightField({ motion, flight, tint }: { motion: ArrivalMotio
     const { width, height } = event.nativeEvent.layout
     bubbleWidth.set(width + SENT_BUBBLE_PAD.x * 2)
     bubbleHeight.set(height + SENT_BUBBLE_PAD.y * 2)
+    bubbleRadius.set(bubbleCorner(height + SENT_BUBBLE_PAD.y * 2))
     narrow.set(withTiming(1, { duration: NARROW_MS, easing: Easing.out(Easing.cubic) }, (finished) => {
       if (finished) finishNarrowing(motion, id)
     }))
@@ -277,6 +282,7 @@ export function SendFlightField({ motion, flight, tint }: { motion: ArrivalMotio
       top: field.height - height,
       width,
       height,
+      borderRadius: radius.composer + (bubbleRadius.get() - radius.composer) * at,
       transform: [
         { translateX: dx.get() * (travel - 1) },
         { translateY: flying ? motion.slide.get() + startDy.get() * travel - dy.get() : 0 },
@@ -284,13 +290,14 @@ export function SendFlightField({ motion, flight, tint }: { motion: ArrivalMotio
       ],
     }
   })
-  // From the field's first line to the bubble's; its line is two points taller than the field's.
+  // From the field's first line to the bubble's, and from the field's text size up to the bubble's.
   const words = useAnimatedStyle(() => {
     const at = narrow.get()
     return {
       transform: [
         { translateX: (SENT_BUBBLE_PAD.x - OPEN_FIELD_INSET.left) * at },
-        { translateY: (SENT_BUBBLE_PAD.y - OPEN_FIELD_INSET.top + 1) * at },
+        { translateY: (SENT_BUBBLE_PAD.y - OPEN_FIELD_INSET.top + LINE_LEAD) * at },
+        { scale: FIELD_SCALE + (1 - FIELD_SCALE) * at },
       ],
     }
   })
@@ -309,6 +316,6 @@ const styles = StyleSheet.create({
   row: { transformOrigin: 'right bottom' },
   clip: { position: 'absolute', left: 0, right: 0, bottom: 0, zIndex: 3, overflow: 'hidden' },
   field: { position: 'absolute', overflow: 'hidden', borderRadius: radius.composer, ...squircle, transformOrigin: 'right bottom' },
-  words: { position: 'absolute', left: OPEN_FIELD_INSET.left, top: OPEN_FIELD_INSET.top - 1 },
-  fieldText: { fontFamily: fonts.sans, fontSize: 17, lineHeight: 25 },
+  words: { position: 'absolute', left: OPEN_FIELD_INSET.left, top: OPEN_FIELD_INSET.top - LINE_LEAD, transformOrigin: 'left top' },
+  fieldText: { fontFamily: fonts.sans, ...bubbleText },
 })
