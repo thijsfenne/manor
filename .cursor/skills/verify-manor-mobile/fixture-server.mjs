@@ -1102,6 +1102,34 @@ function runCommand(chatId, command) {
   broadcast({ type: 'event', chatId, event })
 }
 
+/**
+ * A 👍 on Marlow's newest message reaches him the way the server delivers it: a notice only
+ * the model reads, then his short answer in a turn of its own, so reacted replies stack.
+ */
+function reactionTurn(chatId, target) {
+  const id = `reaction-${++replies}`
+  const turnId = `turn-${id}`
+  const text = REACTION_ANSWERS[replies % REACTION_ANSWERS.length]
+  const { agentId } = target
+  const record = (event) => {
+    snapshots[chatId] = [...(snapshots[chatId] ?? []), event]
+    broadcast({ type: 'event', chatId, event })
+  }
+  record({ id: `${id}-u`, ts: Date.now(), type: 'user_message', text: '', mentions: [], instruction: '[Manor] The user reacted 👍 to your last message.', reactionTo: { eventId: target.id, emoji: '👍' } })
+  broadcast({ type: 'turn_state', chatId, turnId, agentId, state: 'running', startedAt: Date.now() })
+  setTimeout(() => {
+    record({ id: `${id}-a`, ts: Date.now(), type: 'agent_message', turnId, agentId, messageId: `${id}-m`, text })
+    record({ id: `${id}-r`, ts: Date.now(), type: 'turn_result', turnId, agentId })
+    broadcast({ type: 'turn_state', chatId, turnId, agentId, state: 'done' })
+  }, 800)
+}
+
+const REACTION_ANSWERS = [
+  'Goed, ik zet de planning voor morgen klaar en stuur je zo het overzicht.',
+  'Gedaan. Het concept staat klaar in je mail, je hoeft het alleen nog te versturen.',
+  'Top, dan zet ik het ook in je agenda voor vrijdagochtend.',
+]
+
 function reply(chatId, agentId, text, images = [], quotes = []) {
   const id = `reply-${++replies}`
   const turnId = `turn-${id}`
@@ -2087,6 +2115,13 @@ server.on('connection', (socket) => {
       snapshots[message.chatId] = snapshots[message.chatId].map((event) => event === target ? patched : event)
       broadcast({ type: 'event', chatId: message.chatId, event: patched })
       console.log(`set_reaction ${message.chatId} ${message.eventId} ${message.emoji ?? 'removed'}`)
+      const newest = snapshots[message.chatId].findLast((event) => event.type === 'agent_message')
+      // Like the server: only a reaction still standing after a short wait reaches him.
+      if (message.chatId === 'chat-dm-marlow' && message.emoji === '👍' && newest === patched) {
+        setTimeout(() => {
+          if (snapshots[message.chatId].includes(patched)) reactionTurn(message.chatId, patched)
+        }, 2000)
+      }
     }
     const command = message.type === 'send_message' ? chatCommandOf(message) : undefined
     if (command !== undefined) runCommand(message.chatId, command)

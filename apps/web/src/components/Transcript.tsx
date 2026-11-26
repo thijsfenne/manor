@@ -1295,6 +1295,16 @@ const TurnRow = memo(function TurnRow({
   // A DM shows only whole messages: partial text a stop or failure cut off stays out.
   const standing = bubbleReplies ? turn.tail.filter((segment) => segment.kind !== 'reply' || segment.interrupted !== true)
     : pinPlan ? turn.tail.filter((segment) => segment.kind !== 'todo') : turn.tail
+  // A DM reply that ends the turn with a reaction hangs its badge into the gap to the next
+  // turn, so the bubble takes no room for it and the Worked for line stands beside it.
+  // A delivered picture is drawn rather than listed, and only once: most are already in the replies above.
+  const delivered = turn.files === undefined ? undefined
+    : splitDeliveredFiles(turn.files, standing.flatMap((segment) => (segment.kind === 'reply' ? segment.images : [])))
+  const closing = standing.at(-1)
+  const endsOnBadge = bubbleReplies && closing?.kind === 'reply' && closing.reaction !== undefined
+    && (delivered?.pictures.length ?? 0) === 0 && (delivered?.rows.length ?? 0) === 0
+    && turn.connects === undefined && turn.sessionLinks === undefined && turn.fileWrites === undefined
+    && turn.notesUpdate === undefined && turn.instructionsOffer === undefined && (note === undefined || isCompactNote(note))
   const changed = running ? NO_CHANGED_FILES : turnChangedFiles(turn, repoFiles)
   const answerText = answerTextOf(turn.answer)
   const status = (
@@ -1328,7 +1338,7 @@ const TurnRow = memo(function TurnRow({
     // the bubbles, and opens the trace above them. Nothing while it runs. Clicks pass
     // through it to a relay line pulled up beneath; the status button takes its own.
     running || !hasStatus(traced) ? null : (
-      <div className={`pointer-events-none flex min-h-6 items-center${open ? '' : ` ${HUNG_BELOW}`}`}>{status}</div>
+      <div className={`pointer-events-none flex min-h-6 items-center${open ? '' : ` ${HUNG_BELOW}`}${endsOnBadge ? ' pl-10' : ''}`}>{status}</div>
     )
   ) : showSpeaker && threadProject === undefined ? (
     <TurnHeader
@@ -1349,9 +1359,6 @@ const TurnRow = memo(function TurnRow({
     <div className="flex min-h-8 items-center">{status}</div>
   ) : null
   const lastReply = [...standing].reverse().find((segment) => segment.kind === 'reply')
-  // A delivered picture is drawn rather than listed, and only once: most are already in the replies above.
-  const delivered = turn.files === undefined ? undefined
-    : splitDeliveredFiles(turn.files, standing.flatMap((segment) => (segment.kind === 'reply' ? segment.images : [])))
   const memoryChanges = bubbleReplies ? dmMemory : turn.memoryChanges
   // A finished DM turn that left nothing (a relay marker is its own row) keeps no
   // Worked for line either: it would hover over an empty gap between rows.
@@ -1382,10 +1389,11 @@ const TurnRow = memo(function TurnRow({
       {silent && threadProject === undefined ? (
         <SystemLine kind="info" text={showSpeaker ? `${persona.name} finished without a reply.` : 'Finished without a reply.'} />
       ) : null}
-      {standing.map((segment) => (
+      {standing.map((segment, index) => (
         <StandingSegment
           key={segment.key}
           segment={segment}
+          badgeRoom={!endsOnBadge || index < standing.length - 1}
           color={persona.color}
           agentId={turn.agentId}
           agents={agents}
@@ -1628,6 +1636,7 @@ export function placeConsultedMenu(
 
 function StandingSegment({
   segment,
+  badgeRoom,
   color,
   agentId,
   agents,
@@ -1641,6 +1650,7 @@ function StandingSegment({
   renderUser,
 }: {
   segment: TurnStanding
+  badgeRoom: boolean
   color: string
   agentId: string
   agents: AgentConfig[]
@@ -1671,6 +1681,7 @@ function StandingSegment({
           quoteSources={segment.quoteSources}
           {...(reaction === undefined ? {} : {
             badge: <ReactionBadge reaction={reaction} {...(react === undefined ? {} : { onRemove: () => react(null) })} />,
+            badgeRoom,
           })}
         />
         <BubbleActions

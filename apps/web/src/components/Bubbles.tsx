@@ -560,13 +560,15 @@ interface AgentBubbleProps {
   quoteAgentId?: string
   /** A reaction badge on the bubble's bottom left edge, in a DM; a short reply widens to hold it. */
   badge?: ReactNode
+  /** False when the gap after the bubble already holds the hanging badge. */
+  badgeRoom?: boolean
 }
 
 /**
  * One beat inside a signed turn group. Identity and actions live on the group; a DM
  * adds the incoming-message cloud while Work leaves the answer on the page.
  */
-function AgentBubbleView({ color, text, agents, images = [], live = false, bubble = false, quoteSources, quoteAgentId, badge }: AgentBubbleProps) {
+function AgentBubbleView({ color, text, agents, images = [], live = false, bubble = false, quoteSources, quoteAgentId, badge, badgeRoom = true }: AgentBubbleProps) {
   const { plugins, components } = useAgentMentions(agents)
   const annotate = useContext(AnnotateImageContext)
   // The file viewer over this message's pictures only, opened at the one pressed.
@@ -584,7 +586,7 @@ function AgentBubbleView({ color, text, agents, images = [], live = false, bubbl
     </div>
   ) : null
   return (
-    <div className={bubble ? `relative flex w-fit max-w-bubble flex-col gap-1.5${badge === undefined ? ' min-w-0' : ' mb-3 min-w-14'}` : 'flex min-w-0'}>
+    <div className={bubble ? `relative flex w-fit max-w-bubble flex-col gap-1.5${badge === undefined ? ' min-w-0' : `${badgeRoom ? ' mb-3' : ''} min-w-14`}` : 'flex min-w-0'}>
       {bubble ? pictures : null}
       {viewing === null ? null : (
         <FileViewer files={eventImageFiles(images)} index={viewing} onIndex={setViewing} onClose={() => setViewing(null)} />

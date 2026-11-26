@@ -117,6 +117,12 @@ const isUserBubbleRow = (row: Row | undefined): boolean =>
   row?.kind === 'pending' ||
   (row?.kind === 'event' && row.event.type === 'user_message' && row.event.source === undefined && row.confirmTasks === undefined && !isModelOnlyMessage(row.event))
 
+/** A message only the model reads, with nothing Manor says under it: its row would draw nothing. */
+const isUnseenUserRow = (row: Extract<Row, { kind: 'event' }>): boolean =>
+  row.event.type === 'user_message' && row.event.source === undefined && row.confirmTasks === undefined &&
+  isModelOnlyMessage(row.event) && (row.hints?.length ?? 0) === 0
+  && (row.forwards?.length ?? 0) === 0 && row.event.forwardedFrom === undefined
+
 /** Consultation markers annotate the conversation, so they sit close to what they annotate. */
 const isRelayRow = (row: Row | undefined): boolean => row?.kind === 'event' && row.event.type === 'agent_relay'
 
@@ -167,10 +173,11 @@ function useTranscriptRows(thread: ThreadShape, workspace: QuietWorkspace, chatI
   // keeps the object it was, so the list redraws only the rows an event changed.
   const [rowMemory] = useState(() => createRowMemory<Row>())
   // A DM turn that draws nothing gets no row: an empty one still takes a slot and its gap,
-  // and inserting it as a turn starts pushes the working indicator down, then back.
+  // and inserting it as a turn starts pushes the working indicator down, then back. Words
+  // to the model alone, such as a reaction's notice, draw nothing either.
   const visibleRows = useMemo(
     () => rowMemory.reuse(feedRows.filter((row) => row.kind === 'event'
-      ? consultationMarkers.get(row.event.id)?.length !== 0 && exchanges.get(row.event.id) !== null
+      ? consultationMarkers.get(row.event.id)?.length !== 0 && exchanges.get(row.event.id) !== null && !isUnseenUserRow(row)
       : !(chatKind === 'dm' && row.kind === 'turn' && (onlyConsulted(row) || dmTurnDrawsNothing(row))))),
     [chatKind, consultationMarkers, exchanges, feedRows, rowMemory],
   )

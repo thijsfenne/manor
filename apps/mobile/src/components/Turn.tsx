@@ -287,6 +287,9 @@ export function Turn({
   // A delivered picture is drawn rather than listed, and only once: most are already in the replies above.
   const delivered = turn.files === undefined ? undefined
     : splitDeliveredFiles(turn.files, standing.flatMap((segment) => (segment.kind === 'reply' ? segment.images : [])))
+  // Whether the turn draws more under its last standing piece, so a badge there needs room.
+  const trailing = (delivered?.pictures.length ?? 0) > 0 || (delivered?.rows.length ?? 0) > 0 || turn.connects !== undefined
+    || (turn.fileWrites?.length ?? 0) > 0 || (signsBubble && header !== null) || (note !== undefined && !isCompactNote(note))
   return (
     <View style={styles.turn}>
       {bubbleReplies ? null : header}
@@ -305,14 +308,14 @@ export function Turn({
         />
       ) : null}
       {finishedSilent(turn) && threadProject === undefined ? <Note text={showSpeaker ? `${persona.name} finished without a reply.` : 'Finished without a reply.'} /> : null}
-      {standing.map((segment) =>
+      {standing.map((segment, index) =>
         segment.kind === 'reply' ? (
           <Reply
             agents={agents}
             bubble={bubbleReplies}
             images={segment.images}
             key={segment.key}
-            {...(bubbleReplies && segment.reaction !== undefined ? { reaction: segment.reaction } : {})}
+            {...(bubbleReplies && segment.reaction !== undefined ? { reaction: segment.reaction, lastInTurn: index === standing.length - 1 && !trailing } : {})}
             {...(reactable && reactionTargetOf(segment) !== undefined ? { onRemoveReaction: () => onReact?.(reactionTargetOf(segment)!, null) } : {})}
             links={links}
             quoteAgentId={turn.agentId}
@@ -1247,6 +1250,7 @@ function Reply({
   onSwipeReply,
   bubble = false,
   reaction,
+  lastInTurn = false,
   onRemoveReaction,
 }: {
   text: string
@@ -1261,6 +1265,8 @@ function Reply({
   bubble?: boolean
   /** The user's reaction, a badge on the bubble's bottom left edge. */
   reaction?: MessageReaction
+  /** Nothing of the turn's own follows, so the gap to the next turn holds the badge. */
+  lastInTurn?: boolean
   onRemoveReaction?: () => void
 }) {
   const still = useReducedMotion()
@@ -1311,7 +1317,7 @@ function Reply({
           <Animated.View style={[swipeStyle, styles.reply]}>
             {/* In a DM only the words sit in the bubble; the pictures stand on the chat itself. */}
             {said ? (
-              <View ref={bubbleRef} style={[styles.reply, bubble && styles.replyBubble, reaction !== undefined && styles.replyReacted]}>
+              <View ref={bubbleRef} style={[styles.reply, bubble && styles.replyBubble, reaction !== undefined && (!lastInTurn || images.length > 0) && styles.replyReacted]}>
                 {quoteSources !== undefined && quoteSources.length > 0 ? quoteSources.map((source) => (
                   <Pressable
                     accessibilityHint={onLongPressSource === undefined ? undefined : 'Press and hold for actions'}
@@ -1476,7 +1482,8 @@ const styles = StyleSheet.create({
   replyCue: { position: 'absolute', top: 0, bottom: 0, left: spacing.md, justifyContent: 'center' },
   // Around the words, short of a bubble's padding so it stays inside the bubble.
   replyWash: { top: -spacing.xs, right: -spacing.sm, bottom: -spacing.xs, left: -spacing.sm, borderRadius: radius.md, ...squircle },
-  replyReacted: { marginBottom: spacing.md },
+  // Room for the badge over the turn's own gap; the gap between turns already holds it.
+  replyReacted: { marginBottom: spacing.sm },
   replyBubble: { alignSelf: 'flex-start', borderRadius: radius.composer, ...squircle, backgroundColor: colors.bubble, paddingHorizontal: spacing.md + 2, paddingVertical: spacing.sm + 1 },
   messageFooter: { minHeight: 28, flexDirection: 'row', alignItems: 'center', gap: 2 },
   footerButton: { width: 28, height: 28, alignItems: 'center', justifyContent: 'center', borderRadius: radius.sm },
