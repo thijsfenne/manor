@@ -224,7 +224,7 @@ export const tracking = {
  * reading size, set a little tighter. The fold, the send flight and the held lift
  * measure with it, so they keep matching the bubble.
  */
-export const bubbleText = { fontSize: 18, lineHeight: 24 } as const
+export const bubbleText = { fontSize: 19, lineHeight: 25 } as const
 
 /**
  * The quiet one-line marks between DM messages: the day and time line, and the line

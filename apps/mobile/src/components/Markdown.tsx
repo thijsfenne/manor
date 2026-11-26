@@ -1046,9 +1046,9 @@ const READING = {
   }),
   bubble: StyleSheet.create({
     body: bubbleText,
-    h1: { fontSize: 22, lineHeight: 28 },
-    h2: { fontSize: 20, lineHeight: 26 },
-    h3: { fontSize: 19, lineHeight: 25 },
+    h1: { fontSize: 23, lineHeight: 29 },
+    h2: { fontSize: 21, lineHeight: 27 },
+    h3: { fontSize: 20, lineHeight: 26 },
   }),
 }
 
