@@ -3253,6 +3253,27 @@ describe('ManorService, routines', () => {
     await expect(manor.useRoutineTool(context, 'routine_list')).rejects.toThrow('no longer active')
   })
 
+  it('tells the persona in a routine result to reply in Dutch when the user wrote Dutch', async () => {
+    const { driver, forChat } = gated()
+    const store = createMemoryStore({ agents: roster })
+    const dm = await store.createChat({ kind: 'dm', memberIds: ['sage'], title: 'Sage' })
+    const { manor, broadcast, reply } = service(store, driver)
+
+    const turn = manor.handle({ type: 'send_message', chatId: dm.id, text: 'Kunnen we hier een routine van maken?' }, reply)
+    await until(() => forChat(dm.id).length === 1, 'the DM turn to start')
+    const started = broadcast.find(
+      (message) => message.type === 'turn_state' && message.chatId === dm.id && message.state === 'running',
+    )
+    if (started?.type !== 'turn_state') throw new Error('expected the active DM turn')
+
+    expect(await manor.useRoutineTool({ chatId: dm.id, agentId: 'sage', turnId: started.turnId }, 'routine_list')).toEqual({
+      routines: [],
+      reply: '[Manor] The user wrote Dutch. Reply to them in Dutch, whatever language this result is in.',
+    })
+    forChat(dm.id)[0]?.finish()
+    await turn
+  })
+
   it('opens the same side chat however often the rail item is clicked, and never broadcasts it', async () => {
     const store = createMemoryStore({ agents: cosRoster })
     const { chatId } = await seededChat(store)

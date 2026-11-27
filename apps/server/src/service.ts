@@ -97,6 +97,7 @@ import type { UserInputContext } from './interactionCapability.js'
 import type { OpenQuestions } from './interactionBroker.js'
 import { FileDeliveryError, readDeliverable, readEvidenceImage } from './fileDelivery.js'
 import { usableTimeZone, usageReportFromRuns } from './usageReport.js'
+import { replyLanguageNote } from './replyLanguage.js'
 import type { RateSnapshot } from './usageRates.js'
 
 export interface ManorServiceOptions {
@@ -777,7 +778,8 @@ export class ManorService {
       throw new FileDeliveryError('This turn has already ended, so the file was not added.')
     }
     const shown = file.mime === 'text/html' ? 'drawn live in the chat' : 'with Open and Save'
-    return `Delivered ${file.name}. It appears under your reply ${shown}; do not repeat its path.`
+    const note = await this.replyLanguage(context)
+    return `Delivered ${file.name}. It appears under your reply ${shown}; do not repeat its path.${note === undefined ? '' : `\n${note}`}`
   }
 
   /**
@@ -1002,12 +1004,28 @@ export class ManorService {
     tool: RoutineToolName,
     input?: RoutineToolInput,
   ): Promise<unknown> {
-    return this.routineModule.useTool(context, tool, input)
+    return this.withReplyLanguage(context, await this.routineModule.useTool(context, tool, input))
   }
 
   /** The only broker seam for a Chat persona's bounded Work write. */
-  useWorkTool(context: WorkToolContext, input: WorkToolInput): Promise<unknown> {
-    return this.workModule.useTool(context, input)
+  async useWorkTool(context: WorkToolContext, input: WorkToolInput): Promise<unknown> {
+    return this.withReplyLanguage(context, await this.workModule.useTool(context, input))
+  }
+
+  /** A Manor tool's result with the `reply` reminder from `replyLanguageNote`, when it has one. */
+  private async withReplyLanguage(turn: { chatId: string; turnId: string }, result: unknown): Promise<unknown> {
+    if (typeof result !== 'object' || result === null || Array.isArray(result)) return result
+    const note = await this.replyLanguage(turn)
+    return note === undefined ? result : { ...result, reply: note }
+  }
+
+  /** Runs after the tool's write, so a failed read drops the reminder and keeps the result. */
+  private async replyLanguage({ chatId, turnId }: { chatId: string; turnId: string }): Promise<string | undefined> {
+    try {
+      return replyLanguageNote(await this.options.store.loadEvents(chatId), turnId)
+    } catch {
+      return undefined
+    }
   }
 
   /**

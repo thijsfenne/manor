@@ -368,7 +368,7 @@ export const REPLY_LANGUAGE_LINE =
  * routine, kickoff, wake, relay, or their Confirm click (an instruction only the model
  * reads). A sent-on project-thread message is still their own words.
  */
-const typedByUser = (event: ThreadEvent): boolean =>
+export const typedByUser = (event: ThreadEvent): boolean =>
   event.type === 'user_message' && event.source === undefined && event.confirmRequest === undefined &&
   event.mergeTrouble === undefined && event.text.trim().length > 0
 
