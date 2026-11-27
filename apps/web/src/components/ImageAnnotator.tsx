@@ -1,11 +1,12 @@
-import { Cancel01Icon, CircleIcon, Pen01Icon, PinLocation01Icon, SquareIcon, Undo02Icon } from '@hugeicons/core-free-icons'
+import { ArrowExpand01Icon, ArrowShrink01Icon, Cancel01Icon, CircleIcon, Pen01Icon, PinLocation01Icon, SquareIcon, Undo02Icon } from '@hugeicons/core-free-icons'
 import { MAX_IMAGE_COMMENT_CHARS, MAX_IMAGE_PINS, MAX_IMAGE_STROKES, MAX_STROKE_POINTS, numberedMarks } from '@manor/contracts'
-import { motion, useReducedMotion } from 'motion/react'
+import { motion, useIsPresent, useReducedMotion } from 'motion/react'
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type PointerEvent as ReactPointerEvent, type RefObject } from 'react'
 import { markAnchor, type ImageMarks, type ImageShape } from '../imageMarks'
 import { INSTANT, POPOVER_IN, POPOVER_OUT, POPOVER_PRE_SCALE } from '../motion'
 import { Icon } from './Icon'
 import { Button } from './ui/Button'
+import { Dialog } from './ui/Dialog'
 
 type Tool = 'pin' | 'frame' | 'circle' | 'pen'
 type Selection = { kind: 'pin' | 'shape'; index: number } | null
@@ -71,6 +72,42 @@ function useFit(rootRef: RefObject<HTMLDivElement | null>) {
   return fit
 }
 
+/** The popup's frame around the picture: the scrim's gutter (wide, or default on a narrow window) and the card's padding, on both sides. */
+const POPUP_FRAME = { wide: 64 * 2 + 16 * 2, default: 24 * 2 + 16 * 2 }
+/** Beside the picture in the popup: the comments column and the gap before it. */
+const POPUP_COMMENTS = 280 + 16
+/** Above the picture in the popup: the tool row and its gap. */
+const POPUP_TOOLS = 44
+/** A small picture grows to at most twice its own size in the popup; past that it only blurs. */
+const MAX_UPSCALE = 2
+
+/**
+ * The picture's size in the enlarged editor: as large as the window allows beside the
+ * comments, so a small screenshot is easier to point at. Null while inline, or before
+ * the picture has loaded.
+ */
+function usePopupFit(enlarged: boolean, natural: { w: number; h: number } | null) {
+  const [view, setView] = useState({ w: window.innerWidth, h: window.innerHeight })
+  useEffect(() => {
+    if (!enlarged) return
+    const measure = () => setView({ w: window.innerWidth, h: window.innerHeight })
+    measure()
+    window.addEventListener('resize', measure)
+    return () => window.removeEventListener('resize', measure)
+  }, [enlarged])
+  if (!enlarged || natural === null) return null
+  // Comments beside the picture or under it, whichever leaves the larger picture.
+  const layout = (side: boolean) => {
+    const frame = POPUP_FRAME[side ? 'wide' : 'default']
+    const room = { w: view.w - frame - (side ? POPUP_COMMENTS : 0), h: view.h - frame - POPUP_TOOLS - (side ? 0 : STACKED_COMMENTS) }
+    return { side, room: room.h, scale: Math.min(MAX_UPSCALE, room.w / natural.w, room.h / natural.h) }
+  }
+  const beside = layout(true)
+  const under = layout(false)
+  const { side, room, scale } = beside.scale >= under.scale ? beside : under
+  return { side, room, width: Math.max(1, Math.floor(natural.w * scale)), height: Math.max(1, Math.floor(natural.h * scale)) }
+}
+
 const clamp = (value: number, low = 0, high = 1) => Math.min(high, Math.max(low, value))
 
 /** How far from a shape's line, in screen pixels, a press still grabs the shape. */
@@ -104,7 +141,9 @@ type Drag =
  * The editor over the composer where the user points at a picture: numbered pins with
  * a comment each, frames or circles around an area, and freehand lines. Positions are shares of the
  * picture, so they mean the same at any size it is drawn or read at. It holds the marks
- * until Done hands them back; Cancel drops every change.
+ * until Done hands them back; Cancel drops every change. Enlarge shows the same editor,
+ * marks and Undo included, as a popup in the middle of the window; Escape or Shrink
+ * brings it back over the composer.
  */
 export function ImageAnnotator({ src, name, initial, onCancel, onDone, note }: {
   /** The picture without marks. */
@@ -121,8 +160,11 @@ export function ImageAnnotator({ src, name, initial, onCancel, onDone, note }: {
   const [history, setHistory] = useState<readonly ImageMarks[]>([])
   const [tool, setTool] = useState<Tool>('pin')
   const [selected, setSelected] = useState<Selection>(null)
+  const [enlarged, setEnlarged] = useState(false)
+  const [natural, setNatural] = useState<{ w: number; h: number } | null>(null)
   const stageRef = useRef<HTMLDivElement>(null)
   const rootRef = useRef<HTMLDivElement>(null)
+  const popupRef = useRef<HTMLDivElement>(null)
   const inputs = useRef(new Map<RowKey, HTMLInputElement>())
   const drag = useRef<Drag | null>(null)
   // The row whose field takes the caret after the render that adds its mark.
@@ -142,10 +184,17 @@ export function ImageAnnotator({ src, name, initial, onCancel, onDone, note }: {
     row?.scrollIntoView({ block: 'nearest' })
   }
   const fit = useFit(rootRef)
+  const popup = usePopupFit(enlarged, natural)
+  const stacked = popup ? !popup.side : !enlarged && fit.stacked
+  // Done or Cancel from the popup: it leaves at once, while the hidden inline card plays the exit.
+  const present = useIsPresent()
+  // Keys go where the editor is shown: the inline card, or the popup over the window.
+  const focusEditor = () => (enlarged ? popupRef : rootRef).current?.focus({ preventScroll: true })
 
+  // On open and each time the editor moves between the composer and the popup.
   useEffect(() => {
-    rootRef.current?.focus({ preventScroll: true })
-  }, [])
+    (enlarged ? popupRef : rootRef).current?.focus({ preventScroll: true })
+  }, [enlarged])
 
   useLayoutEffect(() => {
     if (focusRow.current === null) return
@@ -167,17 +216,20 @@ export function ImageAnnotator({ src, name, initial, onCancel, onDone, note }: {
     setMarks(previous)
     setSelected(null)
     // The focused row may be the one undone, so focus stays in the editor for the next ⌘Z.
-    rootRef.current?.focus({ preventScroll: true })
+    focusEditor()
   }
 
+  // The removed mark or its row may hold focus, so focus stays in the editor for the next key.
   const removePin = (index: number) => {
     commit(marks, { ...marks, pins: marks.pins.filter((_, at) => at !== index) })
     setSelected(null)
+    focusEditor()
   }
 
   const removeShape = (index: number) => {
     commit(marks, { ...marks, shapes: marks.shapes.filter((_, at) => at !== index) })
     setSelected(null)
+    focusEditor()
   }
 
   const pointAt = (event: { clientX: number; clientY: number }) => {
@@ -291,6 +343,12 @@ export function ImageAnnotator({ src, name, initial, onCancel, onDone, note }: {
     } else focusInput(rowKey(current.kind, current.index))
   }
 
+  // A drag still held when the editor moves loses its stage, so it ends here and keeps its Undo step.
+  const resize = (next: boolean) => {
+    end()
+    setEnlarged(next)
+  }
+
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     const typing = event.target instanceof HTMLInputElement
     if (event.key === 'Escape') {
@@ -324,6 +382,202 @@ export function ImageAnnotator({ src, name, initial, onCancel, onDone, note }: {
       : { ...value, shapes: value.shapes.map((shape, each) => (each === index ? { ...shape, comment } : shape)) }))
   }
 
+  const editor = (
+    <div className={`flex gap-4 ${stacked ? 'flex-col' : ''}`}>
+      {/* Side by side, the picture's column hugs the picture and the comments take the rest. */}
+      <div className={`flex min-w-0 flex-col gap-2 ${stacked ? '' : 'flex-[0_1_auto]'}`}>
+        <div className="flex flex-wrap items-center gap-1.5" role="toolbar" aria-label="Marks">
+          {TOOLS.map((each) => (
+            <Button
+              key={each.tool}
+              size="compact"
+              variant={tool === each.tool ? 'primary' : 'ghost'}
+              aria-pressed={tool === each.tool}
+              className="flex items-center gap-1.5"
+              onClick={() => setTool(each.tool)}
+            >
+              <Icon icon={each.icon} size={14} />
+              {each.label}
+            </Button>
+          ))}
+          <Button size="compact" variant="ghost" className="ml-auto flex items-center gap-1.5" disabled={history.length === 0} onClick={undo} aria-label="Undo">
+            <Icon icon={Undo02Icon} size={14} />
+          </Button>
+          <Button size="compact" variant="ghost" className="flex items-center" aria-label={enlarged ? 'Shrink' : 'Enlarge'} title={enlarged ? 'Shrink (Esc)' : 'Enlarge'} onClick={() => resize(!enlarged)}>
+            <Icon icon={enlarged ? ArrowShrink01Icon : ArrowExpand01Icon} size={14} />
+          </Button>
+        </div>
+        <div className="flex justify-center overflow-hidden rounded-lg bg-bg">
+          <div
+            ref={stageRef}
+            data-annotator-stage=""
+            className={`relative inline-block touch-none select-none ${tool === 'pin' || tool === 'pen' ? 'cursor-crosshair' : 'cursor-cell'}`}
+            onPointerDown={startOnStage}
+            onPointerMove={move}
+            onPointerUp={end}
+            onPointerCancel={end}
+          >
+            <img
+              src={src}
+              alt={name}
+              draggable={false}
+              className={`block ${popup ? '' : 'max-w-full'}`}
+              style={popup ? { width: popup.width, height: popup.height } : { maxHeight: fit.picture }}
+              onLoad={(event) => setNatural({ w: event.currentTarget.naturalWidth, h: event.currentTarget.naturalHeight })}
+            />
+            {marks.strokes.length === 0 ? null : (
+              // Drawn in shares of the picture; the line keeps its width however the picture is scaled.
+              <svg aria-hidden className="pointer-events-none absolute inset-0 h-full w-full overflow-visible" viewBox="0 0 1 1" preserveAspectRatio="none" data-annotator-strokes={marks.strokes.length}>
+                {marks.strokes.map((stroke, index) => (
+                  <path
+                    key={`stroke-${index}`}
+                    d={`M${stroke.map(([x, y]) => `${x} ${y}`).join('L')}${stroke.length === 1 ? 'h0' : ''}`}
+                    className="fill-none stroke-mark"
+                    strokeWidth={3}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    vectorEffect="non-scaling-stroke"
+                  />
+                ))}
+              </svg>
+            )}
+            {marks.shapes.map((shape, index) => {
+              const isSelected = selected?.kind === 'shape' && selected.index === index
+              const number = numbers.get(rowKey('shape', index))
+              return (
+                <div
+                  key={`shape-${index}`}
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`${shape.kind === 'frame' ? 'Frame' : 'Circle'} ${index + 1}${number === undefined ? '' : `, number ${number}`}`}
+                  aria-pressed={isSelected}
+                  onFocus={() => setSelected({ kind: 'shape', index })}
+                  data-annotator-shape={shape.kind}
+                  className={`absolute cursor-move border-[2.5px] border-mark ${shape.kind === 'circle' ? 'rounded-[50%]' : 'rounded-md'} ${isSelected ? 'outline-2 outline-offset-2 outline-mark/50' : ''}`}
+                  style={{ left: `${shape.x * 100}%`, top: `${shape.y * 100}%`, width: `${shape.w * 100}%`, height: `${shape.h * 100}%` }}
+                  onPointerDown={(event) => startOnMark(event, 'shape', index)}
+                >
+                  {isSelected ? (
+                    <button
+                      type="button"
+                      aria-label={`Remove ${shape.kind}`}
+                      className="absolute -top-2.5 -right-2.5 grid h-5 w-5 cursor-pointer place-items-center rounded-full border-0 bg-media-scrim p-0 text-on-media"
+                      onPointerDown={(event) => event.stopPropagation()}
+                      onClick={() => removeShape(index)}
+                    >
+                      <Icon icon={Cancel01Icon} size={11} />
+                    </button>
+                  ) : null}
+                </div>
+              )
+            })}
+            {numbered.flatMap((mark) => {
+              if (mark.kind === 'pin') return []
+              const anchor = markAnchor(mark)
+              return [
+                <span
+                  key={`shape-number-${mark.index}`}
+                  aria-hidden
+                  className="pointer-events-none absolute grid h-[22px] w-[22px] -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full border-2 border-on-media bg-mark text-[12px] leading-none font-medium text-on-media"
+                  // Kept whole inside the picture when the shape touches its edge.
+                  style={{ left: `clamp(11px, ${anchor.x * 100}%, calc(100% - 11px))`, top: `clamp(11px, ${anchor.y * 100}%, calc(100% - 11px))` }}
+                >
+                  {mark.number}
+                </span>,
+              ]
+            })}
+            {marks.pins.map((pin, index) => {
+              const isSelected = selected?.kind === 'pin' && selected.index === index
+              return (
+                <button
+                  key={`pin-${index}`}
+                  type="button"
+                  data-annotator-pin={index + 1}
+                  aria-label={`Pin ${index + 1}`}
+                  onFocus={() => setSelected({ kind: 'pin', index })}
+                  className={`absolute grid h-[22px] w-[22px] -translate-x-1/2 -translate-y-1/2 cursor-move place-items-center rounded-full border-2 border-on-media bg-mark p-0 text-[12px] leading-none font-medium text-on-media ${isSelected ? 'outline-2 outline-offset-1 outline-mark' : ''}`}
+                  style={{ left: `${pin.x * 100}%`, top: `${pin.y * 100}%` }}
+                  onPointerDown={(event) => startOnMark(event, 'pin', index)}
+                >
+                  {index + 1}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      </div>
+      <div className={`flex flex-col ${stacked ? 'w-full' : enlarged ? 'w-[280px] flex-none' : 'min-w-[240px] flex-1'}`}>
+        <h4 className="m-0 mb-2 text-[13px] font-medium text-text">Comments</h4>
+        <ol className="m-0 flex list-none flex-col gap-0.5 overflow-y-auto p-0" style={{ maxHeight: popup?.side ? popup.room - 40 : stacked ? 96 : fit.picture - 40 }}>
+          {rows.map(({ key, kind, index }, at) => {
+            const shape = kind === 'shape' ? marks.shapes[index] : undefined
+            const comment = (kind === 'pin' ? marks.pins[index]?.comment : shape?.comment) ?? ''
+            const number = numbers.get(key)
+            const label = shape === undefined ? `pin ${index + 1}` : `${shape.kind} ${index + 1}${number === undefined ? '' : `, number ${number}`}`
+            const isSelected = selected?.kind === kind && selected.index === index
+            return (
+              <li key={key} className={`group/row flex items-center gap-2 rounded-lg p-1.5 ${isSelected ? 'bg-surface-2' : ''}`}>
+                {number === undefined ? (
+                  <span className="grid h-[22px] w-[22px] flex-none place-items-center rounded-full border border-mark text-mark">
+                    <Icon icon={shape?.kind === 'circle' ? CircleIcon : SquareIcon} size={11} />
+                  </span>
+                ) : (
+                  <span className="grid h-[22px] w-[22px] flex-none place-items-center rounded-full bg-mark text-[12px] leading-none font-medium text-on-media">{number}</span>
+                )}
+                <input
+                  ref={(element) => {
+                    if (element === null) inputs.current.delete(key)
+                    else inputs.current.set(key, element)
+                  }}
+                  value={comment}
+                  maxLength={MAX_IMAGE_COMMENT_CHARS}
+                  placeholder={kind === 'pin' ? 'Add a comment' : 'Optional comment'}
+                  aria-label={`Comment for ${label}`}
+                  className="min-w-0 flex-1 rounded-md border border-line bg-transparent px-2 py-1 text-[13px] text-text outline-none placeholder:text-dim focus:border-mark"
+                  onFocus={() => setSelected({ kind, index })}
+                  onBlur={() => {
+                    typedRow.current = null
+                  }}
+                  onChange={(event) => setComment(kind, index, event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key !== 'Enter' || event.metaKey || event.ctrlKey) return
+                    event.preventDefault()
+                    const next = rows[at + 1]
+                    if (next !== undefined) inputs.current.get(next.key)?.focus()
+                  }}
+                />
+                <button
+                  type="button"
+                  aria-label={`Remove ${label}`}
+                  className="grid h-6 w-6 flex-none cursor-pointer place-items-center rounded-md border-0 bg-transparent p-0 text-dim opacity-0 group-hover/row:opacity-100 hover:text-text focus-visible:opacity-100"
+                  onClick={() => (kind === 'pin' ? removePin(index) : removeShape(index))}
+                >
+                  <Icon icon={Cancel01Icon} size={12} />
+                </button>
+              </li>
+            )
+          })}
+        </ol>
+        <p className="m-0 mt-2 px-1.5 text-[12px] leading-snug text-dim">
+          {marks.pins.length >= MAX_IMAGE_PINS
+            ? `Up to ${MAX_IMAGE_PINS} pins per picture.`
+            : tool === 'pin'
+              ? 'Click the picture to place a pin. Drag a mark to move it.'
+              : tool === 'pen'
+                ? 'Draw on the picture. Undo takes back the last line.'
+                : `Drag on the picture to draw a ${tool}. A comment gives it a number.`}
+        </p>
+        <div className="mt-auto flex flex-col gap-2 pt-3">
+          {note ? <p className="m-0 text-[12px] text-danger">{note}</p> : null}
+          <div className="flex justify-end gap-2">
+            <Button size="small" variant="secondary" onClick={onCancel}>Cancel</Button>
+            <Button size="small" variant="primary" onClick={() => onDone(marks)}>Done</Button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+
   return (
     <motion.div
       ref={rootRef}
@@ -331,196 +585,28 @@ export function ImageAnnotator({ src, name, initial, onCancel, onDone, note }: {
       aria-label={`Mark up ${name}`}
       tabIndex={-1}
       data-image-annotator=""
-      className={`absolute right-0 left-0 z-[6] rounded-panel border border-line surface-floating p-3 shadow-popover outline-none ${fit.over ? 'bottom-0' : 'bottom-[calc(100%+8px)]'}`}
+      className={`${enlarged ? 'hidden ' : ''}absolute right-0 left-0 z-[6] rounded-panel border border-line surface-floating p-3 shadow-popover outline-none ${fit.over ? 'bottom-0' : 'bottom-[calc(100%+8px)]'}`}
       style={{ transformOrigin: 'bottom center' }}
       initial={reduceMotion ? false : { opacity: 0, scale: POPOVER_PRE_SCALE }}
       animate={{ opacity: 1, scale: 1, transition: reduceMotion ? INSTANT : POPOVER_IN }}
       exit={{ opacity: 0, scale: reduceMotion ? 1 : POPOVER_PRE_SCALE, transition: reduceMotion ? INSTANT : POPOVER_OUT }}
-      onKeyDown={onKeyDown}
+      {...(enlarged ? {} : { onKeyDown })}
     >
-      <div className={`flex gap-4 ${fit.stacked ? 'flex-col' : ''}`}>
-        {/* Side by side, the picture's column hugs the picture and the comments take the rest. */}
-        <div className={`flex min-w-0 flex-col gap-2 ${fit.stacked ? '' : 'flex-[0_1_auto]'}`}>
-          <div className="flex flex-wrap items-center gap-1.5" role="toolbar" aria-label="Marks">
-            {TOOLS.map((each) => (
-              <Button
-                key={each.tool}
-                size="compact"
-                variant={tool === each.tool ? 'primary' : 'ghost'}
-                aria-pressed={tool === each.tool}
-                className="flex items-center gap-1.5"
-                onClick={() => setTool(each.tool)}
-              >
-                <Icon icon={each.icon} size={14} />
-                {each.label}
-              </Button>
-            ))}
-            <Button size="compact" variant="ghost" className="ml-auto flex items-center gap-1.5" disabled={history.length === 0} onClick={undo} aria-label="Undo">
-              <Icon icon={Undo02Icon} size={14} />
-            </Button>
-          </div>
-          <div className="flex justify-center overflow-hidden rounded-lg bg-bg">
-            <div
-              ref={stageRef}
-              data-annotator-stage=""
-              className={`relative inline-block touch-none select-none ${tool === 'pin' || tool === 'pen' ? 'cursor-crosshair' : 'cursor-cell'}`}
-              onPointerDown={startOnStage}
-              onPointerMove={move}
-              onPointerUp={end}
-              onPointerCancel={end}
-            >
-              <img src={src} alt={name} draggable={false} className="block max-w-full" style={{ maxHeight: fit.picture }} />
-              {marks.strokes.length === 0 ? null : (
-                // Drawn in shares of the picture; the line keeps its width however the picture is scaled.
-                <svg aria-hidden className="pointer-events-none absolute inset-0 h-full w-full overflow-visible" viewBox="0 0 1 1" preserveAspectRatio="none" data-annotator-strokes={marks.strokes.length}>
-                  {marks.strokes.map((stroke, index) => (
-                    <path
-                      key={`stroke-${index}`}
-                      d={`M${stroke.map(([x, y]) => `${x} ${y}`).join('L')}${stroke.length === 1 ? 'h0' : ''}`}
-                      className="fill-none stroke-mark"
-                      strokeWidth={3}
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      vectorEffect="non-scaling-stroke"
-                    />
-                  ))}
-                </svg>
-              )}
-              {marks.shapes.map((shape, index) => {
-                const isSelected = selected?.kind === 'shape' && selected.index === index
-                const number = numbers.get(rowKey('shape', index))
-                return (
-                  <div
-                    key={`shape-${index}`}
-                    role="button"
-                    tabIndex={0}
-                    aria-label={`${shape.kind === 'frame' ? 'Frame' : 'Circle'} ${index + 1}${number === undefined ? '' : `, number ${number}`}`}
-                    aria-pressed={isSelected}
-                    onFocus={() => setSelected({ kind: 'shape', index })}
-                    data-annotator-shape={shape.kind}
-                    className={`absolute cursor-move border-[2.5px] border-mark ${shape.kind === 'circle' ? 'rounded-[50%]' : 'rounded-md'} ${isSelected ? 'outline-2 outline-offset-2 outline-mark/50' : ''}`}
-                    style={{ left: `${shape.x * 100}%`, top: `${shape.y * 100}%`, width: `${shape.w * 100}%`, height: `${shape.h * 100}%` }}
-                    onPointerDown={(event) => startOnMark(event, 'shape', index)}
-                  >
-                    {isSelected ? (
-                      <button
-                        type="button"
-                        aria-label={`Remove ${shape.kind}`}
-                        className="absolute -top-2.5 -right-2.5 grid h-5 w-5 cursor-pointer place-items-center rounded-full border-0 bg-media-scrim p-0 text-on-media"
-                        onPointerDown={(event) => event.stopPropagation()}
-                        onClick={() => removeShape(index)}
-                      >
-                        <Icon icon={Cancel01Icon} size={11} />
-                      </button>
-                    ) : null}
-                  </div>
-                )
-              })}
-              {numbered.flatMap((mark) => {
-                if (mark.kind === 'pin') return []
-                const anchor = markAnchor(mark)
-                return [
-                  <span
-                    key={`shape-number-${mark.index}`}
-                    aria-hidden
-                    className="pointer-events-none absolute grid h-[22px] w-[22px] -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full border-2 border-on-media bg-mark text-[12px] leading-none font-medium text-on-media"
-                    // Kept whole inside the picture when the shape touches its edge.
-                    style={{ left: `clamp(11px, ${anchor.x * 100}%, calc(100% - 11px))`, top: `clamp(11px, ${anchor.y * 100}%, calc(100% - 11px))` }}
-                  >
-                    {mark.number}
-                  </span>,
-                ]
-              })}
-              {marks.pins.map((pin, index) => {
-                const isSelected = selected?.kind === 'pin' && selected.index === index
-                return (
-                  <button
-                    key={`pin-${index}`}
-                    type="button"
-                    data-annotator-pin={index + 1}
-                    aria-label={`Pin ${index + 1}`}
-                    onFocus={() => setSelected({ kind: 'pin', index })}
-                    className={`absolute grid h-[22px] w-[22px] -translate-x-1/2 -translate-y-1/2 cursor-move place-items-center rounded-full border-2 border-on-media bg-mark p-0 text-[12px] leading-none font-medium text-on-media ${isSelected ? 'outline-2 outline-offset-1 outline-mark' : ''}`}
-                    style={{ left: `${pin.x * 100}%`, top: `${pin.y * 100}%` }}
-                    onPointerDown={(event) => startOnMark(event, 'pin', index)}
-                  >
-                    {index + 1}
-                  </button>
-                )
-              })}
-            </div>
-          </div>
-        </div>
-        <div className={`flex flex-col ${fit.stacked ? 'w-full' : 'min-w-[240px] flex-1'}`}>
-          <h4 className="m-0 mb-2 text-[13px] font-medium text-text">Comments</h4>
-          <ol className="m-0 flex list-none flex-col gap-0.5 overflow-y-auto p-0" style={{ maxHeight: fit.stacked ? 96 : fit.picture - 40 }}>
-            {rows.map(({ key, kind, index }, at) => {
-              const shape = kind === 'shape' ? marks.shapes[index] : undefined
-              const comment = (kind === 'pin' ? marks.pins[index]?.comment : shape?.comment) ?? ''
-              const number = numbers.get(key)
-              const label = shape === undefined ? `pin ${index + 1}` : `${shape.kind} ${index + 1}${number === undefined ? '' : `, number ${number}`}`
-              const isSelected = selected?.kind === kind && selected.index === index
-              return (
-                <li key={key} className={`group/row flex items-center gap-2 rounded-lg p-1.5 ${isSelected ? 'bg-surface-2' : ''}`}>
-                  {number === undefined ? (
-                    <span className="grid h-[22px] w-[22px] flex-none place-items-center rounded-full border border-mark text-mark">
-                      <Icon icon={shape?.kind === 'circle' ? CircleIcon : SquareIcon} size={11} />
-                    </span>
-                  ) : (
-                    <span className="grid h-[22px] w-[22px] flex-none place-items-center rounded-full bg-mark text-[12px] leading-none font-medium text-on-media">{number}</span>
-                  )}
-                  <input
-                    ref={(element) => {
-                      if (element === null) inputs.current.delete(key)
-                      else inputs.current.set(key, element)
-                    }}
-                    value={comment}
-                    maxLength={MAX_IMAGE_COMMENT_CHARS}
-                    placeholder={kind === 'pin' ? 'Add a comment' : 'Optional comment'}
-                    aria-label={`Comment for ${label}`}
-                    className="min-w-0 flex-1 rounded-md border border-line bg-transparent px-2 py-1 text-[13px] text-text outline-none placeholder:text-dim focus:border-mark"
-                    onFocus={() => setSelected({ kind, index })}
-                    onBlur={() => {
-                      typedRow.current = null
-                    }}
-                    onChange={(event) => setComment(kind, index, event.target.value)}
-                    onKeyDown={(event) => {
-                      if (event.key !== 'Enter' || event.metaKey || event.ctrlKey) return
-                      event.preventDefault()
-                      const next = rows[at + 1]
-                      if (next !== undefined) inputs.current.get(next.key)?.focus()
-                    }}
-                  />
-                  <button
-                    type="button"
-                    aria-label={`Remove ${label}`}
-                    className="grid h-6 w-6 flex-none cursor-pointer place-items-center rounded-md border-0 bg-transparent p-0 text-dim opacity-0 group-hover/row:opacity-100 hover:text-text focus-visible:opacity-100"
-                    onClick={() => (kind === 'pin' ? removePin(index) : removeShape(index))}
-                  >
-                    <Icon icon={Cancel01Icon} size={12} />
-                  </button>
-                </li>
-              )
-            })}
-          </ol>
-          <p className="m-0 mt-2 px-1.5 text-[12px] leading-snug text-dim">
-            {marks.pins.length >= MAX_IMAGE_PINS
-              ? `Up to ${MAX_IMAGE_PINS} pins per picture.`
-              : tool === 'pin'
-                ? 'Click the picture to place a pin. Drag a mark to move it.'
-                : tool === 'pen'
-                  ? 'Draw on the picture. Undo takes back the last line.'
-                  : `Drag on the picture to draw a ${tool}. A comment gives it a number.`}
-          </p>
-          <div className="mt-auto flex flex-col gap-2 pt-3">
-            {note ? <p className="m-0 text-[12px] text-danger">{note}</p> : null}
-            <div className="flex justify-end gap-2">
-              <Button size="small" variant="secondary" onClick={onCancel}>Cancel</Button>
-              <Button size="small" variant="primary" onClick={() => onDone(marks)}>Done</Button>
-            </div>
-          </div>
-        </div>
-      </div>
+      {enlarged ? present ? (
+        // The card is portalled to the window's middle; this inline one stays mounted, hidden, so its exit still plays.
+        // Once Done or Cancel starts that exit, neither shows the editor.
+        <Dialog
+          label={`Mark up ${name}`}
+          trapFocus
+          inset={popup?.side === false ? 'default' : 'wide'}
+          onClose={() => resize(false)}
+          onKeyDown={onKeyDown}
+          scrimClassName="grid place-items-center"
+          className="max-h-full max-w-fit overflow-auto p-4 shadow-popover"
+        >
+          <div ref={popupRef} tabIndex={-1} className="outline-none">{editor}</div>
+        </Dialog>
+      ) : null : editor}
     </motion.div>
   )
 }
