@@ -216,10 +216,11 @@ function mockMailDraft(input: TurnInput, queue: AsyncQueue<RuntimeEvent>, delayM
   }
 }
 
-/** The mock's triage rule: who wrote, whether it is automatic, whether it asks something. */
+/** The mock's triage rule: who wrote, whether a result waits, whether it is bulk mail, whether it is automatic, whether it asks something. */
 function mockMailLabel(entry: Record<string, unknown>): { label: MailLabel; reason: string } {
   const text = `${String(entry.from ?? '')} ${String(entry.subject ?? '')} ${String(entry.newestMessageStart ?? '')}`
   if (entry.fromTheUser === true) return { label: 'wait', reason: 'You wrote last and are waiting for an answer.' }
+  if (/uitslag|test result/i.test(text)) return { label: 'reply', reason: 'A result is waiting for you to look at.' }
   if (/digest|newsletter|unsubscribe/i.test(text)) return { label: 'other', reason: 'A newsletter or notification; nothing needs your attention.' }
   if (/no-?reply|do not reply|automatic/i.test(text)) return { label: 'fyi', reason: 'An automatic message; nothing to answer.' }
   if (/\?|please|renew|laat .*weten/i.test(String(entry.newestMessageStart ?? ''))) return { label: 'reply', reason: 'Asks you to answer or act.' }

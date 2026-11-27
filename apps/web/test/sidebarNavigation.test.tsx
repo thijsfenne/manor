@@ -126,11 +126,14 @@ describe('navigation rail', () => {
     expect(html).toContain('aria-label="Plugins"')
   })
 
-  it('shows Mail after Scheduled tasks where the host has a mailbox, with its dot even while open', () => {
+  it('shows Mail fourth, after Browser, where the host has a mailbox, with its dot even while open', () => {
     expect(renderRail()).not.toContain('aria-label="Mail')
     const html = renderRail({ hasMail: true })
-    expect(html.indexOf('aria-label="Mail"')).toBeGreaterThan(html.indexOf('aria-label="Scheduled tasks"'))
-    expect(html.indexOf('aria-label="Mail"')).toBeLessThan(html.indexOf('aria-label="Plugins"'))
+    expect(html.indexOf('aria-label="Mail"')).toBeGreaterThan(html.indexOf('aria-label="Browser"'))
+    expect(html.indexOf('aria-label="Mail"')).toBeLessThan(html.indexOf('aria-label="Knowledge"'))
+    expect(html).toContain('title="Mail (⌘4)"')
+    // Without the Browser door every later door moves up one.
+    expect(renderRail({ hasMail: true, hasBrowser: false })).toContain('title="Mail (⌘3)"')
     expect(renderRail({ hasMail: true, mailAttention: true, destination: 'mail' })).toMatch(/aria-label="Mail, unread mail" aria-current="page"/)
     expect(navDestinationOf('mail', null, 'chats')).toBe('mail')
     expect(sidebarPanelOf('mail')).toBe('mail')

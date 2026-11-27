@@ -12,6 +12,11 @@ export interface SegmentOption<Value extends string> {
   disabled?: boolean
   /** What picking this segment means, shown in a tooltip on hover and keyboard focus. */
   hint?: string
+  /**
+   * How many items the segment holds, drawn muted after the label. `name` is what a screen
+   * reader hears after the label instead, such as "3 mails".
+   */
+  count?: { value: number; name: string }
 }
 
 /** Long enough that a pointer crossing the control on its way elsewhere opens nothing. */
@@ -125,6 +130,7 @@ export function SegmentedControl<Value extends string>({
         const tabOption = variant === 'labels' ? option as SegmentOption<Value> : undefined
         const symbolOption = variant === 'symbols' ? option as SymbolSegmentOption<Value> : undefined
         const hint = tabOption?.hint
+        const count = tabOption?.count
         return (
           <button
             key={option.value}
@@ -138,7 +144,7 @@ export function SegmentedControl<Value extends string>({
             aria-selected={variant === 'labels' ? selected : undefined}
             aria-checked={variant === 'symbols' ? selected : undefined}
             aria-controls={tabOption?.panelId}
-            aria-label={symbolOption?.label}
+            aria-label={symbolOption?.label ?? (count === undefined ? undefined : `${option.label}, ${count.name}`)}
             aria-describedby={hint !== undefined && hinted?.text === hint ? hintId : undefined}
             title={symbolOption?.title ?? symbolOption?.label}
             tabIndex={selected ? 0 : -1}
@@ -176,6 +182,7 @@ export function SegmentedControl<Value extends string>({
             ) : null}
             <span className={`relative z-10 ${variant === 'symbols' ? 'grid place-items-center' : ''}`}>
               {symbolOption?.symbol ?? option.label}
+              {count === undefined ? null : <span className="ml-1.5 font-normal tabular-nums text-muted">{count.value}</span>}
             </span>
           </button>
         )

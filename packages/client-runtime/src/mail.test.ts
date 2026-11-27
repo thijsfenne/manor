@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { ClientMessage, MailCard, MailThread, ServerMessage } from '@manor/contracts'
 import { createWorkspaceCommands } from './commands'
-import { mailCards, NO_MAIL_YET, reduceMail, type MailSnapshot } from './mail'
+import { mailCards, mailWantsALook, NO_MAIL_YET, reduceMail, type MailSnapshot } from './mail'
 import { clearRunningTurns, emptyWorkspace, reduce, type WorkspaceState } from './state'
 
 const card = (threadId: string, at: number, over: Partial<MailCard> = {}): MailCard => ({
@@ -110,6 +110,21 @@ describe('Mail state', () => {
     const after = clearRunningTurns(app.state)
     expect(mailCards(after.mail).map((entry) => entry.threadId)).toEqual(['a', 'b', 'c'])
     expect(after.mail.drafts.d1?.status).toBe('error')
+  })
+
+  it('asks for a look only while a card in one of the tabs is unread', () => {
+    const state = (list: MailCard[]) => reduceMail(NO_MAIL_YET, snapshot(list))
+    expect(mailWantsALook(NO_MAIL_YET)).toBe(false)
+    // Unread mail that only a search lists: labelled Other, or not labelled yet.
+    expect(mailWantsALook(state([card('a', 30, { label: 'other' }), card('b', 20)]))).toBe(false)
+    expect(mailWantsALook(state([card('a', 30, { label: 'fyi', unread: false }), card('b', 20, { label: 'other' })]))).toBe(false)
+    expect(mailWantsALook(state([card('a', 30, { label: 'fyi' })]))).toBe(true)
+
+    const app = client()
+    app.commands.setMailLabel('a', 'reply')
+    expect(mailWantsALook(app.state.mail)).toBe(true)
+    app.commands.openMailThread('r1', 'a')
+    expect(mailWantsALook(app.state.mail)).toBe(false)
   })
 
   it('shows opening, labelling and linking at once', () => {

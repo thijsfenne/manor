@@ -55,7 +55,7 @@ export function mailTriageToolServer(label: MailTriageLabeller, limit: number): 
     instructions: 'Sets one triage label on one mail of the current run. It never sends, archives or changes mail.',
     tools: [{
       name: MAIL_TRIAGE_TOOL,
-      description: 'Label one mail of this run: reply (the user must answer or act), wait (the user waits for someone else), fyi (worth reading, no answer needed) or other (newsletters, promotions, automated notifications). Give the reason in one short line.',
+      description: 'Label one mail of this run: reply (the user must answer or act), wait (the user waits for someone else), fyi (worth reading or keeping, no answer needed, receipts and confirmations included) or other (newsletters, promotions and other mail written for many people at once). Give the reason in one short line.',
       inputSchema: {
         type: 'object',
         properties: {

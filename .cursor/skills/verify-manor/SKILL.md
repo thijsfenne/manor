@@ -65,7 +65,7 @@ node .cursor/skills/verify-manor/control-manor.mjs wait-settle
 
 Stable handles from this repo:
 
-- Rail landmark `navigation "Destinations"` with doors `Agents`, `Sessions`, `Knowledge`, `Scheduled tasks`, `Mail`, `Plugins`, `Usage` (`Artifacts` only with its fixture, below). A fresh browser lands on Agents.
+- Rail landmark `navigation "Destinations"` with doors `Agents`, `Sessions`, `Mail`, `Knowledge`, `Scheduled tasks`, `Plugins`, `Usage` (`Artifacts` only with its fixture, below). A fresh browser lands on Agents.
 - The window's top bar is `banner "Top bar"`: `Hide sidebar` / `Show sidebar`, `Back`, `Forward`, `Search`, then each pane's breadcrumb, its `navigation "Panels"` doors and, in a split, `Close pane`. The rail stays the first navigation landmark in the page, so `--within navigation` still hits it.
 - Sidebars are `navigation "<Title> navigation"` (Agents, Sessions, Reminders, Knowledge), with the destination's creation buttons in their title row. Search sits in the top bar: `click --role button --name Search --exact --within banner`.
 - Headless Chromium has no desktop bridge, so it shows the full-screen arrangement (lead controls over the rail, no traffic-light corner). Real lights only come from the Electron shell.

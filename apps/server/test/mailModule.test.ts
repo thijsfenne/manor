@@ -42,7 +42,7 @@ describe('MailModule', () => {
     await send({ type: 'mail_load', refresh: true })
     expect(replies).toEqual([{ type: 'mail_state', status: 'off', cards: [], syncedAt: null, triage: { lastRunAt: null, running: false } }])
     await send({ type: 'mail_open', requestId: 'r1', threadId: FIXTURE_THREAD.parking })
-    expect(replies.at(-1)).toMatchObject({ type: 'mail_thread', result: { status: 'error' } })
+    expect(replies.at(-2)).toMatchObject({ type: 'mail_thread', result: { status: 'error' } })
   })
 
   it('answers from the cache at once and broadcasts the polled Inbox, newest first', async () => {
@@ -54,13 +54,26 @@ describe('MailModule', () => {
     expect(state.cards.map((card) => card.threadId)).toEqual([
       FIXTURE_THREAD.interview,
       FIXTURE_THREAD.family,
+      FIXTURE_THREAD.result,
       FIXTURE_THREAD.parking,
       FIXTURE_THREAD.newsletter,
       FIXTURE_THREAD.digest,
       FIXTURE_THREAD.waiting,
+      FIXTURE_THREAD.receipt,
+      FIXTURE_THREAD.signUp,
       FIXTURE_THREAD.application,
     ])
     expect(state.cards[0]).toMatchObject({ subject: 'Second round interview', messageCount: 2, unread: true })
+  })
+
+  it('a thread that could not be read stays unread, and the asker gets the list back as it stands', async () => {
+    const { send, replies, source, module } = setup()
+    await module.refresh()
+    vi.spyOn(source, 'readThread').mockRejectedValueOnce(new Error('Connection timed out'))
+    await send({ type: 'mail_open', requestId: 'r1', threadId: FIXTURE_THREAD.parking })
+    const [answer, state] = replies.slice(-2)
+    expect(state?.type === 'mail_state' ? state.cards.find((card) => card.threadId === FIXTURE_THREAD.parking)?.unread : undefined).toBe(true)
+    expect(answer).toMatchObject({ type: 'mail_thread', result: { status: 'error', message: 'Connection timed out' } })
   })
 
   it('opening a thread leaves it unread on the source while its card turns read', async () => {
@@ -168,7 +181,7 @@ describe('MailModule', () => {
     vi.spyOn(source, 'listInbox').mockRejectedValueOnce(new Error('Connection timed out'))
     await module.refresh()
     expect(lastState()).toMatchObject({ status: 'error', error: 'Connection timed out' })
-    expect(lastState().cards).toHaveLength(7)
+    expect(lastState().cards).toHaveLength(10)
     await module.refresh()
     expect(lastState().status).toBe('ready')
     expect(lastState().error).toBeUndefined()
@@ -281,7 +294,7 @@ describe('MailModule', () => {
     })
     expect((await module.state()).cards).toEqual([])
     await module.refresh()
-    expect(lastState().cards).toHaveLength(7)
+    expect(lastState().cards).toHaveLength(10)
   })
 
   it('refuses a send on a host without a send port', async () => {
@@ -306,7 +319,7 @@ describe('the cache file is disposable', () => {
     await second.send({ type: 'mail_load' })
     expect(second.replies.at(-1)).toMatchObject({ type: 'mail_state', cards: [] })
     await second.module.refresh()
-    expect(second.lastState().cards).toHaveLength(7)
+    expect(second.lastState().cards).toHaveLength(10)
     expect(second.card(FIXTURE_THREAD.family)?.label).toBeUndefined()
   }
 
@@ -343,6 +356,44 @@ describe('the cache file is disposable', () => {
     check.close()
     await second.module.refresh()
     expect(second.card(FIXTURE_THREAD.family)?.label).toBe('reply')
+  })
+
+  it('a cache labelled under newer triage rules than this build knows keeps every label', async () => {
+    const first = setup()
+    await first.module.refresh()
+    first.module.setAgentLabel(FIXTURE_THREAD.receipt, 'other', 'A receipt.')
+    first.module.cache!.close()
+    const db = new DatabaseSync(first.cacheFile)
+    db.exec("UPDATE meta SET value = '99' WHERE key = 'triageRules'")
+    db.close()
+    const second = setup({ cacheFile: first.cacheFile })
+    await second.module.refresh()
+    expect(second.card(FIXTURE_THREAD.receipt)?.label).toBe('other')
+    expect(second.module.cache!.getMeta('triageRules')).toBe('99')
+  })
+
+  it('a cache labelled under older triage rules loses only the Other labels the agent gave', async () => {
+    const first = setup()
+    await first.module.refresh()
+    first.module.setAgentLabel(FIXTURE_THREAD.receipt, 'other', 'A receipt.')
+    first.module.setAgentLabel(FIXTURE_THREAD.application, 'fyi', 'A confirmation.')
+    await first.send({ type: 'mail_set_label', threadId: FIXTURE_THREAD.newsletter, label: 'other' })
+    first.module.cache!.close()
+    const db = new DatabaseSync(first.cacheFile)
+    db.exec("UPDATE meta SET value = '1' WHERE key = 'triageRules'")
+    db.close()
+
+    const second = setup({ cacheFile: first.cacheFile })
+    await second.module.refresh()
+    expect(second.card(FIXTURE_THREAD.receipt)?.label).toBeUndefined()
+    expect(second.card(FIXTURE_THREAD.application)?.label).toBe('fyi')
+    expect(second.card(FIXTURE_THREAD.newsletter)?.label).toBe('other')
+    second.module.setAgentLabel(FIXTURE_THREAD.receipt, 'other', 'Still a receipt.')
+    second.module.cache!.close()
+
+    const third = setup({ cacheFile: first.cacheFile })
+    await third.module.refresh()
+    expect(third.card(FIXTURE_THREAD.receipt)?.label).toBe('other')
   })
 
   it('a file on another schema version is emptied', async () => {

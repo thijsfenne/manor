@@ -33,6 +33,9 @@ const tracker = person('Issue Tracker', 'digest@issues.example')
 const family = person('Ingrid Example', 'ingrid@family.example')
 const careers = person('Careers', 'no-reply@jobs.example')
 const shop = person('Garden Supply', 'news@garden-supply.example')
+const hospital = person('', 'no_reply@hospital.example')
+const bikeShop = person('City Bikes', 'receipts@city-bikes.example')
+const swimSchool = person('Swim School', 'noreply@swim-school.example')
 
 /**
  * Two public, stable pictures from a free media archive. The isolated verify server
@@ -109,9 +112,16 @@ export const FIXTURE_THREAD = {
   family: '1790000000000000005',
   application: '1790000000000000006',
   newsletter: '1790000000000000007',
+  result: '1790000000000000008',
+  receipt: '1790000000000000009',
+  signUp: '1790000000000000010',
 } as const
 
-/** Seven threads modelled on the design's Inbox; `now` anchors their times. Two carry HTML, the rest plain text only. */
+/**
+ * Ten threads modelled on the design's Inbox; `now` anchors their times. Two carry HTML,
+ * the rest plain text only. The last three are automatic mail that still matters: a
+ * result waiting in a patient portal, a receipt and a sign-up confirmation.
+ */
 function seed(now: number): FixtureMessage[] {
   let uid = 100
   const message = (fields: Omit<FixtureMessage, 'uid' | 'messageId' | 'cc' | 'attachments'> & Partial<Pick<FixtureMessage, 'cc' | 'attachments'>>): FixtureMessage => {
@@ -128,6 +138,26 @@ function seed(now: number): FixtureMessage[] {
       seen: true,
       inbox: true,
       text: 'Thank you for applying for the role of Operations Lead.\n\nThis is an automatic confirmation. Our team reviews every application and will contact you within three weeks if your profile matches.\n\nPlease do not reply to this message.',
+    }),
+    message({
+      threadId: FIXTURE_THREAD.signUp,
+      subject: 'Jouw aanmelding bij Swim School',
+      from: swimSchool,
+      to: [ACCOUNT],
+      at: now - 46 * HOUR,
+      seen: true,
+      inbox: true,
+      text: 'Bedankt voor je aanmelding!\n\nJe staat ingeschreven voor de cursus van het voorjaar. De eerste les is op zaterdag 6 maart om 09:00. Neem je inschrijfnummer 4471 mee.\n\nTot dan,\nSwim School',
+    }),
+    message({
+      threadId: FIXTURE_THREAD.receipt,
+      subject: 'Your receipt for order 1042',
+      from: bikeShop,
+      to: [ACCOUNT],
+      at: now - 44 * HOUR,
+      seen: true,
+      inbox: true,
+      text: 'Thank you for your order.\n\nOrder 1042\n1 x Rear light, 24.95\nShipping, 4.95\nTotal paid, 29.90\n\nKeep this mail as your proof of purchase.',
     }),
     message({
       threadId: FIXTURE_THREAD.waiting,
@@ -191,6 +221,16 @@ function seed(now: number): FixtureMessage[] {
       seen: false,
       inbox: true,
       text: 'Dear resident,\n\nYour residential parking permit expires on 31 December. Renew it before that date to keep parking in your zone.\n\nYou can renew online with your permit number. The fee for next year is unchanged.\n\nParking Services',
+    }),
+    message({
+      threadId: FIXTURE_THREAD.result,
+      subject: 'Uitslag onderzoek beschikbaar in het patiëntenportaal',
+      from: hospital,
+      to: [ACCOUNT],
+      at: now - 6 * HOUR,
+      seen: false,
+      inbox: true,
+      text: 'Geachte heer, mevrouw,\n\nEr staat een nieuwe uitslag van een onderzoek voor u klaar in het patiëntenportaal. Log in om de uitslag te bekijken.\n\nDit is een automatisch bericht, u kunt hier niet op antwoorden.',
     }),
     message({
       threadId: FIXTURE_THREAD.family,

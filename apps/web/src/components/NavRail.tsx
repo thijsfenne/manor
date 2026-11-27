@@ -50,11 +50,11 @@ const DOORS: RailDoor[] = [
   { id: 'chats', label: 'Agents', icon: AiBotHeadLookingIcon, activeIcon: AiBotHeadLookingSolidIcon },
   { id: 'work', label: 'Sessions', icon: CellsIcon, activeIcon: CellsSolidIcon },
   { id: 'browser', label: 'Browser', icon: Globe02Icon, activeIcon: Globe02SolidIcon },
+  { id: 'mail', label: 'Mail', icon: Mail01Icon, activeIcon: Mail01SolidIcon },
   { id: 'knowledge', label: 'Knowledge', icon: BookOpen01Icon, activeIcon: BookOpen01SolidIcon },
   { id: 'reminders', label: 'Reminders', icon: CheckListIcon, activeIcon: CheckListSolidIcon },
   { id: 'artifacts', label: 'Artifacts', icon: Archive02Icon, activeIcon: Archive02SolidIcon },
   { id: 'routines', label: 'Scheduled tasks', icon: Clock01Icon, activeIcon: Clock01SolidIcon },
-  { id: 'mail', label: 'Mail', icon: Mail01Icon, activeIcon: Mail01SolidIcon },
   { id: 'plugins', label: 'Plugins', icon: PuzzleIcon, activeIcon: PuzzleSolidIcon },
 ]
 
@@ -99,7 +99,7 @@ interface NavRailProps {
   hasArtifacts: boolean
   hasBrowser: boolean
   hasMail?: boolean
-  /** A mail card is unread. Shown wherever the stage is. */
+  /** A mail in one of the Mail tabs is unread. Shown wherever the stage is. */
   mailAttention?: boolean
   /** A chat asking for the user outranks one that is merely unread. Shown while another door is open. */
   agentsAttention: DoorAttention

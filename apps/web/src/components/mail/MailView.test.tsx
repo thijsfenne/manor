@@ -108,6 +108,9 @@ const shown = () => cardsShown().map((node) => node.props['data-mail-card'])
 const selected = () => cardsShown().find((node) => node.props['aria-current'] === 'true')?.props['data-mail-card'] ?? null
 const textOf = (node: ReactTestInstance): string => node.children.map((child) => (typeof child === 'string' ? child : textOf(child))).join('')
 const button = (name: string) => host((node) => node.type === 'button' && (node.props['aria-label'] === name || textOf(node) === name))[0]!
+/** A label tab by its visible label; its accessible name adds the count. */
+const tab = (label: string) => host((node) => node.props.role === 'tab' && String(node.props['aria-label']).startsWith(`${label}, `))[0]!
+const tabNames = () => host((node) => node.props.role === 'tab').map((node) => node.props['aria-label'])
 const says = (text: string) => JSON.stringify(view.toJSON()).includes(text)
 const search = (query: string) => act(() => host((node) => node.props['aria-label'] === 'Search mail')[0]!.props.onChange({ target: { value: query } }))
 const paneOpen = () => host((node) => node.props['aria-label'] === 'Reply draft').length === 1
@@ -158,8 +161,7 @@ describe('MailView', () => {
 
   it('lists Needs attention first, without an All tab, and draws no actions until a mail is open', () => {
     mount()
-    const tabs = host((node) => node.props.role === 'tab').map(textOf)
-    expect(tabs).toEqual(['Needs attention', 'Waiting', 'FYI'])
+    expect(tabNames()).toEqual(['Needs attention, 3 mails', 'Waiting, 0 mails', 'FYI, 0 mails'])
     expect(shown()).toEqual(['a', 'b', 'c'])
     for (const name of ['Reply', 'Add to chat', 'Archive']) expect(button(name)).toBeUndefined()
     expect(says('Select a mail to read.')).toBe(true)
@@ -172,7 +174,7 @@ describe('MailView', () => {
   it('keeps Other and unlabelled mail out of every tab and finds it in a search, with its label', () => {
     mount()
     for (const name of ['Needs attention', 'Waiting', 'FYI']) {
-      act(() => button(name).props.onClick())
+      act(() => tab(name).props.onClick())
       expect(shown()).not.toContain('d')
       expect(shown()).not.toContain('e')
     }
@@ -200,9 +202,9 @@ describe('MailView', () => {
     expect(button('1 new')).toBeDefined()
     act(() => button('Label 1 new').props.onClick())
     expect(ofType('mail_triage_run')).toHaveLength(1)
-    act(() => button('Waiting').props.onClick())
+    act(() => tab('Waiting').props.onClick())
     expect(says('Nothing is waiting on someone.')).toBe(true)
-    act(() => button('FYI').props.onClick())
+    act(() => tab('FYI').props.onClick())
     expect(says('Nothing to read.')).toBe(true)
     search('nothing like it')
     expect(says('No mail matches this search.')).toBe(true)
@@ -221,7 +223,7 @@ describe('MailView', () => {
   it('names the last run when every card is labelled', () => {
     const at = Date.now() - 60_000
     mount([card('a', 30, 'reply')], { lastRunAt: at, running: false })
-    act(() => button('Waiting').props.onClick())
+    act(() => tab('Waiting').props.onClick())
     expect(says(`Last labelled ${mailTimeLabel(at, Date.now())}`)).toBe(true)
     expect(button(mailTimeLabel(at, Date.now()))).toBeDefined()
     expect(button('Label 1 new')).toBeUndefined()
@@ -255,6 +257,16 @@ describe('MailView', () => {
     expect(shown()).toEqual(['a', 'b', 'c'])
   })
 
+  it('counts every card of each tab beside its label, and an archived card leaves its count', () => {
+    mount([...CARDS, card('f', 3, 'wait')])
+    expect(host((node) => node.props.role === 'tab').map(textOf)).toEqual(['Needs attention3', 'Waiting1', 'FYI0'])
+    expect(tabNames()).toEqual(['Needs attention, 3 mails', 'Waiting, 1 mail', 'FYI, 0 mails'])
+    press('j')
+    press('e')
+    expect(textOf(tab('Needs attention'))).toBe('Needs attention2')
+    expect(tab('Waiting').props['aria-label']).toBe('Waiting, 1 mail')
+  })
+
   it('archives at once and selects the next card, else the previous one', () => {
     mount()
     press('j')
@@ -275,14 +287,14 @@ describe('MailView', () => {
     mount()
     press('j')
     press('2')
-    act(() => button('Waiting').props.onClick())
+    act(() => tab('Waiting').props.onClick())
     press('e')
     expect(JSON.stringify(view.toJSON())).toContain('Archived')
-    act(() => button('Needs attention').props.onClick())
+    act(() => tab('Needs attention').props.onClick())
     act(() => button('Undo').props.onClick())
     expect(ofType('mail_unarchive').map((message) => message.threadId)).toEqual(['a'])
     // The tab that would hide it gives way to its own.
-    expect(host((node) => node.props.role === 'tab' && node.props['aria-selected'] === true).map(textOf)).toEqual(['Waiting'])
+    expect(host((node) => node.props.role === 'tab' && node.props['aria-selected'] === true).map((node) => node.props['aria-label'])).toEqual(['Waiting, 1 mail'])
     expect(shown()).toEqual(['a'])
     expect(selected()).toBe('a')
     expect(button('Undo')).toBeUndefined()
@@ -338,7 +350,7 @@ describe('MailView', () => {
     press('j')
     press('2')
     expect(ofType('mail_set_label')).toEqual([{ type: 'mail_set_label', threadId: 'a', label: 'wait' }])
-    act(() => button('Waiting').props.onClick())
+    act(() => tab('Waiting').props.onClick())
     expect(shown()).toEqual(['a'])
     press('3')
     expect(shown()).toEqual([])

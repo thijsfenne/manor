@@ -1,4 +1,4 @@
-import { mailBareAddress, type MailCard, type MailLabel, type MailThread, type ServerMessage } from '@manor/contracts'
+import { MAIL_TAB_LABELS, mailBareAddress, type MailCard, type MailLabel, type MailThread, type ServerMessage } from '@manor/contracts'
 
 /**
  * The Mail door as the client holds it. The host's `mail_state` is the truth; an Archive
@@ -80,6 +80,13 @@ export function mailCards(state: MailState): MailCard[] {
     state.snapshot?.cards ?? NO_CARDS,
   )
 }
+
+/**
+ * Whether the rail's Mail door wears its dot: a card in one of the tabs is unread. Other
+ * and unlabelled mail is listed only by a search, so it never asks for a look.
+ */
+export const mailWantsALook = (state: MailState): boolean =>
+  mailCards(state).some((card) => card.unread && MAIL_TAB_LABELS.some((label) => label === card.label))
 
 export function reduceMail(state: MailState, msg: MailServerMessage): MailState {
   switch (msg.type) {

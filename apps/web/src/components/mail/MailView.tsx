@@ -5,7 +5,7 @@ import type { AgentConfig, Chat, Project } from '@manor/contracts'
 import type { createWorkspaceCommands } from '@manor/client-runtime/commands'
 import { mailCards, type MailState } from '@manor/client-runtime/mail'
 import {
-  listedMailCards, mailKeyAction, mailNeighbour, mailRange, steppedMailSelection, toggledMailSelection, unlabelledMailCount, type MailKeyAction,
+  listedMailCards, mailKeyAction, mailTabCounts, mailNeighbour, mailRange, steppedMailSelection, toggledMailSelection, unlabelledMailCount, type MailKeyAction,
 } from '../../mail'
 import { toast } from '../../notices'
 import { cosOf } from '../../persona'
@@ -242,7 +242,7 @@ export function MailView({ mail, agents, projects, chats, chatDoor, status, comm
   return (
     <section aria-label="Mail" className={`relative grid min-h-0 min-w-0 ${headerRows} overflow-hidden bg-bg`}>
       {sidebarSlot === null ? null : createPortal(
-        <MailSidebar cards={listed} projects={projects} selectedId={openId} picked={selection} tab={tab} query={query} problems={problems}
+        <MailSidebar cards={listed} tabCounts={mailTabCounts(cards)} projects={projects} selectedId={openId} picked={selection} tab={tab} query={query} problems={problems}
           searchRef={search} onSelect={click} onArchive={archiveCard}
           onTab={(next) => setMailView({ tab: next, picked: [] })} onQuery={(next) => setMailView({ query: next, picked: [] })} />,
         sidebarSlot,

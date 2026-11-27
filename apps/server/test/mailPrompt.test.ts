@@ -10,6 +10,7 @@ import {
   MAIL_UNTRUSTED_CLOSE,
   MAIL_UNTRUSTED_OPEN,
   mailDraftPrompt,
+  mailTriagePrompt,
   untrustedMailPayload,
   type MailCalendar,
 } from '../src/mailPrompt.js'
@@ -142,5 +143,22 @@ describe('the draft prompt', () => {
     expect(shown.map((entry) => entry.title)).toEqual(many.slice(0, shown.length).map((entry) => entry.title))
     expect(prompt).toContain(`${300 - shown.length} later events were left out, so the calendar above is complete only up to ${shown.at(-1)!.start}.`)
     expect(mailDraftPrompt(thread, 'user@example.com', undefined, { now: TODAY, calendar: calendar(many.slice(0, 3)) })).not.toContain('left out')
+  })
+})
+
+describe('the triage prompt', () => {
+  it('keeps automatic mail about the user out of Other and lists every mail in the untrusted block', () => {
+    const card = { threadId: 't1', subject: 'Your receipt for order 1042', from: { name: 'City Bikes', address: 'receipts@city-bikes.example' }, at: Date.UTC(2026, 10, 26, 9, 30), unread: false, messageCount: 1 }
+    const prompt = mailTriagePrompt([{ id: 'm1', card, snippet: 'Total paid, 29.90' }], 'user@example.com')
+    const rules = prompt.slice(0, prompt.indexOf(MAIL_UNTRUSTED_OPEN))
+    const line = (label: string) => rules.split('\n').find((entry) => entry.startsWith(`- ${label}:`)) ?? ''
+    expect(line('reply')).toContain('a medical result or a message waiting in a patient portal')
+    expect(line('fyi')).toContain('a receipt')
+    expect(line('fyi')).toContain('the confirmation of a sign-up, registration or application')
+    expect(line('other')).not.toMatch(/receipt|confirmation|notification/)
+    expect(rules).toContain('When a mail fits both reply and fyi, choose reply. When you doubt between fyi and other, choose fyi.')
+    expect(untrustedMailPayload(prompt)).toEqual([
+      { id: 'm1', from: 'City Bikes <receipts@city-bikes.example>', fromTheUser: false, subject: 'Your receipt for order 1042', date: '2026-11-26 09:30 UTC', messages: 1, newestMessageStart: 'Total paid, 29.90' },
+    ])
   })
 })

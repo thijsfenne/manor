@@ -25,6 +25,13 @@ const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite') as typeof
  */
 export const MAIL_CACHE_SCHEMA_VERSION = 2
 
+/**
+ * Bumped when the triage rules move a kind of mail out of Other. A cache labelled under
+ * older rules then loses the Other labels the agent gave, so that mail is sorted again
+ * by the next run. Version 2 took receipts, confirmations and portal notices out of Other.
+ */
+export const MAIL_TRIAGE_RULES_VERSION = 2
+
 const SCHEMA = `
 CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 CREATE TABLE messages (
@@ -178,7 +185,8 @@ export class MailCache {
   /**
    * Never throws for a bad file: whatever is at `file` that cannot be read is replaced.
    * A cache written for another mailbox is emptied, labels and links included, so one
-   * account's mail never shows under another. `fresh` replaces the file outright.
+   * account's mail never shows under another. `fresh` replaces the file outright. A cache
+   * labelled under older triage rules keeps every label but the agent's Other ones.
    */
   static open(file: string, account: string, options: { fresh?: boolean } = {}): MailCache {
     const remove = () => {
@@ -195,6 +203,13 @@ export class MailCache {
     const owner = cache.getMeta('account')
     if (owner !== undefined && owner !== account) cache.empty()
     cache.setMeta('account', account)
+    // One step, so of two servers opening the file at once only the first clears anything.
+    transaction(cache.db, () => {
+      // Labels written under newer rules than this build knows are left alone.
+      if (Number(cache.getMeta('triageRules') ?? 0) >= MAIL_TRIAGE_RULES_VERSION) return
+      cache.db.exec("DELETE FROM labels WHERE set_by = 'agent' AND label = 'other'")
+      cache.setMeta('triageRules', String(MAIL_TRIAGE_RULES_VERSION))
+    })
     return cache
   }
 

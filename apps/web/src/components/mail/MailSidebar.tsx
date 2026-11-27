@@ -106,9 +106,11 @@ function MailRow({ card, open, picked, showLabel, project, now, archiveLabel, on
  * stage. A search lists every match whatever its label, so it hides the tabs and each row
  * names its label instead.
  */
-export function MailSidebar({ cards, projects, selectedId, picked, tab, query, problems, searchRef, onSelect, onArchive, onTab, onQuery }: {
+export function MailSidebar({ cards, tabCounts, projects, selectedId, picked, tab, query, problems, searchRef, onSelect, onArchive, onTab, onQuery }: {
   /** Already narrowed to the tab, or to the search. */
   cards: readonly MailCard[]
+  /** Every card each tab holds, whatever the tab or search; drawn beside the tab labels. */
+  tabCounts: Record<MailTab, number>
   projects: readonly Project[]
   /** The thread on the stage; null while several cards are picked. */
   selectedId: string | null
@@ -154,7 +156,10 @@ export function MailSidebar({ cards, projects, selectedId, picked, tab, query, p
       </label>
       {searching ? null : (
         <SegmentedControl dense label="Mail labels" value={tab} onChange={onTab}
-          options={MAIL_TABS.map((option) => ({ ...option, tabId: `mail-tab-${option.value}`, panelId: PANEL_ID }))} />
+          options={MAIL_TABS.map((option) => {
+            const value = tabCounts[option.value]
+            return { ...option, tabId: `mail-tab-${option.value}`, panelId: PANEL_ID, count: { value, name: `${value} ${value === 1 ? 'mail' : 'mails'}` } }
+          })} />
       )}
       {problems.map((problem) => <p key={problem} role="status" className="m-0 break-words px-3 text-meta text-warn">{problem}</p>)}
       <div {...(searching ? {} : { id: PANEL_ID, role: 'tabpanel', 'aria-labelledby': `mail-tab-${tab}` })}>

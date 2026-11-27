@@ -351,6 +351,8 @@ export class MailModule {
             threadId: message.threadId,
             result: { status: 'error', message: reason(error, 'This thread could not be read.').slice(0, 400) },
           })
+          // The asker cleared the card's dot when it asked; nothing was shown, so the list goes back as it stands here.
+          await this.state().then(reply, () => undefined)
         }
         return
       }

@@ -9,7 +9,8 @@ import { z } from 'zod'
 
 /**
  * The triage labels. Keys `1` to `4` set them in this order. `other` holds newsletters,
- * promotions and automated notices: it has no tab and shows only in a search.
+ * promotions and other mail written for many people at once: it has no tab and shows
+ * only in a search.
  */
 export const MAIL_LABELS = ['reply', 'wait', 'fyi', 'other'] as const
 export const MailLabelSchema = z.enum(MAIL_LABELS)

@@ -486,6 +486,9 @@ describe('the triage run', () => {
     expect(card(FIXTURE_THREAD.digest)).toMatchObject({ label: 'other', reason: 'A newsletter or notification; nothing needs your attention.' })
     expect(card(FIXTURE_THREAD.newsletter)).toMatchObject({ label: 'other' })
     expect(card(FIXTURE_THREAD.application)).toMatchObject({ label: 'fyi' })
+    expect(card(FIXTURE_THREAD.result)).toMatchObject({ label: 'reply' })
+    expect(card(FIXTURE_THREAD.receipt)).toMatchObject({ label: 'fyi' })
+    expect(card(FIXTURE_THREAD.signUp)).toMatchObject({ label: 'fyi' })
     expect(card(FIXTURE_THREAD.family)).toEqual(expect.objectContaining({ label: 'fyi' }))
     expect(card(FIXTURE_THREAD.family)?.reason).toBeUndefined()
     expect(module.cache!.label(FIXTURE_THREAD.family)?.by).toBe('user')
@@ -511,7 +514,7 @@ describe('the triage run', () => {
     await socket('a').send({ type: 'mail_triage_run' })
     expect(recorder.inputs).toHaveLength(3)
     expect(list).toHaveBeenCalledTimes(1)
-    expect(lastState().cards).toHaveLength(67)
+    expect(lastState().cards).toHaveLength(70)
     expect(lastState().cards.every((entry) => entry.label !== undefined)).toBe(true)
     expect(lastState().triage.error).toBeUndefined()
     // A fresh capability per batch: a turn's capability is unmounted before the next turn starts.

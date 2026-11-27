@@ -15,6 +15,10 @@ export function mailCardsInTab(cards: readonly MailCard[], tab: MailTab): MailCa
   return cards.filter((card) => card.label === tab)
 }
 
+/** How many cards each tab holds, for the counts beside the tab labels. */
+export const mailTabCounts = (cards: readonly MailCard[]): Record<MailTab, number> =>
+  Object.fromEntries(MAIL_TAB_LABELS.map((tab) => [tab, mailCardsInTab(cards, tab).length])) as Record<MailTab, number>
+
 /** A query of only spaces is no search, so the tabs stay. */
 export const mailSearching = (query: string): boolean => query.trim() !== ''
 
