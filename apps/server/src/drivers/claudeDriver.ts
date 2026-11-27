@@ -608,6 +608,8 @@ export class StreamParser {
   onBackgroundAck: ((toolCallId: string) => void) | undefined
   /** Streaming input reports each user message it takes as queued, started, completed or cancelled. */
   onCommand: ((uuid: string, state: string) => void) | undefined
+  /** A foreground Bash command or helper the persona itself started began running, by its call. */
+  onForegroundTask: ((toolCallId: string) => void) | undefined
   /** A background task the persona started ended, with the row it settles. */
   onBackgroundEnded: ((item: { toolCallId: string; title: string; state: 'done' | 'failed' | 'stopped' }) => void) | undefined
   /**
@@ -659,6 +661,13 @@ export class StreamParser {
    * agent running again; a plain result means it only messaged one.
    */
   private readonly heldMessages = new Map<string, Extract<RuntimeEvent, { type: 'tool_use' }>>()
+  /**
+   * Foreground tasks the persona started, by task id: the call blocks until the task
+   * ends, unless the CLI moves it to the background, which a steer asks for.
+   */
+  private readonly foregroundTasks = new Map<string, { toolCallId: string; title: string; agent: boolean }>()
+  /** Top-level calls still waiting for their result, so a moved task's row can be marked background. */
+  private readonly openCalls = new Map<string, Extract<RuntimeEvent, { type: 'tool_use' }>>()
   /** Each background task this turn started, by task id, with the call its row lives under. */
   private readonly taskRows = new Map<string, string>()
   /**
@@ -707,6 +716,29 @@ export class StreamParser {
     let agents = 0
     for (const task of this.backgroundTasks.values()) if (task.kind === 'agent') agents += 1
     return { agents, commands: this.backgroundTasks.size - agents }
+  }
+
+  /** A foreground Bash command or helper is running, so a steer waits for it unless it moves. */
+  runsForegroundTask(): boolean {
+    return this.foregroundTasks.size > 0
+  }
+
+  /**
+   * The CLI moved a foreground task to the background (a steer asked for it). From here
+   * it is background work like any `run_in_background` launch: the call's result is a
+   * receipt, the row stays open and settles from the task's notification, and the turn
+   * waits for it. The row goes out again marked background, as the client promotes it.
+   */
+  private foregroundMoved(taskId: string): RuntimeEvent[] {
+    const task = this.foregroundTasks.get(taskId)
+    if (task === undefined) return []
+    this.foregroundTasks.delete(taskId)
+    this.backgroundTasks.set(taskId, { title: task.title, kind: task.agent ? 'agent' : 'command' })
+    this.backgroundCalls.add(task.toolCallId)
+    this.turnRows.add(task.toolCallId)
+    this.taskRows.set(taskId, task.toolCallId)
+    const launch = this.openCalls.get(task.toolCallId)
+    return launch === undefined ? [] : [{ ...launch, background: true }]
   }
 
   /**
@@ -902,8 +934,9 @@ export class StreamParser {
       case 'system': {
         const subtype = asString(parsed['subtype'])
         const taskId = asString(parsed['task_id'])
-        if (subtype === 'task_started' && taskId !== undefined && parsed['is_backgrounded'] === true
-          && parsed['owned_by_subagent'] !== true && (asNumber(parsed['spawn_depth']) ?? 1) <= 1) {
+        /** The persona's own task, not one a helper started for itself. */
+        const ownTask = taskId !== undefined && parsed['owned_by_subagent'] !== true && (asNumber(parsed['spawn_depth']) ?? 1) <= 1
+        if (subtype === 'task_started' && ownTask && parsed['is_backgrounded'] === true) {
           const launch = asString(parsed['tool_use_id'])
           const described = launch === undefined ? undefined : this.launchDescriptions.get(launch)
           if (launch !== undefined) this.launchDescriptions.delete(launch)
@@ -915,14 +948,26 @@ export class StreamParser {
           this.taskStatus.delete(taskId)
           if (this.followsBackground) return this.backgroundStarted(parsed, taskId, title, agent)
         }
+        if (this.followsBackground && subtype === 'task_started' && ownTask && parsed['is_backgrounded'] === false) {
+          const toolCallId = asString(parsed['tool_use_id'])
+          if (toolCallId !== undefined) {
+            const agent = asString(parsed['task_type']) === 'local_agent'
+            this.foregroundTasks.set(taskId, { toolCallId, title: asString(parsed['description']) ?? taskId, agent })
+            this.onForegroundTask?.(toolCallId)
+          }
+          return []
+        }
         if (subtype === 'task_notification' && taskId !== undefined) {
+          this.foregroundTasks.delete(taskId)
           if (this.backgroundTasks.has(taskId)) this.unansweredNotification = true
           return this.backgroundEnded(taskId, asString(parsed['tool_use_id']), asString(parsed['status']), asString(parsed['summary']))
         }
-        if (subtype === 'task_updated' && taskId !== undefined && this.backgroundTasks.has(taskId)) {
-          const status = isRecord(parsed['patch']) ? asString(parsed['patch']['status']) : undefined
-          if (status !== undefined) this.taskStatus.set(taskId, status)
-          return []
+        if (subtype === 'task_updated' && taskId !== undefined) {
+          const patch = isRecord(parsed['patch']) ? parsed['patch'] : {}
+          const moved = patch['is_backgrounded'] === true ? this.foregroundMoved(taskId) : []
+          const status = asString(patch['status'])
+          if (status !== undefined && this.backgroundTasks.has(taskId)) this.taskStatus.set(taskId, status)
+          return moved
         }
         // The roster as the CLI sees it. A task it no longer lists has ended; its
         // notification normally follows, and `reconcileVanished` covers one that does not.
@@ -1096,6 +1141,11 @@ export class StreamParser {
             ...(background ? { background: true } : {}),
           })
         }
+        if (this.followsBackground) {
+          for (const event of events) {
+            if (event.type === 'tool_use' && event.toolCallId !== undefined && event.background !== true) this.openCalls.set(event.toolCallId, event)
+          }
+        }
         return events
       }
       case 'user': {
@@ -1107,6 +1157,8 @@ export class StreamParser {
           const reported = asString(block['tool_use_id'])
           if (reported === undefined) continue
           const toolCallId = this.rowOf(reported)
+          this.openCalls.delete(toolCallId)
+          for (const [taskId, task] of this.foregroundTasks) if (task.toolCallId === toolCallId) this.foregroundTasks.delete(taskId)
           if (this.todoToolCalls.delete(toolCallId) || this.hiddenToolCalls.delete(toolCallId)) continue
           // The receipt of a background launch, not its outcome: the row waits for the task.
           // A launch the CLI refused started nothing, so its error settles the row now.
@@ -1722,6 +1774,23 @@ export function createClaudeDriver(options: ClaudeDriverOptions): Driver {
         backgroundCap.unref?.()
       }
 
+      /**
+       * The CLI reads a steer only at its next model request, so a running foreground
+       * Bash command or helper would hold it until it ends, often minutes. Moving that
+       * work to the background (the CLI's Ctrl+B) lets the steer in now; the work goes
+       * on and reports like any background launch. Best effort: a refusal or a timeout
+       * only means the steer waits for the work, as it did before.
+       */
+      const moveToBackground = (toolCallId?: string) => {
+        if (proc === undefined || settled || stopped) return
+        void control(proc, { subtype: 'background_tasks', ...(toolCallId === undefined ? {} : { tool_use_id: toolCallId }) })
+      }
+      // Work that starts before the CLI read a steer would hold it the same way.
+      // Work started after the steer was read is the answer to it and stays in front.
+      parser.onForegroundTask = (toolCallId) => {
+        if (queuedSteers.size > 0) moveToBackground(toolCallId)
+      }
+
       // `next` waits for a tool boundary in the running run. Without one the CLI ends
       // that run first and answers the addition in another; both stay this turn.
       // Queued is receipt, not consumption: a queued addition can still be cancelled or
@@ -1756,7 +1825,8 @@ export function createClaudeDriver(options: ClaudeDriverOptions): Driver {
         const parsedEvents = parser.handle(line)
         if (parser.sessionId !== undefined) input.onStage?.('threadReady')
         for (const event of parsedEvents) {
-          if (parkedAway) break
+          // After Stop the turn shows nothing more: the rows it closed stay stopped while the process goes down.
+          if (parkedAway || stopped) break
           toolIdle.see(event)
           const located = event.type === 'tool_use' && event.command === undefined && event.edits !== undefined
             ? { ...event, edits: withEditOrigins(event.edits, input.cwd, input.repoPaths) } : event
@@ -1954,7 +2024,9 @@ export function createClaudeDriver(options: ClaudeDriverOptions): Driver {
             } catch {
               queuedSteers.delete(uuid)
               settle('uncertain')
+              return
             }
+            if (parser.runsForegroundTask()) moveToBackground()
           })
         },
         stop() {

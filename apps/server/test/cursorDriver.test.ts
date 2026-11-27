@@ -765,7 +765,7 @@ describe('createCursorDriver', () => {
   })
 
   it('settles a result when the CLI leaves its process open', async () => {
-    const child = Object.assign(new FakeChild(), { pid: 99992 })
+    const child = Object.assign(new FakeChild(), { pid: 4_194_312 })
     let spawned: () => void = () => undefined
     const ready = new Promise<void>((resolve) => { spawned = resolve })
     const driver = createCursorDriver({

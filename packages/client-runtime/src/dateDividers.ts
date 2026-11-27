@@ -36,6 +36,11 @@ const standsInDm = (segment: TurnStanding): boolean =>
     : segment.kind === 'todo' ? segment.todos.length > 0
       : true
 
+/** A message the user sent, as their bubble; a pending one is that bubble on its way. */
+const isUserBubble = (row: Row | undefined): boolean =>
+  row?.kind === 'pending' ||
+  (row?.kind === 'event' && row.event.type === 'user_message' && row.event.source === undefined && row.confirmTasks === undefined && !isModelOnlyMessage(row.event))
+
 /**
  * When a row that reads as a message, a bubble from the user or an agent, was written;
  * undefined for every other row. Relay lines, system lines, routine and wake lines and a
@@ -52,10 +57,7 @@ function messageTime(row: Row, mode: DateDividerMode, now: number): number | und
     return shows ? row.startedAt : undefined
   }
   if (row.kind !== 'event' || row.event.type !== 'user_message') return undefined
-  const event = row.event
-  const bubble = event.source === 'agent_relay'
-    || (event.source === undefined && row.confirmTasks === undefined && !isModelOnlyMessage(event))
-  return bubble ? event.ts : undefined
+  return row.event.source === 'agent_relay' || isUserBubble(row) ? row.event.ts : undefined
 }
 
 /**
@@ -88,3 +90,17 @@ export function dateDividers(rows: readonly Row[], mode: DateDividerMode, now = 
 }
 
 const isIncomingRelay = (row: Row): boolean => row.kind === 'event' && row.event.type === 'agent_relay' && row.event.phase === 'received'
+
+/**
+ * Whether a row sits at the bubble gap under the row above instead of the feed gap: the
+ * same speaker again with no time line between, the user anywhere and an agent in a DM.
+ * A DM reply that ends on a reaction keeps the feed gap, because its badge hangs into it.
+ */
+export function joinsBubbleAbove(row: Row, previous: Row | undefined, dateLabel: string | undefined, dm: boolean): boolean {
+  if (dateLabel !== undefined || previous === undefined) return false
+  if (isUserBubble(row)) return isUserBubble(previous)
+  if (!dm || row.kind !== 'turn' || previous.kind !== 'turn' || row.agentId !== previous.agentId) return false
+  const closing = previous.tail.filter(standsInDm).at(-1)
+  return messageTime(row, 'gaps', 0) !== undefined && messageTime(previous, 'gaps', 0) !== undefined
+    && !(closing?.kind === 'reply' && closing.reaction !== undefined)
+}

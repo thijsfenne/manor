@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { dateDividers } from './dateDividers'
+import { dateDividers, joinsBubbleAbove } from './dateDividers'
 import type { Row, TurnRow } from './transcriptState'
 
 const at = (day: number, hour: number, minute: number) => new Date(2026, 10, day, hour, minute).getTime()
@@ -64,3 +64,27 @@ describe('date dividers', () => {
     expect(dateDividers([user('u1', at(16, 23, 50)), cut], 'days', now)).toEqual(['Mon, 16 Nov 2026', 'Tue, 17 Nov 2026'])
   })
 })
+
+describe('bubbles that join the one above', () => {
+  const t = at(17, 11, 0)
+
+  it('joins the same speaker again: the user anywhere, an agent in a DM', () => {
+    expect(joinsBubbleAbove(user('u2', t), user('u1', t), undefined, false)).toBe(true)
+    expect(joinsBubbleAbove(reply('t2', t), reply('t1', t), undefined, true)).toBe(true)
+    expect(joinsBubbleAbove(reply('t2', t), reply('t1', t), undefined, false)).toBe(false)
+  })
+
+  it('keeps the gap for a time line, another speaker, or a reaction badge hanging into it', () => {
+    expect(joinsBubbleAbove(reply('t2', t), reply('t1', t), 'Today 11:00', true)).toBe(false)
+    expect(joinsBubbleAbove(reply('t1', t), user('u1', t), undefined, true)).toBe(false)
+    expect(joinsBubbleAbove(user('u1', t), reply('t1', t), undefined, true)).toBe(false)
+    expect(joinsBubbleAbove(reply('t2', t, { agentId: 'sage' }), reply('t1', t), undefined, true)).toBe(false)
+    const reacted = reply('t1', t, { tail: [{ kind: 'reply', key: 't1:r', text: 'Hi', images: [], quoteSources: [], reaction: { emoji: '👍', at: t } }] })
+    expect(joinsBubbleAbove(reply('t2', t), reacted, undefined, true)).toBe(false)
+  })
+
+  it('does not join a turn that shows nothing whole yet', () => {
+    expect(joinsBubbleAbove(reply('t2', t, { tail: [] }), reply('t1', t), undefined, true)).toBe(false)
+  })
+})
+

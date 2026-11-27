@@ -1097,7 +1097,7 @@ describe('createClaudeDriver', () => {
   })
 
   it('kills the process and ends the stream on stop()', async () => {
-    const child = Object.assign(new FakeChild(), { pid: 99990 })
+    const child = Object.assign(new FakeChild(), { pid: 4_194_310 })
     const driver = createClaudeDriver({ agents: () => [sage], spawnFn: () => child, timeoutMs: 5_000 })
     const handle = driver.startTurn(turnInput(sage))
     const collected = drain(handle.events)
@@ -1675,6 +1675,110 @@ describe('steering', () => {
     handle.stop()
     const seen = await events
     expect(seen.filter((event) => event.type === 'result')).toEqual([])
+  })
+
+  describe('foreground work during a steer', () => {
+    const system = (subtype: string, fields: Record<string, unknown>) => line({ type: 'system', subtype, session_id: 'session-1', ...fields })
+    const said = (id: string, text: string) => line({ type: 'assistant', message: { id, content: [{ type: 'text', text }] } })
+    /** Claude calls Bash, or a helper, in the foreground and the CLI starts its task. */
+    const runTool = (child: FakeChild, callId: string, taskId: string, tool: 'Bash' | 'Agent' = 'Bash') => {
+      const input = tool === 'Bash'
+        ? { command: 'python3 wait.py', description: 'Wait a minute' }
+        : { description: 'Wait a minute', prompt: 'Run python3 wait.py', subagent_type: 'general-purpose' }
+      child.stdout.write(line({ type: 'assistant', message: { id: `msg_${callId}`, content: [{ type: 'tool_use', id: callId, name: tool, input }] } }))
+      child.stdout.write(system('task_started', { task_id: taskId, tool_use_id: callId, description: 'Wait a minute', is_backgrounded: false,
+        spawn_depth: 1, task_type: tool === 'Bash' ? 'local_bash' : 'local_agent' }))
+    }
+    /** What the CLI answers a move with: the task goes to the background and the call returns a receipt. */
+    const moved = (child: FakeChild, callId: string, taskId: string) => {
+      child.stdout.write(system('task_updated', { task_id: taskId, patch: { is_backgrounded: true } }))
+      child.stdout.write(line({ type: 'user', message: { role: 'user', content: [
+        { type: 'tool_result', tool_use_id: callId, content: `Command was manually backgrounded by user with ID: ${taskId}.` },
+      ] } }))
+    }
+    const controls = (sent: () => unknown[]) => sent()
+      .filter((message): message is { request_id: string; request: Record<string, unknown> } => (message as { type?: string }).type === 'control_request')
+
+    it.each(['Bash', 'Agent'] as const)('moves a running %s call to the background so the steer is read now, and still reports its end', async (tool) => {
+      const { child, handle, events, sent, boot, inputEnded } = start()
+      await boot()
+      runTool(child, 'toolu_1', 'b1', tool)
+      await tick()
+      expect(controls(sent)).toEqual([])
+
+      const delivery = handle.steer?.(addition('Reply with only PINEAPPLE'))
+      await tick()
+      const steer = sent().find((message) => message.priority === 'next')
+      const [move] = controls(sent)
+      expect(move?.request).toEqual({ subtype: 'background_tasks' })
+      child.stdout.write(line({ type: 'control_response', response: { subtype: 'success', request_id: move?.request_id, response: {} } }))
+
+      child.stdout.write(lifecycle(steer?.uuid, 'queued'))
+      moved(child, 'toolu_1', 'b1')
+      child.stdout.write(lifecycle(steer?.uuid, 'started'))
+      expect(await delivery).toBe('accepted')
+      child.stdout.write(said('msg_2', 'PINEAPPLE'))
+      child.stdout.write(result('PINEAPPLE', { input_tokens: 10, output_tokens: 2 }, 0.01))
+      await tick()
+      // The command still runs, so the answer to the steer is not the turn's end.
+      expect(inputEnded()).toBe(false)
+
+      child.stdout.write(system('task_notification', { task_id: 'b1', tool_use_id: 'toolu_1', status: 'completed', summary: 'It printed done.' }))
+      child.stdout.write(system('init', {}))
+      child.stdout.write(system('status', { status: 'requesting' }))
+      child.stdout.write(said('msg_3', 'It printed done.'))
+      child.stdout.write(line({ type: 'result', subtype: 'success', is_error: false, result: 'It printed done.', session_id: 'session-1',
+        origin: { kind: 'task-notification' }, usage: { input_tokens: 20, output_tokens: 4 }, total_cost_usd: 0.02 }))
+      await tick()
+      expect(inputEnded()).toBe(true)
+      child.stdout.end()
+      child.emit('close', 0)
+
+      const seen = await events
+      expect(seen.filter((event) => event.type === 'tool_use' && event.toolCallId === 'toolu_1').map((event) => event.type === 'tool_use' && event.background))
+        .toEqual([undefined, true])
+      expect(seen.filter((event) => event.type === 'tool_result' && event.toolCallId === 'toolu_1'))
+        .toEqual([expect.objectContaining({ outcome: 'success', ...(tool === 'Agent' ? { output: 'It printed done.' } : {}) })])
+      expect(seen.filter((event) => event.type === 'message').map((event) => event.text)).toEqual(['PINEAPPLE', 'It printed done.'])
+      expect(seen.filter((event) => event.type === 'result')).toEqual([expect.objectContaining({ text: 'It printed done.' })])
+    })
+
+    it('leaves a steer alone when nothing runs, and moves only work started before the steer was read', async () => {
+      const { child, handle, sent, boot } = start()
+      onTestFinished(() => { handle.stop() })
+      await boot()
+      void handle.steer?.(addition('Use the staging database'))
+      await tick()
+      expect(controls(sent)).toEqual([])
+
+      const steer = sent().find((message) => message.priority === 'next')
+      child.stdout.write(lifecycle(steer?.uuid, 'queued'))
+      runTool(child, 'toolu_2', 'b2')
+      await tick()
+      expect(controls(sent).map((message) => message.request)).toEqual([{ subtype: 'background_tasks', tool_use_id: 'toolu_2' }])
+
+      child.stdout.write(lifecycle(steer?.uuid, 'started'))
+      runTool(child, 'toolu_3', 'b3')
+      await tick()
+      expect(controls(sent)).toHaveLength(1)
+    })
+
+    it('keeps a moved row stopped when Stop lands before the CLI returns its receipt', async () => {
+      const { child, handle, events, boot } = start()
+      await boot()
+      runTool(child, 'toolu_4', 'b4')
+      void handle.steer?.(addition('Never mind'))
+      child.stdout.write(system('task_updated', { task_id: 'b4', patch: { is_backgrounded: true } }))
+      await tick()
+      handle.stop()
+      moved(child, 'toolu_4', 'b4')
+      await tick()
+      child.stdout.end()
+      child.emit('close', null)
+      const seen = await events
+      expect(seen.filter((event) => event.type === 'tool_result' && event.toolCallId === 'toolu_4'))
+        .toEqual([expect.objectContaining({ outcome: 'stopped' })])
+    })
   })
 
   it('does not end the turn on a background-task wake the resumed CLI replays first', async () => {

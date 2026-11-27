@@ -157,7 +157,7 @@ export function WakeNotices({ items, ts }: { items: readonly WakeItem[]; ts: num
 }
 
 /** A wake's quiet rows, one line each, so a long name never pushes the next one out of sight. */
-export function WakeText({ items }: { items: readonly WakeItem[] }) {
+function WakeText({ items }: { items: readonly WakeItem[] }) {
   return (
     <View>
       {wakeLines(items).map((line, index) => <Text key={index} style={styles.wake} numberOfLines={1}>{line}</Text>)}

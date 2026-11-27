@@ -14,7 +14,8 @@ import { cliTreeGone, isSignallableGroupPid, stopAllCliChildren, terminateCliTre
 describe('CLI shutdown', () => {
   it('stops a child outside an active chat turn and refuses late starts', async () => {
     class FakeChild extends EventEmitter {
-      readonly pid = 99990
+      // Above any pid the OS hands out (macOS 99999, Linux 4194304), so no real group is signalled.
+      readonly pid = 4_194_310
       readonly signals: NodeJS.Signals[] = []
       kill(signal: NodeJS.Signals = 'SIGTERM'): boolean {
         this.signals.push(signal)

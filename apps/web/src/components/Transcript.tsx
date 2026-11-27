@@ -1,5 +1,5 @@
 import { createContext, Fragment, memo, useContext, useEffect, useLayoutEffect, useRef, useState, type MutableRefObject, type ReactNode } from 'react'
-import { dateDividers } from '@manor/client-runtime/date-dividers'
+import { dateDividers, joinsBubbleAbove } from '@manor/client-runtime/date-dividers'
 import { splitDeliveredFiles } from '@manor/client-runtime/dm-files'
 import { historyStart, olderHistoryKey } from '@manor/client-runtime/history-window'
 import { quoteFromText } from '@manor/client-runtime/message-quotes'
@@ -52,7 +52,7 @@ import { Icon } from './Icon'
 import { Badge } from './ui/Badge'
 import { ThreadBundle } from './ThreadBundle'
 import { AnswerChange, OTHER_ANSWER } from './bundleTile'
-import { AgentBubble, ClampedMessage, FileWriteFootnote, KickoffAttachments, ProjectFileWriteCard, RoutineLine, SystemLine, TurnHeader, UserBubble, WakeLine } from './Bubbles'
+import { AgentBubble, ClampedMessage, FileWriteFootnote, KickoffAttachments, ProjectFileWriteCard, RoutineLine, SystemLine, TurnHeader, UserBubble } from './Bubbles'
 import { SelectionQuoteBar } from './SelectionQuoteBar'
 import { QUIET_CHROME, TurnStatus } from './TurnStatus'
 import { DmWorkingIndicator } from './DmWorkingIndicator'
@@ -104,9 +104,11 @@ const BOTTOM_SLACK_PX = 48
 const JUMP_DURATION_MS = 200
 /** How long a message found from the palette stays marked; matches `search-hit` in styles.css. */
 const SEARCH_HIT_MS = 1500
-const isUserBubbleRow = (row: Row | undefined): boolean =>
-  row?.kind === 'pending' ||
-  (row?.kind === 'event' && row.event.type === 'user_message' && row.event.source === undefined && row.confirmTasks === undefined && !isModelOnlyMessage(row.event))
+/** A message only the model reads, with nothing Manor says under it: its row would draw nothing. */
+const isUnseenUserRow = (row: Extract<Row, { kind: 'event' }>): boolean =>
+  row.event.type === 'user_message' && row.event.source === undefined && row.confirmTasks === undefined &&
+  isModelOnlyMessage(row.event) && (row.hints?.length ?? 0) === 0
+  && (row.forwards?.length ?? 0) === 0 && row.event.forwardedFrom === undefined
 
 /** Consultation markers annotate the conversation, so they sit close to what they annotate. */
 const isRelayRow = (row: Row | undefined): boolean => row?.kind === 'event' && row.event.type === 'agent_relay'
@@ -350,8 +352,10 @@ export function Transcript({
   const memoryMarks = bubbleReplies ? dmMemoryMarks(rows) : undefined
   const exchanges = bubbleReplies && onOpenAgentRelay !== undefined ? relayExchanges(rows) : NO_EXCHANGES
   const consultationMarkers = bubbleReplies && onOpenAgentRelay !== undefined ? stackedConsultationMarkers(rows, exchanges) : NO_CONSULTATION_MARKERS
+  // A DM's answer after background work speaks for itself, so the wake that prompted it gets
+  // no row. Nor do words to the model alone, so the bubbles around them still join.
   const visibleRows = rows.filter((row) => row.kind === 'event'
-    ? consultationMarkers.get(row.event.id)?.length !== 0 && exchanges.get(row.event.id) !== null
+    ? consultationMarkers.get(row.event.id)?.length !== 0 && exchanges.get(row.event.id) !== null && !isUnseenUserRow(row) && !(bubbleReplies && row.event.type === 'user_message' && row.event.source === 'background_wake')
     : !(bubbleReplies && row.kind === 'turn' && (onlyConsulted(row) || endedQuietly(row))))
   // The project thread's open bundles; the user's next message folds them all again.
   const [openBundles, setOpenBundles] = useState(NO_OPEN_THREAD_BUNDLES)
@@ -374,6 +378,8 @@ export function Transcript({
   const start = historyStart(visibleRows, firstKey)
   const pageRows = visibleRows.slice(start)
   const dateLabels = dateDividers(pageRows, bubbleReplies ? 'gaps' : showDates ? 'days' : 'off')
+  // The same speaker again stands at the bubble gap, as one reply's beats do.
+  const joined = pageRows.map((row, index) => joinsBubbleAbove(row, pageRows[index - 1], dateLabels[index], bubbleReplies))
   const working = bubbleReplies ? dmWorking(rows, runningChatIds) : undefined
   const workingPersona = working === undefined
     ? undefined
@@ -732,7 +738,7 @@ export function Transcript({
   }
 
   /** One row as it stands in the feed; a bundle draws its items through the same function. */
-  const renderRow = (row: Row): ReactNode => {
+  const renderRow = (row: Row, joinedBelow = false): ReactNode => {
     const consultationMarker = row.kind === 'event' ? consultationMarkers.get(row.event.id) : undefined
     const exchange = row.kind === 'event' ? exchanges.get(row.event.id) : undefined
     return row.kind === 'event' && row.event.type === 'agent_relay' && exchange != null ? (
@@ -821,6 +827,7 @@ export function Transcript({
         connected={connected}
         waitingOnAgentId={waitingOnByTurn.get(row.turnId)}
         bubbleReplies={bubbleReplies}
+        joinedBelow={joinedBelow}
         {...(openTrace?.key === row.key ? { openTrace: openTrace.id } : {})}
         {...(draftActions === undefined ? {} : { draftActions })}
         {...(memoryMarks === undefined ? {} : { memoryChanges: memoryMarks.get(row.key) })}
@@ -884,7 +891,6 @@ export function Transcript({
             </div>
           ) : (
             pageRows.map((row, pageIndex) => {
-              const compactUser = dateLabels[pageIndex] === undefined && isUserBubbleRow(row) && isUserBubbleRow(pageRows[pageIndex - 1])
               const spacing = dateLabels[pageIndex] === undefined
                 ? relaySpacing(row, pageRows[pageIndex - 1], variant === 'panel') + (threadProject === undefined ? '' : threadRhythm(row, pageRows[pageIndex - 1], variant === 'panel'))
                 : ''
@@ -892,8 +898,8 @@ export function Transcript({
                 <Fragment key={row.key}>
                   {dateLabels[pageIndex] === undefined ? null : <DateSeparator label={dateLabels[pageIndex]} />}
                   {/* `empty:hidden` drops a row with nothing to draw out of the column's gap. */}
-                  <div data-transcript-row={row.key} className={`flex min-w-0 flex-col empty:hidden${compactUser ? variant === 'panel' ? ' -mt-[18px]' : ' -mt-[26px]' : spacing}`}>
-                    {renderRow(row)}
+                  <div data-transcript-row={row.key} className={`flex min-w-0 flex-col empty:hidden${joined[pageIndex] === true ? variant === 'panel' ? ' -mt-[18px]' : ' -mt-[26px]' : spacing}`}>
+                    {renderRow(row, joined[pageIndex + 1] === true)}
                   </div>
                 </Fragment>
               )
@@ -1078,8 +1084,7 @@ const EventRow = memo(function EventRow({
       const message = event.source === 'routine' ? (
         <RoutineLine name={event.routineName} ts={event.ts} prompt={event.text} {...(event.routineDueAt === undefined ? {} : { dueAt: event.routineDueAt })} />
       ) : event.source === 'background_wake' ? (
-        // A DM keeps the compact line; helper cards are Session work.
-        dm ? <WakeLine items={event.wakeItems ?? []} /> : <WakeNotices items={event.wakeItems ?? []} ts={event.ts} />
+        <WakeNotices items={event.wakeItems ?? []} ts={event.ts} />
       ) : brief !== '' ? (
         <KickoffCard text={brief} agents={agents} images={event.images ?? []} files={event.files ?? []} />
       ) : event.source === 'project_thread' ? (
@@ -1233,6 +1238,8 @@ interface TurnRowProps {
   /** In a DM: the memory writes this turn's last reply bubble shows, its own or carried to it. */
   memoryChanges?: TurnRowState['memoryChanges']
   pinPlan?: boolean
+  /** In a DM: the next turn's bubbles stand right under this one's, in the gap its Worked for line would hang in. */
+  joinedBelow?: boolean
 }
 
 /**
@@ -1245,7 +1252,7 @@ const HUNG_BELOW = '[@media(hover:hover)]:absolute [@media(hover:hover)]:inset-x
 
 const TurnRow = memo(function TurnRow({
   turn, agents, showSpeaker, repoFiles, onOpenFile, onOpenSubagents, onOpenChat, renderUser, onReply, onReact, connected = true, draftActions, waitingOnAgentId,
-  bubbleReplies, memoryChanges: dmMemory, threadProject, openTrace, pinPlan = false,
+  bubbleReplies, memoryChanges: dmMemory, threadProject, openTrace, pinPlan = false, joinedBelow = false,
 }: TurnRowProps) {
   const persona = personaOf(agents, turn.agentId)
   // Deltas still arriving have no durable event yet, so they are not a segment;
@@ -1307,15 +1314,16 @@ const TurnRow = memo(function TurnRow({
     && turn.notesUpdate === undefined && turn.instructionsOffer === undefined && (note === undefined || isCompactNote(note))
   const changed = running ? NO_CHANGED_FILES : turnChangedFiles(turn, repoFiles)
   const answerText = answerTextOf(turn.answer)
+  const toggleOpen = () => {
+    const from = activityRoot.current?.offsetHeight ?? 0
+    setFoldToggle((last) => ({ id: (last?.id ?? 0) + 1, from, opens: !open }))
+    setOpen(!open)
+  }
   const status = (
     <TurnStatus
       turn={traced}
       open={open}
-      onToggle={() => {
-        const from = activityRoot.current?.offsetHeight ?? 0
-        setFoldToggle((last) => ({ id: (last?.id ?? 0) + 1, from, opens: !open }))
-        setOpen(!open)
-      }}
+      onToggle={toggleOpen}
       standalone={!showSpeaker || bubbleReplies || threadProject !== undefined}
       dm={bubbleReplies}
       thread={threadProject !== undefined}
@@ -1331,14 +1339,18 @@ const TurnRow = memo(function TurnRow({
     && turn.sessionLinks === undefined && turn.fileWrites === undefined
   if (dmBare && !running && (turn.note?.kind === 'error' || turn.note?.kind === 'aborted')) return null
   if (dmBare && running && !turn.segments.some(dmLiveCard)) return null
+  const lastReply = [...standing].reverse().find((segment) => segment.kind === 'reply')
+  // Under a joined reply there is no gap to hang the Worked for line in, so the reply's menu
+  // opens the steps instead. A turn with no reply bubble keeps the line, in flow.
+  const stepsInMenu = joinedBelow && !open && lastReply !== undefined
   // The status line rests itself once the turn is over: see `TurnStatus`.
   const header = bubbleReplies ? (
     // A finished DM turn has no face: the face lives only in the working indicator at
     // the foot of the chat. Its Worked for line waits for hover, hung in the gap under
     // the bubbles, and opens the trace above them. Nothing while it runs. Clicks pass
     // through it to a relay line pulled up beneath; the status button takes its own.
-    running || !hasStatus(traced) ? null : (
-      <div className={`pointer-events-none flex min-h-6 items-center${open ? '' : ` ${HUNG_BELOW}`}${endsOnBadge ? ' pl-10' : ''}`}>{status}</div>
+    running || !hasStatus(traced) || stepsInMenu ? null : (
+      <div className={`pointer-events-none flex min-h-6 items-center${open || joinedBelow ? '' : ` ${HUNG_BELOW}`}${endsOnBadge ? ' pl-10' : ''}`}>{status}</div>
     )
   ) : showSpeaker && threadProject === undefined ? (
     <TurnHeader
@@ -1358,7 +1370,6 @@ const TurnRow = memo(function TurnRow({
     // project thread holds the slot on every reply, for the actions of the one before.
     <div className="flex min-h-8 items-center">{status}</div>
   ) : null
-  const lastReply = [...standing].reverse().find((segment) => segment.kind === 'reply')
   const memoryChanges = bubbleReplies ? dmMemory : turn.memoryChanges
   // A finished DM turn that left nothing (a relay marker is its own row) keeps no
   // Worked for line either: it would hover over an empty gap between rows.
@@ -1403,6 +1414,7 @@ const TurnRow = memo(function TurnRow({
           trace={turn.memoryTrace}
           // One turn, one memory write: only its last reply beat carries the mark.
           {...(memoryChanges === undefined || segment !== lastReply ? {} : { memoryChanges })}
+          {...(stepsInMenu && showActivity && hasStatus(traced) && hasFold(traced) && segment === lastReply ? { onShowSteps: toggleOpen } : {})}
           {...(onReply === undefined ? {} : {
             onReply: (text: string) => onReply({ turnId: turn.turnId, agentId: turn.agentId, text }),
           })}
@@ -1647,6 +1659,7 @@ function StandingSegment({
   memoryChanges,
   onReply,
   onReact,
+  onShowSteps,
   renderUser,
 }: {
   segment: TurnStanding
@@ -1661,6 +1674,7 @@ function StandingSegment({
   memoryChanges?: TurnRowState['memoryChanges']
   onReply?: (text: string) => void
   onReact?: (eventId: string, emoji: string | null) => void
+  onShowSteps?: () => void
   renderUser?: (row: Extract<Row, { kind: 'event' }>) => ReactNode
 }) {
   if (segment.kind === 'user') return renderUser?.(segment.row) ?? null
@@ -1691,6 +1705,7 @@ function StandingSegment({
           {...(onReply === undefined ? {} : { onReply: () => onReply(segment.text) })}
           {...(reaction === undefined ? {} : { reaction })}
           {...(react === undefined ? {} : { onReact: react })}
+          {...(onShowSteps === undefined ? {} : { onShowSteps })}
         />
       </div>
     )

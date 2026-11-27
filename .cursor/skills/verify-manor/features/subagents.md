@@ -1,6 +1,6 @@
 # Subagents
 
-A persona can start helpers on other models. Each one shows as a full-width card in a Session's turn (round provider face with a status dot, brief over its live step or answer, status, time, chevron; model and effort on hover), as a one-line row under its parent in the Sessions and Agents sidebars while it runs (provider mark, title, spinner, on a dotted rail), and in its own view on the stage. A DM shows no card outside its open trace, and its wake keeps the compact `Background task finished: x` line; the sidebar and `Agents` reach its helpers. A child of a child nests one step further in.
+A persona can start helpers on other models. Each one shows as a full-width card in a Session's turn (round provider face with a status dot, brief over its live step or answer, status, time, chevron; model and effort on hover), as a one-line row under its parent in the Sessions and Agents sidebars while it runs (provider mark, title, spinner, on a dotted rail), and in its own view on the stage. A DM shows no card outside its open trace, and its wake draws no row, so the agent's answer follows without a grey line or gap; the sidebar and `Agents` reach its helpers. A child of a child nests one step further in.
 
 ## Sub-features
 

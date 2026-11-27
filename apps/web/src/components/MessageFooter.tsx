@@ -1,4 +1,4 @@
-import { Brain02Icon, Copy01Icon, MoreHorizontalIcon, NoteEditIcon, ReplyIcon, Tick02Icon } from '@hugeicons/core-free-icons'
+import { Brain02Icon, Copy01Icon, MoreHorizontalIcon, NoteEditIcon, ReplyIcon, TaskDone01Icon, Tick02Icon } from '@hugeicons/core-free-icons'
 import { Fragment, useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from 'react'
 import { createPortal } from 'react-dom'
 import { motion } from 'motion/react'
@@ -169,13 +169,14 @@ function useCopied(text: string): [boolean, () => Promise<void>] {
 }
 
 /** The rows of a DM bubble's three-dots menu, in order. */
-export const bubbleMenu = (text: string, trace: MemoryTrace | undefined, changes: MemoryChange[] | undefined) => [
+export const bubbleMenu = (text: string, trace: MemoryTrace | undefined, changes: MemoryChange[] | undefined, steps = false) => [
   ...(text.length > 0 ? [{ key: 'copy' as const, label: 'Copy' }] : []),
+  ...(steps ? [{ key: 'steps' as const, label: 'Show steps' }] : []),
   ...(trace === undefined ? [] : [{ key: 'trace' as const, label: markLabel(trace) }]),
   ...(changes === undefined ? [] : [{ key: 'changes' as const, label: changesLabel(changes) }]),
 ]
 
-export function BubbleActions({ text, trace, memoryChanges, onReply, reaction, onReact }: {
+export function BubbleActions({ text, trace, memoryChanges, onReply, reaction, onReact, onShowSteps }: {
   text: string
   trace?: MemoryTrace
   memoryChanges?: MemoryChange[]
@@ -184,13 +185,15 @@ export function BubbleActions({ text, trace, memoryChanges, onReply, reaction, o
   reaction?: MessageReaction
   /** Absent where the bubble cannot take a reaction, such as one still arriving. */
   onReact?: (emoji: string | null) => void
+  /** Opens the turn's steps where its Worked for line has no room to hang. */
+  onShowSteps?: () => void
 }) {
   const [copied, copy] = useCopied(text)
   const [picking, setPicking] = useState(false)
   const [card, setCard] = useState<'trace' | 'changes' | null>(null)
   const [menu, trigger] = useMenu({ maxHeight: 240, minHeight: 80, minWidth: 220 })
   const changes = hasMemoryChanges(memoryChanges) ? memoryChanges : undefined
-  const entries = bubbleMenu(text, trace, changes)
+  const entries = bubbleMenu(text, trace, changes, onShowSteps !== undefined)
   const standing = picking || menu.open || card !== null || copied
   return (
     <div className={`mb-0.5 flex flex-none items-center gap-0.5 transition-opacity ${standing ? 'opacity-100' : 'opacity-0 group-hover/beat:opacity-100 focus-within:opacity-100'}`}>
@@ -216,9 +219,10 @@ export function BubbleActions({ text, trace, memoryChanges, onReply, reaction, o
             {entries.map((entry) => (
               <MenuItem
                 key={entry.key}
-                icon={entry.key === 'copy' ? Copy01Icon : entry.key === 'trace' ? Brain02Icon : NoteEditIcon}
+                icon={entry.key === 'copy' ? Copy01Icon : entry.key === 'steps' ? TaskDone01Icon : entry.key === 'trace' ? Brain02Icon : NoteEditIcon}
                 onClick={() => {
                   if (entry.key === 'copy') { menu.close(); void copy(); return }
+                  if (entry.key === 'steps') { menu.close(); onShowSteps?.(); return }
                   menu.close(false)
                   setCard(entry.key)
                 }}

@@ -131,18 +131,33 @@ describe('a routine turn in the transcript', () => {
 })
 
 describe('a background wake in the transcript', () => {
+  const wake = event({
+    type: 'user_message', source: 'background_wake', mentions: [],
+    text: 'Background work you started has ended. Sam has not sent anything new.\n- “Anti-slop review” (Sol, taskId task_9) finished.\n[Begin its answer.]\nRAW-ANSWER',
+    wakeItems: [{ toolCallId: 'tc1', taskId: 'task_9', title: 'Anti-slop review', state: 'done', driver: 'codex', model: 'gpt' }],
+  }, 1)
+
   it('shows one quiet finished line and never the prompt Manor sent the persona', () => {
-    const html = render([
-      event({
-        type: 'user_message', source: 'background_wake', mentions: [],
-        text: 'Background work you started has ended. Sam has not sent anything new.\n- “Anti-slop review” (Sol, taskId task_9) finished.\n[Begin its answer.]\nRAW-ANSWER',
-        wakeItems: [{ toolCallId: 'tc1', taskId: 'task_9', title: 'Anti-slop review', state: 'done', driver: 'codex', model: 'gpt' }],
-      }, 1),
-    ])
+    const html = render([wake])
     expect(html).toContain('Background task finished: anti-slop review')
     expect(html).not.toContain('<button')
     expect(html).not.toContain('Background work you started')
     expect(html).not.toContain('RAW-ANSWER')
     expect(html).not.toContain('task_9')
+  })
+
+  it('draws nothing in a DM, where the answer after it speaks for itself', () => {
+    const reply = [
+      event({ type: 'agent_message', turnId: 'turn-2', agentId: 'smith', text: 'The review is back.' }, 2),
+      event({ type: 'turn_result', turnId: 'turn-2', agentId: 'smith' }, 3),
+    ]
+    const rows = rowsOf(thread([wake, ...reply]), 'dm')
+    const html = renderToStaticMarkup(<Transcript rows={rows} agents={[smith]} skills={SKILLS} hasSnapshot bubbleReplies />)
+    const wakeRow = rows.find((row) => row.kind === 'event' && row.event.id === wake.id)
+    expect(html).toContain('The review is back.')
+    expect(html).not.toContain('Background task finished')
+    // No empty slot either: the row is gone, not drawn blank.
+    expect(wakeRow).toBeDefined()
+    expect(html).not.toContain(`data-transcript-row="${wakeRow?.key}"`)
   })
 })

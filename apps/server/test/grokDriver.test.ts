@@ -1142,7 +1142,7 @@ describe('createGrokDriver', () => {
   })
 
   it('does not synthetic-settle an end_turn while ask-user holds this turn', async () => {
-    const child = Object.assign(new FakeChild(), { pid: 99991 })
+    const child = Object.assign(new FakeChild(), { pid: 4_194_311 })
     const gate = new TurnIdleGate()
     let onSpawn: () => void = () => undefined
     const spawned = new Promise<void>((resolve) => {

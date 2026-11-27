@@ -348,6 +348,8 @@ describe('the footer under a turn', () => {
     // A DM bubble moves the mark into its three-dots menu.
     expect(render(events, [], undefined, true)).toContain('More actions')
     expect(bubbleMenu('', undefined, memoryChanges).map((entry) => entry.label)).toEqual(['Memory updated, 1 change'])
+    // A reply the next one joins has no gap for its Worked for line, so its steps open from here.
+    expect(bubbleMenu('Done.', undefined, memoryChanges, true).map((entry) => entry.label)).toEqual(['Copy', 'Show steps', 'Memory updated, 1 change'])
     expect(render(events.slice(0, 1).concat(event({ type: 'turn_result', agentId: 'sage', turnId: 'turn_3' }, START + 2_000))))
       .not.toContain('Memory updated')
     // A DM turn with no reply anywhere has no bubble for the notepad, and no row of its own.

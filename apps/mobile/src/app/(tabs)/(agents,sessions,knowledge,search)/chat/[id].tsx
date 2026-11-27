@@ -3,7 +3,7 @@ import { Badge } from '@/components/Badge'
 import { FoldedBody } from '@/components/FoldedBody'
 import { KickoffCard } from '@/components/KickoffCard'
 import { FOOTER_GAP, KeyboardFooter, useFooterPadding } from '@/components/KeyboardFooter'
-import { WakeNotices, WakeText } from '@/components/SubagentRow'
+import { WakeNotices } from '@/components/SubagentRow'
 import { SubagentDirectory, SubagentLaunchesContext, type SubagentLaunches } from '@/lib/subagentContext'
 import { WaitingDock, WorkDecisionDock } from '@/components/WorkDecisionDock'
 import { openWorkChanges, useDockedWorkChanges, workChangesDockable } from '@/components/WorkResultBody'
@@ -29,7 +29,7 @@ import { activityOf, chatOf, dmMemoryMarks, isHomeRoom, isProjectThread, roomOf,
 import { actionNotice } from '@manor/client-runtime/notices'
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router'
 import { KeyboardAwareLegendList, useKeyboardScrollToEnd } from '@legendapp/list/keyboard'
-import { dateDividers } from '@manor/client-runtime/date-dividers'
+import { dateDividers, joinsBubbleAbove } from '@manor/client-runtime/date-dividers'
 import { historyStart, olderHistoryKey } from '@manor/client-runtime/history-window'
 import { plainDraftText } from '@manor/client-runtime/plain-preview'
 import type { LegendListRef } from '@legendapp/list/react-native'
@@ -114,9 +114,6 @@ const FEED_END_GAP = spacing.xl
 const SENT_BUBBLE_SHARE = 0.86
 /** One identity, so a chat that offers no skills does not re-render the composer. */
 const NO_SKILLS: SkillConfig[] = []
-const isUserBubbleRow = (row: Row | undefined): boolean =>
-  row?.kind === 'pending' ||
-  (row?.kind === 'event' && row.event.type === 'user_message' && row.event.source === undefined && row.confirmTasks === undefined && !isModelOnlyMessage(row.event))
 
 /** A message only the model reads, with nothing Manor says under it: its row would draw nothing. */
 const isUnseenUserRow = (row: Extract<Row, { kind: 'event' }>): boolean =>
@@ -175,10 +172,12 @@ function useTranscriptRows(thread: ThreadShape, workspace: QuietWorkspace, chatI
   const [rowMemory] = useState(() => createRowMemory<Row>())
   // A DM turn that draws nothing gets no row: an empty one still takes a slot and its gap,
   // and inserting it as a turn starts pushes the working indicator down, then back. Words
-  // to the model alone, such as a reaction's notice, draw nothing either.
+  // to the model alone, such as a reaction's notice, draw nothing either, nor does the wake
+  // before an answer after background work.
   const visibleRows = useMemo(
     () => rowMemory.reuse(feedRows.filter((row) => row.kind === 'event'
       ? consultationMarkers.get(row.event.id)?.length !== 0 && exchanges.get(row.event.id) !== null && !isUnseenUserRow(row)
+        && !(chatKind === 'dm' && row.event.type === 'user_message' && row.event.source === 'background_wake')
       : !(chatKind === 'dm' && row.kind === 'turn' && (onlyConsulted(row) || dmTurnDrawsNothing(row))))),
     [chatKind, consultationMarkers, exchanges, feedRows, rowMemory],
   )
@@ -1499,7 +1498,7 @@ function LiveTranscript({
    */
   const [aroundMemory] = useState(() => createValueMemory<{
     /** By row key, so an equal map means every row keeps its own values, wherever it moved. */
-    places: Map<string, { dateLabel: string | undefined; compactUser: boolean; relayOffset: number | undefined; threadOffset: number | undefined }>
+    places: Map<string, { dateLabel: string | undefined; joinsAbove: boolean; relayOffset: number | undefined; threadOffset: number | undefined }>
     waitingOnByTurn: Map<string, string>
     consultationMarkers: ReturnType<typeof stackedConsultationMarkers>
     exchanges: ReturnType<typeof relayExchanges>
@@ -1512,7 +1511,7 @@ function LiveTranscript({
       const previous = pageRows[index - 1]
       return [item.key, {
         dateLabel,
-        compactUser: dateLabel === undefined && isUserBubbleRow(item) && isUserBubbleRow(previous),
+        joinsAbove: joinsBubbleAbove(item, previous, dateLabel, chatKind === 'dm'),
         relayOffset: dateLabel === undefined ? relayOffset(item, previous) : undefined,
         threadOffset: projectThread && dateLabel === undefined ? threadOffset(item, previous) : undefined,
       }]
@@ -1522,7 +1521,7 @@ function LiveTranscript({
     exchanges,
     memoryMarks,
     stretch,
-  }), [aroundMemory, consultationMarkers, dateLabels, exchanges, memoryMarks, pageRows, projectThread, stretch, waitingOnByTurn])
+  }), [aroundMemory, chatKind, consultationMarkers, dateLabels, exchanges, memoryMarks, pageRows, projectThread, stretch, waitingOnByTurn])
   // An isolated Session names its branch above its opening brief, which a later `/goal` brief is not.
   const isolatedBranch = chat?.kind === 'project' && chat.checkout.mode === 'worktree' ? chat.checkout.branch ?? undefined : undefined
   const opening = isolatedBranch === undefined ? undefined : rows.find((row) => row.kind === 'event' && row.event.type === 'user_message')
@@ -1553,7 +1552,7 @@ function LiveTranscript({
       {...(projectThread && project !== undefined ? { threadProject: project } : {})}
       pinPlan={chatKind === 'project' && !projectThread}
       {...(isolatedBranch === undefined || item.key !== kickoffKey ? {} : { isolatedBranch })}
-      compactUser={around.places.get(item.key)?.compactUser === true}
+      joinsAbove={around.places.get(item.key)?.joinsAbove === true}
       latest={item.key === latestTurnKey}
       links={links}
       draftActions={draftActions}
@@ -1684,7 +1683,7 @@ interface TranscriptRowProps {
   /** The skills a `$slug` he wrote may name, drawn as skill pills in his bubble. */
   skills: readonly SkillConfig[]
   threadProject?: NonNullable<ReturnType<typeof useWorkspace>['workspace']['projects'][number]>
-  compactUser: boolean
+  joinsAbove: boolean
   onReply?: (reply: MessageReply) => void
   onReact?: (eventId: string, emoji: string | null) => void
   onQuoteSource?: (source: QuoteSelectionSource) => void
@@ -1735,7 +1734,7 @@ const TranscriptRow = memo(function TranscriptRowBody(props: TranscriptRowProps)
     quoteAuthors,
     skills,
     threadProject,
-    compactUser,
+    joinsAbove,
     onReply,
     onReact,
     onQuoteSource,
@@ -1768,8 +1767,7 @@ const TranscriptRow = memo(function TranscriptRowBody(props: TranscriptRowProps)
     const message = eventRow.event.source === 'routine'
       ? <Text style={styles.note}>{eventRow.event.routineName ?? 'Routine'} started{routineLateNote(eventRow.event)}</Text>
       : eventRow.event.source === 'background_wake'
-        // A DM keeps the compact line; helper cards are Session work.
-        ? bubbleReplies ? <WakeText items={eventRow.event.wakeItems ?? []} /> : <WakeNotices items={eventRow.event.wakeItems ?? []} ts={eventRow.event.ts} />
+        ? <WakeNotices items={eventRow.event.wakeItems ?? []} ts={eventRow.event.ts} />
       : brief !== ''
         ? <KickoffCard agents={agents} text={brief} images={eventRow.event.images ?? []} files={eventRow.event.files ?? []} />
       : eventRow.event.source === 'project_thread'
@@ -1853,7 +1851,7 @@ const TranscriptRow = memo(function TranscriptRowBody(props: TranscriptRowProps)
             {...props}
             row={item}
             latest={false}
-            compactUser={false}
+            joinsAbove={false}
             dateLabel={undefined}
             relayOffset={undefined}
             threadOffset={undefined}
@@ -1927,7 +1925,7 @@ const TranscriptRow = memo(function TranscriptRowBody(props: TranscriptRowProps)
   )
   })()
   return (
-    <View style={[styles.transcriptItem, compactUser ? styles.compactUserItem : relayOffset !== undefined ? { marginTop: relayOffset } : threadOffset === undefined ? null : { marginTop: threadOffset }]}>
+    <View style={[styles.transcriptItem, joinsAbove ? styles.joinedItem : relayOffset !== undefined ? { marginTop: relayOffset } : threadOffset === undefined ? null : { marginTop: threadOffset }]}>
       {dateLabel === undefined ? null : <Text style={styles.dateSeparator}>{dateLabel}</Text>}
       {content}
     </View>
@@ -2117,7 +2115,7 @@ const styles = StyleSheet.create({
   sessionChip: { flexShrink: 1, flexDirection: 'row', alignItems: 'center', gap: 4, borderRadius: radius.sm, backgroundColor: colors.chip, paddingHorizontal: 6, paddingVertical: 2 },
   sessionChipText: { flexShrink: 1, color: colors.muted, fontFamily: fonts.sans, fontSize: 13, lineHeight: 18 },
   transcriptItem: { gap: spacing.xl },
-  compactUserItem: { marginTop: 6 - spacing.xl },
+  joinedItem: { marginTop: 6 - spacing.xl },
   dateSeparator: { color: colors.dim, fontFamily: fonts.sans, fontSize: transcriptMark.fontSize, lineHeight: transcriptMark.lineHeight, textAlign: 'center' },
   relayMarker: { alignSelf: 'center', flexDirection: 'row', alignItems: 'center', gap: 6, borderRadius: radius.sm, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs },
   relayMarkerText: { color: colors.dim, fontFamily: fonts.sans, fontSize: transcriptMark.fontSize, lineHeight: transcriptMark.lineHeight },

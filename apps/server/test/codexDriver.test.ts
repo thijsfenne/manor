@@ -883,7 +883,7 @@ describe('createCodexDriver', () => {
   })
 
   it('kills app-server when interrupt confirmation misses the grace period', async () => {
-    const child = Object.assign(new FakeChild(), { pid: 99993 })
+    const child = Object.assign(new FakeChild(), { pid: 4_194_313 })
     let spawnedResolve: () => void = () => undefined
     const spawned = new Promise<void>((resolve) => { spawnedResolve = resolve })
     const driver = createCodexDriver({
