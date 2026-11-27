@@ -1,5 +1,6 @@
 import type { MailAddress, MailMessage } from '@manor/contracts'
 import type { MailArchiveReceipt, MailEnvelope, MailInbox, MailSource, MailThreadRef } from './mailSource.js'
+import type { OutboundAttachment } from './outboundSend.js'
 
 interface FixtureMessage {
   uid: number
@@ -35,6 +36,7 @@ const careers = person('Careers', 'no-reply@jobs.example')
 const shop = person('Garden Supply', 'news@garden-supply.example')
 const hospital = person('', 'no_reply@hospital.example')
 const bikeShop = person('City Bikes', 'receipts@city-bikes.example')
+const bikeShopMarketing = person('City Bikes', 'hello@city-bikes.example')
 const swimSchool = person('Swim School', 'noreply@swim-school.example')
 
 /**
@@ -115,12 +117,14 @@ export const FIXTURE_THREAD = {
   result: '1790000000000000008',
   receipt: '1790000000000000009',
   signUp: '1790000000000000010',
+  review: '1790000000000000011',
 } as const
 
 /**
- * Ten threads modelled on the design's Inbox; `now` anchors their times. Two carry HTML,
- * the rest plain text only. The last three are automatic mail that still matters: a
- * result waiting in a patient portal, a receipt and a sign-up confirmation.
+ * Eleven threads modelled on the design's Inbox; `now` anchors their times. Two carry
+ * HTML, the rest plain text only. Three are automatic mail that still matters: a result
+ * waiting in a patient portal, a receipt and a sign-up confirmation. The last is the
+ * review request that follows the receipt, which is marketing.
  */
 function seed(now: number): FixtureMessage[] {
   let uid = 100
@@ -158,6 +162,16 @@ function seed(now: number): FixtureMessage[] {
       seen: true,
       inbox: true,
       text: 'Thank you for your order.\n\nOrder 1042\n1 x Rear light, 24.95\nShipping, 4.95\nTotal paid, 29.90\n\nKeep this mail as your proof of purchase.',
+    }),
+    message({
+      threadId: FIXTURE_THREAD.review,
+      subject: 'Your opinion counts',
+      from: bikeShopMarketing,
+      to: [ACCOUNT],
+      at: now - 42 * HOUR,
+      seen: true,
+      inbox: true,
+      text: 'We are so happy with your order! What matters most is that you are just as happy with it.\n\nWhat did you think of your recent purchase? Rate it from 0 to 10.\n\nGive your opinion',
     }),
     message({
       threadId: FIXTURE_THREAD.waiting,
@@ -253,6 +267,7 @@ function seed(now: number): FixtureMessage[] {
       inbox: true,
       text: 'Hi,\n\nThursday at 10:00 works for the team lead. Would that suit you? The interview takes about an hour, at our office.\n\nThe route and parking are on our visitor page: https://talent.example/visit\n\nKind regards,\nNora Example',
       html: INTERVIEW_HTML,
+      attachments: [{ name: 'interview-schedule.pdf', kb: 96 }, { name: 'office-map.png', kb: 340 }],
     }),
   ]
 }
@@ -295,6 +310,19 @@ export class MailFixtureSource implements MailSource {
         attachments: message.attachments,
         mine: message.from.address === ACCOUNT.address,
       }))
+  }
+
+  /** Made-up bytes under the listed names: the fixture has no files. */
+  async readAttachments(thread: MailThreadRef, messageId: string, files: readonly number[], maxBytes: number): Promise<OutboundAttachment[]> {
+    const message = this.messages.find((entry) => entry.threadId === thread.threadId && entry.messageId === messageId)
+    if (message === undefined) throw new Error('The forwarded message is no longer in this thread.')
+    const read = files.map((place) => {
+      const attachment = message.attachments[place]
+      if (attachment === undefined) throw new Error('The forwarded message no longer has that attachment.')
+      return { name: attachment.name, type: 'application/octet-stream', content: Buffer.from(`Fixture bytes of ${attachment.name}\n`) }
+    })
+    if (read.reduce((sum, file) => sum + file.content.length, 0) > maxBytes) throw new Error('These attachments are too large to forward together.')
+    return read
   }
 
   async archive(thread: MailThreadRef): Promise<MailArchiveReceipt> {

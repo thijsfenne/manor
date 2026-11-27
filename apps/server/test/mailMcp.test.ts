@@ -135,6 +135,13 @@ describe('attachments', () => {
     expect(attachments({ type: 'text/plain', parameters: { charset: 'utf-8' }, size: 40 } as never)).toEqual([])
   })
 
+  it('gives a base64 attachment the size of the file, not of its encoded form', () => {
+    const pdf = { part: '2', type: 'application/pdf', disposition: 'attachment', dispositionParameters: { filename: 'scan.pdf' } }
+    // 16 MB of file travels as almost 22 MB of base64.
+    expect(attachments({ ...pdf, encoding: 'base64', size: 22_958_032 })).toEqual([{ name: 'scan.pdf', type: 'application/pdf', kb: 16_384 }])
+    expect(attachments({ ...pdf, encoding: '8bit', size: 2_048 })).toEqual([{ name: 'scan.pdf', type: 'application/pdf', kb: 2 }])
+  })
+
   it('ignores an inline signature image that carries no filename', () => {
     const structure = {
       type: 'multipart/related',

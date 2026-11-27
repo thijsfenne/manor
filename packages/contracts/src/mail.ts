@@ -9,7 +9,7 @@ import { z } from 'zod'
 
 /**
  * The triage labels. Keys `1` to `4` set them in this order. `other` holds newsletters,
- * promotions and other mail written for many people at once: it has no tab and shows
+ * promotions, review requests and other bulk or marketing mail: it has no tab and shows
  * only in a search.
  */
 export const MAIL_LABELS = ['reply', 'wait', 'fyi', 'other'] as const
@@ -41,6 +41,10 @@ export const MAIL_INBOX_WINDOW = 200
 export const MAIL_INSTRUCTION_MAX = 2_000
 export const MAIL_DRAFT_BODY_MAX = 20_000
 export const MAIL_RECIPIENTS_MAX = 400
+/** Attachments one message lists; a forward names the ones it carries by their place in that list. */
+export const MAIL_ATTACHMENTS_MAX = 50
+/** What the attachments of one forward may weigh together, under what a mail server takes in one mail. */
+export const MAIL_FORWARD_ATTACHMENTS_MAX_KB = 20 * 1024
 /** What Add to chat carries along; the preview shows exactly this text. */
 export const MAIL_CONTEXT_TEXT_MAX = 6_000
 
@@ -85,7 +89,7 @@ export const MailMessageSchema = z.object({
    */
   html: z.string().max(MAIL_MESSAGE_HTML_MAX).optional(),
   truncated: z.boolean(),
-  attachments: z.array(z.object({ name: z.string().max(400), kb: z.number().int().min(0) })).max(50),
+  attachments: z.array(z.object({ name: z.string().max(400), kb: z.number().int().min(0) })).max(MAIL_ATTACHMENTS_MAX),
   /** Sent by the mailbox's own account. */
   mine: z.boolean(),
 })
@@ -139,7 +143,9 @@ export const MailClientMessageSchemas = [
     current: z.string().max(MAIL_DRAFT_BODY_MAX).optional(),
   }),
   z.object({ type: z.literal('mail_draft_stop'), draftId: z.string().min(1).max(120) }),
-  // The user's Send, answered with `mail_result`. The subject is the thread's own.
+  // The user's Send, answered with `mail_result`. The subject is the thread's own: a reply
+  // is filed in the thread, and with `forward` the body leaves as new mail under `Fwd:`,
+  // with the attachments of message `messageId` that `files` names by their place in its list.
   z.object({
     type: z.literal('mail_send'),
     requestId: z.string().min(1).max(120),
@@ -147,6 +153,10 @@ export const MailClientMessageSchemas = [
     to: z.string().min(3).max(MAIL_RECIPIENTS_MAX),
     cc: z.string().max(MAIL_RECIPIENTS_MAX).optional(),
     body: z.string().min(1).max(MAIL_DRAFT_BODY_MAX),
+    forward: z.object({
+      messageId: z.string().min(1).max(200),
+      files: z.array(z.number().int().min(0).max(MAIL_ATTACHMENTS_MAX - 1)).max(MAIL_ATTACHMENTS_MAX),
+    }).optional(),
   }),
 ] as const
 
@@ -193,6 +203,9 @@ export const MailServerMessageSchemas = [
   }),
 ] as const
 
+/** `Fwd: <subject>`, without stacking a second one: the subject a forward leaves under and its pane shows. */
+export const mailForwardSubject = (subject: string): string => `Fwd: ${subject.replace(/^(\s*fwd?\s*:\s*)+/i, '')}`.slice(0, 1_000)
+
 /** The bare address of `Name <address>`, lowercased; undefined when there is none. */
 export function mailBareAddress(value: string): string | undefined {
   const address = (/<([^<>]+)>\s*$/.exec(value)?.[1] ?? value).trim().toLowerCase()
@@ -227,7 +240,8 @@ export function mailNewRecipients(thread: Pick<MailThread, 'messages'>, to: stri
     })
 }
 
-const nameOf = (entry: MailAddress) => entry.name === '' ? entry.address : `${entry.name} <${entry.address}>`
+/** `Name <address>`, or the bare address when the header carried no name. */
+export const mailAddressLine = (entry: MailAddress): string => entry.name === '' ? entry.address : `${entry.name} <${entry.address}>`
 
 /**
  * The text Add to chat carries into a conversation, and what its preview shows. Cut at
@@ -238,10 +252,10 @@ export function mailContextText(thread: MailThread): string {
   const head = thread.messages.at(-1)
   const lines = [
     thread.subject,
-    ...(head === undefined ? [] : [nameOf(head.from)]),
+    ...(head === undefined ? [] : [mailAddressLine(head.from)]),
     '',
     thread.messages
-      .map((message) => `${nameOf(message.from)}, ${new Date(message.at).toISOString().slice(0, 16).replace('T', ' ')} UTC\n${message.text}`)
+      .map((message) => `${mailAddressLine(message.from)}, ${new Date(message.at).toISOString().slice(0, 16).replace('T', ' ')} UTC\n${message.text}`)
       .join('\n\n---\n\n'),
   ]
   const text = lines.join('\n')

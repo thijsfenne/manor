@@ -153,7 +153,7 @@ describe('MailReader', () => {
     <MailReader card={{ threadId: 't', subject: 'Hi', from, at: 1, unread: false, messageCount: messages.length }}
       thread={{ threadId: 't', subject: 'Hi', messages, reply: { to: from.address, cc: '', subject: 'Re: Hi' } }}
       error={undefined} listed={1} tab="reply" query="" triage={null} unlabelled={0} projects={[]} split={false}
-      onReply={() => {}} onAdd={() => {}} onArchive={() => {}} onLink={() => {}} />)
+      onReply={() => {}} onForward={() => {}} onAdd={() => {}} onArchive={() => {}} onLink={() => {}} />)
   const pane = () => host.querySelector('.overflow-y-auto')
 
   it('puts a thread with one coloured mail on paper and draws every frame light', () => {

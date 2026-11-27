@@ -41,6 +41,8 @@ const thread: MailThread = {
 const agent = { id: 'chief', name: 'Avery', color: 'teal', isCos: true } as unknown as AgentConfig
 
 let view: ReactTestRenderer
+/** The thread the pane is open for; one test gives it an attachment. */
+let open: MailThread
 let calls: { start: [string | undefined, string | undefined][]; stop: number; send: [string, string, string][]; close: number }
 let state: MailDraftsState
 let reply: MailReply
@@ -49,7 +51,7 @@ const draft = (status: MailDraft['status'], text: string, draftId = 'd1', messag
   ({ draftId, threadId: 't1', status, text, ...(message === undefined ? {} : { message }) })
 
 const pane = () => (
-  <MailDraftPane thread={thread} agent={agent} reply={reply} drafts={state}
+  <MailDraftPane thread={open} agent={agent} reply={reply} drafts={state}
     onChange={(change) => {
       reply = { ...reply, ...change }
       view.update(pane())
@@ -86,6 +88,8 @@ beforeEach(() => {
   calls = { start: [], stop: 0, send: [], close: 0 }
   state = { draft: undefined, sending: false }
   reply = { to: thread.reply.to, cc: thread.reply.cc, body: '' }
+  open = thread
+  composer.props = null
   act(() => { view = create(pane()) })
 })
 afterEach(() => act(() => view.unmount()))
@@ -188,6 +192,51 @@ describe('MailDraftPane', () => {
     show({ sending: false })
     expect(calls.close).toBe(0)
     expect(text()).toBe('Thanks.')
+  })
+
+  it('opens a forward without the agent: empty recipients, the Fwd subject, the quote, and Send as a forward', () => {
+    act(() => view.unmount())
+    calls.start = []
+    composer.props = null
+    reply = { forward: { messageId: 'm1', files: [] }, to: '', cc: '', body: '\n\nQuoted.' }
+    act(() => { view = create(pane()) })
+    expect(calls.start).toEqual([])
+    expect(composer.props).toBeNull()
+    expect(host((node) => node.type === 'h2').map(textOf)).toEqual(['Forward'])
+    expect(host((node) => node.props['aria-label'] === 'Forward draft')).toHaveLength(1)
+    expect(labelled('Edit To').children.map((child) => typeof child === 'string' ? child : textOf(child))).toEqual(['Add To'])
+    expect(host((node) => node.props.title === 'Fwd: Second round interview')).toHaveLength(1)
+    expect(labelled('Forward text').props.value).toBe('\n\nQuoted.')
+    expect(host((node) => node.props['aria-label'] === 'Attachments')).toEqual([])
+    expect(sendButton().props.disabled).toBe(true)
+    act(() => labelled('Edit To').props.onClick())
+    act(() => labelled('To').props.onChange({ target: { value: 'sam@else.example' } }))
+    act(() => sendButton().props.onClick())
+    expect(calls.send).toEqual([['sam@else.example', '', '\n\nQuoted.']])
+  })
+
+  it('lists the attachments a forward carries, and Remove takes one out', () => {
+    act(() => view.unmount())
+    const files = [{ index: 0, name: 'cv.pdf', kb: 120 }, { index: 1, name: 'portfolio.pdf', kb: 2048 }]
+    reply = { forward: { messageId: 'm1', files }, to: 'sam@else.example', cc: '', body: '\n\nQuoted.' }
+    act(() => { view = create(pane()) })
+    expect(labelled('Attachments').findAllByType('li').map(textOf)).toEqual(['cv.pdf120 KB', 'portfolio.pdf2.0 MB'])
+    act(() => labelled('Remove cv.pdf').props.onClick())
+    expect(reply.forward).toEqual({ messageId: 'm1', files: [files[1]] })
+    act(() => labelled('Remove portfolio.pdf').props.onClick())
+    expect(host((node) => node.props['aria-label'] === 'Attachments')).toEqual([])
+  })
+
+  it('holds Send while the attachments of a forward are over the limit together', () => {
+    act(() => view.unmount())
+    const files = [{ index: 0, name: 'scan.pdf', kb: 15_000 }, { index: 1, name: 'video.mov', kb: 8_000 }]
+    reply = { forward: { messageId: 'm1', files }, to: 'sam@else.example', cc: '', body: '\n\nQuoted.' }
+    act(() => { view = create(pane()) })
+    expect(sendButton().props.disabled).toBe(true)
+    expect(host((node) => node.props.role === 'alert').map(textOf)).toEqual(['These attachments are over 20 MB together. Remove some to send.'])
+    act(() => labelled('Remove video.mov').props.onClick())
+    expect(sendButton().props.disabled).toBe(false)
+    expect(host((node) => node.props.role === 'alert')).toEqual([])
   })
 
   it('asks for no draft when its reply already has one, and fills in one that finished meanwhile once', () => {

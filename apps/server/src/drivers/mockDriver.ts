@@ -223,6 +223,7 @@ function mockMailLabel(entry: Record<string, unknown>): { label: MailLabel; reas
   if (entry.fromTheUser === true) return { label: 'wait', reason: 'You wrote last and are waiting for an answer.' }
   if (/uitslag|test result/i.test(text)) return { label: 'reply', reason: 'A result is waiting for you to look at.' }
   if (/digest|newsletter|unsubscribe/i.test(text)) return { label: 'other', reason: 'A newsletter or notification; nothing needs your attention.' }
+  if (/your opinion counts/i.test(text)) return { label: 'other', reason: 'A review request; it asks nothing you need to do.' }
   if (/no-?reply|do not reply|automatic/i.test(text)) return { label: 'fyi', reason: 'An automatic message; nothing to answer.' }
   if (/\?|please|renew|laat .*weten/i.test(String(entry.newestMessageStart ?? ''))) return { label: 'reply', reason: 'Asks you to answer or act.' }
   return { label: 'fyi', reason: 'For your information.' }

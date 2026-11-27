@@ -238,6 +238,11 @@ export interface AttachmentSummary {
   kb: number
 }
 
+/** An attachment with the IMAP part its bytes sit under, for the one caller that downloads them. */
+export interface AttachmentPart extends AttachmentSummary {
+  part: string
+}
+
 /**
  * Names and sizes of what is attached, never the bytes.
  *
@@ -248,8 +253,13 @@ export interface AttachmentSummary {
  * usually enough to know whether the attachment needs opening at all.
  */
 export function attachments(structure: MessageStructureObject | undefined): AttachmentSummary[] {
+  return attachmentParts(structure).map(({ name, type, kb }) => ({ name, type, kb }))
+}
+
+/** The same list as `attachments`, in the same order, each with its part number. */
+export function attachmentParts(structure: MessageStructureObject | undefined): AttachmentPart[] {
   if (structure === undefined) return []
-  const found: AttachmentSummary[] = []
+  const found: AttachmentPart[] = []
   const walk = (node: MessageStructureObject) => {
     const children = node.childNodes
     if (Array.isArray(children) && children.length > 0) {
@@ -268,10 +278,16 @@ export function attachments(structure: MessageStructureObject | undefined): Atta
     if (type === 'text/plain' || type === 'text/html') {
       if (disposition !== 'attachment') return
     }
+    // IMAP counts a part as it travels. Base64 carries 57 bytes of the file in each
+    // line of 78, so the file itself is about a quarter smaller than that count.
+    const travels = Number(node.size ?? 0)
+    const bytes = String(node.encoding ?? '').toLowerCase() === 'base64' ? travels / 78 * 57 : travels
     found.push({
       name: name ?? '(unnamed)',
       type,
-      kb: Math.round(Number(node.size ?? 0) / 1024),
+      kb: Math.round(bytes / 1024),
+      // A single-part message has no part number; IMAP addresses its body as 1.
+      part: typeof node.part === 'string' && node.part.length > 0 ? node.part : '1',
     })
   }
   walk(structure)

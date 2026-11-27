@@ -1,10 +1,11 @@
 import { useSyncExternalStore } from 'react'
+import type { MailLabel } from '@manor/contracts'
 import type { MailTab } from '../../mail'
 
 /**
  * What the user is looking at in Mail, and the replies being written there. It lives outside
- * the view so it survives a visit to another door, and so the Archived notice's Undo can
- * select the thread again.
+ * the view so it survives a visit to another door, and so the Undo of the Archived and the
+ * Moved notices can select the thread again.
  * `useMailView` reads it and `setMailView` changes it.
  */
 export interface MailViewState {
@@ -18,12 +19,23 @@ export interface MailViewState {
   picked: string[]
   /** The latest Archive, one entry per thread, while its notice offers Undo. */
   archived: { requestId: string; threadId: string }[] | null
-  /** Replies being written, by thread id; one stays until it is closed, sent or archived. */
+  /**
+   * The latest label key that moved the open mail, while its notice is up: `previous` is the
+   * label its Undo sets again, null for a mail that had none.
+   */
+  relabelled: { id: string; threadId: string; label: MailLabel; previous: MailLabel | null } | null
+  /** Replies and forwards being written, by thread id; one stays until it is closed, sent or archived. */
   replies: Record<string, MailReply>
 }
 
-/** One reply as its pane left it, so the pane comes back the same on any return. */
+/** One reply or forward as its pane left it, so the pane comes back the same on any return. */
 export interface MailReply {
+  /**
+   * A forward of the newest message rather than a reply: no draft is asked for, and it leaves
+   * under `Fwd:`. `files` are that message's attachments that still go along, each with its
+   * place in the message's list, which Send names; the pane's Remove filters one out.
+   */
+  forward?: { messageId: string; files: { index: number; name: string; kb: number }[] }
   /** The latest draft asked for; undefined until the first left, which the pane then asks for. */
   draftId?: string
   /** The latest send, and whom it went to, for the notice once it is confirmed. */
@@ -36,7 +48,7 @@ export interface MailReply {
   settled?: string
 }
 
-let view: MailViewState = { selectedId: null, tab: 'reply', query: '', picked: [], archived: null, replies: {} }
+let view: MailViewState = { selectedId: null, tab: 'reply', query: '', picked: [], archived: null, relabelled: null, replies: {} }
 const listeners = new Set<() => void>()
 
 const subscribe = (listener: () => void) => {

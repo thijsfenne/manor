@@ -1,4 +1,5 @@
 import type { MailAddress, MailMessage } from '@manor/contracts'
+import type { OutboundAttachment } from './outboundSend.js'
 
 /**
  * The Mail door's one way into a mailbox. The IMAP source talks to the user's real
@@ -6,6 +7,7 @@ import type { MailAddress, MailMessage } from '@manor/contracts'
  * else in the server reads or writes mail for the door.
  *
  * The only write is `archive` and its Undo `restore`. Reading never marks mail read.
+ * Attachment bytes are read only by `readAttachments`, for a forward the user sends.
  */
 export interface MailSource {
   /** The mailbox's own address, lowercased. A message from it is `mine`. */
@@ -17,6 +19,13 @@ export interface MailSource {
    * carries its plain text, and its HTML part when that came whole and within the caps.
    */
   readThread(thread: MailThreadRef): Promise<MailMessage[]>
+  /**
+   * The bytes of some attachments of one message of the thread, for a forward the user
+   * sends. `files` are their places in that message's `attachments` list as `readThread`
+   * gave it, and the answer keeps their order. Rejects when the message or a place is no
+   * longer there, or when the files weigh more than `maxBytes` together.
+   */
+  readAttachments(thread: MailThreadRef, messageId: string, files: readonly number[], maxBytes: number): Promise<OutboundAttachment[]>
   /** Takes the thread's Inbox messages out of the Inbox. The receipt is what `restore` needs. */
   archive(thread: MailThreadRef): Promise<MailArchiveReceipt>
   /** Puts what `archive` took back in the Inbox. */

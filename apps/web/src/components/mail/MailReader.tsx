@@ -114,11 +114,11 @@ function threadOnPaper(thread: MailThread | null) {
 }
 
 /**
- * The Mail stage's left pane: the bar of what can be done with the open thread, and the
- * thread. With none open the bar keeps its height, holding only Archive while several cards
- * are picked, and the stage says why.
+ * The Mail stage's left pane: the thread, and floating over its foot the bar of what can be
+ * done with it. With none open the stage says why, and the bar shows only while several
+ * cards are picked, holding only Archive.
  */
-export function MailReader({ card, thread, error, listed, selected = 0, tab, query, triage, unlabelled, projects, split, onReply, onAdd, onArchive, onLink, onTriage }: {
+export function MailReader({ card, thread, error, listed, selected = 0, tab, query, triage, unlabelled, projects, split, onReply, onForward, onAdd, onArchive, onLink, onTriage }: {
   /** The open thread's card; null when none is open. */
   card: MailCard | null
   /** Its messages, once read. */
@@ -137,6 +137,7 @@ export function MailReader({ card, thread, error, listed, selected = 0, tab, que
   projects: readonly Project[]
   split: boolean
   onReply: () => void
+  onForward: () => void
   onAdd: () => void
   onArchive: () => void
   onLink: (address: string, projectId: string | null) => void
@@ -151,19 +152,10 @@ export function MailReader({ card, thread, error, listed, selected = 0, tab, que
   )
   return (
     <div className="relative flex h-full min-h-0 min-w-0 flex-col">
-      <div role="toolbar" aria-label="Mail actions" className="flex min-h-14 flex-none items-center gap-1.5 px-4 py-3">
-        {/* Reply leads as the one primary action on an open mail; several picked mails can only be archived. */}
-        {card === null ? null : (
-          <>
-            <Button variant="primary" size="small" disabled={thread === null} title="Draft a reply (R)" onClick={onReply}>Reply</Button>
-            <Button size="small" disabled={thread === null} title="Add to chat (A)" onClick={onAdd}>Add to chat</Button>
-          </>
-        )}
-        {card === null && selected < 2 ? null : <Button size="small" title="Archive (E)" onClick={onArchive}>Archive</Button>}
-      </div>
       {empty}
       {card === null ? null : (
-        <div className={`min-h-0 flex-1 overflow-y-auto pt-6 pb-10 ${split ? 'px-7' : 'px-10'} ${paper ? 'mail-paper' : ''}`}>
+        // The foot clears the floating bar, so the last lines of a long mail scroll out from under it.
+        <div className={`min-h-0 flex-1 overflow-y-auto pt-6 pb-28 ${split ? 'px-7' : 'px-10'} ${paper ? 'mail-paper' : ''}`}>
           {/* One column for every mail, on paper or not, so the layout holds between mails. */}
           <div className="mx-auto w-full max-w-[720px]">
             <h2 className="m-0 mb-2 text-[20px] font-medium break-words text-text">{card.subject}</h2>
@@ -177,6 +169,23 @@ export function MailReader({ card, thread, error, listed, selected = 0, tab, que
             {thread === null ? null : thread.messages.map((message, index) => (
               <MailMessageView key={`${thread.threadId}:${message.id}`} message={message} first={index === 0} newest={index === thread.messages.length - 1} paper={paper} now={now} />
             ))}
+          </div>
+        </div>
+      )}
+      {card === null && selected < 2 ? null : (
+        // Over the reader in the app's own theme, also on a mail drawn on paper. Placed
+        // after the thread so it paints above it; the strip around it lets clicks through.
+        <div className="pointer-events-none absolute inset-x-0 bottom-5 z-[1] flex justify-center px-4">
+          <div role="toolbar" aria-label="Mail actions" className="pointer-events-auto flex max-w-full flex-wrap items-center justify-center gap-1.5 rounded-xl border border-line bg-raised p-1.5 shadow-pill">
+            {/* Reply leads as the one primary action on an open mail; several picked mails can only be archived. */}
+            {card === null ? null : (
+              <>
+                <Button variant="primary" size="small" disabled={thread === null} title="Draft a reply (R)" onClick={onReply}>Reply</Button>
+                <Button size="small" disabled={thread === null} title="Forward (F)" onClick={onForward}>Forward</Button>
+                <Button size="small" disabled={thread === null} title="Add to chat (A)" onClick={onAdd}>Add to chat</Button>
+              </>
+            )}
+            <Button size="small" title="Archive (E)" onClick={onArchive}>Archive</Button>
           </div>
         </div>
       )}

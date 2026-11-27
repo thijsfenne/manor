@@ -5,7 +5,7 @@ import type { AgentConfig, Chat, Project } from '@manor/contracts'
 import type { createWorkspaceCommands } from '@manor/client-runtime/commands'
 import { mailCards, type MailState } from '@manor/client-runtime/mail'
 import {
-  listedMailCards, mailKeyAction, mailTabCounts, mailNeighbour, mailRange, steppedMailSelection, toggledMailSelection, unlabelledMailCount, type MailKeyAction,
+  listedMailCards, mailForwardBody, mailKeyAction, mailTabCounts, mailNeighbour, mailRange, steppedMailSelection, toggledMailSelection, unlabelledMailCount, type MailKeyAction,
 } from '../../mail'
 import { toast } from '../../notices'
 import { cosOf } from '../../persona'
@@ -113,8 +113,15 @@ export function MailView({ mail, agents, projects, chats, chatDoor, status, comm
     dropMailReplies(delivered.map(([threadId]) => threadId))
   }, [replies, mail.results])
 
+  // Reply and Forward share the one pane of a thread, so neither replaces the other while it is open.
   const openReply = () => {
     if (thread !== null && replying === null) openMailReply(thread.threadId, { to: thread.reply.to, cc: thread.reply.cc, body: '' })
+  }
+  const openForward = () => {
+    const newest = thread?.messages.at(-1)
+    if (thread === null || replying !== null || newest === undefined) return
+    const files = newest.attachments.map((attachment, index) => ({ index, ...attachment }))
+    openMailReply(thread.threadId, { forward: { messageId: newest.id, files }, to: '', cc: '', body: mailForwardBody(thread) })
   }
   /** False when the request could not leave, so the pane keeps what was asked. */
   const startDraft = (instruction?: string, current?: string) => {
@@ -131,7 +138,9 @@ export function MailView({ mail, agents, projects, chats, chatDoor, status, comm
   const send = (to: string, cc: string, body: string) => {
     if (thread === null) return
     const sendId = newId('send')
-    if (commands.sendMail(sendId, thread.threadId, to, body, cc)) changeMailReply(thread.threadId, { sendId, sentTo: to })
+    const forward = replying?.forward
+    const carried = forward === undefined ? undefined : { messageId: forward.messageId, files: forward.files.map((file) => file.index) }
+    if (commands.sendMail(sendId, thread.threadId, to, body, cc, carried)) changeMailReply(thread.threadId, { sendId, sentTo: to })
   }
   const openAdd = () => {
     if (thread !== null) setAdding(thread.threadId)
@@ -188,11 +197,20 @@ export function MailView({ mail, agents, projects, chats, chatDoor, status, comm
         if (next !== null) select(next)
         return true
       }
-      case 'label':
-        if (openId !== null) commands.setMailLabel(openId, action.label)
+      case 'label': {
+        if (card === null) return true
+        // The same label again moves nothing, so only another one is told, with the way back.
+        const previous = card.label ?? null
+        if (commands.setMailLabel(card.threadId, action.label) && previous !== action.label) {
+          setMailView({ relabelled: { id: newId('label'), threadId: card.threadId, label: action.label, previous } })
+        }
         return true
+      }
       case 'reply':
         openReply()
+        return true
+      case 'forward':
+        openForward()
         return true
       case 'archive':
         archiveSelected()
@@ -263,7 +281,7 @@ export function MailView({ mail, agents, projects, chats, chatDoor, status, comm
           <MailReader card={card} thread={thread} error={openId === null ? undefined : mail.threadErrors[openId]}
             listed={snapshot === null ? null : listed.length} selected={selection.length} tab={tab} query={query} triage={snapshot?.triage ?? null}
             unlabelled={unlabelled} projects={projects} split={replying !== null}
-            onReply={openReply} onAdd={openAdd} onArchive={archiveSelected} onTriage={runTriage}
+            onReply={openReply} onForward={openForward} onAdd={openAdd} onArchive={archiveSelected} onTriage={runTriage}
             onLink={(address, projectId) => { commands.linkMailSender(address, projectId) }} />
         </div>
         {/* Always here at no width, so the pane travels both ways. It gives way to the reader on a narrow stage. */}

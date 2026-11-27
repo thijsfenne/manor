@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 import { Archive02Icon } from '@hugeicons/core-free-icons'
 import { mailCards, type MailState } from '@manor/client-runtime/mail'
 import { mailViewShowing } from '../../mail'
@@ -7,9 +7,7 @@ import type { HouseNotice } from '../NoticeStack'
 import { Button } from '../ui/Button'
 import { NoticeCard } from '../ui/NoticeCard'
 import { mailView, setMailView, useMailView } from './mailViewStore'
-
-/** Longer than a bare confirmation, because there is an Undo to reach for. */
-const UNDO_VISIBLE_MS = 6_000
+import { useNoticeHold } from './useNoticeHold'
 
 /**
  * The `Archived` card in the window's notice stack, with its Undo, for one Archive of one
@@ -19,20 +17,14 @@ const UNDO_VISIBLE_MS = 6_000
  */
 export function useMailArchivedNotice(mail: MailState, unarchive: (requestId: string, threadId: string) => boolean): HouseNotice | null {
   const { archived } = useMailView()
-  const [held, setHeld] = useState<string | null>(null)
   const kept = archived?.filter((entry) => mail.results[entry.requestId]?.ok !== false) ?? []
   const key = archived?.[0] === undefined ? null : `mail-${archived[0].requestId}`
   const refused = archived !== null && kept.length === 0
-  const paused = key !== null && held === key
 
   useEffect(() => {
     if (refused) setMailView({ archived: null })
   }, [refused])
-  useEffect(() => {
-    if (archived === null || paused) return
-    const timer = setTimeout(() => setMailView({ archived: null }), UNDO_VISIBLE_MS)
-    return () => clearTimeout(timer)
-  }, [archived, paused])
+  const hold = useNoticeHold(key, () => setMailView({ archived: null }))
 
   if (key === null || refused) return null
   // A card on its way out, replaced by the next Archive, no longer acts: the notice up now is not its own.
@@ -55,8 +47,7 @@ export function useMailArchivedNotice(mail: MailState, unarchive: (requestId: st
     key,
     dismiss,
     node: (
-      <div onPointerEnter={() => setHeld(key)} onPointerLeave={() => setHeld(null)}
-        onFocus={() => setHeld(key)} onBlur={() => setHeld(null)}>
+      <div {...hold}>
         <NoticeCard mark={<Icon icon={Archive02Icon} size={20} className="text-muted" />}
           title={kept.length === 1 ? 'Archived' : `Archived ${kept.length} mails`}
           action={<Button size="small" onClick={undo}>Undo</Button>} onDismiss={dismiss} />

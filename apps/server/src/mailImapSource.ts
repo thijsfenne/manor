@@ -1,5 +1,6 @@
 import { ImapFlow, type FetchMessageObject, type MessageAddressObject, type MessageStructureObject } from 'imapflow'
 import {
+  MAIL_ATTACHMENTS_MAX,
   MAIL_MESSAGE_HTML_MAX,
   MAIL_MESSAGE_TEXT_MAX,
   MAIL_THREAD_HTML_MAX,
@@ -8,7 +9,7 @@ import {
   type MailMessage,
 } from '@manor/contracts'
 import {
-  attachments,
+  attachmentParts,
   decode,
   DEFAULT_MAIL_ENV_PREFIX,
   DEFAULT_MAILBOX,
@@ -31,6 +32,7 @@ import {
   type MailSource,
   type MailThreadRef,
 } from './mailSource.js'
+import type { OutboundAttachment } from './outboundSend.js'
 
 /**
  * The part of imapflow this source uses. A test hands in a recording fake with this
@@ -105,14 +107,17 @@ const timeOf = (date: Date | string | undefined) => {
   return Number.isFinite(time) ? time : undefined
 }
 
+/** A message's id on the wire: Gmail's own, else its Message-ID, else its uid. */
+const messageKey = (message: FetchMessageObject) => (firstId(message.emailId, message.envelope?.messageId) ?? String(message.uid)).slice(0, 200)
+
 const messageTime = (message: FetchMessageObject) => timeOf(message.envelope?.date ?? message.internalDate) ?? 0
 
 const uidList = (found: number[] | false) => (Array.isArray(found) ? [...found].sort((left, right) => left - right) : [])
 
 /**
  * The real mailbox, over IMAP with the connector's app password. Reads headers, the
- * text part and the HTML part only, never attachment bytes, and never sets a flag.
- * Archive is a move out of the Inbox and its Undo the way back.
+ * text part and the HTML part, and attachment bytes only for a forward the user sends.
+ * It never sets a flag. Archive is a move out of the Inbox and its Undo the way back.
  */
 export class MailImapSource implements MailSource {
   constructor(private readonly options: MailImapSourceOptions) {}
@@ -180,19 +185,53 @@ export class MailImapSource implements MailSource {
     }))
   }
 
-  readThread(thread: MailThreadRef): Promise<MailMessage[]> {
+  /** Runs `read` over the thread's newest messages, in the mailbox that holds them. */
+  private inThread<T>(thread: MailThreadRef, read: (client: MailImapClient, uids: number[]) => Promise<T>): Promise<T> {
     return this.withClient(async (client) => {
       // A Gmail thread is read from all mail, so the account's own sent replies come along.
       if (isGmail(client) && thread.gmailThreadId !== undefined) {
         const opened = await openMailbox(client, DEFAULT_MAILBOX)
         try {
           const uids = uidList(await client.search({ threadId: thread.gmailThreadId }, { uid: true }))
-          return await this.readMessages(client, uids.slice(-MAIL_THREAD_MESSAGES_MAX))
+          return await read(client, uids.slice(-MAIL_THREAD_MESSAGES_MAX))
         } finally {
           opened.release()
         }
       }
-      return this.withInbox(client, () => this.readMessages(client, thread.uids.slice(-MAIL_THREAD_MESSAGES_MAX)), thread.uidValidity)
+      return this.withInbox(client, () => read(client, thread.uids.slice(-MAIL_THREAD_MESSAGES_MAX)), thread.uidValidity)
+    })
+  }
+
+  readThread(thread: MailThreadRef): Promise<MailMessage[]> {
+    return this.inThread(thread, (client, uids) => this.readMessages(client, uids))
+  }
+
+  readAttachments(thread: MailThreadRef, messageId: string, files: readonly number[], maxBytes: number): Promise<OutboundAttachment[]> {
+    return this.inThread(thread, async (client, uids) => {
+      if (uids.length === 0) throw new Error('This thread is no longer in the mailbox.')
+      // Drained before any download, as in `readMessages`.
+      let found: FetchMessageObject | undefined
+      for await (const message of client.fetch(uids.join(','), { uid: true, envelope: true, bodyStructure: true }, { uid: true })) {
+        if (messageKey(message) === messageId) found = message
+      }
+      if (found === undefined) throw new Error('The forwarded message is no longer in this thread.')
+      // The same list, in the same order, as the one `readMessages` put on the wire.
+      const listed = attachmentParts(withoutAttachedMessages(found.bodyStructure as MessageStructureObject | undefined)).slice(0, MAIL_ATTACHMENTS_MAX)
+      const read: OutboundAttachment[] = []
+      let left = maxBytes
+      for (const place of files) {
+        const file = listed[place]
+        if (file === undefined) throw new Error('The forwarded message no longer has that attachment.')
+        const download = await client.download(String(found.uid), file.part, { uid: true })
+        // One byte over the room left is enough to know the files are too large together.
+        const content = await readStream(download.content, left + 1)
+        if (content.length > left) throw new Error('These attachments are too large to forward together.')
+        left -= content.length
+        // The download hands a text file over in another charset than the original named.
+        const type = file.type.startsWith('text/') ? `${file.type}; charset=${downloadCharset(download)}` : file.type
+        read.push({ name: file.name, type, content })
+      }
+      return read
     })
   }
 
@@ -237,7 +276,7 @@ export class MailImapSource implements MailSource {
       const from = address(message.envelope?.from?.[0])
       const truncated = cut || text.length > MAIL_MESSAGE_TEXT_MAX
       messages.push({
-        id: (firstId(message.emailId, message.envelope?.messageId) ?? String(message.uid)).slice(0, 200),
+        id: messageKey(message),
         from,
         to: addresses(message.envelope?.to),
         cc: addresses(message.envelope?.cc),
@@ -245,7 +284,7 @@ export class MailImapSource implements MailSource {
         text: text.slice(0, MAIL_MESSAGE_TEXT_MAX),
         ...(html === undefined ? {} : { html }),
         truncated,
-        attachments: attachments(structure).slice(0, 50).map((entry) => ({ name: entry.name.slice(0, 400), kb: entry.kb })),
+        attachments: attachmentParts(structure).slice(0, MAIL_ATTACHMENTS_MAX).map(({ name, kb }) => ({ name: name.slice(0, 400), kb })),
         mine: normalAddress(from.address) === account,
       })
     }

@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import type { MailCard } from '@manor/contracts'
+import { MAIL_DRAFT_BODY_MAX, type MailCard, type MailMessage } from '@manor/contracts'
 import {
   listedMailCards,
   MAIL_TABS,
   mailAttachmentSize,
   mailCardsInTab,
+  mailForwardBody,
   mailKeyAction,
   mailNeighbour,
   mailRange,
@@ -99,7 +100,7 @@ describe('mail helpers', () => {
       { kind: 'label', label: 'reply' }, { kind: 'label', label: 'wait' }, { kind: 'label', label: 'fyi' }, { kind: 'label', label: 'other' },
     ])
     expect(mailKeyAction('5')).toBeUndefined()
-    expect(['r', 'e', 'a', '/', 'Escape'].map((key) => mailKeyAction(key)?.kind)).toEqual(['reply', 'archive', 'add', 'search', 'close'])
+    expect(['r', 'f', 'e', 'a', '/', 'Escape'].map((key) => mailKeyAction(key)?.kind)).toEqual(['reply', 'forward', 'archive', 'add', 'search', 'close'])
     expect(mailKeyAction('x')).toBeUndefined()
     expect(mailKeyAction('toString')).toBeUndefined()
   })
@@ -113,6 +114,35 @@ describe('mail helpers', () => {
     expect(mailTimeLabel(at(11, 20), now)).toBe('Fri')
     expect(mailTimeLabel(at(11, 19), now)).toBe('19 Nov')
     expect(mailTimeLabel(at(12, 31, 12, 0, 2025), now)).toBe('31 Dec 2025')
+  })
+
+  it('quotes the newest message under a header for a forward, and cuts a long one to leave room for a note', () => {
+    const message = (id: string, text: string, over: Partial<MailMessage> = {}): MailMessage => ({
+      id, from: { name: 'Robin Example', address: 'robin@example.com' }, to: [{ name: '', address: 'me@example.com' }, { name: 'Sam Example', address: 'sam@example.com' }],
+      cc: [], at: new Date(2026, 10, 26, 12, 0).getTime(), text, truncated: false, attachments: [], mine: false, ...over,
+    })
+    const thread = { subject: 'Quote for the roof', messages: [message('m1', 'Older.'), message('m2', 'The quote is attached.')] }
+    expect(mailForwardBody(thread)).toBe([
+      '',
+      '',
+      '---------- Forwarded message ---------',
+      'From: Robin Example <robin@example.com>',
+      'Date: 26 Nov 2026, 12:00',
+      'Subject: Quote for the roof',
+      'To: me@example.com, Sam Example <sam@example.com>',
+      '',
+      'The quote is attached.',
+    ].join('\n'))
+
+    const long = mailForwardBody({ ...thread, messages: [message('m3', 'word '.repeat(4_000))] })
+    expect(long.endsWith('word\n[cut]')).toBe(true)
+    expect(long.length).toBeLessThanOrEqual(MAIL_DRAFT_BODY_MAX - 2_000)
+    expect(long.length).toBeGreaterThan(MAIL_DRAFT_BODY_MAX - 2_100)
+    // The cap covers the header too, however many people the mail went to.
+    const crowd = Array.from({ length: 900 }, (_, index) => ({ name: '', address: `guest${index}@example.com` }))
+    expect(mailForwardBody({ ...thread, messages: [message('m5', 'Short.', { to: crowd })] }).length).toBeLessThanOrEqual(MAIL_DRAFT_BODY_MAX - 2_000)
+    // Text the host already cut says so too.
+    expect(mailForwardBody({ ...thread, messages: [message('m4', 'Short.', { truncated: true })] }).endsWith('Short.\n[cut]')).toBe(true)
   })
 
   it('names an attachment size', () => {

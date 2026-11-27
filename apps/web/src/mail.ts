@@ -1,4 +1,4 @@
-import { MAIL_LABEL_NAME, MAIL_LABELS, MAIL_TAB_LABELS, type MailAddress, type MailCard, type MailLabel } from '@manor/contracts'
+import { MAIL_DRAFT_BODY_MAX, MAIL_LABEL_NAME, MAIL_LABELS, MAIL_TAB_LABELS, mailAddressLine, type MailAddress, type MailCard, type MailLabel, type MailThread } from '@manor/contracts'
 
 /** What the Mail view shows and what its keys do, kept apart from the components so it can be tested. */
 
@@ -91,7 +91,7 @@ export function steppedMailSelection(listed: readonly MailCard[], selectedId: st
 export type MailKeyAction =
   | { kind: 'step'; step: 1 | -1 }
   | { kind: 'label'; label: MailLabel }
-  | { kind: 'reply' | 'archive' | 'add' | 'search' | 'close' }
+  | { kind: 'reply' | 'forward' | 'archive' | 'add' | 'search' | 'close' }
 
 const MAIL_KEYS: Record<string, MailKeyAction> = {
   j: { kind: 'step', step: 1 },
@@ -99,6 +99,7 @@ const MAIL_KEYS: Record<string, MailKeyAction> = {
   k: { kind: 'step', step: -1 },
   ArrowUp: { kind: 'step', step: -1 },
   r: { kind: 'reply' },
+  f: { kind: 'forward' },
   e: { kind: 'archive' },
   a: { kind: 'add' },
   '/': { kind: 'search' },
@@ -133,3 +134,35 @@ export function mailTimeLabel(at: number, now: number): string {
 
 export const mailAttachmentSize = (kb: number): string =>
   kb < 1024 ? `${Math.max(1, kb)} KB` : `${(kb / 1024).toFixed(1)} MB`
+
+const FULL_DATE = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
+
+/** Room a forward always keeps free for the user's own note above the quote. */
+const FORWARD_NOTE_ROOM = 2_000
+
+/**
+ * The text a forward's pane starts with: an empty line for the user's own note, then the
+ * newest message of the thread quoted under a header. A quote, header included, that would
+ * leave less than `FORWARD_NOTE_ROOM` of the body cap, or that the host already cut, ends
+ * in `[cut]`.
+ */
+export function mailForwardBody(thread: Pick<MailThread, 'subject' | 'messages'>): string {
+  const message = thread.messages.at(-1)
+  if (message === undefined) return ''
+  const head = [
+    '',
+    '',
+    '---------- Forwarded message ---------',
+    `From: ${mailAddressLine(message.from)}`,
+    `Date: ${FULL_DATE.format(new Date(message.at))}`,
+    `Subject: ${thread.subject}`,
+    `To: ${message.to.map(mailAddressLine).join(', ')}`,
+    '',
+    '',
+  ].join('\n')
+  const quote = head + message.text
+  const cut = '\n[cut]'
+  const room = MAIL_DRAFT_BODY_MAX - FORWARD_NOTE_ROOM
+  if (quote.length <= room && !message.truncated) return quote
+  return quote.slice(0, room - cut.length).trimEnd() + cut
+}

@@ -1,5 +1,6 @@
+import nodemailer from 'nodemailer'
 import { describe, expect, it, vi } from 'vitest'
-import { ConfirmedOutboundSend } from '../src/outboundSend.js'
+import { ConfirmedOutboundSend, type ComposioOutbound } from '../src/outboundSend.js'
 
 const credentials = {
   MANOR_MAIL_IMAP_USER: 'sam@example.invalid',
@@ -36,6 +37,59 @@ describe('Gmail outbound send', () => {
       text: 'Confirmed body',
       messageId: `<${submissionId}@manor.local>`,
     })
+  })
+
+  it('attaches the files of a forward to the mail it builds, under header-safe names and types', async () => {
+    // The real composer without a connection: it builds the mail and hands back its bytes.
+    const composer = nodemailer.createTransport({ streamTransport: true, buffer: true })
+    let raw = ''
+    const send = new ConfirmedOutboundSend(credentials, () => ({
+      sendMail: async (message) => {
+        const info = await composer.sendMail(message)
+        raw = String(info.message)
+        return info
+      },
+    }))
+    await expect(send.send({
+      channel: 'gmail',
+      to: 'robin@example.invalid',
+      subject: 'Fwd: Invoice',
+      body: 'See below.',
+      attachments: [
+        { name: 'invoice.pdf', type: 'application/pdf', content: Buffer.from('%PDF-1.7 invoice') },
+        { name: 'notes\r\nBcc: other@example.invalid.txt', type: 'text/plain; charset=utf-8', content: Buffer.from('Net 30 days') },
+        { name: '\n', type: 'text/x\r\nX-Injected: 1', content: Buffer.from('odd') },
+        { name: 'earlier.eml', type: 'message/rfc822', content: Buffer.from('Subject: Earlier\r\n\r\nAs agreed.') },
+      ],
+      submissionId,
+    })).resolves.toEqual({ ok: true, delivery: 'delivered' })
+
+    expect(raw).toContain('Content-Type: application/pdf; name=invoice.pdf')
+    expect(raw).toContain('Content-Disposition: attachment; filename=invoice.pdf')
+    expect(raw).toContain(Buffer.from('%PDF-1.7 invoice').toString('base64'))
+    expect(raw).toContain(Buffer.from('Net 30 days').toString('base64'))
+    // No line of the mail starts with a header a file's name or type tried to add.
+    expect(raw).not.toMatch(/^(Bcc|X-Injected):/m)
+    expect(raw).toContain('Content-Type: application/octet-stream; name=attachment')
+    // An attached mail leaves as a file, not as text shown under the forward.
+    expect(raw).toContain('Content-Disposition: attachment; filename=earlier.eml')
+    expect(raw).not.toContain('Content-Disposition: inline')
+  })
+
+  it('refuses attachments on a Composio account before anything is sent', async () => {
+    const execute = vi.fn()
+    const composio: ComposioOutbound = { available: () => true, account: async () => 'acct_1', execute }
+    const send = new ConfirmedOutboundSend({}, vi.fn(), undefined, undefined, undefined, composio)
+    await expect(send.send({
+      channel: 'gmail',
+      from: 'sam@example.invalid',
+      to: 'robin@example.invalid',
+      subject: 'Fwd: Invoice',
+      body: 'See below.',
+      attachments: [{ name: 'invoice.pdf', type: 'application/pdf', content: Buffer.from('x') }],
+      submissionId,
+    })).resolves.toEqual({ ok: false, certainty: 'safe', message: 'Not sent: this Gmail connection cannot carry attachments. Remove them to forward the text alone.' })
+    expect(execute).not.toHaveBeenCalled()
   })
 
   it('threads a reply card into its Gmail conversation without a lookup for new mail', async () => {

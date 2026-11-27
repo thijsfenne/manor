@@ -34,6 +34,7 @@ import { NoticeStack } from './components/NoticeStack'
 import { providerUpdateNotice, useProviderUpdates } from './components/ProviderUpdates'
 import { sessionGitNotice, useSessionGitToast } from './components/session/SessionGitToast'
 import { useMailArchivedNotice } from './components/mail/mailArchivedNotice'
+import { useMailLabelledNotice } from './components/mail/mailLabelledNotice'
 import { SESSION_SCOPE } from './components/session/DiffPanel'
 import { FileMarkSprite } from './components/fileMark'
 import { chatKindOffersSideChat } from './components/RightRail'
@@ -451,8 +452,10 @@ function Workspace({
   const providerUpdates = useProviderUpdates(workspace.providerUpdates)
   const sessionGitToast = useSessionGitToast(workspace.sessionGitResults, workspace.sessionCommits, manor.status === 'live')
   const mailNotice = useMailArchivedNotice(workspace.mail, manor.mailCommands.unarchiveMailThread)
+  const mailLabelledNotice = useMailLabelledNotice(workspace.mail, manor.mailCommands.setMailLabel)
   const houseNotices = [
     mailNotice,
+    mailLabelledNotice,
     providerUpdateNotice(providerUpdates.toast, manor.updateProviders, providerUpdates.dismissToast),
     sessionGitNotice(sessionGitToast.notice, sessionGitToast.dismiss),
   ].filter((notice) => notice !== null)
@@ -761,15 +764,14 @@ function Workspace({
       {/* The window's one notice stack: chat news, action confirmations and the house's
           own progress, in the top right corner under the bar, whatever the panels do.
           Outside the frame Settings makes inert, and above it, so what lands while
-          Settings is open is seen and can be reached. In Mail it sits under the row of
-          actions, so a notice never covers Archive or a reply's Close. */}
+          Settings is open is seen and can be reached. */}
       <NoticeStack
         house={houseNotices}
         agents={workspace.agents}
         onOpen={openNoticeTarget}
         onUndo={(undo) => manor.undoNoticeWrite(undo.chatId, undo.writeId)}
         className={phone ? 'inset-x-2 top-2 items-center' : 'items-end'}
-        {...(phone ? {} : { style: { top: TOP_BAR_HEIGHT + (destination === 'mail' ? MAIL_ACTIONS_HEIGHT : 8), right: FRAME_GUTTER + 8 } })}
+        {...(phone ? {} : { style: { top: TOP_BAR_HEIGHT + 8, right: FRAME_GUTTER + 8 } })}
       />
       {/* The L-frame: the top bar and the rail are one surface, and the sidebar and the
           stage sit together in the inset it frames. The phone has neither. */}
@@ -1022,9 +1024,6 @@ function occupiedChatIdsOf(split: SplitStage | null, draftSide: 'left' | 'right'
   if (split !== null) return new Set(occupiedSplitIds(split, draftSide))
   return new Set(stageChatId === null ? [] : [stageChatId])
 }
-
-/** The row of actions over a mail and over its reply, `min-h-14` in both. */
-const MAIL_ACTIONS_HEIGHT = 56
 
 /** The window under the Settings modal: mounted, but out of reach of focus, clicks and screen readers. */
 const COVERED = { inert: '' }

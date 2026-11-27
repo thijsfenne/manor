@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState, type ChangeEvent } from 'react'
-import { DEFAULT_USER_PROFILE, type HouseSettings, type SystemInfo, type UserProfile } from '@manor/contracts'
+import { DEFAULT_USER_PROFILE, MAIL_LABEL_NAME, MAIL_LABELS, type HouseSettings, type SystemInfo, type UserProfile } from '@manor/contracts'
 import { AVATAR_ACCEPT, shrinkToAvatar } from '../../avatar'
 import { DEFAULT_THEMES, type ThemePair } from '../../colorThemes'
 import type { Notice } from '../../state'
@@ -194,6 +194,21 @@ const KEYBINDINGS: readonly { title: string; keys: readonly { keys: string; act:
       { keys: '⌘S', act: 'Save the open file or note' },
       { keys: '/', act: 'Search notes in Knowledge' },
       { keys: '⌘B', act: 'Make text bold, inside a note' },
+    ],
+  },
+  {
+    title: 'Mail',
+    keys: [
+      { keys: 'J  K  ↓  ↑', act: 'Next and previous mail' },
+      { keys: '1 – 4', act: `Label the open mail: ${MAIL_LABELS.map((label) => MAIL_LABEL_NAME[label]).join(', ')}` },
+      { keys: 'R', act: 'Reply to the open mail' },
+      { keys: 'F', act: 'Forward the open mail' },
+      { keys: 'E', act: 'Archive the open mail, or the selected mails' },
+      { keys: 'A', act: 'Add the open mail to a chat' },
+      { keys: '/', act: 'Search mail' },
+      { keys: 'Esc', act: 'Clear a selection of several mails, else close the reply or forward' },
+      { keys: '⌘ click', act: 'Add a mail to the selection, or take it out' },
+      { keys: '⇧ click', act: 'Select every mail from the last one clicked or opened to this one' },
     ],
   },
   {

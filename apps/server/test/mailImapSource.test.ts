@@ -279,6 +279,37 @@ describe('MailImapSource edge cases', () => {
     expect(calls.map((call) => call.method)).toEqual(['connect', 'list', 'logout'])
   })
 
+  it('reads only the picked attachments of the named message, in the order asked, and refuses what is gone or too large', async () => {
+    const messages: FakeMessage[] = [{
+      emailId: 'e7', threadId: '1790000000000000066', messageId: '<g@one.example>', subject: 'Papers', from: sam, to: [me],
+      date: new Date('2026-11-20T09:00:00Z'), seen: false, allUid: 31, inboxUid: 4,
+      structure: { type: 'multipart/mixed', childNodes: [
+        { part: '1', ...plain },
+        { part: '2', type: 'application/pdf', disposition: 'attachment', dispositionParameters: { filename: 'contract.pdf' }, size: 2_048 },
+        { part: '3', type: 'text/csv', disposition: 'attachment', dispositionParameters: { filename: 'hours.csv' }, size: 1_024 },
+        { part: '4', type: 'message/rfc822', disposition: 'attachment', dispositionParameters: { filename: 'earlier.eml' }, size: 3_072, childNodes: [{ part: '4.1', ...plain }] },
+      ] },
+      body: 'Three files attached.',
+      parts: { '2': '%PDF contract', '3': 'day,hours\nmon,8', '4': 'Subject: Earlier\r\n\r\nHello' },
+    }]
+    const { client, calls } = fakeServer({ gmail: true, messages })
+    const source = new MailImapSource({ account: 'you@home.example', createClient: () => client })
+    const thread = { threadId: '1790000000000000066', gmailThreadId: '1790000000000000066', uidValidity: '7', uids: [4] }
+
+    expect(await source.readAttachments(thread, 'e7', [2, 0], 1_000)).toEqual([
+      { name: 'earlier.eml', type: 'message/rfc822', content: Buffer.from('Subject: Earlier\r\n\r\nHello') },
+      { name: 'contract.pdf', type: 'application/pdf', content: Buffer.from('%PDF contract') },
+    ])
+    expect(calls.filter((call) => call.method === 'download').map((call) => call.args.slice(0, 2))).toEqual([['31', '4'], ['31', '2']])
+    expect(calls.map((call) => call.method).filter((method) => FORBIDDEN.test(method))).toEqual([])
+    // A text file says which charset its bytes arrived in.
+    expect((await source.readAttachments(thread, 'e7', [1], 1_000))[0]?.type).toBe('text/csv; charset=utf-8')
+
+    await expect(source.readAttachments(thread, 'e7', [0, 1], 20)).rejects.toThrow('too large to forward together')
+    await expect(source.readAttachments(thread, 'e7', [3], 1_000)).rejects.toThrow('no longer has that attachment')
+    await expect(source.readAttachments(thread, 'e-other', [0], 1_000)).rejects.toThrow('no longer in this thread')
+  })
+
   it('does not read an attached mail as the message text, and lists it as one attachment', async () => {
     const messages: FakeMessage[] = [{
       emailId: 'e9', threadId: '1790000000000000099', messageId: '<f@one.example>', subject: 'Fwd: Plans', from: sam, to: [me],

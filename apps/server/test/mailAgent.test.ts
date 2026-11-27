@@ -489,6 +489,7 @@ describe('the triage run', () => {
     expect(card(FIXTURE_THREAD.result)).toMatchObject({ label: 'reply' })
     expect(card(FIXTURE_THREAD.receipt)).toMatchObject({ label: 'fyi' })
     expect(card(FIXTURE_THREAD.signUp)).toMatchObject({ label: 'fyi' })
+    expect(card(FIXTURE_THREAD.review)).toMatchObject({ label: 'other', reason: 'A review request; it asks nothing you need to do.' })
     expect(card(FIXTURE_THREAD.family)).toEqual(expect.objectContaining({ label: 'fyi' }))
     expect(card(FIXTURE_THREAD.family)?.reason).toBeUndefined()
     expect(module.cache!.label(FIXTURE_THREAD.family)?.by).toBe('user')
@@ -514,7 +515,7 @@ describe('the triage run', () => {
     await socket('a').send({ type: 'mail_triage_run' })
     expect(recorder.inputs).toHaveLength(3)
     expect(list).toHaveBeenCalledTimes(1)
-    expect(lastState().cards).toHaveLength(70)
+    expect(lastState().cards).toHaveLength(71)
     expect(lastState().cards.every((entry) => entry.label !== undefined)).toBe(true)
     expect(lastState().triage.error).toBeUndefined()
     // A fresh capability per batch: a turn's capability is unmounted before the next turn starts.
@@ -578,6 +579,29 @@ describe('the triage run', () => {
     // The user's own click still runs.
     await socket('a').send({ type: 'mail_triage_run' })
     expect(recorder.inputs).toHaveLength(2)
+  })
+
+  it('sorts the agent\'s labels again after a rules change, and a run that fails leaves them where they were', async () => {
+    const before = await setup()
+    before.module.setAgentLabel(FIXTURE_THREAD.review, 'reply', 'Asks for a rating.')
+    before.module.setAgentLabel(FIXTURE_THREAD.receipt, 'fyi', 'A receipt.')
+    before.module.cache!.setMeta('triageRules', '2')
+    before.module.cache!.close()
+    const cacheFile = path.join(before.dir, 'mail-cache.db')
+
+    const failing = await setup({ cacheFile, driver: choosingDriver(() => 'The provider is out of quota.') })
+    await failing.socket('a').send({ type: 'mail_load', refresh: true })
+    expect(failing.recorder.inputs).toHaveLength(1)
+    expect(failing.card(FIXTURE_THREAD.review)).toMatchObject({ label: 'reply', reason: 'Asks for a rating.' })
+    expect(failing.card(FIXTURE_THREAD.receipt)).toMatchObject({ label: 'fyi', reason: 'A receipt.' })
+    failing.module.cache!.close()
+
+    const after = await setup({ cacheFile })
+    await after.socket('a').send({ type: 'mail_load', refresh: true })
+    expect(after.card(FIXTURE_THREAD.review)).toMatchObject({ label: 'other' })
+    expect(after.card(FIXTURE_THREAD.receipt)).toMatchObject({ label: 'fyi', reason: 'For your information.' })
+    await after.socket('a').send({ type: 'mail_load', refresh: true })
+    expect(after.recorder.inputs).toHaveLength(1)
   })
 
   it('stops at the first batch that fails or sets no label, and says why', async () => {
@@ -770,6 +794,51 @@ describe('send', () => {
     await asker.send({ ...sendFamily, requestId: 's1' })
     expect(port.sent).toEqual([])
     expect(asker.replies.at(-1)).toMatchObject({ requestId: 's1', ok: false, message: expect.stringContaining('could not be filed in its thread') })
+  })
+
+  it('a forward leaves as new mail under Fwd, with or without a Gmail thread id, and keeps the label', async () => {
+    const { socket, send, card } = await setup()
+    const asker = socket('a')
+    await asker.send({ type: 'mail_set_label', threadId: FIXTURE_THREAD.family, label: 'reply' })
+    await asker.send({ type: 'mail_send', requestId: 'f1', threadId: FIXTURE_THREAD.family, to: 'nora@talent.example', body: 'See below.', forward: { messageId: 'any', files: [] } })
+    expect((send as RecordingOutboundSend).sent).toEqual([{
+      channel: 'gmail',
+      submissionId: 'f1',
+      from: 'you@example.com',
+      to: 'nora@talent.example',
+      subject: 'Fwd: Komen jullie zondag eten?',
+      body: 'See below.',
+    }])
+    expect(asker.replies.at(-1)).toEqual({ type: 'mail_result', requestId: 'f1', ok: true })
+    expect(card(FIXTURE_THREAD.family)?.label).toBe('reply')
+
+    const port = new SilentPort(async () => ({ ok: true, delivery: 'delivered' }))
+    const plain = await setup({ source: new PlainImapSource({ now: Date.UTC(2026, 10, 26, 12) }), send: port })
+    await plain.socket('a').send({ type: 'mail_send', requestId: 'f2', threadId: FIXTURE_THREAD.family, to: 'nora@talent.example', body: 'See below.', forward: { messageId: 'any', files: [] } })
+    expect(port.sent).toHaveLength(1)
+    expect(port.sent[0]?.gmailThreadId).toBeUndefined()
+  })
+
+  it('a forward carries the attachments the user kept, read from the mailbox on Send, and one that cannot be read sends nothing', async () => {
+    const { socket, send, source, module } = await setup()
+    const asker = socket('a')
+    const newest = (await source.readThread({ threadId: FIXTURE_THREAD.interview, uidValidity: '1', uids: [] })).at(-1)!
+    expect(newest.attachments.map((entry) => entry.name)).toEqual(['interview-schedule.pdf', 'office-map.png'])
+    const forwardOf = (files: number[], messageId = newest.id) =>
+      ({ type: 'mail_send', threadId: FIXTURE_THREAD.interview, to: 'ingrid@family.example', body: 'See below.', forward: { messageId, files } }) as const
+    // Only the second file was kept; naming it twice attaches it once.
+    await asker.send({ ...forwardOf([1, 1]), requestId: 'f1' })
+    const { sent } = send as RecordingOutboundSend
+    expect(sent[0]?.attachments).toEqual([{ name: 'office-map.png', type: 'application/octet-stream', content: Buffer.from('Fixture bytes of office-map.png\n') }])
+    expect(asker.replies.at(-1)).toEqual({ type: 'mail_result', requestId: 'f1', ok: true })
+
+    // A place the message does not have, or a message that left the thread: refused before the port, with no claim to answer for.
+    await asker.send({ ...forwardOf([5]), requestId: 'f2' })
+    expect(asker.replies.at(-1)).toEqual({ type: 'mail_result', requestId: 'f2', ok: false, message: 'Not sent: the attachments could not be read. The forwarded message no longer has that attachment.' })
+    await asker.send({ ...forwardOf([0], '<gone@fixture.example>'), requestId: 'f3' })
+    expect(asker.replies.at(-1)).toMatchObject({ requestId: 'f3', ok: false, message: expect.stringContaining('no longer in this thread') })
+    expect(sent).toHaveLength(1)
+    expect(module.cache!.sendClaims(FIXTURE_THREAD.interview).map((claim) => claim.status)).toEqual(['sent'])
   })
 
   it('an uncertain outcome answers ok:false, keeps the label, and the next send asks to check Sent once', async () => {

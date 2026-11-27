@@ -54,7 +54,7 @@ function parseClaim(value: string | undefined): { owner: string; at: number } | 
 }
 
 interface MailTriageOptions {
-  module: Pick<MailModule, 'cache' | 'available' | 'state' | 'refresh' | 'unlabelled' | 'setAgentLabel' | 'setTriageRunning' | 'recordTriageRun' | 'broadcastState'>
+  module: Pick<MailModule, 'cache' | 'available' | 'unsorted' | 'refresh' | 'triageCandidates' | 'setAgentLabel' | 'setTriageRunning' | 'recordTriageRun' | 'broadcastState'>
   runtime?: MailAgentRuntime
   toolHost?: MailToolHost
   account: () => string
@@ -62,7 +62,7 @@ interface MailTriageOptions {
 }
 
 /**
- * The triage run: turns of the default agent over the unlabelled threads, a batch of
+ * The triage run: turns of the default agent over the unsorted threads, a batch of
  * the newest at a time, each turn with exactly one tool, `mail_set_label`. Daily at
  * 07:30 on the server that runs routines, on demand on any server, and when the open
  * Mail view looks at the mailbox and finds new mail. It labels in
@@ -76,26 +76,25 @@ export class MailTriage {
   /** Names this process in the claim, so two servers on one data folder never both run. */
   private readonly owner = randomUUID()
   private running = false
-  /** The threads the last run in this process ended without a label for. */
+  /** The threads the last run in this process ended without a new label for. */
   private left: ReadonlySet<string> = new Set()
 
   constructor(private readonly options: MailTriageOptions) {}
 
   /**
-   * The open Mail view just polled the mailbox: runs when that left a thread unlabelled
+   * The open Mail view just polled the mailbox: runs when that left a thread unsorted
    * that no run here has ended on. A thread the agent skipped and a run that failed
    * wait for a click or the daily run, so looking again never repeats a turn.
    */
   async look(): Promise<void> {
     const { runtime, toolHost } = this.options
     if (this.running || runtime === undefined || toolHost === undefined || mailDefaultAgent(runtime) === undefined) return
-    const waiting = await this.unlabelledThreads()
+    const waiting = await this.unsortedThreads()
     if ([...waiting].some((threadId) => !this.left.has(threadId))) await this.run()
   }
 
-  private async unlabelledThreads(): Promise<Set<string>> {
-    const { cards } = await this.options.module.state()
-    return new Set(cards.filter((card) => card.label === undefined).map((card) => card.threadId))
+  private async unsortedThreads(): Promise<Set<string>> {
+    return new Set((await this.options.module.unsorted()).map((card) => card.threadId))
   }
 
   /** The schedule's tick: runs when today's run is owed. */
@@ -120,7 +119,7 @@ export class MailTriage {
     } finally {
       this.release(module.cache ?? cache)
       // Read before another run may start, so a look right after this one finds nothing new.
-      this.left = await this.unlabelledThreads().catch(() => this.left)
+      this.left = await this.unsortedThreads().catch(() => this.left)
       this.running = false
     }
     await module.recordTriageRun(error)
@@ -145,7 +144,7 @@ export class MailTriage {
   }
 
   /**
-   * Polls once, then labels batch after batch, one turn each, until no unlabelled thread
+   * Polls once, then labels batch after batch, one turn each, until no unsorted thread
    * is left. Answers why it stopped early, or undefined.
    */
   private async label(): Promise<string | undefined> {
@@ -161,7 +160,7 @@ export class MailTriage {
       if (cache === undefined) return undefined
       // Each batch renews the claim, so a long run never looks abandoned to another server.
       if (!this.claim(cache)) return 'Another Manor server took over the triage run.'
-      const entries: MailTriageEntry[] = (await module.unlabelled(MAIL_TRIAGE_BATCH, offered)).map((entry, index) => ({ id: `m${index + 1}`, ...entry }))
+      const entries: MailTriageEntry[] = (await module.triageCandidates(MAIL_TRIAGE_BATCH, offered)).map((entry, index) => ({ id: `m${index + 1}`, ...entry }))
       if (entries.length === 0) return undefined
       for (const entry of entries) offered.add(entry.card.threadId)
       const threads = new Map(entries.map((entry) => [entry.id, entry.card.threadId]))

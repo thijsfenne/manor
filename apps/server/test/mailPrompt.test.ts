@@ -147,7 +147,7 @@ describe('the draft prompt', () => {
 })
 
 describe('the triage prompt', () => {
-  it('keeps automatic mail about the user out of Other and lists every mail in the untrusted block', () => {
+  it('keeps automatic mail about the user out of Other, sends review requests there and lists every mail in the untrusted block', () => {
     const card = { threadId: 't1', subject: 'Your receipt for order 1042', from: { name: 'City Bikes', address: 'receipts@city-bikes.example' }, at: Date.UTC(2026, 10, 26, 9, 30), unread: false, messageCount: 1 }
     const prompt = mailTriagePrompt([{ id: 'm1', card, snippet: 'Total paid, 29.90' }], 'user@example.com')
     const rules = prompt.slice(0, prompt.indexOf(MAIL_UNTRUSTED_OPEN))
@@ -156,6 +156,9 @@ describe('the triage prompt', () => {
     expect(line('fyi')).toContain('a receipt')
     expect(line('fyi')).toContain('the confirmation of a sign-up, registration or application')
     expect(line('other')).not.toMatch(/receipt|confirmation|notification/)
+    expect(line('other')).toContain('a request for a review, a rating, a survey or feedback')
+    expect(rules).toContain('a request that serves only the sender is not something the user needs to do')
+    expect(rules).toContain('A mail that does both, such as a delivery notice that also asks for a rating, is fyi.')
     expect(rules).toContain('When a mail fits both reply and fyi, choose reply. When you doubt between fyi and other, choose fyi.')
     expect(untrustedMailPayload(prompt)).toEqual([
       { id: 'm1', from: 'City Bikes <receipts@city-bikes.example>', fromTheUser: false, subject: 'Your receipt for order 1042', date: '2026-11-26 09:30 UTC', messages: 1, newestMessageStart: 'Total paid, 29.90' },

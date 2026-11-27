@@ -59,6 +59,7 @@ describe('MailModule', () => {
       FIXTURE_THREAD.newsletter,
       FIXTURE_THREAD.digest,
       FIXTURE_THREAD.waiting,
+      FIXTURE_THREAD.review,
       FIXTURE_THREAD.receipt,
       FIXTURE_THREAD.signUp,
       FIXTURE_THREAD.application,
@@ -181,7 +182,7 @@ describe('MailModule', () => {
     vi.spyOn(source, 'listInbox').mockRejectedValueOnce(new Error('Connection timed out'))
     await module.refresh()
     expect(lastState()).toMatchObject({ status: 'error', error: 'Connection timed out' })
-    expect(lastState().cards).toHaveLength(10)
+    expect(lastState().cards).toHaveLength(11)
     await module.refresh()
     expect(lastState().status).toBe('ready')
     expect(lastState().error).toBeUndefined()
@@ -217,7 +218,7 @@ describe('MailModule', () => {
     await module.broadcastState()
     expect(card(FIXTURE_THREAD.family)).toMatchObject({ label: 'reply' })
     expect(card(FIXTURE_THREAD.digest)).toMatchObject({ label: 'fyi', reason: 'A weekly digest, nothing to answer.' })
-    const unlabelled = await module.unlabelled()
+    const unlabelled = await module.triageCandidates()
     expect(unlabelled.map((entry) => entry.card.threadId)).not.toContain(FIXTURE_THREAD.digest)
     expect(unlabelled.find((entry) => entry.card.threadId === FIXTURE_THREAD.parking)?.snippet).toMatch(/^Dear resident, Your residential parking permit/)
     // Reading for a snippet does not count as opening.
@@ -247,7 +248,7 @@ describe('MailModule', () => {
     await module.refresh()
     expect(card(FIXTURE_THREAD.waiting)?.label).toBeUndefined()
     expect(card(FIXTURE_THREAD.family)).toMatchObject({ label: 'reply' })
-    expect((await module.unlabelled()).map((entry) => entry.card.threadId)).toContain(FIXTURE_THREAD.waiting)
+    expect((await module.triageCandidates()).map((entry) => entry.card.threadId)).toContain(FIXTURE_THREAD.waiting)
   })
 
   it('a uidValidity change rebuilds the message rows and drops bodies read under the old numbering', async () => {
@@ -294,7 +295,7 @@ describe('MailModule', () => {
     })
     expect((await module.state()).cards).toEqual([])
     await module.refresh()
-    expect(lastState().cards).toHaveLength(10)
+    expect(lastState().cards).toHaveLength(11)
   })
 
   it('refuses a send on a host without a send port', async () => {
@@ -319,7 +320,7 @@ describe('the cache file is disposable', () => {
     await second.send({ type: 'mail_load' })
     expect(second.replies.at(-1)).toMatchObject({ type: 'mail_state', cards: [] })
     await second.module.refresh()
-    expect(second.lastState().cards).toHaveLength(10)
+    expect(second.lastState().cards).toHaveLength(11)
     expect(second.card(FIXTURE_THREAD.family)?.label).toBeUndefined()
   }
 
@@ -369,31 +370,37 @@ describe('the cache file is disposable', () => {
     const second = setup({ cacheFile: first.cacheFile })
     await second.module.refresh()
     expect(second.card(FIXTURE_THREAD.receipt)?.label).toBe('other')
+    expect((await second.module.unsorted()).map((card) => card.threadId)).not.toContain(FIXTURE_THREAD.receipt)
     expect(second.module.cache!.getMeta('triageRules')).toBe('99')
   })
 
-  it('a cache labelled under older triage rules loses only the Other labels the agent gave', async () => {
+  it('a cache labelled under older triage rules keeps every label in place and offers the agent\'s to be sorted again', async () => {
     const first = setup()
     await first.module.refresh()
-    first.module.setAgentLabel(FIXTURE_THREAD.receipt, 'other', 'A receipt.')
-    first.module.setAgentLabel(FIXTURE_THREAD.application, 'fyi', 'A confirmation.')
+    for (const card of first.lastState().cards) first.module.setAgentLabel(card.threadId, 'fyi', 'Sorted under the old rules.')
+    first.module.setAgentLabel(FIXTURE_THREAD.review, 'reply', 'Asks for a rating.')
     await first.send({ type: 'mail_set_label', threadId: FIXTURE_THREAD.newsletter, label: 'other' })
     first.module.cache!.close()
     const db = new DatabaseSync(first.cacheFile)
-    db.exec("UPDATE meta SET value = '1' WHERE key = 'triageRules'")
+    db.exec("UPDATE meta SET value = '2' WHERE key = 'triageRules'")
     db.close()
+    const unsorted = async (module: MailModule) => (await module.unsorted()).map((card) => card.threadId)
 
     const second = setup({ cacheFile: first.cacheFile })
     await second.module.refresh()
-    expect(second.card(FIXTURE_THREAD.receipt)?.label).toBeUndefined()
-    expect(second.card(FIXTURE_THREAD.application)?.label).toBe('fyi')
+    expect(second.card(FIXTURE_THREAD.review)).toMatchObject({ label: 'reply', reason: 'Asks for a rating.' })
+    expect(second.card(FIXTURE_THREAD.receipt)?.label).toBe('fyi')
     expect(second.card(FIXTURE_THREAD.newsletter)?.label).toBe('other')
-    second.module.setAgentLabel(FIXTURE_THREAD.receipt, 'other', 'Still a receipt.')
+    expect(await unsorted(second.module)).toHaveLength(10)
+    expect(await unsorted(second.module)).not.toContain(FIXTURE_THREAD.newsletter)
+    expect(second.module.setAgentLabel(FIXTURE_THREAD.review, 'other', 'A review request.')).toBe(true)
+    expect(await unsorted(second.module)).not.toContain(FIXTURE_THREAD.review)
     second.module.cache!.close()
 
     const third = setup({ cacheFile: first.cacheFile })
     await third.module.refresh()
-    expect(third.card(FIXTURE_THREAD.receipt)?.label).toBe('other')
+    expect(third.card(FIXTURE_THREAD.review)?.label).toBe('other')
+    expect(await unsorted(third.module)).toHaveLength(9)
   })
 
   it('a file on another schema version is emptied', async () => {

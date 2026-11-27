@@ -26,11 +26,12 @@ const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite') as typeof
 export const MAIL_CACHE_SCHEMA_VERSION = 2
 
 /**
- * Bumped when the triage rules move a kind of mail out of Other. A cache labelled under
- * older rules then loses the Other labels the agent gave, so that mail is sorted again
- * by the next run. Version 2 took receipts, confirmations and portal notices out of Other.
+ * Bumped when the triage rules change what a label means. In a cache labelled under older
+ * rules the agent's labels then count as outdated: each stays where it is until the next
+ * run sorts that mail again. Version 2 took receipts, confirmations and portal notices out
+ * of Other; version 3 sent review requests and the marketing after a purchase there.
  */
-export const MAIL_TRIAGE_RULES_VERSION = 2
+export const MAIL_TRIAGE_RULES_VERSION = 3
 
 const SCHEMA = `
 CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
@@ -186,7 +187,7 @@ export class MailCache {
    * Never throws for a bad file: whatever is at `file` that cannot be read is replaced.
    * A cache written for another mailbox is emptied, labels and links included, so one
    * account's mail never shows under another. `fresh` replaces the file outright. A cache
-   * labelled under older triage rules keeps every label but the agent's Other ones.
+   * labelled under older triage rules keeps every label, the agent's as outdated.
    */
   static open(file: string, account: string, options: { fresh?: boolean } = {}): MailCache {
     const remove = () => {
@@ -203,11 +204,11 @@ export class MailCache {
     const owner = cache.getMeta('account')
     if (owner !== undefined && owner !== account) cache.empty()
     cache.setMeta('account', account)
-    // One step, so of two servers opening the file at once only the first clears anything.
+    // One step, so of two servers opening the file at once only the first marks anything.
     transaction(cache.db, () => {
       // Labels written under newer rules than this build knows are left alone.
       if (Number(cache.getMeta('triageRules') ?? 0) >= MAIL_TRIAGE_RULES_VERSION) return
-      cache.db.exec("DELETE FROM labels WHERE set_by = 'agent' AND label = 'other'")
+      cache.db.exec("UPDATE labels SET set_by = 'outdated' WHERE set_by = 'agent'")
       cache.setMeta('triageRules', String(MAIL_TRIAGE_RULES_VERSION))
     })
     return cache
@@ -412,7 +413,12 @@ export class MailCache {
     const row = this.db.prepare('SELECT label, reason, set_by FROM labels WHERE thread_id = ?').get(threadId)
     const label = MailLabelSchema.safeParse(row?.label)
     if (row === undefined || !label.success) return undefined
-    return { label: label.data, ...(typeof row.reason === 'string' ? { reason: row.reason } : {}), by: row.set_by === 'agent' ? 'agent' : 'user' }
+    return { label: label.data, ...(typeof row.reason === 'string' ? { reason: row.reason } : {}), by: row.set_by === 'user' ? 'user' : 'agent' }
+  }
+
+  /** The threads whose label the agent gave under older triage rules; a new label from the agent replaces it. */
+  outdatedLabels(): Set<string> {
+    return new Set(this.db.prepare("SELECT thread_id FROM labels WHERE set_by = 'outdated'").all().map((row) => String(row.thread_id)))
   }
 
   /** Sender address (lowercased) to project id. */

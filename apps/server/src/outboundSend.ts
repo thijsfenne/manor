@@ -30,8 +30,18 @@ export interface OutboundSendRequest {
   slackChannelId?: string
   slackThreadTs?: string
   slackRichText?: SlackRichText
+  /** Gmail only: the files a forward carries. Only the host's own mail account can send them. */
+  attachments?: OutboundAttachment[]
   /** Durable claim id, reused as provider idempotency metadata where supported. */
   submissionId: string
+}
+
+/** One file as it leaves with a mail. Name and type are the words of the original's sender, so both are untrusted. */
+export interface OutboundAttachment {
+  name: string
+  /** The MIME type the original declared, with the charset of the bytes for a text file. */
+  type: string
+  content: Buffer
 }
 
 export type OutboundSendResult =
@@ -86,6 +96,7 @@ interface GmailMessage {
   messageId: string
   inReplyTo?: string
   references?: string[]
+  attachments?: { filename: string; contentType: string; content: Buffer }[]
 }
 
 interface GmailTransport {
@@ -156,6 +167,18 @@ function rejectedRecipients(info: unknown): string[] {
   if (!Array.isArray(rejected)) return []
   return rejected.map((entry: unknown) => typeof entry === 'string' ? entry : typeof entry === 'object' && entry !== null && 'address' in entry ? String(entry.address) : '').filter((entry) => entry !== '')
 }
+
+/**
+ * A file as the SMTP transport takes it. No control character of the name reaches a
+ * header, and a type that is not a plain MIME type leaves as unnamed bytes. The
+ * disposition is said outright, because the composer shows an attached mail inline.
+ */
+const smtpAttachment = ({ name, type, content }: OutboundAttachment) => ({
+  filename: name.replace(/[\u0000-\u001f\u007f]+/g, ' ').trim() || 'attachment',
+  contentType: /^[\w.+-]+\/[\w.+-]+(; charset=[\w.:-]+)?$/.test(type) ? type : 'application/octet-stream',
+  contentDisposition: 'attachment' as const,
+  content,
+})
 
 function composioFailure(channel: 'Gmail' | 'Slack', result: Exclude<ComposioExecution, { status: 'ok' }>): OutboundSendResult {
   return {
@@ -234,6 +257,10 @@ export class ConfirmedOutboundSend implements OutboundSendPort {
     if (user === undefined || user === '' || pass === undefined || pass === '') {
       const accountId = await this.composioAccount('gmail')
       if (accountId === undefined) return { ok: false, certainty: 'safe', message: 'Gmail sending is unavailable because no Gmail account is connected.' }
+      // Composio takes a file only after an upload to its own storage, which Manor does not do with the user's mail.
+      if ((request.attachments?.length ?? 0) > 0) {
+        return { ok: false, certainty: 'safe', message: 'Not sent: this Gmail connection cannot carry attachments. Remove them to forward the text alone.' }
+      }
       // A Composio account can be swapped behind Manor's back, so it sends only as the
       // address its card showed. A card without one never names who it would send as.
       if (request.from === undefined) return { ok: false, certainty: 'safe', message: 'Not sent: this draft does not say which Gmail account sends it. Ask for the draft again.' }
@@ -276,6 +303,7 @@ export class ConfirmedOutboundSend implements OutboundSendPort {
         text: request.body,
         messageId: `<${request.submissionId}@manor.local>`,
         ...(reply === undefined ? {} : { inReplyTo: reply.inReplyTo, references: reply.references }),
+        ...(request.attachments === undefined || request.attachments.length === 0 ? {} : { attachments: request.attachments.map(smtpAttachment) }),
       })
       // SMTP may take the mail for some recipients and refuse others. Part of it left, so
       // Send stays locked against a duplicate, but nothing may claim it reached everyone.

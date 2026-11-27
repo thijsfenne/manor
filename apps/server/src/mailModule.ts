@@ -1,4 +1,5 @@
 import {
+  MAIL_FORWARD_ATTACHMENTS_MAX_KB,
   MAIL_INBOX_WINDOW,
   MAIL_RECIPIENTS_MAX,
   MAIL_THREAD_MESSAGES_MAX,
@@ -133,6 +134,7 @@ export class MailModule {
     this.sender = source === undefined || options.send === undefined ? undefined : new MailSender({
       cache: () => this.cacheHandle,
       port: options.send,
+      attachments: (thread, messageId, files) => source.readAttachments(thread, messageId, files, MAIL_FORWARD_ATTACHMENTS_MAX_KB * 1024),
       account: source.account(),
       subject: replySubject,
       now: () => this.now(),
@@ -269,14 +271,23 @@ export class MailModule {
     return { thread, uids: inbox.uids }
   }
 
+  /** The cards a triage run has to sort: no label yet, or one the agent gave under older rules. */
+  async unsorted(): Promise<MailCard[]> {
+    const { cards } = await this.state()
+    const { cache } = this
+    if (cache === undefined) return []
+    const outdated = this.useCache(cache, (current) => current.outdatedLabels())
+    return cards.filter((card) => card.label === undefined || outdated.has(card.threadId))
+  }
+
   /**
-   * The newest unlabelled cards with a snippet of each thread's newest message, for the
+   * The newest unsorted cards with a snippet of each thread's newest message, for the
    * triage run. Reads uncached bodies through the source (never marking them read, and
    * not marking them opened); a thread that will not read gets an empty snippet.
    */
-  async unlabelled(limit = 30, offered: ReadonlySet<string> = new Set()): Promise<{ card: MailCard; snippet: string }[]> {
+  async triageCandidates(limit = 30, offered: ReadonlySet<string> = new Set()): Promise<{ card: MailCard; snippet: string }[]> {
     if (this.cache === undefined) return []
-    const cards = (await this.state()).cards.filter((card) => card.label === undefined && !offered.has(card.threadId)).slice(0, limit)
+    const cards = (await this.unsorted()).filter((card) => !offered.has(card.threadId)).slice(0, limit)
     const out: { card: MailCard; snippet: string }[] = []
     for (const card of cards) {
       let snippet = ''

@@ -341,8 +341,11 @@ export function createWorkspaceCommands(send: Send, update: Update) {
         ...(current === undefined ? {} : { current }) }, (mail) => startingMailDraft(mail, draftId, threadId)),
     stopMailDraft: (draftId: string) =>
       askMail({ type: 'mail_draft_stop', draftId }, (mail) => stoppedMailDraft(mail, draftId)),
-    /** The user's own Send. `mail_result` under `requestId` says whether delivery was confirmed. */
-    sendMail: (requestId: string, threadId: string, to: string, body: string, cc?: string) =>
-      send({ type: 'mail_send', requestId, threadId, to, body, ...(cc === undefined || cc === '' ? {} : { cc }) }),
+    /**
+     * The user's own Send, a reply unless `forward` names the message it forwards and which of
+     * its attachments go along. `mail_result` under `requestId` says whether delivery was confirmed.
+     */
+    sendMail: (requestId: string, threadId: string, to: string, body: string, cc?: string, forward?: Extract<ClientMessage, { type: 'mail_send' }>['forward']) =>
+      send({ type: 'mail_send', requestId, threadId, to, body, ...(cc === undefined || cc === '' ? {} : { cc }), ...(forward === undefined ? {} : { forward }) }),
   }
 }

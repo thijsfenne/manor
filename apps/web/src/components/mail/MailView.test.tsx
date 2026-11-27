@@ -8,6 +8,7 @@ import { toast } from '../../notices'
 import { emptyWorkspace, reduce } from '../../state'
 import { Button } from '../ui/Button'
 import { useMailArchivedNotice } from './mailArchivedNotice'
+import { useMailLabelledNotice } from './mailLabelledNotice'
 import { MailView } from './MailView'
 import { mailView, setMailView } from './mailViewStore'
 
@@ -57,9 +58,9 @@ class FakeElement {
   constructor(public tagName = 'DIV') {}
 }
 
-/** The Archived card as the window's notice stack would draw it. */
-function Notices({ args }: { args: Parameters<typeof useMailArchivedNotice> }) {
-  return <>{useMailArchivedNotice(...args)?.node}</>
+/** The Archived and Moved cards as the window's notice stack would draw them. */
+function Notices({ args, labelArgs }: { args: Parameters<typeof useMailArchivedNotice>; labelArgs: Parameters<typeof useMailLabelledNotice> }) {
+  return <>{useMailArchivedNotice(...args)?.node}{useMailLabelledNotice(...labelArgs)?.node}</>
 }
 
 let view: ReactTestRenderer
@@ -78,7 +79,7 @@ function mount(cards = CARDS, triage = NO_RUN) {
     <>
       <MailView mail={state.mail} agents={[agent]} projects={[]} chats={[]} chatDoor={chatDoor} status="live" commands={commands} settingsOpen={false}
         sidebarSlot={{} as HTMLElement} actionSlot={{} as HTMLElement} sidebarCollapsed={false} />
-      <Notices args={[state.mail, commands.unarchiveMailThread]} />
+      <Notices args={[state.mail, commands.unarchiveMailThread]} labelArgs={[state.mail, commands.setMailLabel]} />
     </>
   ))
   const change = (next: typeof state) => {
@@ -113,7 +114,9 @@ const tab = (label: string) => host((node) => node.props.role === 'tab' && Strin
 const tabNames = () => host((node) => node.props.role === 'tab').map((node) => node.props['aria-label'])
 const says = (text: string) => JSON.stringify(view.toJSON()).includes(text)
 const search = (query: string) => act(() => host((node) => node.props['aria-label'] === 'Search mail')[0]!.props.onChange({ target: { value: query } }))
-const paneOpen = () => host((node) => node.props['aria-label'] === 'Reply draft').length === 1
+const paneOpen = (kind = 'Reply') => host((node) => node.props['aria-label'] === `${kind} draft`).length === 1
+const toolbar = () => host((node) => node.props.role === 'toolbar')
+const toolbarButtons = () => toolbar()[0]!.findAll((node) => node.type === 'button').map(textOf)
 /** A click on a card with the modifiers held, and a right click on it. */
 const clickCard = (id: string, keys: object = {}) =>
   act(() => cardsShown().find((node) => node.props['data-mail-card'] === id)!.props.onClick({ metaKey: false, ctrlKey: false, shiftKey: false, ...keys }))
@@ -140,7 +143,7 @@ beforeEach(() => {
   vi.stubGlobal('HTMLElement', FakeElement)
   vi.stubGlobal('requestAnimationFrame', (run: () => void) => { run(); return 0 })
   vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
-  setMailView({ selectedId: null, tab: 'reply', query: '', picked: [], archived: null, replies: {} })
+  setMailView({ selectedId: null, tab: 'reply', query: '', picked: [], archived: null, relabelled: null, replies: {} })
 })
 afterEach(() => {
   act(() => view.unmount())
@@ -163,10 +166,10 @@ describe('MailView', () => {
     mount()
     expect(tabNames()).toEqual(['Needs attention, 3 mails', 'Waiting, 0 mails', 'FYI, 0 mails'])
     expect(shown()).toEqual(['a', 'b', 'c'])
-    for (const name of ['Reply', 'Add to chat', 'Archive']) expect(button(name)).toBeUndefined()
+    expect(toolbar()).toEqual([])
     expect(says('Select a mail to read.')).toBe(true)
     press('j')
-    for (const name of ['Reply', 'Add to chat', 'Archive']) expect(button(name)).toBeDefined()
+    for (const name of ['Reply', 'Forward', 'Add to chat', 'Archive']) expect(button(name)).toBeDefined()
     expect(button('Reply').props.title).toBe('Draft a reply (R)')
     expect(says('Select a mail to read.')).toBe(false)
   })
@@ -290,6 +293,8 @@ describe('MailView', () => {
     act(() => tab('Waiting').props.onClick())
     press('e')
     expect(JSON.stringify(view.toJSON())).toContain('Archived')
+    // The card of the move by key 2 goes with the mail: its Undo would label a mail that left the Inbox.
+    expect(says('Moved to Waiting')).toBe(false)
     act(() => tab('Needs attention').props.onClick())
     act(() => button('Undo').props.onClick())
     expect(ofType('mail_unarchive').map((message) => message.threadId)).toEqual(['a'])
@@ -297,7 +302,7 @@ describe('MailView', () => {
     expect(host((node) => node.props.role === 'tab' && node.props['aria-selected'] === true).map((node) => node.props['aria-label'])).toEqual(['Waiting, 1 mail'])
     expect(shown()).toEqual(['a'])
     expect(selected()).toBe('a')
-    expect(button('Undo')).toBeUndefined()
+    expect(says('Archived')).toBe(false)
   })
 
   it('archives a pick of several cards with one request each, and undoes them all', () => {
@@ -311,7 +316,7 @@ describe('MailView', () => {
     expect(selected()).toBe('a')
     clickCard('c', { shiftKey: true })
     expect(says('3 mails selected')).toBe(true)
-    expect(button('Archive')).toBeDefined()
+    expect(toolbarButtons()).toEqual(['Archive'])
     menuOn('b')
     expect(menuItems().map(textOf)).toEqual(['Archive 3 mails'])
     act(() => menuItems()[0]!.props.onClick())
@@ -358,13 +363,111 @@ describe('MailView', () => {
     expect(button('Archive')).toBeUndefined()
   })
 
-  it('leads the toolbar with Reply as the primary button, then Add to chat and Archive', () => {
+  it('tells a label key that moved the open mail, and Undo sets the label before it and shows the mail', () => {
     mount()
     press('j')
-    const toolbar = host((node) => node.props.role === 'toolbar')[0]!
-    expect(toolbar.findAll((node) => node.type === 'button').map(textOf)).toEqual(['Reply', 'Add to chat', 'Archive'])
-    expect(toolbar.findAllByType(Button).map((node) => [node.props.variant, node.props.size]))
-      .toEqual([['primary', 'small'], [undefined, 'small'], [undefined, 'small']])
+    press('3')
+    expect(says('Moved to FYI')).toBe(true)
+    expect(shown()).toEqual(['b', 'c'])
+    const stale = button('Undo').props.onClick
+    press('2')
+    expect(says('Moved to Waiting')).toBe(true)
+    expect(says('Moved to FYI')).toBe(false)
+    // The replaced card no longer acts.
+    act(() => stale())
+    expect(ofType('mail_set_label').map((message) => message.label)).toEqual(['fyi', 'wait'])
+    act(() => button('Undo').props.onClick())
+    expect(ofType('mail_set_label').at(-1)).toEqual({ type: 'mail_set_label', threadId: 'a', label: 'fyi' })
+    // The tab that would hide it gives way to its own.
+    expect(host((node) => node.props.role === 'tab' && node.props['aria-selected'] === true).map((node) => node.props['aria-label'])).toEqual(['FYI, 1 mail'])
+    expect(shown()).toEqual(['a'])
+    expect(selected()).toBe('a')
+    expect(says('Moved to')).toBe(false)
+  })
+
+  it('sends the label the open mail already has without a notice, since nothing moved', () => {
+    mount()
+    press('j')
+    press('1')
+    expect(ofType('mail_set_label')).toEqual([{ type: 'mail_set_label', threadId: 'a', label: 'reply' }])
+    expect(says('Moved to')).toBe(false)
+  })
+
+  it('offers no Undo when the mail had no label, and dismisses the notice', () => {
+    mount()
+    search('subject e')
+    press('j')
+    press('4')
+    expect(says('Moved to Other')).toBe(true)
+    expect(button('Undo')).toBeUndefined()
+    act(() => button('Dismiss').props.onClick({ stopPropagation: () => {} }))
+    expect(says('Moved to')).toBe(false)
+  })
+
+  it('keeps the Moved notice while the pointer rests on it, and lets it go six seconds after', () => {
+    vi.useFakeTimers()
+    try {
+      mount()
+      press('j')
+      press('3')
+      const card = () => host((node) => node.props.onPointerEnter !== undefined && textOf(node).includes('Moved to FYI'))[0]!
+      act(() => card().props.onPointerEnter())
+      act(() => { vi.advanceTimersByTime(10_000) })
+      expect(says('Moved to FYI')).toBe(true)
+      // Focus holds it on its own, so the pointer leaving does not start the clock.
+      act(() => card().props.onFocus())
+      act(() => card().props.onPointerLeave())
+      act(() => { vi.advanceTimersByTime(10_000) })
+      expect(says('Moved to FYI')).toBe(true)
+      act(() => card().props.onBlur())
+      act(() => { vi.advanceTimersByTime(5_999) })
+      expect(says('Moved to FYI')).toBe(true)
+      act(() => { vi.advanceTimersByTime(1) })
+      expect(says('Moved to')).toBe(false)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('leads the floating bar with Reply as the primary button, then Forward, Add to chat and Archive', () => {
+    mount()
+    press('j')
+    expect(toolbar()).toHaveLength(1)
+    expect(toolbar()[0]!.props['aria-label']).toBe('Mail actions')
+    expect(toolbarButtons()).toEqual(['Reply', 'Forward', 'Add to chat', 'Archive'])
+    expect(toolbar()[0]!.findAllByType(Button).map((node) => [node.props.variant, node.props.size, node.props.title]))
+      .toEqual([['primary', 'small', 'Draft a reply (R)'], [undefined, 'small', 'Forward (F)'], [undefined, 'small', 'Add to chat (A)'], [undefined, 'small', 'Archive (E)']])
+  })
+
+  it('opens a forward from its key and its button, with the quote and no draft, and sends it as a forward', () => {
+    mount()
+    press('j')
+    const attachments = [{ name: 'quote.pdf', kb: 300 }, { name: 'photo.jpg', kb: 900 }]
+    const messages = thread('a').messages.map((message) => ({ ...message, attachments }))
+    hear({ type: 'mail_thread', requestId: 'with-files', threadId: 'a', result: { status: 'ready', thread: { ...thread('a'), messages } } })
+    press('f')
+    expect(paneOpen('Forward')).toBe(true)
+    expect(mailView().replies.a).toMatchObject({ forward: { messageId: 'a-2', files: [{ index: 0, name: 'quote.pdf', kb: 300 }, { index: 1, name: 'photo.jpg', kb: 900 }] }, to: '', cc: '' })
+    const text = () => host((node) => node.props['aria-label'] === 'Forward text')[0]!
+    expect(text().props.value).toContain('---------- Forwarded message ---------')
+    expect(text().props.value).toContain('Body 2 of a')
+    expect(says('Fwd: Subject a')).toBe(true)
+    expect(ofType('mail_draft_start')).toEqual([])
+    expect(host((node) => node.props['data-composer'] !== undefined)).toEqual([])
+    // One pane per thread: Reply and Forward do nothing new while it is open.
+    press('r')
+    act(() => button('Forward').props.onClick())
+    expect(paneOpen('Forward')).toBe(true)
+    expect(ofType('mail_draft_start')).toEqual([])
+    act(() => button('Edit To').props.onClick())
+    act(() => host((node) => node.props['aria-label'] === 'To')[0]!.props.onChange({ target: { value: 'sam@else.example' } }))
+    act(() => button('Remove quote.pdf').props.onClick())
+    act(() => button('Send').props.onClick())
+    expect(ofType('mail_send')).toMatchObject([{ threadId: 'a', to: 'sam@else.example', forward: { messageId: 'a-2', files: [1] } }])
+    press('Escape')
+    expect(paneOpen('Forward')).toBe(false)
+    act(() => button('Forward').props.onClick())
+    expect(paneOpen('Forward')).toBe(true)
   })
 
   it('opens the reply split with one draft, and Escape stops it and ends the reply', () => {

@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react'
 import { Cancel01Icon } from '@hugeicons/core-free-icons'
-import { MAIL_DRAFT_BODY_MAX, MAIL_INSTRUCTION_MAX, MAIL_RECIPIENTS_MAX, mailNewRecipients, type AgentConfig, type MailThread } from '@manor/contracts'
+import { MAIL_DRAFT_BODY_MAX, MAIL_FORWARD_ATTACHMENTS_MAX_KB, MAIL_INSTRUCTION_MAX, MAIL_RECIPIENTS_MAX, mailForwardSubject, mailNewRecipients, type AgentConfig, type MailThread } from '@manor/contracts'
 import { NO_CHAT_COMMANDS } from '@manor/client-runtime/chat-commands'
 import type { MailDraft } from '@manor/client-runtime/mail'
+import { mailAttachmentSize } from '../../mail'
 import { Composer } from '../Composer'
 import { Button } from '../ui/Button'
 import { IconButton } from '../ui/IconButton'
@@ -20,7 +21,7 @@ export interface MailDraftPaneProps {
   thread: MailThread
   /** The default agent, who writes the draft. */
   agent: AgentConfig | null
-  /** The reply as the Mail view keeps it, which `onChange` updates. */
+  /** The reply or forward as the Mail view keeps it, which `onChange` updates. */
   reply: MailReply
   drafts: MailDraftsState
   onChange: (change: Partial<MailReply>) => void
@@ -39,6 +40,8 @@ const FIELD_ROW = 'flex min-w-0 items-baseline gap-3 border-b border-line py-2'
 /** A fixed column wide enough for Subject, so the three values start on one line. */
 const FIELD_LABEL = 'w-[52px] flex-none text-meta text-dim'
 const FIELD_VALUE = 'min-w-0 flex-1 truncate text-[13px] leading-[18px]'
+/** Where the pane says a forward's attachments weigh more than one mail may carry. */
+const OVER_LIMIT = `These attachments are over ${MAIL_FORWARD_ATTACHMENTS_MAX_KB / 1024} MB together. Remove some to send.`
 
 /**
  * One recipient row. At rest it lists the entries, each one the thread never saw in the
@@ -90,9 +93,18 @@ function RecipientField({ label, value, fresh, onChange, onEscape }: {
  * user's to edit, kept until a new version is asked for in the composer at its foot. The
  * reply lives on when the pane unmounts, so it comes back as it was. Only Send makes
  * anything leave.
+ *
+ * A forward uses the same pane without the agent: the text starts as the quoted newest
+ * message, and no draft is asked for, since a draft turn writes a reply over it. The
+ * message's attachments are listed under the Subject and go along unless removed there.
  */
 export function MailDraftPane({ thread, agent, reply, drafts, onChange, onClose, onStart, onStop, onSend }: MailDraftPaneProps) {
   const { to, cc } = reply
+  const forward = reply.forward !== undefined
+  const files = reply.forward?.files ?? []
+  const kind = forward ? 'Forward' : 'Reply'
+  const subject = forward ? mailForwardSubject(thread.subject) : thread.reply.subject
+  const overLimit = files.reduce((sum, file) => sum + file.kb, 0) > MAIL_FORWARD_ATTACHMENTS_MAX_KB
   const [askError, setAskError] = useState<string | null>(null)
   const { draft, sending } = drafts
   const streaming = draft?.status === 'streaming'
@@ -100,7 +112,7 @@ export function MailDraftPane({ thread, agent, reply, drafts, onChange, onClose,
   const started = useRef(false)
   useEffect(() => {
     // Only for a reply that never had a draft, once also where React runs a mount's effects twice.
-    if (started.current || reply.draftId !== undefined) return
+    if (started.current || forward || reply.draftId !== undefined) return
     started.current = true
     onStart()
   }, [])
@@ -118,7 +130,7 @@ export function MailDraftPane({ thread, agent, reply, drafts, onChange, onClose,
 
   const shown = streaming ? draft.text : body
   const fresh = mailNewRecipients(thread, to, cc)
-  const canSend = !streaming && !sending && body.trim() !== '' && to.trim() !== ''
+  const canSend = !streaming && !sending && !overLimit && body.trim() !== '' && to.trim() !== ''
   const send = () => {
     if (!canSend) return
     onSend(to.trim(), cc.trim(), body)
@@ -140,12 +152,15 @@ export function MailDraftPane({ thread, agent, reply, drafts, onChange, onClose,
     event.stopPropagation()
     onClose()
   }
-  const problem = askError ?? draft?.message
+  const problem = askError ?? draft?.message ?? (overLimit ? OVER_LIMIT : undefined)
+  const remove = (index: number) => {
+    if (reply.forward !== undefined) onChange({ forward: { ...reply.forward, files: files.filter((file) => file.index !== index) } })
+  }
 
   return (
-    <aside aria-label="Reply draft" className="flex h-full min-h-0 min-w-0 flex-col">
+    <aside aria-label={`${kind} draft`} className="flex h-full min-h-0 min-w-0 flex-col">
       <div className="flex min-h-14 flex-none items-center gap-2 py-3 pr-3 pl-5">
-        <h2 className="m-0 min-w-0 flex-1 truncate text-[14px] font-medium text-text">Reply</h2>
+        <h2 className="m-0 min-w-0 flex-1 truncate text-[14px] font-medium text-text">{kind}</h2>
         <IconButton icon={Cancel01Icon} label="Close" title="Close (Esc)" onClick={onClose} />
       </div>
       <div className="mx-5 flex flex-none flex-col">
@@ -153,12 +168,25 @@ export function MailDraftPane({ thread, agent, reply, drafts, onChange, onClose,
         <RecipientField label="Cc" value={cc} fresh={fresh} onChange={(next) => onChange({ cc: next })} onEscape={onClose} />
         <div className={FIELD_ROW}>
           <span className={FIELD_LABEL}>Subject</span>
-          <span className={`${FIELD_VALUE} text-text`} title={thread.reply.subject}>{thread.reply.subject}</span>
+          <span className={`${FIELD_VALUE} text-text`} title={subject}>{subject}</span>
         </div>
+        {/* What leaves with the forward, under the Subject; a long list scrolls in its own few rows. */}
+        {files.length === 0 ? null : (
+          <ul aria-label="Attachments" className="m-0 flex max-h-[104px] list-none flex-col overflow-y-auto border-b border-line py-1 pl-[64px] text-[12px] text-muted">
+            {files.map((file) => (
+              <li key={file.index} className="flex min-h-6 min-w-0 items-center gap-2">
+                <span className="min-w-0 truncate" title={file.name}>{file.name}</span>
+                <span className="flex-none text-dim">{mailAttachmentSize(file.kb)}</span>
+                <IconButton icon={Cancel01Icon} label={`Remove ${file.name}`} size={20} iconSize={12} className="ml-auto"
+                  disabled={sending} onClick={() => remove(file.index)} />
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
       {/* A hairline as well as the fill: the surface is the stage's own colour. */}
-      <div className="mx-5 mt-4 flex min-h-0 flex-1 flex-col rounded-panel border border-line bg-surface">
-        <textarea aria-label="Reply text" value={shown} readOnly={streaming} spellCheck maxLength={MAIL_DRAFT_BODY_MAX}
+      <div className={`mx-5 mt-4 flex min-h-0 flex-1 flex-col rounded-panel border border-line bg-surface ${forward ? 'mb-4' : ''}`}>
+        <textarea aria-label={`${kind} text`} value={shown} readOnly={streaming} spellCheck maxLength={MAIL_DRAFT_BODY_MAX}
           className="min-h-0 flex-1 resize-none border-0 bg-transparent px-4 pt-3.5 pb-2 text-[14px] leading-[1.6] text-text outline-none"
           onChange={(event) => onChange({ body: event.target.value })} onKeyDown={escapes} />
         <div className="flex flex-none items-center gap-1.5 px-3 pt-1 pb-3">
@@ -171,7 +199,8 @@ export function MailDraftPane({ thread, agent, reply, drafts, onChange, onClose,
           <Button variant="primary" size="small" disabled={!canSend} onClick={send}>{sending ? 'Sending…' : 'Send'}</Button>
         </div>
       </div>
-      <div className="flex min-w-0 flex-none flex-col px-5 pt-3 pb-4">
+      {/* A forward has no agent to ask: the draft turn writes replies and would overwrite the quote. */}
+      {forward ? null : <div className="flex min-w-0 flex-none flex-col px-5 pt-3 pb-4">
         <Composer
           agents={NO_AGENTS}
           commandContext={noChatCommands}
@@ -192,7 +221,7 @@ export function MailDraftPane({ thread, agent, reply, drafts, onChange, onClose,
           onStop={onStop}
           onEscapeIdle={onClose}
         />
-      </div>
+      </div>}
     </aside>
   )
 }
