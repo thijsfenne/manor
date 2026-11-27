@@ -113,11 +113,11 @@ async function harness(roster: readonly AgentConfig[] = agents) {
 }
 
 /** A session the thread proposed and the user accepted. */
-async function threadSession(h: Awaited<ReturnType<typeof harness>>, mode: 'single' | 'house' = 'house'): Promise<string> {
+async function threadSession(h: Awaited<ReturnType<typeof harness>>, mode: 'single' | 'house' = 'house', title = 'Export button'): Promise<string> {
   await h.work.useTool({ chatId: h.threadChatId, agentId: '__single__', turnId: 'thread_turn' }, {
-    assignmentKey: 'export', project: h.projectId, title: 'Export button', task: 'Add an export button.',
+    assignmentKey: title, project: h.projectId, title, task: `Work on ${title}.`,
   })
-  const [handoff] = (await h.store.listWorkHandoffs()).filter((row) => row.sourceChatId === h.threadChatId)
+  const handoff = (await h.store.listWorkHandoffs()).find((row) => row.sourceChatId === h.threadChatId && row.title === title)
   return h.work.accept(handoff!.id, { mode })
 }
 
@@ -1279,7 +1279,7 @@ describe('sending a follow-up on to a Session', () => {
     expect((await h.store.getChat(session))?.settledAt).not.toBeNull()
     expect(h.queued).toEqual([])
     await h.threads.create(h.projectId)
-    expect(await h.threads.forwardToSession(context, { session: 'Export button', message: 'The checkmark is still clipped' })).toContain('Sent to “Export button”')
+    expect(await h.threads.forwardToSession(context, { session: 'Export button', message: 'The checkmark is still clipped', images: [1] })).toContain('Sent to “Export button”')
   })
 
   it('puts the user\'s words in an open Session as their message, with no card, and marks their bubble', async () => {
@@ -1287,7 +1287,7 @@ describe('sending a follow-up on to a Session', () => {
     const session = await threadSession(h)
     const handoffsBefore = (await h.store.listWorkHandoffs()).length
     const { message, context } = await userSays(h, 'The checkmark is still clipped')
-    const note = await h.threads.forwardToSession(context, { session: 'Export button', message: 'The checkmark is still clipped' })
+    const note = await h.threads.forwardToSession(context, { session: 'Export button', message: 'The checkmark is still clipped', images: [1] })
     expect(note).toContain('Sent to “Export button”')
     expect(h.queued).toEqual([{ chatId: session, message: {
       text: 'The checkmark is still clipped',
@@ -1311,7 +1311,7 @@ describe('sending a follow-up on to a Session', () => {
     await h.work.setSettled(session, true)
     expect((await h.store.getChat(session))?.settledAt).not.toBeNull()
     const { context } = await userSays(h, 'One more thing: the label wraps')
-    const note = await h.threads.forwardToSession(context, { session, message: 'One more thing: the label wraps' })
+    const note = await h.threads.forwardToSession(context, { session, message: 'One more thing: the label wraps', images: [1] })
     expect(note).toContain('it was settled and is open again')
     expect((await notes(h, h.threadChatId)).at(-1)?.sessionForward).toMatchObject({ sessionChatId: session, reopened: true })
     expect((await h.store.getChat(session))?.settledAt).toBeNull()
@@ -1359,10 +1359,73 @@ describe('sending a follow-up on to a Session', () => {
       }
       return append(chatId, event)
     }
-    await expect(h.threads.forwardToSession(context, { session, message: 'The checkmark is still clipped' })).rejects.toThrow('store blinked')
+    await expect(h.threads.forwardToSession(context, { session, message: 'The checkmark is still clipped', images: [1] })).rejects.toThrow('store blinked')
+    // The Session already holds it, so a retry that forgets the choice still only writes the receipt.
     await h.threads.forwardToSession(context, { session, message: 'The checkmark is still clipped' })
     expect(h.queued).toHaveLength(1)
     expect((await notes(h, h.threadChatId)).filter((event) => event.hintFor === message.id && event.sessionForward !== undefined)).toHaveLength(1)
+  })
+
+  it('sends each Session only the pictures and files the thread chose for it', async () => {
+    const h = await harness()
+    const export_ = await threadSession(h)
+    const bubbles = await threadSession(h, 'house', 'Phone bubbles')
+    const shot = (name: string) => ({ name, dataUrl: 'data:image/png;base64,aW1hZ2U=' })
+    const file = { name: 'notes.txt', mime: 'text/plain', content: 'wrap at 40' }
+    await h.store.appendEvent(h.threadChatId, { type: 'user_message', text: '1. bubbles 2. export', mentions: [], images: [shot('one.png'), shot('two.png')], files: [file] })
+    const context = { chatId: h.threadChatId, agentId: '__single__', turnId: 'thread_split', mayForward: true as const }
+    await h.threads.forwardToSession(context, { session: 'Phone bubbles', message: 'bubbles', images: [1], files: [] })
+    await h.threads.forwardToSession(context, { session: 'Export button', message: 'export', images: [2], files: [1] })
+    expect(h.queued.map(({ chatId, message }) => ({ chatId, images: message.images, files: message.files }))).toEqual([
+      { chatId: bubbles, images: [shot('one.png')], files: undefined },
+      { chatId: export_, images: [shot('two.png')], files: [file] },
+    ])
+  })
+
+  it('sends no attachments for an empty choice, and refuses a missing or wrong one', async () => {
+    const h = await harness()
+    const session = await threadSession(h)
+    const { context } = await userSays(h, 'The checkmark is still clipped')
+    await expect(h.threads.forwardToSession(context, { session, message: 'Fix it' }))
+      .rejects.toThrow('The user\'s message has 1 picture. Pass `images`')
+    await expect(h.threads.forwardToSession(context, { session, message: 'Fix it', images: [2] }))
+      .rejects.toThrow('`images` holds 2, but the message has pictures 1 to 1.')
+    await expect(h.threads.forwardToSession(context, { session, message: 'Fix it', images: [1], files: [1] }))
+      .rejects.toThrow('The user\'s message has no text files')
+    expect(h.queued).toEqual([])
+    await h.threads.forwardToSession(context, { session, message: 'Fix it', images: [] })
+    expect(h.queued[0]?.message).not.toHaveProperty('images')
+  })
+
+  it('keeps a marked picture with its unmarked original, pointing at its new place', async () => {
+    const h = await harness()
+    const session = await threadSession(h)
+    const dataUrl = 'data:image/png;base64,aW1hZ2U='
+    const marked = { name: 'marked.png', dataUrl, annotation: { original: 2, pins: [{ x: 0.5, y: 0.5, comment: 'here' }], shapes: [] } }
+    await h.store.appendEvent(h.threadChatId, { type: 'user_message', text: 'Look', mentions: [], images: [{ name: 'other.png', dataUrl }, marked, { name: 'plain.png', dataUrl }] })
+    await h.threads.forwardToSession({ chatId: h.threadChatId, agentId: '__single__', turnId: 'thread_mark', mayForward: true }, { session, message: 'See [Image #2], not [Image #1]', images: [2] })
+    expect(h.queued[0]?.message.images).toEqual([{ ...marked, annotation: { ...marked.annotation, original: 1 } }, { name: 'plain.png', dataUrl }])
+    // The text's references follow the pictures to their numbers in the Session.
+    expect(h.queued[0]?.message.text).toBe('See [Image #1], not (a picture not sent here)')
+  })
+
+  it('never pulls in another marked picture that an annotation points at', async () => {
+    const h = await harness()
+    const session = await threadSession(h)
+    const dataUrl = 'data:image/png;base64,aW1hZ2U='
+    const pin = { x: 0.5, y: 0.5, comment: 'here' }
+    const first = { name: 'first.png', dataUrl, annotation: { original: 1, pins: [pin], shapes: [] } }
+    const second = { name: 'second.png', dataUrl, annotation: { pins: [pin], shapes: [] } }
+    await h.store.appendEvent(h.threadChatId, { type: 'user_message', text: 'Look', mentions: [], images: [first, second] })
+    await h.threads.forwardToSession({ chatId: h.threadChatId, agentId: '__single__', turnId: 'thread_mark', mayForward: true }, { session, message: 'Look', images: [1] })
+    expect(h.queued[0]?.message.images).toEqual([{ ...first, annotation: { pins: [pin], shapes: [] } }])
+    // Nor keeps a pointer back to an earlier picture, also when both go along.
+    const plain = { name: 'plain.png', dataUrl }
+    const back = { name: 'back.png', dataUrl, annotation: { original: 0, pins: [pin], shapes: [] } }
+    await h.store.appendEvent(h.threadChatId, { type: 'user_message', text: 'Again', mentions: [], images: [plain, back] })
+    await h.threads.forwardToSession({ chatId: h.threadChatId, agentId: '__single__', turnId: 'thread_back', mayForward: true }, { session, message: 'Again [Image #01]', images: [1, 2] })
+    expect(h.queued[1]?.message.text).toBe('Again [Image #01]')
+    expect(h.queued[1]?.message.images).toEqual([plain, { ...back, annotation: { pins: [pin], shapes: [] } }])
   })
 
   it('never forwards from a turn the user did not start, nor from outside the thread', async () => {

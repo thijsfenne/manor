@@ -13,6 +13,8 @@ import {
   GOAL_COMMIT_SUBJECT_MAX,
   GOAL_RESULT_MAX,
   MAX_GOAL_CHOICES,
+  MAX_MESSAGE_ATTACHMENTS,
+  MAX_MESSAGE_IMAGES,
   MAX_GOAL_POINTS,
   GOAL_CHOICE_QUESTION_MAX,
   GOAL_POINT_MAX,
@@ -548,12 +550,14 @@ async function offerInstructionsLine(instructionsUrl: string, capability: string
 
 const sessionForwardTool = {
   name: 'send_to_session',
-  description: 'Send the user\'s message on to the Session it follows up on, as their own message there: a correction or follow-up on work that Session already did, open or settled. A settled Session reopens and runs it; a running one takes the message into its current answer, subject to the same addressing and runtime safety guards as a message they type there. No Accept card. Pass their words as they wrote them, with only the context the Session needs after a blank line. New work or a different subject still gets start_work; when two Sessions could fit, ask the user with ask_user instead of guessing. Once per Session for each of their messages.',
+  description: 'Send the user\'s message on to the Session it follows up on, as their own message there: a correction or follow-up on work that Session already did, open or settled. A settled Session reopens and runs it; a running one takes the message into its current answer, subject to the same addressing and runtime safety guards as a message they type there. No Accept card. Pass their words as they wrote them, with only the context the Session needs after a blank line. New work or a different subject still gets start_work; when two Sessions could fit, ask the user with ask_user instead of guessing. Once per Session for each of their messages. When their message has pictures or text files, pass `images` and `files` with only the numbers that belong to this Session.',
   inputSchema: {
     type: 'object',
     properties: {
       session: { type: 'string', minLength: 1, maxLength: 200, description: 'The Session id from the Sessions list, or its exact title.' },
       message: { type: 'string', minLength: 1, maxLength: 40000, description: 'The user\'s message word for word, then context only after a blank line.' },
+      images: { type: 'array', items: { type: 'integer', minimum: 1 }, maxItems: MAX_MESSAGE_IMAGES, description: 'Required when the user\'s message has pictures: the numbers (Image #1 is 1) of the ones that belong to this Session, [] for none.' },
+      files: { type: 'array', items: { type: 'integer', minimum: 1 }, maxItems: MAX_MESSAGE_ATTACHMENTS, description: 'Required when the user\'s message has attached text files: the numbers of the ones that belong to this Session, [] for none.' },
     },
     required: ['session', 'message'],
     additionalProperties: false,

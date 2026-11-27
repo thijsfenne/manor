@@ -26,7 +26,7 @@ A project can have one curated project thread (decided 2026-10-10). The Sessions
 - A card with a lead and a supporting persona: `mock start work Marlow with Smith: <task>` (Marlow's allowlist holds Smith). Deleting Smith afterwards leaves the card with Marlow's face only; an id the roster no longer resolves draws no face.
 - In the session: `@Smith mock ask: <question> | <a> | <b>` asks through the real broker; a preferences line naming option `<a>` lets the thread answer itself. `@Smith mock goal: <result> | <limitation> learn: <preference>` reaches the goal with a learning.
 - In the Marlow DM: `mock start work Smith: <task>`, Accept.
-- In the thread, after a Session exists: `mock send to <Session title>: <follow-up>` forwards through the real `send_to_session`. Settle the Session first (overview `Settle <title>`) to see it reopen.
+- In the thread, after a Session exists: `mock send to <Session title>: <follow-up>` forwards through the real `send_to_session`. With attachments on the message, end it with `[images: 1]` and `[files: ]` to pick which go along. Settle the Session first (overview `Settle <title>`) to see it reopen.
 
 ## Driving it with control-manor
 

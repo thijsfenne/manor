@@ -916,7 +916,8 @@ function ruleScriptFor(input: TurnInput, request: typeof fetch): MockWorkStep | 
  * "mock status: <line>" in a thread-started Session writes its notes.md line through the
  * real `set_session_status`.
  * "mock send to <Session title or id>: <message>" in a thread turn the user started sends
- * the message on to that Session through the real `send_to_session`.
+ * the message on to that Session through the real `send_to_session`; a trailing
+ * "[images: 1,2]" or "[files: ]" picks which attachments go along.
  */
 function projectScriptFor(input: TurnInput, request: typeof fetch): MockWorkStep | undefined {
   const text = lastUserLine(input)
@@ -1010,7 +1011,13 @@ function projectScriptFor(input: TurnInput, request: typeof fetch): MockWorkStep
     return {
       tool: 'mcp__manor__send_to_session',
       run: async (signal) => {
-        const payload = await postManor(request, forwarder, { action: 'forward', session: forward[1]!.trim(), message: forward[2]!.trim() }, signal)
+        const picks: Record<string, number[]> = {}
+        let message = forward[2]!.trim()
+        for (let option = /\[(images|files):([\d,\s]*)\]$/i.exec(message); option !== null; option = /\[(images|files):([\d,\s]*)\]$/i.exec(message)) {
+          picks[option[1]!.toLowerCase()] ??= option[2]!.split(',').map((number) => number.trim()).filter(Boolean).map(Number)
+          message = message.slice(0, option.index).trim()
+        }
+        const payload = await postManor(request, forwarder, { action: 'forward', session: forward[1]!.trim(), message, ...picks }, signal)
         // The note's first sentence is the receipt; the rest is guidance for a real model.
         return typeof payload.note === 'string' ? payload.note.split(' as the user')[0]! + '.' : 'Sent.'
       },

@@ -24,6 +24,9 @@ import {
   NEW_SINGLE_CHAT_DEFAULT,
   runtimeOn,
   NOTES_LINE_MAX,
+  formatImageRef,
+  imageRefSpans,
+  originalImageIndexes,
   SESSION_STATUS_MAX,
   PROJECT_CARD_FILE,
   projectFileWriteDetail,
@@ -150,6 +153,70 @@ export interface SessionForwardInput {
   /** A Session's chat id, or its exact title. */
   session: string
   message: string
+  /** Which of the message's pictures go along, by their number in it (Image #1 is 1). Required when it has any. */
+  images?: readonly number[]
+  /** Which of the message's text files go along, by their number in it. Required when it has any. */
+  files?: readonly number[]
+}
+
+type SourceMessage = Extract<ThreadEvent, { type: 'user_message' }>
+
+/**
+ * The attachments of `kind` the thread chose to send on, numbered from 1 as the turn
+ * listed them. A message that has some needs an explicit choice, so one Session never
+ * gets another's screenshot by default; an empty list sends none.
+ */
+function chosen<T>(kind: 'images' | 'files', all: readonly T[] | undefined, picked: readonly number[] | undefined): number[] {
+  const count = all?.length ?? 0
+  const label = kind === 'images' ? 'picture' : 'text file'
+  if (picked === undefined) {
+    if (count === 0) return []
+    throw new Error(`The user's message has ${count} ${label}${count === 1 ? '' : 's'}. Pass \`${kind}\` with the numbers of the ones that belong to this Session, or [] for none.`)
+  }
+  const bad = picked.filter((number) => !Number.isInteger(number) || number < 1 || number > count)
+  if (bad.length > 0) {
+    throw new Error(count === 0
+      ? `The user's message has no ${label}s; pass \`${kind}\` as [] or leave it out.`
+      : `\`${kind}\` holds ${bad.join(', ')}, but the message has ${label}s 1 to ${count}.`)
+  }
+  return [...new Set(picked)].map((number) => number - 1)
+}
+
+/**
+ * The chosen pictures in their original order, with the message's text. A marked picture
+ * brings its unmarked original along (the rule `originalImageIndexes` keeps), and its
+ * annotation and the text's `[Image #n]` references follow each picture to its new number.
+ */
+function pickImages(images: SourceMessage['images'], indexes: readonly number[], text: string): { images: SourceMessage['images']; text: string } {
+  const all = images ?? []
+  const originals = originalImageIndexes(all)
+  const originalOf = (index: number) => {
+    const original = all[index]?.annotation?.original
+    return original !== undefined && original > index && originals.has(original) ? original : undefined
+  }
+  const keep = new Set(indexes)
+  for (const index of indexes) {
+    const original = originalOf(index)
+    if (original !== undefined) keep.add(original)
+  }
+  const order = [...keep].sort((a, b) => a - b)
+  const placed = new Map(order.map((index, at) => [index, at]))
+  let renumbered = ''
+  let at = 0
+  for (const span of imageRefSpans(text, all.length)) {
+    const moved = placed.get(span.number - 1)
+    renumbered += text.slice(at, span.start) + (moved === undefined ? '(a picture not sent here)' : formatImageRef(moved + 1))
+    at = span.end
+  }
+  renumbered += text.slice(at)
+  const picked = order.map((index) => {
+    const image = all[index]!
+    if (image.annotation?.original === undefined) return image
+    const { original: _original, ...annotation } = image.annotation
+    const original = originalOf(index)
+    return { ...image, annotation: original === undefined ? annotation : { ...annotation, original: placed.get(original)! } }
+  })
+  return { images: picked.length === 0 ? undefined : picked, text: renumbered }
 }
 
 /** A Session this thread started and the user accepted. */
@@ -681,15 +748,19 @@ export class ProjectThreads {
       // The Session's own record decides too: a receipt that failed to save must not send it twice.
       const delivered = (await this.options.store.loadEvents(target.chat.id)).some((event) =>
         event.type === 'user_message' && event.forwardedFrom?.threadChatId === threadChatId && event.forwardedFrom.eventId === source.id)
+      const message = delivered ? undefined : {
+        ...pickImages(source.images, chosen('images', source.images, input.images), input.message.trim()),
+        files: chosen('files', source.files, input.files).map((index) => source.files![index]!),
+      }
       // What the user does themselves in a settled Session: Unsettle, then their message.
-      const reopened = !delivered && target.chat.settledAt !== null
+      const reopened = message !== undefined && target.chat.settledAt !== null
       if (reopened) await this.options.reopenSession(target.chat.id)
-      if (!delivered) {
+      if (message !== undefined) {
         await this.options.acceptInSession(target.chat.id, {
-          text: input.message.trim(),
+          text: message.text,
           forwardedFrom: { threadChatId, eventId: source.id },
-          ...(source.images === undefined || source.images.length === 0 ? {} : { images: source.images }),
-          ...(source.files === undefined || source.files.length === 0 ? {} : { files: source.files }),
+          ...(message.images === undefined ? {} : { images: message.images }),
+          ...(message.files.length === 0 ? {} : { files: message.files }),
         })
       }
       await this.append(threadChatId, {

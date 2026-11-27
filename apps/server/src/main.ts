@@ -24,6 +24,8 @@ import {
   MAX_GOAL_EVIDENCE,
   PROJECT_CARD_FILE,
   SESSION_STATUS_MAX,
+  MAX_MESSAGE_ATTACHMENTS,
+  MAX_MESSAGE_IMAGES,
   ProjectThreadFileSchema,
   UserInputAnswersSchema,
   OutboundDraftContentSchema,
@@ -2455,6 +2457,8 @@ const ProjectThreadRequestSchema = z.discriminatedUnion('action', [
     action: z.literal('forward'),
     session: z.string().trim().min(1).max(200),
     message: z.string().trim().min(1).max(40_000),
+    images: z.array(z.number()).max(MAX_MESSAGE_IMAGES).optional(),
+    files: z.array(z.number()).max(MAX_MESSAGE_ATTACHMENTS).optional(),
   }),
   z.object({
     action: z.literal('status'),
@@ -2523,7 +2527,11 @@ async function handleProjectThreadRequest(
       : input.action === 'answer'
         ? await service.projectThreads.answerFromThread(context, { requestId: input.requestId, answers: input.answers, preference: input.preference })
         : input.action === 'forward'
-          ? await service.projectThreads.forwardToSession(context, { session: input.session, message: input.message })
+          ? await service.projectThreads.forwardToSession(context, {
+            session: input.session, message: input.message,
+            ...(input.images === undefined ? {} : { images: input.images }),
+            ...(input.files === undefined ? {} : { files: input.files }),
+          })
           : input.action === 'status'
             ? await service.projectThreads.writeSessionStatus(context, input.status)
             : await service.projectThreads.report(context, {
