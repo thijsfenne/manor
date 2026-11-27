@@ -222,9 +222,10 @@ export const tracking = {
 /**
  * The words in a DM bubble, his and the agent's: a step above the transcript's 17pt
  * reading size, set a little tighter. The fold, the send flight and the held lift
- * measure with it, so they keep matching the bubble.
+ * measure with it, so they keep matching the bubble. Its tracking is stated because
+ * the shared Text only tracks up to 17pt.
  */
-export const bubbleText = { fontSize: 19, lineHeight: 25 } as const
+export const bubbleText = { fontSize: 19, lineHeight: 25, letterSpacing: -0.4 } as const
 
 /**
  * The quiet one-line marks between DM messages: the day and time line, and the line
