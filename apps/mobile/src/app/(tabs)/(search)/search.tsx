@@ -190,7 +190,7 @@ export default function SearchScreen() {
   )
 
   return (
-    <SectionScaffold title="Search" toolbar={toolbar} trailing={<UsageButton />}>
+    <SectionScaffold title="Search" toolbar={toolbar} toolbarFade trailing={<UsageButton />}>
       <ScrimFlatList
         contentContainerStyle={[styles.list, results.length === 0 && styles.emptyList]}
         data={results}

@@ -23,6 +23,7 @@ interface SectionScaffoldProps {
   /** False in a room from the house menu, which hides the tab bar. */
   tabBar?: boolean
   toolbar?: (scrim: ReactNode) => ReactNode
+  toolbarFade?: boolean
   /** The header's right side, for a tab root: the usage pill. */
   trailing?: ReactNode
 }
@@ -40,6 +41,12 @@ interface ScrimFrameProps {
    * over the keyboard.
    */
   toolbar?: (scrim: ReactNode) => ReactNode
+  /**
+   * True where the toolbar spans the width, as the search field does: the fade then reaches
+   * up behind it too. Left off, it covers the tab bar alone, so the rows beside a floating
+   * button stay readable.
+   */
+  toolbarFade?: boolean
   /** Placed between the header and the tab bar; a scroll view in it runs under both with `useScrimScroll`. */
   children: ReactNode
 }
@@ -49,13 +56,13 @@ interface ScrimFrameProps {
  * with the scrim behind it, the same scrim behind the tab bar, and the content padded
  * clear of both so only a scroll view reaches under them.
  */
-export function ScrimFrame({ header, headerHeight, tabBar = true, toolbar, children }: ScrimFrameProps) {
+export function ScrimFrame({ header, headerHeight, tabBar = true, toolbar, toolbarFade = false, children }: ScrimFrameProps) {
   // Inside a tab stack the bottom inset is the tab bar plus the home indicator.
   const insets = useSafeAreaInsets()
   const top = insets.top + headerHeight
   const bottom = insets.bottom + (toolbar === undefined ? 0 : TOOLBAR_SPACE)
   const scrimInsets = useMemo(() => ({ top, bottom }), [top, bottom])
-  const bottomScrim = tabBar ? <EdgeScrim edge="bottom" height={bottom + SCRIM_REACH} /> : null
+  const bottomScrim = tabBar ? <EdgeScrim edge="bottom" height={(toolbarFade ? bottom : insets.bottom) + SCRIM_REACH} /> : null
 
   return (
     <View style={styles.screen}>
@@ -73,7 +80,7 @@ export function ScrimFrame({ header, headerHeight, tabBar = true, toolbar, child
 }
 
 /** Shared phone chrome for every room: the title, and the button to the house menu or back, in a `ScrimFrame`. */
-export function SectionScaffold({ children, title, compactTitle = true, onBack, tabBar, toolbar, trailing }: SectionScaffoldProps) {
+export function SectionScaffold({ children, title, compactTitle = true, onBack, tabBar, toolbar, toolbarFade, trailing }: SectionScaffoldProps) {
   const menu = useHouseDrawer()
   const header = (
     <View pointerEvents="box-none" style={styles.header}>
@@ -96,7 +103,7 @@ export function SectionScaffold({ children, title, compactTitle = true, onBack, 
   )
 
   return (
-    <ScrimFrame header={header} headerHeight={HEADER_HEIGHT} tabBar={tabBar} toolbar={toolbar}>
+    <ScrimFrame header={header} headerHeight={HEADER_HEIGHT} tabBar={tabBar} toolbar={toolbar} toolbarFade={toolbarFade}>
       {children}
     </ScrimFrame>
   )
