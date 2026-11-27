@@ -101,6 +101,7 @@ import { liveSessionFiles } from './sessionGit.js'
 import { effectiveRepoPaths } from './worktree.js'
 import type { RuntimeDiagnostics } from './runtimeDiagnostics.js'
 import { ReactionRefusal, Reactions, type ReactionNotice } from './reactions.js'
+import { announcesNextStep, stallNudgeLine } from './stalledTurn.js'
 
 export { PROVIDER_RECOVERY_NUDGE, REPORT_BACK_NUDGE, usageFrom, withOverride }
 
@@ -426,6 +427,8 @@ interface QueuedTurn {
   reviewHop?: boolean
   /** The goal owner's one continuation after it ended the chain on nothing. */
   goalNudge?: boolean
+  /** The one continuation of a turn that announced its next step and stopped there. */
+  stallNudge?: boolean
   /** Skills selected by the user for this direct turn. Delegation never inherits them. */
   skillIds: string[]
 }
@@ -2365,6 +2368,11 @@ export class Orchestrator {
     // does for the capped loop.
     const ran = new Set<string>()
     let goalDone = false
+    // At most one stall continuation per message, so a persona that keeps announcing cannot loop.
+    let stallNudged = false
+    // This chain holds one `inflight` slot itself. Another is a message still being accepted,
+    // which `waiting` only counts once it is.
+    const userSpoke = (): boolean => chat.inflight > 1 || chat.waiting > 0 || chat.wakeHold
 
     // Turns the daily-log writer covers once the whole chain for this message is done.
     const logged: MemoryLogTurn[] = []
@@ -2395,6 +2403,13 @@ export class Orchestrator {
       // The last await before the turn sets `chat.active`: a Stop that landed while a
       // wake prepared ends it here, and a later one aborts the turn itself.
       if (origin?.source === 'background_wake' && chat.wakeHold) break
+      // A stall continuation is Manor's guess; a message the user sent meanwhile outranks it, so
+      // this is checked after the last await before the turn starts, and once more after its note.
+      if (next.stallNudge === true) {
+        if (userSpoke()) continue
+        await this.append(chat, chatId, { type: 'system_note', kind: 'info', agentId: next.agent.id, text: stallNudgeLine(next.agent.name) })
+        if (userSpoke()) continue
+      }
       let turnId: string | undefined
       // Bookkeeping about this turn goes into its trace; without a started turn it stays a line.
       const traceNote = (text: string) => this.append(chat, chatId, {
@@ -2420,6 +2435,7 @@ export class Orchestrator {
         allowComputerTarget: origin === undefined && !next.delegated && room?.kind !== 'side',
         ...(threadRoom ? { projectThread: { reason: origin === undefined ? 'user' : origin.source === 'project_thread' ? origin.reason : 'wake' } } : {}),
         ...(goalOwner === undefined ? {} : { goal: { owner: goalOwner, nudge: next.goalNudge === true } }),
+        ...(next.stallNudge === true ? { stallNudge: true as const } : {}),
         ...(single && room?.kind === 'project' && handoff !== undefined && handoff.acceptedAt !== null ? { goalSession: true as const } : {}),
         ...(chainWakes ? { wakes: true } : {}),
         ...(wakeRun ? { wakeRun: true } : {}),
@@ -2427,7 +2443,7 @@ export class Orchestrator {
         ...(room?.kind === 'dm' && message.id !== undefined && this.options.interviewKickoff?.(next.agent.id, message.id) === true
           ? { instructionsInterview: true as const } : {}),
         // In a DM the agent may react to the user's own message; a reaction notice is Manor's, not theirs.
-        ...(room?.kind !== 'dm' || origin !== undefined ? {}
+        ...(room?.kind !== 'dm' || origin !== undefined || next.stallNudge === true ? {}
           : message.reactionTo !== undefined ? { reactionPrompt: true as const }
             : userEventId === undefined ? {} : { reactTarget: userEventId }),
       })
@@ -2523,6 +2539,22 @@ export class Orchestrator {
         }
       }
 
+      // A turn that ended announcing its next step ("Now I'll run the tests.") without
+      // taking it continues once on its own. A Multiple goal chain already continues its
+      // owner, a mention hands the step to someone else, and background work wakes it.
+      // In a Single goal Session the goal's own continuation goes first and covers it.
+      const stalled = !stallNudged && next.stallNudge !== true && next.goalNudge !== true && outcome.hasReply && outcome.endedOnText === true &&
+        (origin === undefined || origin.source === 'work_handoff') && room?.kind !== 'side' &&
+        message.reactionTo === undefined && (goalOwner === undefined || goalDone || single) &&
+        !(room?.kind === 'dm' && message.id !== undefined && this.options.interviewKickoff?.(next.agent.id, message.id) === true) &&
+        !userSpoke() && !this.subagents.wakePending(chatId, next.agent.id) &&
+        this.options.liveSessions?.info(chatId, next.agent.id) === undefined &&
+        parseMentions(outcome.text, this.options.agents()).length === 0 && announcesNextStep(outcome.text)
+      const continueStalled = (): void => {
+        stallNudged = true
+        queue.unshift({ ...next, reviewHop: true, goalNudge: false, stallNudge: true })
+      }
+
       // Who a turn's mentions may summon, enforced structurally rather than by
       // asking nicely. The chief of staff's free delegation went out on 2026-08-13:
       // every persona entering a chat costs a ~47k prompt-token floor, and with a
@@ -2557,10 +2589,16 @@ export class Orchestrator {
             (sessionChangedFiles([event]).length > 0 || ('fileChangesFailed' in event && event.fileChangesFailed === true)))
           if (edited && next.goalNudge !== true) {
             queue.push({ agent: goalOwner, delegated: true, reviewHop: true, goalNudge: true, skillIds: [] })
+            continue
           } else if (next.goalNudge === true) {
             await traceNote(stoppedBeforeFinishing(next.agent.name))
           }
         }
+        if (stalled) continueStalled()
+        continue
+      }
+      if (stalled) {
+        continueStalled()
         continue
       }
       if (origin?.source === 'routine') continue

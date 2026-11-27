@@ -115,6 +115,7 @@ import type { ChatWorktree, DraftEvent } from './store.js'
 import { materializeSkills } from './skills/materialize.js'
 import { estimateContext } from './contextEstimate.js'
 import { offeredPrefix, prefixChanges, type PrefixParts } from './promptFingerprint.js'
+import { STALL_CONTINUE_NUDGE } from './stalledTurn.js'
 import { randomUUID } from 'node:crypto'
 import { existsSync } from 'node:fs'
 import { homedir } from 'node:os'
@@ -163,6 +164,8 @@ export type TurnResult =
       goalScreenshots?: readonly GoalScreenshot[]
       /** The user added to this turn while it ran. */
       steered?: boolean
+      /** No tool ran after the turn's last words, so they are where it really stopped. */
+      endedOnText?: true
     }
   | { kind: 'stopped' }
   | { kind: 'error' }
@@ -217,6 +220,8 @@ export interface TurnRequest {
    * nothing.
    */
   readonly goal?: { owner: { id: string; name: string }; nudge: boolean }
+  /** The one continuation after a turn that announced its next step and stopped there. */
+  readonly stallNudge?: true
   /**
    * Every turn of a Single Session opened from an accepted handoff, its goal open or
    * reached. `goal_reached` and its rule stay offered so the prompt prefix holds across
@@ -545,6 +550,14 @@ const goalNudge = (): ThreadEvent => ({
   type: 'system_note',
   kind: 'info',
   text: GOAL_CONTINUE_NUDGE,
+})
+
+const stallNudge = (): ThreadEvent => ({
+  id: `stall_nudge_${randomUUID()}`,
+  ts: Date.now(),
+  type: 'system_note',
+  kind: 'info',
+  text: STALL_CONTINUE_NUDGE,
 })
 
 export const WORK_HANDOFF_NUDGE =
@@ -1844,6 +1857,10 @@ export class TurnRunner {
       if (turn.relayHandoff === true && !nudgeOnly && !recoveringProvider && !workRetry) {
         catchUp = [...catchUp, relayHandoffNudge()]
       }
+      // First attempt only: after steering or an answer, the user's newer word decides.
+      if (turn.stallNudge === true && attempt === 1) {
+        catchUp = [...catchUp, stallNudge()]
+      }
       steeringCatchUpOverride = undefined
       restartedForSteering = false
       // Skills, then the room's routine block, then house style as the suffix. Every
@@ -2447,6 +2464,7 @@ export class TurnRunner {
       kind: 'answered',
       text: answerText,
       hasReply,
+      ...(outcome.usedTools && !outcome.reportedAfterTools ? {} : { endedOnText: true as const }),
       ...(logged
         ? {
             memoryLog: {

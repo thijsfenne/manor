@@ -17,6 +17,7 @@ import { DM_ROUTINE_PUBLISH_MARKER } from '../composer.js'
 import { REACTION_QUIET_MARKER } from '../reactions.js'
 import { MAIL_DRAFT_THREAD_PREFIX, MAIL_REVISION_MARK, MAIL_TRIAGE_THREAD_PREFIX, untrustedMailPayload } from '../mailPrompt.js'
 import { MAIL_TRIAGE_MCP_NAME, MAIL_TRIAGE_TOOL } from '../mcp/mailTriageServer.js'
+import { STALL_CONTINUE_NUDGE } from '../stalledTurn.js'
 
 const MOCK_COMPACT_MS = 1_500
 
@@ -300,6 +301,19 @@ function shortReplyFor(input: TurnInput): string | undefined {
 }
 
 /** Last thing the human said in the catch-up, so the scripted reply looks responsive. */
+/**
+ * "mock stall" ends on an announced next step and carries it out once Manor continues
+ * the turn; "mock offer" ends on a question, which Manor leaves alone.
+ */
+function stallReply(input: TurnInput): string[] {
+  if (input.catchUp.some((event) => event.type === 'system_note' && event.text === STALL_CONTINUE_NUDGE)) {
+    return ['\n\nDe tests zijn gedraaid en groen.']
+  }
+  const line = lastUserLine(input)
+  if (/\bmock offer\b/i.test(line)) return ['\n\nIk kan nu de tests draaien. Zal ik dat doen?']
+  return /\bmock stall\b/i.test(line) ? ['\n\nIk ga nu de tests draaien.'] : []
+}
+
 function lastUserLine(input: TurnInput): string {
   for (let index = input.catchUp.length - 1; index >= 0; index -= 1) {
     const event = input.catchUp[index]
@@ -1770,6 +1784,7 @@ export function createMockDriver(options: MockDriverOptions = {}): Driver {
           ...(woken === undefined ? linesReply(Math.min(200, Number(/\breply of (\d{1,3}) lines\b/i.exec(lastUserLine(input))?.[1] ?? 0))) : []),
           ...(woken === undefined && /\bmock diagram\b/i.test(lastUserLine(input)) ? DIAGRAM_REPLY : []),
           ...(woken === undefined && /\bmock sources\b/i.test(lastUserLine(input)) ? SOURCES_REPLY : []),
+          ...(woken === undefined ? stallReply(input) : []),
         ]
         for (const [index, text] of deltas.entries()) {
           if (stopped) return
