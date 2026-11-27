@@ -142,5 +142,5 @@ const styles = StyleSheet.create({
   grows: { transformOrigin: 'left bottom' },
   face: { marginLeft: -4 },
   label: { flex: 1, minWidth: 0, flexDirection: 'row' },
-  text: { color: colors.muted, fontFamily: fonts.sans, fontSize: 15 },
+  text: { color: colors.muted, fontFamily: fonts.sans, fontSize: 16, fontWeight: '500' },
 })

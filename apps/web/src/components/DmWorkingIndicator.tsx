@@ -52,7 +52,7 @@ export function DmWorkingIndicator({ working, persona, agents }: {
         avatarTone={persona.avatarTone}
         avatarFinish={persona.avatarFinish}
         status={
-          <span className="relative min-w-0 truncate text-[15px] leading-tight font-normal">
+          <span className="relative min-w-0 truncate text-[16px] leading-tight font-medium">
             {/* Keyed by the words, so a new phase swaps in place, the way the status line does. */}
             <AnimatePresence mode="popLayout" initial={false}>
               <motion.span
