@@ -42,19 +42,21 @@ interface SideRuntimeMenuProps {
   disabled: boolean
   /** What the menu marks as Default. The side chat's own unless another tool-less job says otherwise. */
   defaults?: RuntimeDefaults
+  /** Which way the menu opens; up unless its row sits high on a page. */
+  drop?: 'up' | 'down'
   title?: string
   onChange: (model: string, effort: Effort) => void
 }
 
 /**
- * What the side chat runs on, in its composer's bottom row, and what the note AI runs
- * on, in Settings: both are a model with an effort and nothing else.
+ * What the side chat runs on, in its composer's bottom row, and what the note AI and
+ * mail reply drafts run on, in Settings: each is a model with an effort and nothing else.
  *
  * Provider is represented in the shared picker, but remains derived from the chosen
  * model when the side chat stores the result. Speed stays absent because the side-chat
  * runtime has no speed field.
  */
-export function SideRuntimeMenu({ model, effort, disabled, defaults = SIDE_CHAT_DEFAULTS, title = 'Provider, model and reasoning for this side chat', onChange }: SideRuntimeMenuProps) {
+export function SideRuntimeMenu({ model, effort, disabled, defaults = SIDE_CHAT_DEFAULTS, drop = 'up', title = 'Provider, model and reasoning for this side chat', onChange }: SideRuntimeMenuProps) {
   const voice = voiceOn(defaults)
   const driver = driverOf(model, defaults)
   const override: ChatOverride = {
@@ -82,6 +84,7 @@ export function SideRuntimeMenu({ model, effort, disabled, defaults = SIDE_CHAT_
       compact
       allowSpeed={false}
       allowAuto={false}
+      drop={drop}
       title={title}
       onChange={select}
     />

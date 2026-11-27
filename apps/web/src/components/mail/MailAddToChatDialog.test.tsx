@@ -1,13 +1,15 @@
 import { type ReactNode } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { mailContextText, PageContextAttachmentSchema, type AgentConfig, type Chat, type MailThread, type PageContextAttachment, type Project } from '@manor/contracts'
-import { clearDrafts, readDraft } from '../../composerDrafts'
+import { mailContextText, PageContextAttachmentSchema, type AgentConfig, type Chat, type MailThread, type PageContextAttachment } from '@manor/contracts'
+import { clearDrafts, NEW_CHAT_DRAFT_KEY, readDraft } from '../../composerDrafts'
 import { usePageContexts } from '../../useChatSide'
+import { Avatar } from '../Avatar'
 import { PageContextChip } from '../PageContextChip'
 import { MailAddToChatDialog, mailPageContext, type MailChatDoor } from './MailAddToChatDialog'
 
 vi.mock('react-dom', () => ({ createPortal: (children: ReactNode) => children }))
+vi.mock('../Avatar', () => ({ Avatar: () => null }))
 
 const thread: MailThread = {
   threadId: '1790000000000000001',
@@ -22,18 +24,16 @@ const agent = (id: string, name: string, more: Partial<AgentConfig> = {}) =>
   ({ id, name, color: 'teal', isCos: false, ...more }) as unknown as AgentConfig
 const agents = [agent('writer', 'Writer'), agent('chief', 'Chief', { isCos: true }), agent('builder', 'Builder', { placement: 'session' })]
 const chat = (id: string, kind: Chat['kind'], memberIds: string[] = []) => ({ id, kind, memberIds, archivedAt: null }) as unknown as Chat
-const project = (id: string, name: string, threadChatId?: string) => ({ id, name, color: 'olive', threadChatId }) as unknown as Project
-const projects = [project('garden', 'Garden', 'garden-thread'), project('folder', 'Folder'), project('move', 'Move', 'move-thread')]
-const chats = [chat('chief-dm', 'dm', ['chief']), chat('garden-thread', 'project'), chat('move-thread', 'project')]
+const chats = [chat('chief-dm', 'dm', ['chief'])]
 
 let view: ReactTestRenderer
 let calls: unknown[][]
 let sources: ReturnType<typeof usePageContexts>
 
 /** The dialog over the real staging hook; only navigation is recorded. */
-function Harness({ linked, creating = false, onClose, held = {} }: {
-  linked?: string
+function Harness({ creating = false, canStartChat = true, onClose, held = {} }: {
   creating?: boolean
+  canStartChat?: boolean
   onClose: () => void
   held?: MailChatDoor['staged']
 }) {
@@ -41,12 +41,13 @@ function Harness({ linked, creating = false, onClose, held = {} }: {
   const door: MailChatDoor = {
     staged: { ...held, ...sources.pageContextsByChat },
     creating,
+    canStartChat,
     stage: (key, context) => { calls.push(['stage', key, context]); sources.addPageContext(key, context) },
     openChat: (chatId) => calls.push(['openChat', chatId]),
     openDm: (agentId) => calls.push(['openDm', agentId]),
+    startChat: () => calls.push(['startChat']),
   }
-  return <MailAddToChatDialog thread={thread} agents={agents} chats={chats} projects={projects}
-    linkedProjectId={linked} door={door} onClose={onClose} />
+  return <MailAddToChatDialog thread={thread} agents={agents} chats={chats} door={door} onClose={onClose} />
 }
 
 const mount = (props: Partial<Parameters<typeof Harness>[0]> = {}) => {
@@ -104,20 +105,29 @@ describe('MailAddToChatDialog', () => {
     expect(readDraft('chief-dm').quotes).toBeUndefined()
   })
 
-  it('lists the linked project first, then the default agent, the other DMs and the other project threads', () => {
-    mount({ linked: 'move' })
-    expect(names()).toEqual(['Move, project chat', 'Chief, direct message', 'Writer, direct message', 'Garden, project chat'])
-    expect(checked()).toBe('Move, project chat')
+  it('offers a new Session, the default agent and the other DMs, with faces and no project thread', () => {
+    mount()
+    expect(names()).toEqual(['New Session', 'Chief, direct message', 'Writer, direct message'])
+    // Starting a Session is never the first pick while a DM can take the mail.
+    expect(checked()).toBe('Chief, direct message')
     expect(host((node) => node.props['data-mark'] !== undefined).map((node) => node.props['data-mark']))
-      .toEqual(['project', 'dm', 'dm', 'project'])
-    act(() => button('Add').props.onClick())
-    expect(calls.map((call) => [call[0], call[1]])).toEqual([['stage', 'move-thread'], ['openChat', 'move-thread']])
+      .toEqual(['new', 'agent', 'agent'])
+    expect(view.root.findAllByType(Avatar).map((node) => node.props.name)).toEqual(['Chief', 'Writer'])
   })
 
-  it('starts with the default agent when the sender is linked to no thread', () => {
-    mount({ linked: 'folder' })
-    expect(checked()).toBe('Chief, direct message')
-    expect(names()).toHaveLength(4)
+  it('stages a new Session under the new-chat slot and starts the chat', () => {
+    const onClose = mount()
+    keyDown('ArrowUp')
+    expect(checked()).toBe('New Session')
+    keyDown('Enter')
+    expect(onClose).toHaveBeenCalledOnce()
+    expect(calls.map((call) => call.slice(0, 2))).toEqual([['stage', NEW_CHAT_DRAFT_KEY], ['startChat']])
+    expect(sources.pageContextsByChat[NEW_CHAT_DRAFT_KEY]).toEqual([mailPageContext(thread)])
+  })
+
+  it('holds back a new Session without a project to start it in', () => {
+    mount({ canStartChat: false })
+    expect(radio('New Session, No project to start one in').props.disabled).toBe(true)
   })
 
   it('stages for a DM that does not exist yet in the slot of its draft, picked by arrow and added by Enter', () => {
@@ -134,13 +144,14 @@ describe('MailAddToChatDialog', () => {
   it('adds the target Enter is pressed on, even when Tab left another one picked', () => {
     mount()
     const stopPropagation = vi.fn()
-    act(() => radio('Garden, project chat').props.onKeyDown({ key: 'Enter', repeat: false, preventDefault: () => {}, stopPropagation }))
+    act(() => radio('Writer, direct message').props.onKeyDown({ key: 'Enter', repeat: false, preventDefault: () => {}, stopPropagation }))
     expect(stopPropagation).toHaveBeenCalledOnce()
-    expect(calls.map((call) => [call[0], call[1]])).toEqual([['stage', 'garden-thread'], ['openChat', 'garden-thread']])
+    expect(calls.map((call) => [call[0], call[1]])).toEqual([['stage', 'new-chat:dm:writer'], ['openDm', 'writer']])
   })
 
-  it('holds back a DM that does not exist while a chat is being made', () => {
+  it('holds back a new Session and a DM that does not exist while a chat is being made', () => {
     mount({ creating: true })
+    expect(radio('New Session, A Session is still being started').props.disabled).toBe(true)
     expect(radio('Writer, direct message, A chat is still being started').props.disabled).toBe(true)
     expect(radio('Chief, direct message').props.disabled).toBe(false)
   })

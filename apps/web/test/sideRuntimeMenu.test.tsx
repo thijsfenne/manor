@@ -63,7 +63,7 @@ describe('the menu in the composer', () => {
       'Grok Build',
       'Cursor',
     ])
-    expect(tree.root.find((node) => typeof node.props.className === 'string' && node.props.className.includes('w-[min(360px,calc(var(--side-width)-36px),calc(100vw-48px))]'))).toBeDefined()
+    expect(tree.root.find((node) => typeof node.props.className === 'string' && node.props.className.includes('w-[min(360px,calc(var(--side-width,396px)-36px),calc(100vw-48px))]'))).toBeDefined()
     expect(tree.root.findByProps({ type: 'range' }).props['aria-label']).toBe('Reasoning effort')
     expect(tree.root.findAllByProps({ 'aria-label': 'Fast mode' })).toHaveLength(0)
     expect(tree.root.findAll((node) => node.type === 'p' && node.children.some((child) => typeof child === 'string' && child.includes('This panel only')))).toHaveLength(0)

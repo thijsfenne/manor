@@ -53,6 +53,8 @@ interface RuntimeMenuProps {
   allowAuto?: boolean
   /** Single's synthetic voice follows its pin; its reset target stays with the fallback. */
   effortDefault?: AgentConfig['effort']
+  /** Which way the menu opens: up from a composer's bottom row, down from a row high on a page. */
+  drop?: 'up' | 'down'
   title?: string
   /** The whole next override. Sending one with nothing in it clears the pin. */
   onChange: (override: ChatOverride) => void
@@ -76,6 +78,7 @@ export function RuntimeMenu({
   allowSpeed = true,
   allowAuto = true,
   effortDefault,
+  drop = 'up',
   title,
   onChange,
 }: RuntimeMenuProps) {
@@ -146,15 +149,17 @@ export function RuntimeMenu({
         ref={popoverRef}
         open={open}
         {...(fit === undefined ? {} : { style: fit })}
-        className={
+        origin={drop === 'up' ? 'bottom-left' : 'top-left'}
+        className={`absolute left-0 z-[6] ${drop === 'up' ? 'bottom-[calc(100%+8px)]' : 'top-[calc(100%+8px)]'} ${
           layout === 'split'
-            ? `absolute bottom-[calc(100%+8px)] left-0 z-[6] ${SPLIT_PICKER_SHELL} ${
+            ? `${SPLIT_PICKER_SHELL} ${
+                // Outside a side panel there is no side width, and the picker takes its full one.
                 compact
-                  ? 'w-[min(360px,calc(var(--side-width)-36px),calc(100vw-48px))]'
+                  ? 'w-[min(360px,calc(var(--side-width,396px)-36px),calc(100vw-48px))]'
                   : SPLIT_PICKER_WIDTH
               }`
-            : `absolute bottom-[calc(100%+8px)] left-0 z-[6] w-[236px] ${MENU_SURFACE}`
-        }
+            : `w-[236px] ${MENU_SURFACE}`
+        }`}
         role="menu"
       >
         <RuntimeSections

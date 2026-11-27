@@ -6,6 +6,7 @@ import type { Manor } from '../../useWorkspace'
 import type { ThemeChoice } from '../../useTheme'
 import type { SettingsController } from '../../useSettings'
 import { AgentsPage } from './AgentsPage'
+import { MailPage } from './MailPage'
 import { ModelsPage } from './ModelsPage'
 import { AutoRulesPage } from './AutoRulesPage'
 import { ContextFilesPage } from './ContextFilesPage'
@@ -223,6 +224,8 @@ export function SettingsHost({
             {...common}
           />
         )
+      case 'mail':
+        return <MailPage settings={workspace.houseSettings} agents={workspace.agents} onSave={manor.saveHouseSettings} />
       case 'permissions':
         return <PermissionsPage bridge={desktopPermissions()} />
       case 'storage':

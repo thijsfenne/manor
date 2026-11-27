@@ -56,6 +56,7 @@ import { InteractionBroker, askedByModel, preferenceAnswerText } from './interac
 import { OutboundDrafts } from './outboundDrafts.js'
 import { readMailThread } from './mcp/mailMcp.js'
 import { createMockOutboundSendPort, createOutboundSendPort } from './outboundSend.js'
+import { readMailCalendar } from './mailDraft.js'
 import { MailFixtureSource } from './mailFixtureSource.js'
 import { mailImapSourceFromEnv } from './mailImapSource.js'
 import { InvalidUserInputCapabilityError, UserInputCapabilities } from './interactionCapability.js'
@@ -1134,6 +1135,8 @@ async function main(): Promise<void> {
     mailSend: outboundSend,
     // Served here in every mode, the mock too: its triage script calls the real endpoint.
     mailToolHost: mcpHost,
+    // The isolated mock server never reads the user's calendar.
+    ...(forceMock ? {} : { mailCalendar: readMailCalendar }),
     systemInfo: createSystemInfo({
       memoryDir: memoryFolder ?? null,
       vaultDir: vaultDir.ok ? vaultDir.dir : null,

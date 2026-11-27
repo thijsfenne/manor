@@ -80,13 +80,16 @@ export function Dialog({
   }, [trapFocus])
 
   const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    // A dialog opened from inside this one is portalled outside this card, yet its keys
+    // still bubble here through React. They are its own: Escape closes only the top one.
+    const card = cardRef.current
+    if (card !== null && !card.contains(event.target as Node)) return
     if (event.key === 'Escape') {
       event.preventDefault()
       onClose()
       return
     }
     if (trapFocus && event.key === 'Tab') {
-      const card = cardRef.current
       if (!card) return
       const stops = [...card.querySelectorAll<HTMLElement>(FOCUSABLE)]
       if (stops.length === 0) {

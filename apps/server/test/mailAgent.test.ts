@@ -1,10 +1,10 @@
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { createServer, type Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import os from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { MAIL_INBOX_WINDOW, mailNewRecipients, type Driver, type MailThread, type ServerMessage, type TurnInput } from '@manor/contracts'
+import { MAIL_INBOX_WINDOW, mailNewRecipients, type AgentConfig, type Driver, type MailThread, type ServerMessage, type TurnInput } from '@manor/contracts'
 import { mockComposio } from '../src/composioMarketplacePorts.js'
 import { buildArgs as buildClaudeArgs } from '../src/drivers/claudeDriver.js'
 import { buildCodexAppServerArgs, buildCodexThreadRequest } from '../src/drivers/codexDriver.js'
@@ -12,9 +12,16 @@ import { buildCursorArgs } from '../src/drivers/cursorDriver.js'
 import { buildGrokArgs } from '../src/drivers/grokDriver.js'
 import { createMockDriver } from '../src/drivers/mockDriver.js'
 import { FIXTURE_THREAD, MailFixtureSource } from '../src/mailFixtureSource.js'
-import { MAIL_DRAFT_TURN_MS } from '../src/mailDraft.js'
+import { MAIL_CALENDAR_WAIT_MS, MAIL_DRAFT_TURN_MS, type MailAgentRuntime } from '../src/mailDraft.js'
 import { MailModule } from '../src/mailModule.js'
-import { MAIL_REVISION_MARK, MAIL_UNTRUSTED_CLOSE, MAIL_UNTRUSTED_OPEN, untrustedMailPayload } from '../src/mailPrompt.js'
+import {
+  MAIL_CALENDAR_OPEN,
+  MAIL_MEMORY_OPEN,
+  MAIL_REVISION_MARK,
+  MAIL_UNTRUSTED_CLOSE,
+  MAIL_UNTRUSTED_OPEN,
+  untrustedMailPayload,
+} from '../src/mailPrompt.js'
 import type { MailInbox } from '../src/mailSource.js'
 import { MAIL_TRIAGE_BATCHES, MAIL_TRIAGE_CLAIM_STALE_MS, mailTriageDue } from '../src/mailTriage.js'
 import { McpHttpHost } from '../src/mcp/httpHost.js'
@@ -81,11 +88,16 @@ async function setup(options: {
   deltaDelayMs?: number
   /** Stands in for the mock driver behind the recorder. */
   driver?: Driver
+  /** Stands in for Marlow as the default agent. */
+  agent?: AgentConfig
+  /** The draft's calendar, memory folder and model. */
+  extras?: Pick<MailAgentRuntime, 'calendar' | 'memoryTarget' | 'draftModel'>
 } = {}) {
   const dir = mkdtempSync(path.join(os.tmpdir(), 'manor-mail-agent-'))
   dirs.push(dir)
   const source = options.source ?? new MailFixtureSource({ now: Date.UTC(2026, 10, 26, 12) })
   const recorder = recordingDriver(options.deltaDelayMs, options.driver)
+  const resolved: AgentConfig['driver'][] = []
   const broadcasts: ServerMessage[] = []
   const send = options.send ?? new RecordingOutboundSend()
   const module = new MailModule({
@@ -94,7 +106,15 @@ async function setup(options: {
     projectIds: async () => [],
     broadcast: (message) => broadcasts.push(message),
     ...(options.now === undefined ? {} : { now: options.now }),
-    runtime: { agents: () => [marlow], resolveDriver: () => recorder.driver, ensureScratchDir: async (id) => path.join(dir, id) },
+    runtime: {
+      agents: () => [options.agent ?? marlow],
+      resolveDriver: (agent) => {
+        resolved.push(agent.driver)
+        return recorder.driver
+      },
+      ensureScratchDir: async (id) => path.join(dir, id),
+      ...options.extras,
+    },
     send,
     toolHost: await toolHost(),
   })
@@ -112,7 +132,7 @@ async function setup(options: {
   }
   const lastState = () => broadcasts.filter((message): message is MailState => message.type === 'mail_state').at(-1)!
   const card = (threadId: string) => lastState().cards.find((entry) => entry.threadId === threadId)
-  return { module, source, recorder, broadcasts, send, socket, lastState, card, dir }
+  return { module, source, recorder, resolved, broadcasts, send, socket, lastState, card, dir }
 }
 
 const promptOf = (input: TurnInput) => {
@@ -305,6 +325,126 @@ describe('the draft turn', () => {
     await running
     expect(recorder.stops()).toBe(0)
     expect(asker.frames().at(-1)?.status).toBe('done')
+  })
+})
+
+/** A provider that answers at once, so a test on fake timers never waits on the mock's own pacing. */
+const instantDriver: Driver = {
+  startTurn: () => ({
+    events: (async function* () { yield { type: 'result' as const, text: 'Thank you, that works.' } })(),
+    stop: () => undefined,
+  }),
+}
+
+/** A memory folder whose standing files hold one line. */
+function memoryFolder(dir: string) {
+  mkdirSync(path.join(dir, 'memory', 'daily'), { recursive: true })
+  writeFileSync(path.join(dir, 'soul.md'), 'The user signs every mail with a single initial.\n')
+  return { dailyDir: path.join(dir, 'memory', 'daily') }
+}
+
+const MEETING = {
+  from: '2026-11-27',
+  to: '2027-01-07',
+  events: [{
+    title: 'Dentist', calendar: 'Home', allDay: false, start: '2026-12-01T10:00', end: '2026-12-01T11:00',
+    startsAt: Date.UTC(2026, 11, 1, 9), endsAt: Date.UTC(2026, 11, 1, 10), reserved: false, transparent: false,
+  }],
+}
+
+describe('what the draft turn knows about the user', () => {
+  const draft = async (options: Parameters<typeof setup>[0]) => {
+    const context = await setup(options)
+    const asker = context.socket('a')
+    await asker.send({ type: 'mail_draft_start', draftId: 'd1', threadId: FIXTURE_THREAD.interview })
+    return { ...context, asker, prompt: promptOf(context.recorder.inputs[0]!), done: asker.frames().at(-1)! }
+  }
+
+  it('carries the standing files only when the default agent has memory on, and the turn still gets no memory', async () => {
+    const dir = mkdtempSync(path.join(os.tmpdir(), 'manor-mail-memory-'))
+    dirs.push(dir)
+    const memoryTarget = memoryFolder(dir)
+    const off = await draft({ extras: { memoryTarget } })
+    expect(off.prompt).not.toContain(MAIL_MEMORY_OPEN)
+    expect(off.prompt).not.toContain('single initial')
+    const on = await draft({ agent: { ...marlow, memoryScope: true }, extras: { memoryTarget } })
+    expect(on.prompt).toContain(MAIL_MEMORY_OPEN)
+    expect(on.prompt).toContain('The user signs every mail with a single initial.')
+    expect(on.prompt.indexOf('single initial')).toBeLessThan(on.prompt.indexOf(MAIL_UNTRUSTED_OPEN))
+    expect(toolGrants(on.recorder.inputs[0]!)).toEqual(NO_GRANTS)
+    expect(on.done.status).toBe('done')
+  })
+
+  it('carries the calendar the reader returns', async () => {
+    const { prompt, done } = await draft({ extras: { calendar: async () => MEETING } })
+    expect(prompt).toContain(MAIL_CALENDAR_OPEN)
+    expect(prompt).toContain('"title":"Dentist"')
+    expect(done.status).toBe('done')
+  })
+
+  it('writes the draft without a calendar when the reader fails, has none or never answers', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    try {
+      for (const calendar of [() => Promise.reject(new Error('HTTP 401 body')), async () => undefined]) {
+        const { prompt, done } = await draft({ extras: { calendar } })
+        expect(prompt).not.toContain(MAIL_CALENDAR_OPEN)
+        expect(done.status).toBe('done')
+      }
+      expect(warn.mock.calls.flat().join(' ')).not.toContain('401')
+    } finally {
+      warn.mockRestore()
+    }
+
+    const { socket, recorder } = await setup({ driver: instantDriver, extras: { calendar: () => new Promise(() => undefined) } })
+    const asker = socket('a')
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    try {
+      const drafted = asker.send({ type: 'mail_draft_start', draftId: 'd1', threadId: FIXTURE_THREAD.interview })
+      await vi.advanceTimersByTimeAsync(MAIL_CALENDAR_WAIT_MS - 1)
+      expect(recorder.inputs).toHaveLength(0)
+      await vi.advanceTimersByTimeAsync(1)
+      await drafted
+    } finally {
+      vi.useRealTimers()
+    }
+    expect(promptOf(recorder.inputs[0]!)).not.toContain(MAIL_CALENDAR_OPEN)
+    expect(asker.frames().at(-1)).toMatchObject({ status: 'done', text: 'Thank you, that works.' })
+  })
+
+  it('runs on the house\'s draft model in the default agent\'s character, and falls back to its own runtime', async () => {
+    const chosen = await draft({ extras: { draftModel: () => ({ model: 'claude-sonnet-5-5', effort: 'low', disabledModels: [] }) } })
+    expect(chosen.recorder.inputs[0]!.agent).toMatchObject({ driver: 'claude', model: 'claude-sonnet-5-5', effort: 'low', character: marlow.character })
+    expect(chosen.resolved).toEqual(['claude'])
+
+    const ownEffort = await draft({ extras: { draftModel: () => ({ model: 'gpt-6-sol', effort: null, disabledModels: [] }) } })
+    expect(ownEffort.recorder.inputs[0]!.agent).toMatchObject({ driver: 'codex', model: 'gpt-6-sol', effort: marlow.effort })
+
+    for (const pick of [
+      { model: 'no-such-model', effort: 'low' as const, disabledModels: [] },
+      { model: 'claude-sonnet-5-5', effort: 'low' as const, disabledModels: ['claude-sonnet-5-5'] },
+      { model: null, effort: 'low' as const, disabledModels: [] },
+    ]) {
+      const fallback = await draft({ extras: { draftModel: () => pick } })
+      const { agent } = fallback.recorder.inputs[0]!
+      expect([agent.driver, agent.model, agent.effort]).toEqual([marlow.driver, marlow.model, marlow.effort])
+      expect(fallback.resolved).toEqual([marlow.driver])
+    }
+  })
+
+  it('leaves the triage run on the default agent\'s own model, without calendar or memory', async () => {
+    const dir = mkdtempSync(path.join(os.tmpdir(), 'manor-mail-memory-'))
+    dirs.push(dir)
+    const calendar = vi.fn(async () => MEETING)
+    const { socket, recorder } = await setup({
+      agent: { ...marlow, memoryScope: true },
+      extras: { calendar, memoryTarget: memoryFolder(dir), draftModel: () => ({ model: 'claude-sonnet-5-5', effort: 'low', disabledModels: [] }) },
+    })
+    await socket('a').send({ type: 'mail_triage_run' })
+    const [input] = recorder.inputs
+    expect([input!.agent.driver, input!.agent.model, input!.agent.effort]).toEqual([marlow.driver, marlow.model, marlow.effort])
+    expect(promptOf(input!)).not.toContain(MAIL_CALENDAR_OPEN)
+    expect(promptOf(input!)).not.toContain(MAIL_MEMORY_OPEN)
+    expect(calendar).not.toHaveBeenCalled()
   })
 })
 

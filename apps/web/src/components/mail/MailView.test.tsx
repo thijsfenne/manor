@@ -4,10 +4,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentConfig, ClientMessage, MailCard, MailLabel, MailThread, MailTriageState, ServerMessage } from '@manor/contracts'
 import { createWorkspaceCommands } from '@manor/client-runtime/commands'
 import { mailTimeLabel } from '../../mail'
+import { toast } from '../../notices'
 import { emptyWorkspace, reduce } from '../../state'
+import { Button } from '../ui/Button'
 import { useMailArchivedNotice } from './mailArchivedNotice'
 import { MailView } from './MailView'
-import { setMailView } from './mailViewStore'
+import { mailView, setMailView } from './mailViewStore'
 
 /**
  * The Mail view over the real reducer and commands, without a browser: portals render in
@@ -48,7 +50,7 @@ const thread = (threadId: string): MailThread => ({
 })
 const agent = { id: 'chief', name: 'Avery', color: 'teal', isCos: true } as unknown as AgentConfig
 
-const chatDoor = { staged: {}, creating: false, stage: () => {}, openChat: () => {}, openDm: () => {} }
+const chatDoor = { staged: {}, creating: false, canStartChat: true, stage: () => {}, openChat: () => {}, openDm: () => {}, startChat: () => {} }
 
 class FakeElement {
   isContentEditable = false
@@ -63,18 +65,22 @@ function Notices({ args }: { args: Parameters<typeof useMailArchivedNotice> }) {
 let view: ReactTestRenderer
 let sent: ClientMessage[]
 let hear: (message: ServerMessage) => void
+let leave: () => void
+let back: () => void
 let dialogOpen: boolean
 let page: EventTarget
+/** The view is unmounted, as when another door is open; the mail state still moves. */
+let away: boolean
 
 function mount(cards = CARDS, triage = NO_RUN) {
   let state = reduce(emptyWorkspace, { type: 'mail_state', status: 'ready', cards, syncedAt: 1, triage })
-  const render = () => (
+  const render = () => (away ? <></> : (
     <>
       <MailView mail={state.mail} agents={[agent]} projects={[]} chats={[]} chatDoor={chatDoor} status="live" commands={commands} settingsOpen={false}
         sidebarSlot={{} as HTMLElement} actionSlot={{} as HTMLElement} sidebarCollapsed={false} />
       <Notices args={[state.mail, commands.unarchiveMailThread]} />
     </>
-  )
+  ))
   const change = (next: typeof state) => {
     state = next
     view.update(render())
@@ -84,6 +90,8 @@ function mount(cards = CARDS, triage = NO_RUN) {
     (apply) => change(apply(state)),
   )
   hear = (message) => act(() => change(reduce(state, message)))
+  leave = () => { away = true; act(() => view.update(render())) }
+  back = () => { away = false; act(() => view.update(render())) }
   act(() => { view = create(render(), { unstable_isConcurrent: true } as never) })
   for (const { threadId: id } of cards) hear({ type: 'mail_thread', requestId: `seed-${id}`, threadId: id, result: { status: 'ready', thread: thread(id) } })
 }
@@ -111,10 +119,17 @@ const menuOn = (id: string) =>
 const menuItems = () => host((node) => node.props.role === 'menuitem')
 const ofType = <T extends ClientMessage['type']>(type: T) =>
   sent.filter((message): message is Extract<ClientMessage, { type: T }> => message.type === type)
+const replyText = () => host((node) => node.props['aria-label'] === 'Reply text')[0]!
+const typeReply = (value: string) => act(() => replyText().props.onChange({ target: { value } }))
+const drafted = (index: number, status: 'streaming' | 'done', text: string) => {
+  const { draftId, threadId } = ofType('mail_draft_start')[index]!
+  hear({ type: 'mail_draft', draftId, threadId, status, text })
+}
 
 beforeEach(() => {
   sent = []
   dialogOpen = false
+  away = false
   page = new EventTarget()
   vi.stubGlobal('window', page)
   vi.stubGlobal('document', { querySelector: () => (dialogOpen ? {} : null), body: {}, addEventListener: () => {}, removeEventListener: () => {} })
@@ -122,7 +137,7 @@ beforeEach(() => {
   vi.stubGlobal('HTMLElement', FakeElement)
   vi.stubGlobal('requestAnimationFrame', (run: () => void) => { run(); return 0 })
   vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
-  setMailView({ selectedId: null, tab: 'reply', query: '', picked: [], archived: null })
+  setMailView({ selectedId: null, tab: 'reply', query: '', picked: [], archived: null, replies: {} })
 })
 afterEach(() => {
   act(() => view.unmount())
@@ -331,7 +346,16 @@ describe('MailView', () => {
     expect(button('Archive')).toBeUndefined()
   })
 
-  it('opens the reply split with one draft, and ends it on Escape, another card and leaving', () => {
+  it('leads the toolbar with Reply as the primary button, then Add to chat and Archive', () => {
+    mount()
+    press('j')
+    const toolbar = host((node) => node.props.role === 'toolbar')[0]!
+    expect(toolbar.findAll((node) => node.type === 'button').map(textOf)).toEqual(['Reply', 'Add to chat', 'Archive'])
+    expect(toolbar.findAllByType(Button).map((node) => [node.props.variant, node.props.size]))
+      .toEqual([['primary', 'small'], [undefined, 'small'], [undefined, 'small']])
+  })
+
+  it('opens the reply split with one draft, and Escape stops it and ends the reply', () => {
     mount()
     press('j')
     press('r')
@@ -342,17 +366,94 @@ describe('MailView', () => {
     press('Escape')
     expect(paneOpen()).toBe(false)
     expect(ofType('mail_draft_stop').map((message) => message.draftId)).toEqual([ofType('mail_draft_start')[0]!.draftId])
+    expect(mailView().replies).toEqual({})
+  })
 
-    act(() => button('Reply').props.onClick())
+  it('keeps a reply with the edited text through leaving Mail, without a second draft', () => {
+    mount()
+    press('j')
+    press('r')
+    drafted(0, 'done', 'Thanks, Thursday works.')
+    typeReply('Thanks, Thursday at ten works.')
+    leave()
+    back()
+    expect(paneOpen()).toBe(true)
+    expect(replyText().props.value).toBe('Thanks, Thursday at ten works.')
+    expect(ofType('mail_draft_start')).toHaveLength(1)
+    expect(ofType('mail_draft_stop')).toEqual([])
+  })
+
+  it('fills in a draft that finished while Mail was left, and keeps an edit after it', () => {
+    mount()
+    press('j')
+    press('r')
+    drafted(0, 'streaming', 'Thanks,')
+    leave()
+    drafted(0, 'done', 'Thanks, see you then.')
+    back()
+    expect(replyText().props.value).toBe('Thanks, see you then.')
+    typeReply('Thanks, see you on Thursday.')
+    leave()
+    back()
+    expect(replyText().props.value).toBe('Thanks, see you on Thursday.')
+    expect(ofType('mail_draft_start')).toHaveLength(1)
+  })
+
+  it('keeps a reply while another mail is open and shows it again on return', () => {
+    mount()
+    press('j')
+    press('r')
+    drafted(0, 'done', 'Draft for a.')
     press('j')
     expect(selected()).toBe('b')
     expect(paneOpen()).toBe(false)
-    expect(ofType('mail_draft_stop')).toHaveLength(2)
+    press('k')
+    expect(paneOpen()).toBe(true)
+    expect(replyText().props.value).toBe('Draft for a.')
+    expect(ofType('mail_draft_stop')).toEqual([])
+    expect(ofType('mail_draft_start')).toHaveLength(1)
+  })
 
+  it('stops the streaming draft of one reply before a draft for another thread starts', () => {
+    mount()
+    press('j')
     press('r')
-    const draftId = ofType('mail_draft_start')[2]!.draftId
-    act(() => view.update(<></>))
-    expect(ofType('mail_draft_stop').at(-1)?.draftId).toBe(draftId)
+    drafted(0, 'streaming', 'Half of a')
+    press('j')
+    press('r')
+    const [first, second] = ofType('mail_draft_start')
+    expect(second?.threadId).toBe('b')
+    expect(ofType('mail_draft_stop').map((message) => message.draftId)).toEqual([first!.draftId])
+    press('k')
+    // Stopped, the text it reached is the reply's.
+    expect(replyText().props.value).toBe('Half of a')
+    expect(replyText().props.readOnly).toBe(false)
+  })
+
+  it('ends the reply of an archived thread and stops its draft', () => {
+    mount()
+    press('j')
+    press('r')
+    press('e')
+    expect(mailView().replies).toEqual({})
+    expect(ofType('mail_draft_stop').map((message) => message.draftId)).toEqual([ofType('mail_draft_start')[0]!.draftId])
+  })
+
+  it('tells a send confirmed while Mail was left on return, and ends the reply', () => {
+    const success = vi.spyOn(toast, 'success').mockImplementation(() => {})
+    mount()
+    press('j')
+    press('r')
+    drafted(0, 'done', 'Thanks.')
+    act(() => button('Send').props.onClick())
+    leave()
+    hear({ type: 'mail_result', requestId: ofType('mail_send')[0]!.requestId, ok: true })
+    expect(success).not.toHaveBeenCalled()
+    back()
+    expect(success).toHaveBeenCalledWith('Sent to robin@example.com')
+    expect(mailView().replies).toEqual({})
+    expect(paneOpen()).toBe(false)
+    success.mockRestore()
   })
 
   it('keeps a reply open when a search empties the list', () => {

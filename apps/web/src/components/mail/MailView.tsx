@@ -7,6 +7,7 @@ import { mailCards, type MailState } from '@manor/client-runtime/mail'
 import {
   listedMailCards, mailKeyAction, mailNeighbour, mailRange, steppedMailSelection, toggledMailSelection, unlabelledMailCount, type MailKeyAction,
 } from '../../mail'
+import { toast } from '../../notices'
 import { cosOf } from '../../persona'
 import type { ConnectionStatus } from '../../useWorkspace'
 import { useStableCallback } from '../../useStableCallback'
@@ -17,18 +18,11 @@ import { MailAddToChatDialog, type MailChatDoor } from './MailAddToChatDialog'
 import { MailDraftPane } from './MailDraftPane'
 import { MailReader } from './MailReader'
 import { MailSidebar, MailTriageButton, type MailPick } from './MailSidebar'
-import { setMailView, useMailView } from './mailViewStore'
+import { changeMailReply, dropMailReplies, mailView, openMailReply, setMailView, useMailView } from './mailViewStore'
 
 export type MailCommands = Pick<ReturnType<typeof createWorkspaceCommands>,
   | 'loadMail' | 'openMailThread' | 'setMailLabel' | 'linkMailSender' | 'archiveMailThread'
   | 'unarchiveMailThread' | 'runMailTriage' | 'startMailDraft' | 'stopMailDraft' | 'sendMail'>
-
-/** The open reply split, with the ids of what it last asked the host for. */
-interface Reply {
-  threadId: string
-  draftId?: string
-  sendId?: string
-}
 
 /** A key typed into a field is text, never a command of the view. */
 const typing = (target: EventTarget | null): boolean => {
@@ -58,14 +52,15 @@ export function MailView({ mail, agents, projects, chats, chatDoor, status, comm
   sidebarCollapsed: boolean
   onToggleSidebar?: () => void
 }) {
-  const { selectedId, tab, query, picked } = useMailView()
+  const { selectedId, tab, query, picked, replies } = useMailView()
   const cards = mailCards(mail)
   const listed = listedMailCards(cards, tab, query)
   const unlabelled = unlabelledMailCount(cards)
-  const [reply, setReply] = useState<Reply | null>(null)
   // A thread stays open when a new label or search takes its card off the list, but an
   // empty list has the stage to itself, unless a reply is being written there.
-  const current = listed.length === 0 && reply === null ? null : cards.find((entry) => entry.threadId === selectedId) ?? null
+  const current = listed.length === 0 && (selectedId === null || replies[selectedId] === undefined)
+    ? null
+    : cards.find((entry) => entry.threadId === selectedId) ?? null
   // Only listed cards count as picked, in list order; a pick of two or more hides the thread.
   const pickedListed = listed.filter((entry) => picked.includes(entry.threadId)).map((entry) => entry.threadId)
   const many = pickedListed.length > 1
@@ -79,7 +74,8 @@ export function MailView({ mail, agents, projects, chats, chatDoor, status, comm
   const headerRows = useHeaderRows()
   const search = useRef<HTMLInputElement>(null)
   const [adding, setAdding] = useState<string | null>(null)
-  const replying = reply !== null && thread !== null && reply.threadId === thread.threadId ? reply : null
+  // The open thread's reply, which shows once the thread is read.
+  const replying = thread === null ? null : replies[thread.threadId] ?? null
   const live = status === 'live'
 
   // Opening the door, a reconnect and every return to the window ask the host to look again.
@@ -97,38 +93,45 @@ export function MailView({ mail, agents, projects, chats, chatDoor, status, comm
     if (live && openId !== null) read(openId)
   }, [live, openId, card?.at, card?.messageCount, read])
 
+  // A reply belongs to its thread and outlives the view, another mail and a pick of several:
+  // its draft keeps arriving in `mail.drafts`. Close, a confirmed send and Archive end it.
   const stopDraft = (draftId: string | undefined) => {
     if (draftId !== undefined && mail.drafts[draftId]?.status === 'streaming') commands.stopMailDraft(draftId)
   }
-  const closeReply = () => {
-    stopDraft(reply?.draftId)
-    setReply(null)
+  const endReplies = (threadIds: readonly string[]) => {
+    for (const threadId of threadIds) stopDraft(replies[threadId]?.draftId)
+    dropMailReplies(threadIds)
   }
-  // Whatever moved the selection off the thread (a card, a key, an Archive) ends its reply.
-  const leftReply = useStableCallback(() => {
-    if (reply !== null && reply.threadId !== openId) closeReply()
-  })
-  useEffect(() => { leftReply() }, [openId, leftReply])
-  // So does leaving the door: nobody is left to read what is being written.
-  const leave = useStableCallback(() => stopDraft(reply?.draftId))
-  useEffect(() => () => leave(), [leave])
+  const closeReply = () => {
+    if (replying !== null && thread !== null) endReplies([thread.threadId])
+  }
+  // A send confirmed while the view was away is told on its return.
+  useEffect(() => {
+    const delivered = Object.entries(mailView().replies)
+      .filter(([, entry]) => entry.sendId !== undefined && mail.results[entry.sendId]?.ok === true)
+    for (const [, entry] of delivered) toast.success(`Sent to ${entry.sentTo ?? entry.to.trim()}`)
+    dropMailReplies(delivered.map(([threadId]) => threadId))
+  }, [replies, mail.results])
 
   const openReply = () => {
-    if (thread !== null && replying === null) setReply({ threadId: thread.threadId })
+    if (thread !== null && replying === null) openMailReply(thread.threadId, { to: thread.reply.to, cc: thread.reply.cc, body: '' })
   }
   /** False when the request could not leave, so the pane keeps what was asked. */
   const startDraft = (instruction?: string, current?: string) => {
-    if (replying === null) return false
-    stopDraft(replying.draftId)
+    if (replying === null || thread === null) return false
+    const { threadId } = thread
+    // The host runs one draft at a time and ends the running one without a word, so the
+    // client stops it first, else that reply would read as streaming for good.
+    for (const entry of Object.values(replies)) stopDraft(entry.draftId)
     const draftId = newId('draft')
-    const left = commands.startMailDraft(draftId, replying.threadId, instruction, current)
-    if (left) setReply({ threadId: replying.threadId, draftId })
+    const left = commands.startMailDraft(draftId, threadId, instruction, current)
+    if (left) changeMailReply(threadId, { draftId })
     return left
   }
   const send = (to: string, cc: string, body: string) => {
-    if (replying === null) return
+    if (thread === null) return
     const sendId = newId('send')
-    if (commands.sendMail(sendId, replying.threadId, to, body, cc)) setReply({ ...replying, sendId })
+    if (commands.sendMail(sendId, thread.threadId, to, body, cc)) changeMailReply(thread.threadId, { sendId, sentTo: to })
   }
   const openAdd = () => {
     if (thread !== null) setAdding(thread.threadId)
@@ -144,6 +147,7 @@ export function MailView({ mail, agents, projects, chats, chatDoor, status, comm
     })
     if (archived.length === 0) return
     const gone = archived.map((entry) => entry.threadId)
+    endReplies(gone)
     const reopen = clear || (selectedId !== null && gone.includes(selectedId))
     setMailView({ archived, ...(clear ? { picked: [] } : {}), ...(reopen ? { selectedId: mailNeighbour(listed, gone) } : {}) })
   }
@@ -231,7 +235,6 @@ export function MailView({ mail, agents, projects, chats, chatDoor, status, comm
   const draftsState = {
     draft: replying?.draftId === undefined ? undefined : mail.drafts[replying.draftId],
     sending: replying?.sendId !== undefined && mail.results[replying.sendId] === undefined,
-    sendResult: replying?.sendId === undefined ? undefined : mail.results[replying.sendId],
   }
   const added = adding === null ? undefined : mail.threads[adding]
   const runTriage = agent === null ? undefined : () => { commands.runMailTriage() }
@@ -267,14 +270,13 @@ export function MailView({ mail, agents, projects, chats, chatDoor, status, comm
         <div className={`relative overflow-hidden ${PANE_TRAVEL} ${replying === null ? '' : 'border-l border-line'}`}
           style={{ flex: `0 1 ${replying === null ? '0px' : 'min(420px, 60%)'}` }}>
           {replying === null || thread === null ? null : (
-            <MailDraftPane key={thread.threadId} thread={thread} agent={agent} drafts={draftsState}
-              onClose={closeReply} onStart={startDraft} onStop={() => stopDraft(replying.draftId)} onSend={send} />
+            <MailDraftPane key={thread.threadId} thread={thread} agent={agent} reply={replying} drafts={draftsState}
+              onChange={(change) => changeMailReply(thread.threadId, change)} onClose={closeReply} onStart={startDraft} onStop={() => stopDraft(replying.draftId)} onSend={send} />
           )}
         </div>
       </div>
       {added === undefined ? null : (
-        <MailAddToChatDialog thread={added} agents={agents} chats={chats} projects={projects}
-          linkedProjectId={cards.find((entry) => entry.threadId === added.threadId)?.projectId}
+        <MailAddToChatDialog thread={added} agents={agents} chats={chats}
           door={chatDoor} onClose={() => setAdding(null)} />
       )}
     </section>

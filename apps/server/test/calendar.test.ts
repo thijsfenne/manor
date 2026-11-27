@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { buildCalendarIcs, parseCalendarCreate } from '../src/mcp/calendarCreate.js'
-import { safeCalDavError } from '../src/mcp/calendarMcp.js'
+import { safeCalDavError } from '../src/mcp/calendarDav.js'
 import { freeSlots, occurrencesInRange, parseRange } from '../src/mcp/calendarRead.js'
 
 const ics = (...events: string[]) => [

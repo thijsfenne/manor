@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { SidebarLeftIcon, SidebarRightIcon } from '@hugeicons/core-free-icons'
-import { BROWSER_HOME_SESSION_ID, DEFAULT_HOUSE_SETTINGS, NOTE_AI_DEFAULTS, type WorkflowSuggestion, type Chat, type PageContextAttachment, type Project, type Routine } from '@manor/contracts'
+import { BROWSER_HOME_SESSION_ID, DEFAULT_HOUSE_SETTINGS, NOTE_AI_DEFAULTS, type AgentConfig, type WorkflowSuggestion, type Chat, type PageContextAttachment, type Project, type Routine } from '@manor/contracts'
 import { composioBinding } from '../connectors/composioCatalogue'
 import { PluginsTabs, PluginsView } from '../plugins/PluginsView'
 import { ScheduledTabs } from '../routines/ScheduledTabs'
 import type { ChatDestination } from '../artifacts/AddToChatButton'
+import { agentTargets, newSessionTarget } from '../AddToChatDialog'
 import { retryableLazy } from '../RecoveryBoundary'
 import { BrowserSessionEmpty, BrowserSessionMenu } from '../BrowserSessionMenu'
 import { BrowserPanel } from '../BrowserPanel'
@@ -207,7 +208,10 @@ export function DestinationView({
         agents={workspace.agents}
         projects={workspace.projects}
         chats={workspace.chats}
-        chatDoor={{ staged: pageContextsByChat, creating, stage: onAddPageContext, openChat: onOpenChat, openDm: onOpenDm }}
+        chatDoor={{
+          staged: pageContextsByChat, creating, canStartChat: newChatProject !== undefined,
+          stage: onAddPageContext, openChat: onOpenChat, openDm: onOpenDm, startChat: onStartChat,
+        }}
         status={status}
         commands={manor.mailCommands}
         settingsOpen={settingsOpen}
@@ -231,6 +235,7 @@ export function DestinationView({
         newChatProject={newChatProject}
         creating={creating}
         onOpenChat={onOpenChat}
+        onOpenDm={onOpenDm}
         onStartChat={onStartChat}
       />
     )
@@ -470,10 +475,61 @@ function BrowserPlace({
 }
 
 /**
- * mymind's library, with every chat it may hand sources to. The order is the menu's:
- * the chat on screen, a new one, then whatever was spoken in most recently. Each carries
- * what it already holds, so a room with no slots left says so before it is picked
- * rather than swallowing the third attachment in silence.
+ * Where Artifacts may hand sources, in the dialog's order: the chat on screen, a new
+ * Session, every agent's DM, every live project thread, then the five Sessions and
+ * groups spoken in most recently. No chat is offered twice.
+ */
+export function artifactsDestinations({ agents, chats, projects, chatRows, open, staged, canStartChat, creating }: {
+  agents: readonly AgentConfig[]
+  chats: readonly Chat[]
+  projects: readonly Project[]
+  chatRows: readonly ChatListRow[]
+  open: Chat | null
+  staged: Record<string, PageContextAttachment[]>
+  canStartChat: boolean
+  creating: boolean
+}): ChatDestination[] {
+  const usedIds = (key: string) => (staged[key] ?? []).map((context) => context.id)
+  const live = chats.filter((chat) => chat.archivedAt === null)
+  const threads = projects.flatMap((project): ChatDestination[] => {
+    const chat = live.find((entry) => entry.id === project.threadChatId)
+    return chat === undefined ? [] : [{ id: chat.id, kind: 'chat', label: project.name, owner: { project }, usedIds: usedIds(chat.id) }]
+  })
+  const dms = agentTargets({ agents, chats, staged, creating })
+  // A DM's row carries the persona's current name, which beats the title frozen into
+  // the chat when it was made; everything else is titled well enough by itself.
+  const titleOf = (chat: Chat) => chatRows.find((row) => row.chat?.id === chat.id)?.title ?? withSessionTitle(chat).title
+  // The chat on screen keeps its mark: a DM its agent's face, a thread its project's icon.
+  const current = (chat: Chat): ChatDestination => {
+    const same = [...dms, ...threads].find((target) => target.id === chat.id)
+    return {
+      id: chat.id, kind: 'chat', label: same?.label ?? titleOf(chat), detail: 'Current', usedIds: usedIds(chat.id),
+      ...(same?.owner === undefined ? {} : { owner: same.owner }),
+    }
+  }
+  // A run belongs to its routine and a side chat lives only in its panel: neither is a
+  // room the stage can be moved to, so only Sessions and groups follow the rest.
+  const recent = live
+    .filter((chat) => (chat.kind === 'project' || chat.kind === 'group') && chat.id !== open?.id
+      && !threads.some((target) => target.id === chat.id))
+    .sort((a, b) => b.lastMessageAt - a.lastMessageAt)
+    .slice(0, 5)
+    .map((chat): ChatDestination => ({ id: chat.id, kind: 'chat', label: titleOf(chat), usedIds: usedIds(chat.id) }))
+  const list = [
+    ...(open === null ? [] : [current(open)]),
+    newSessionTarget({ staged, canStart: canStartChat, creating }),
+    ...dms,
+    ...threads,
+    ...recent,
+  ]
+  // The chat on screen leads and is not offered again lower down.
+  return list.filter((target, index) => list.findIndex((other) => other.id === target.id) === index)
+}
+
+/**
+ * mymind's library, with every chat it may hand sources to. Each carries what it already
+ * holds, so a room with no slots left says so before it is picked rather than swallowing
+ * the third attachment in silence.
  */
 function ArtifactsPage({
   manor,
@@ -486,6 +542,7 @@ function ArtifactsPage({
   newChatProject,
   creating,
   onOpenChat,
+  onOpenDm,
   onStartChat,
 }: {
   manor: Manor
@@ -498,47 +555,21 @@ function ArtifactsPage({
   newChatProject: Project | undefined
   creating: boolean
   onOpenChat: (chatId: string) => void
+  onOpenDm: (agentId: string) => void
   onStartChat: () => void
 }) {
   const { workspace, status } = manor
-  const destinations = useMemo((): ChatDestination[] => {
-    const staged = (key: string) => (pageContextsByChat[key] ?? []).map((context) => context.id)
-    // A DM's row carries the persona's current name, which beats the title frozen into
-    // the chat when it was made; everything else is titled well enough by itself.
-    const titleOf = (chat: Chat) => chatRows.find((row) => row.chat?.id === chat.id)?.title ?? withSessionTitle(chat).title
-    const list: ChatDestination[] =
-      open === null
-        ? []
-        : [{ id: open.id, kind: 'chat', label: titleOf(open), detail: 'Current', usedIds: staged(open.id) }]
-    list.push({
-      id: NEW_CHAT_DRAFT_KEY,
-      kind: 'new',
-      label: 'New Session',
-      usedIds: staged(NEW_CHAT_DRAFT_KEY),
-      ...(newChatProject === undefined
-        ? { unavailable: 'No project to start one in' }
-        : creating
-          ? { unavailable: 'A Session is still being started' }
-          : {}),
-    })
-    // A run belongs to its routine and a side chat lives only in its panel: neither is
-    // a room the stage can be moved to, so neither may be offered as one.
-    const recent = workspace.chats
-      .filter((chat) => chat.kind !== 'run' && chat.kind !== 'side' && chat.kind !== 'pair' && chat.archivedAt === null)
-      .sort((a, b) => b.lastMessageAt - a.lastMessageAt)
-    for (const chat of recent) {
-      if (chat.id === open?.id) continue
-      if (list.length >= 7) break
-      list.push({ id: chat.id, kind: 'chat', label: titleOf(chat), usedIds: staged(chat.id) })
-    }
-    return list
-  }, [chatRows, workspace.chats, open, pageContextsByChat, newChatProject, creating])
+  const destinations = useMemo(() => artifactsDestinations({
+    agents: workspace.agents, chats: workspace.chats, projects: workspace.projects, chatRows, open,
+    staged: pageContextsByChat, canStartChat: newChatProject !== undefined, creating,
+  }), [workspace.agents, workspace.chats, workspace.projects, chatRows, open, pageContextsByChat, newChatProject, creating])
 
   const addToChat = (contexts: PageContextAttachment[], destination: ChatDestination) => {
     for (const context of contexts) onAddPageContext(destination.id, context)
     // Going there is the point: the sources are staged in a composer, and a composer
     // nobody is looking at is an attachment that vanished.
     if (destination.id === NEW_CHAT_DRAFT_KEY) onStartChat()
+    else if (destination.owner !== undefined && 'agent' in destination.owner) onOpenDm(destination.owner.agent.id)
     else onOpenChat(destination.id)
   }
 

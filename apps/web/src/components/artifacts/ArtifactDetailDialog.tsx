@@ -169,13 +169,12 @@ export function ArtifactDetailDialog({
             Open original
           </button>
           {/* Always here, even when this one is already in the chat on screen: the
-              menu marks that room "Already there" and aims at the next one, where
-              hiding the control left the only way to another chat off the panel. */}
+              dialog marks that room "Already there" and the button aims at the next
+              one, where hiding the control left the only way to another chat off the panel. */}
           <AddToChatButton
             destinations={destinations}
             contextIds={[artifactContextId(artifact.id)]}
             size="sm"
-            drop="up"
             onAdd={onAdd}
           />
         </div>

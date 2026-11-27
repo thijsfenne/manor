@@ -4,8 +4,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentConfig, MailThread } from '@manor/contracts'
 import type { MailDraft } from '@manor/client-runtime/mail'
 import { MailDraftPane, type MailDraftsState } from './MailDraftPane'
+import type { MailReply } from './mailViewStore'
 
-/** The reply pane without a browser: motion is plain markup and the toast is recorded. */
+/** The reply pane without a browser: motion is plain markup, and the reply is held here as the Mail view would. */
 vi.mock('motion/react', () => {
   const plain = new Map<string, unknown>()
   const motion = new Proxy({}, {
@@ -19,7 +20,6 @@ vi.mock('motion/react', () => {
   })
   return { motion, AnimatePresence: ({ children }: { children: ReactNode }) => children, useReducedMotion: () => true }
 })
-const toasts = vi.hoisted(() => [] as string[])
 // The shared composer needs a browser editor; the pane is tested through the props it hands it.
 const composer = vi.hoisted(() => ({ props: null as null | Record<string, unknown> }))
 vi.mock('../Composer', () => ({
@@ -28,7 +28,6 @@ vi.mock('../Composer', () => ({
     return null
   },
 }))
-vi.mock('../../notices', () => ({ toast: { success: (title: string) => toasts.push(title), error: () => {} } }))
 
 const thread: MailThread = {
   threadId: 't1',
@@ -44,12 +43,17 @@ const agent = { id: 'chief', name: 'Avery', color: 'teal', isCos: true } as unkn
 let view: ReactTestRenderer
 let calls: { start: [string | undefined, string | undefined][]; stop: number; send: [string, string, string][]; close: number }
 let state: MailDraftsState
+let reply: MailReply
 
 const draft = (status: MailDraft['status'], text: string, draftId = 'd1', message?: string): MailDraft =>
   ({ draftId, threadId: 't1', status, text, ...(message === undefined ? {} : { message }) })
 
 const pane = () => (
-  <MailDraftPane thread={thread} agent={agent} drafts={state}
+  <MailDraftPane thread={thread} agent={agent} reply={reply} drafts={state}
+    onChange={(change) => {
+      reply = { ...reply, ...change }
+      view.update(pane())
+    }}
     onClose={() => { calls.close += 1 }}
     onStart={(instruction, current) => { calls.start.push([instruction, current]); return true }}
     onStop={() => { calls.stop += 1 }}
@@ -79,9 +83,9 @@ const asked = (instruction: string) => {
 const textOf = (node: ReactTestInstance): string => node.children.map((child) => (typeof child === 'string' ? child : textOf(child))).join('')
 
 beforeEach(() => {
-  toasts.length = 0
   calls = { start: [], stop: 0, send: [], close: 0 }
-  state = { draft: undefined, sending: false, sendResult: undefined }
+  state = { draft: undefined, sending: false }
+  reply = { to: thread.reply.to, cc: thread.reply.cc, body: '' }
   act(() => { view = create(pane()) })
 })
 afterEach(() => act(() => view.unmount()))
@@ -140,6 +144,12 @@ describe('MailDraftPane', () => {
     expect(host((node) => node.props.role === 'alert')[0]!.children).toEqual(['Avery wrote no draft.'])
   })
 
+  it('keeps the text when a new version was stopped before it wrote anything', () => {
+    show({ draft: draft('done', 'Thanks.') })
+    show({ draft: draft('done', '', 'd2') })
+    expect(text()).toBe('Thanks.')
+  })
+
   it('marks a recipient the thread never saw', () => {
     expect(host((node) => node.props.title === 'Not in this thread')).toHaveLength(0)
     act(() => labelled('Edit To').props.onClick())
@@ -172,14 +182,26 @@ describe('MailDraftPane', () => {
     expect(host((node) => node.props.role === 'alert')).toHaveLength(1)
   })
 
-  it('stays open on a refused send, and confirms a delivered one with a notice and closes', () => {
+  it('stays open on a refused send', () => {
     show({ draft: draft('done', 'Thanks.') })
     act(() => sendButton().props.onClick())
-    show({ sending: false, sendResult: { ok: false, message: 'Not sent.' } })
-    expect(toasts).toEqual([])
+    show({ sending: false })
     expect(calls.close).toBe(0)
-    show({ sendResult: { ok: true } })
-    expect(toasts).toEqual(['Sent to robin@example.com'])
-    expect(calls.close).toBe(1)
+    expect(text()).toBe('Thanks.')
+  })
+
+  it('asks for no draft when its reply already has one, and fills in one that finished meanwhile once', () => {
+    act(() => view.unmount())
+    calls.start = []
+    reply = { ...reply, draftId: 'd1', body: 'Before.' }
+    state = { ...state, draft: draft('done', 'Finished while away.') }
+    act(() => { view = create(pane()) })
+    expect(calls.start).toEqual([])
+    expect(text()).toBe('Finished while away.')
+    expect(reply).toMatchObject({ body: 'Finished while away.', settled: 'd1:done' })
+    act(() => labelled('Reply text').props.onChange({ target: { value: 'Edited after.' } }))
+    act(() => view.unmount())
+    act(() => { view = create(pane()) })
+    expect(text()).toBe('Edited after.')
   })
 })

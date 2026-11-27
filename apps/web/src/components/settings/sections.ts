@@ -10,6 +10,7 @@ import {
   HierarchySquare02Icon,
   InformationCircleIcon,
   KeyboardIcon,
+  Mail01Icon,
   MagicWand01Icon,
   Mic01Icon,
   PaintBoardIcon,
@@ -40,6 +41,7 @@ export type SettingsSection =
   | 'connections'
   | 'skills'
   | 'panels'
+  | 'mail'
   | 'phone'
   | 'permissions'
   | 'storage'
@@ -98,6 +100,7 @@ export const SETTINGS_GROUPS: readonly { label: string; sections: readonly Secti
       { id: 'connections', label: 'Connectors', icon: ConnectIcon, keywords: ['connectors', 'apps', 'mcp', 'servers', 'composio'] },
       { id: 'skills', label: 'Skills', icon: PuzzleIcon, keywords: ['import skill', 'filter skills'] },
       { id: 'panels', label: 'Browser & Simulator', icon: Globe02Icon, keywords: ['browser', 'search engine', 'simulator', 'ios', 'xcode', 'devices'] },
+      { id: 'mail', label: 'Mail', icon: Mail01Icon, keywords: ['mail', 'reply', 'draft', 'model'] },
       { id: 'permissions', label: 'Permissions', icon: SecurityCheckIcon, keywords: ['accessibility', 'screen recording', 'system settings', 'privacy', 'computer use'] },
     ],
   },

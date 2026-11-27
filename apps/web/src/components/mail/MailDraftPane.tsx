@@ -2,11 +2,11 @@ import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent }
 import { Cancel01Icon } from '@hugeicons/core-free-icons'
 import { MAIL_DRAFT_BODY_MAX, MAIL_INSTRUCTION_MAX, MAIL_RECIPIENTS_MAX, mailNewRecipients, type AgentConfig, type MailThread } from '@manor/contracts'
 import { NO_CHAT_COMMANDS } from '@manor/client-runtime/chat-commands'
-import type { MailDraft, MailOutcome } from '@manor/client-runtime/mail'
-import { toast } from '../../notices'
+import type { MailDraft } from '@manor/client-runtime/mail'
 import { Composer } from '../Composer'
 import { Button } from '../ui/Button'
 import { IconButton } from '../ui/IconButton'
+import type { MailReply } from './mailViewStore'
 
 /** What the host has said about the reply this pane is open for. */
 export interface MailDraftsState {
@@ -14,15 +14,16 @@ export interface MailDraftsState {
   draft: MailDraft | undefined
   /** A send left and has no answer yet. */
   sending: boolean
-  /** The answer to the latest send; `ok` means delivery was confirmed. */
-  sendResult: MailOutcome | undefined
 }
 
 export interface MailDraftPaneProps {
   thread: MailThread
   /** The default agent, who writes the draft. */
   agent: AgentConfig | null
+  /** The reply as the Mail view keeps it, which `onChange` updates. */
+  reply: MailReply
   drafts: MailDraftsState
+  onChange: (change: Partial<MailReply>) => void
   onClose: () => void
   /** Asks for a new draft; `instruction` with `current` asks for a new version of that text. */
   onStart: (instruction?: string, current?: string) => boolean
@@ -84,48 +85,42 @@ function RecipientField({ label, value, fresh, onChange, onEscape }: {
 }
 
 /**
- * The reply split beside the open thread. One pane serves one thread: opening it asks
- * for a draft, the stream fills the text, and once it is done the text is the user's to
- * edit, kept until a new version is asked for in the composer at its foot. Only Send
- * makes anything leave.
+ * The reply split beside the open thread. One pane serves one reply: the first time it
+ * opens it asks for a draft, the stream fills the text, and once it is done the text is the
+ * user's to edit, kept until a new version is asked for in the composer at its foot. The
+ * reply lives on when the pane unmounts, so it comes back as it was. Only Send makes
+ * anything leave.
  */
-export function MailDraftPane({ thread, agent, drafts, onClose, onStart, onStop, onSend }: MailDraftPaneProps) {
-  const [to, setTo] = useState(thread.reply.to)
-  const [cc, setCc] = useState(thread.reply.cc)
-  const [body, setBody] = useState('')
+export function MailDraftPane({ thread, agent, reply, drafts, onChange, onClose, onStart, onStop, onSend }: MailDraftPaneProps) {
+  const { to, cc } = reply
   const [askError, setAskError] = useState<string | null>(null)
-  const sentTo = useRef('')
-  const { draft, sending, sendResult } = drafts
+  const { draft, sending } = drafts
   const streaming = draft?.status === 'streaming'
 
   const started = useRef(false)
   useEffect(() => {
-    // Once per pane, also where React runs a mount's effects twice.
-    if (started.current) return
+    // Only for a reply that never had a draft, once also where React runs a mount's effects twice.
+    if (started.current || reply.draftId !== undefined) return
     started.current = true
     onStart()
   }, [])
 
-  // A finished or stopped stream becomes the text; a failure that wrote nothing keeps
-  // what was there. After that the text is the user's until the next version is asked for.
+  // A finished or stopped stream becomes the text once; one that wrote nothing keeps
+  // what was there. After that the text is the user's until the next version is asked for,
+  // also when the draft finished while the pane was away.
   const settled = draft === undefined || streaming ? undefined : `${draft.draftId}:${draft.status}`
+  const unsettled = settled !== undefined && settled !== reply.settled
+  const fills = unsettled && draft?.text !== ''
+  const body = fills && draft !== undefined ? draft.text : reply.body
   useEffect(() => {
-    if (draft === undefined || settled === undefined) return
-    if (draft.status === 'done' || draft.text !== '') setBody(draft.text)
-  }, [settled])
-
-  useEffect(() => {
-    if (sendResult?.ok !== true) return
-    toast.success(`Sent to ${sentTo.current}`)
-    onClose()
-  }, [sendResult])
+    if (unsettled) onChange({ settled, body })
+  }, [settled, reply.settled])
 
   const shown = streaming ? draft.text : body
   const fresh = mailNewRecipients(thread, to, cc)
   const canSend = !streaming && !sending && body.trim() !== '' && to.trim() !== ''
   const send = () => {
     if (!canSend) return
-    sentTo.current = to.trim()
     onSend(to.trim(), cc.trim(), body)
   }
   // False keeps the request in the composer.
@@ -154,8 +149,8 @@ export function MailDraftPane({ thread, agent, drafts, onClose, onStart, onStop,
         <IconButton icon={Cancel01Icon} label="Close" title="Close (Esc)" onClick={onClose} />
       </div>
       <div className="mx-5 flex flex-none flex-col">
-        <RecipientField label="To" value={to} fresh={fresh} onChange={setTo} onEscape={onClose} />
-        <RecipientField label="Cc" value={cc} fresh={fresh} onChange={setCc} onEscape={onClose} />
+        <RecipientField label="To" value={to} fresh={fresh} onChange={(next) => onChange({ to: next })} onEscape={onClose} />
+        <RecipientField label="Cc" value={cc} fresh={fresh} onChange={(next) => onChange({ cc: next })} onEscape={onClose} />
         <div className={FIELD_ROW}>
           <span className={FIELD_LABEL}>Subject</span>
           <span className={`${FIELD_VALUE} text-text`} title={thread.reply.subject}>{thread.reply.subject}</span>
@@ -165,7 +160,7 @@ export function MailDraftPane({ thread, agent, drafts, onClose, onStart, onStop,
       <div className="mx-5 mt-4 flex min-h-0 flex-1 flex-col rounded-panel border border-line bg-surface">
         <textarea aria-label="Reply text" value={shown} readOnly={streaming} spellCheck maxLength={MAIL_DRAFT_BODY_MAX}
           className="min-h-0 flex-1 resize-none border-0 bg-transparent px-4 pt-3.5 pb-2 text-[14px] leading-[1.6] text-text outline-none"
-          onChange={(event) => setBody(event.target.value)} onKeyDown={escapes} />
+          onChange={(event) => onChange({ body: event.target.value })} onKeyDown={escapes} />
         <div className="flex flex-none items-center gap-1.5 px-3 pt-1 pb-3">
           <div className="min-w-0 flex-1 pl-1">
             {problem !== undefined ? <p role="alert" className="m-0 break-words text-meta text-warn">{problem}</p>

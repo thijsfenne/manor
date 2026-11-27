@@ -1,14 +1,8 @@
 import { randomUUID } from 'node:crypto'
-import { createDAVClient, type DAVCalendar } from 'tsdav'
 import { serveMcp, type JsonRecord } from './stdio.js'
-import {
-  CALENDAR_CREATE_TOOL,
-  CALENDAR_ENV_KEYS,
-  buildCalendarIcs,
-  parseCalendarCreate,
-  whenLabel,
-} from './calendarCreate.js'
-import { freeSlots, occurrencesInRange, parseRange, type Occurrence } from './calendarRead.js'
+import { CALENDAR_CREATE_TOOL, buildCalendarIcs, parseCalendarCreate, whenLabel } from './calendarCreate.js'
+import { calDav, calendarClient, calendarName, eventCalendars, fetchOccurrences, pickCalendars } from './calendarDav.js'
+import { freeSlots, parseRange, type Occurrence } from './calendarRead.js'
 
 /**
  * Manor's own iCloud calendar connector: CalDAV with an app-specific Apple password,
@@ -25,7 +19,6 @@ import { freeSlots, occurrencesInRange, parseRange, type Occurrence } from './ca
  * approves is what gets written.
  */
 
-const SERVER_URL = 'https://caldav.icloud.com'
 const LIST_MAX_DAYS = 62
 const FREE_MAX_DAYS = 31
 const EVENTS_MAX = 300
@@ -111,86 +104,6 @@ function tools(): JsonRecord[] {
   ]
 }
 
-type Client = Awaited<ReturnType<typeof createDAVClient>>
-let clientPromise: Promise<Client> | undefined
-
-function client(): Promise<Client> {
-  const [userKey, passwordKey] = CALENDAR_ENV_KEYS
-  const username = process.env[userKey]
-  const password = process.env[passwordKey]
-  if (!username || !password) {
-    throw new Error(`The iCloud calendar is not configured: ${userKey} and ${passwordKey} must be set in apps/server/.env.`)
-  }
-  clientPromise ??= createDAVClient({
-    serverUrl: SERVER_URL,
-    credentials: { username, password },
-    authMethod: 'Basic',
-    defaultAccountType: 'caldav',
-  }).catch((error: unknown) => {
-    clientPromise = undefined
-    throw safeCalDavError('sign in (check the Apple ID and app-specific password)', error)
-  })
-  return clientPromise
-}
-
-/**
- * tsdav errors can quote raw requests and responses, so none of their text reaches
- * the agent: only which step failed and, at most, a three-digit HTTP status.
- */
-export function safeCalDavError(step: string, error: unknown): Error {
-  const text = error instanceof Error ? error.message : ''
-  const status = /\b([45]\d\d)\b/.exec(text)?.[1]
-  return new Error(`iCloud CalDAV could not ${step} (${status === undefined ? 'no usable response' : `HTTP ${status}`}).`)
-}
-
-async function calDav<T>(step: string, run: () => Promise<T>): Promise<T> {
-  try {
-    return await run()
-  } catch (error: unknown) {
-    throw safeCalDavError(step, error)
-  }
-}
-
-/** Fetched on every call: a calendar added or shared mid-turn must be visible to the next call. */
-async function eventCalendars(): Promise<DAVCalendar[]> {
-  const dav = await client()
-  const all = await calDav('list calendars', () => dav.fetchCalendars())
-  return all.filter((calendar) => calendar.components === undefined || calendar.components.includes('VEVENT'))
-}
-
-export function calendarName(calendar: DAVCalendar): string {
-  const name = calendar.displayName
-  if (typeof name === 'string' && name.trim() !== '') return name.trim()
-  return decodeURIComponent(calendar.url.replace(/\/$/, '').split('/').pop() ?? 'calendar')
-}
-
-function pick(calendars: DAVCalendar[], names: unknown): DAVCalendar[] {
-  if (names === undefined) return calendars
-  if (!Array.isArray(names) || names.some((name) => typeof name !== 'string')) throw new Error('calendars must be a list of names.')
-  const wanted = new Set(names.map((name: string) => name.trim().toLowerCase()))
-  const chosen = calendars.filter((calendar) => wanted.has(calendarName(calendar).toLowerCase()))
-  if (chosen.length === 0) {
-    throw new Error(`No calendar by that name. Known: ${calendars.map(calendarName).join(', ')}.`)
-  }
-  return chosen
-}
-
-async function occurrences(range: { start: number; end: number }, names: unknown): Promise<Occurrence[]> {
-  const dav = await client()
-  const calendars = pick(await eventCalendars(), names)
-  const timeRange = {
-    start: new Date(range.start).toISOString().replace(/\.\d{3}Z$/, 'Z'),
-    end: new Date(range.end).toISOString().replace(/\.\d{3}Z$/, 'Z'),
-  }
-  const resources = await Promise.all(calendars.map(async (calendar) => {
-    const objects = await calDav('read events', () => dav.fetchCalendarObjects({ calendar, timeRange }))
-    return objects
-      .filter((object): object is typeof object & { data: string } => typeof object.data === 'string')
-      .map((object) => ({ calendar: calendarName(calendar), data: object.data }))
-  }))
-  return occurrencesInRange(resources.flat(), range)
-}
-
 function eventLine(event: Occurrence): JsonRecord {
   return {
     title: event.title,
@@ -211,7 +124,7 @@ async function call(name: unknown, arguments_: JsonRecord): Promise<unknown> {
   }
   if (name === 'list_events') {
     const range = parseRange(arguments_.from, arguments_.to, LIST_MAX_DAYS)
-    const events = await occurrences(range, arguments_.calendars)
+    const events = await fetchOccurrences(range, arguments_.calendars)
     return {
       timeZone: 'Europe/Amsterdam',
       count: events.length,
@@ -225,7 +138,7 @@ async function call(name: unknown, arguments_: JsonRecord): Promise<unknown> {
     if (typeof minMinutes !== 'number' || !Number.isFinite(minMinutes) || minMinutes < 1) {
       throw new Error('minMinutes must be a positive number.')
     }
-    const events = await occurrences(range, arguments_.calendars)
+    const events = await fetchOccurrences(range, arguments_.calendars)
     const slots = freeSlots(events, range, {
       dayStart: typeof arguments_.dayStart === 'string' ? arguments_.dayStart : '08:00',
       dayEnd: typeof arguments_.dayEnd === 'string' ? arguments_.dayEnd : '22:00',
@@ -241,8 +154,8 @@ async function call(name: unknown, arguments_: JsonRecord): Promise<unknown> {
   }
   if (name === CALENDAR_CREATE_TOOL) {
     const event = parseCalendarCreate(arguments_)
-    const dav = await client()
-    const matches = pick(await eventCalendars(), [event.calendar])
+    const dav = await calendarClient()
+    const matches = pickCalendars(await eventCalendars(), [event.calendar])
     // The approval card names the calendar; two with that name would make it ambiguous.
     if (matches.length !== 1) {
       throw new Error(`${matches.length} calendars are called "${event.calendar}". Nothing was created; ask the user to rename one.`)

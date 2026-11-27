@@ -140,10 +140,11 @@ export function MailSidebar({ cards, projects, selectedId, picked, tab, query, p
 
   return (
     <div className="flex min-w-0 flex-col gap-2 pt-0.5">
-      <label className="flex min-w-0 items-center gap-2 rounded-lg bg-surface px-2.5 py-1.5 text-muted focus-within:outline-1 focus-within:outline-field-focus">
-        <Icon icon={Search01Icon} size={14} className="flex-none" />
+      {/* The same field as the Settings search, without its margins. */}
+      <label className="flex h-8 min-w-0 items-center gap-2 rounded-lg border border-line bg-stage px-2.5 text-muted focus-within:border-field-focus">
+        <Icon icon={Search01Icon} size={16} className="flex-none" />
         <input ref={searchRef} type="search" value={query} placeholder="Search" aria-label="Search mail"
-          className="min-w-0 flex-1 border-0 bg-transparent p-0 text-[13px] text-text outline-none placeholder:text-dim [&::-webkit-search-cancel-button]:appearance-none"
+          className="min-w-0 flex-1 border-0 bg-transparent p-0 text-label text-text outline-none placeholder:text-dim [&::-webkit-search-cancel-button]:appearance-none"
           onChange={(event) => onQuery(event.target.value)}
           onKeyDown={(event) => {
             if (event.key !== 'Escape') return

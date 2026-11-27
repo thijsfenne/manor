@@ -3138,6 +3138,12 @@ export const HouseSettingsSchema = z.object({
   noteAiModel: z.string().trim().min(1).max(120).default(NOTE_AI_DEFAULTS.model),
   noteAiEffort: EffortSchema.default(NOTE_AI_DEFAULTS.effort),
   /**
+   * The model and effort that write a reply draft in Mail, in the default agent's
+   * character. Null is the default agent's own model and effort.
+   */
+  mailDraftModel: z.string().trim().min(1).max(120).nullable().default(null),
+  mailDraftEffort: EffortSchema.nullable().default(null),
+  /**
    * Models turned off in Settings, Models. They leave every picker, Auto skips them and
    * subagents may not run them; a chat or agent already on one keeps it. Stored as the
    * off list, so a model the catalogue gains later starts on.

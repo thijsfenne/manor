@@ -79,6 +79,7 @@ import type { RemindersSource } from './reminders.js'
 import type { OpenLoopsSync } from './openLoopsSync.js'
 import { RemindersModule } from './remindersModule.js'
 import { MailModule } from './mailModule.js'
+import type { MailAgentRuntime } from './mailDraft.js'
 import type { MailSource } from './mailSource.js'
 import type { MailToolHost } from './mailTriage.js'
 import type { OutboundSendPort } from './outboundSend.js'
@@ -318,6 +319,8 @@ export interface ManorServiceOptions {
   mailSend?: OutboundSendPort
   /** Serves the mail triage run's one tool; absent leaves the run unavailable. */
   mailToolHost?: MailToolHost
+  /** The user's calendar as text for a reply draft; absent drafts without one. */
+  mailCalendar?: MailAgentRuntime['calendar']
   /** What Settings shows about this Mac, and the log files `reveal_log` may open. */
   systemInfo?: () => Promise<SystemInfo>
   /** Model list prices for the Usage view. Absent, only provider-reported cost is counted. */
@@ -583,7 +586,14 @@ export class ManorService {
       cacheFile: options.mailCacheFile ?? ':memory:',
       projectIds: async () => (await options.store.listProjects()).map((project) => project.id),
       broadcast: options.broadcast,
-      runtime: { agents: options.agents, resolveDriver: options.resolveDriver, ensureScratchDir: options.ensureScratchDir },
+      runtime: {
+        agents: options.agents,
+        resolveDriver: options.resolveDriver,
+        ensureScratchDir: options.ensureScratchDir,
+        ...(options.mailCalendar === undefined ? {} : { calendar: options.mailCalendar }),
+        ...(options.memoryTarget === undefined ? {} : { memoryTarget: options.memoryTarget }),
+        draftModel: () => ({ model: this.settings.mailDraftModel, effort: this.settings.mailDraftEffort, disabledModels: this.settings.disabledModels }),
+      },
       ...(options.mailSend === undefined ? {} : { send: options.mailSend }),
       ...(options.mailToolHost === undefined ? {} : { toolHost: options.mailToolHost }),
     })

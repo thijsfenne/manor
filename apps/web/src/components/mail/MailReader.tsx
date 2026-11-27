@@ -152,14 +152,14 @@ export function MailReader({ card, thread, error, listed, selected = 0, tab, que
   return (
     <div className="relative flex h-full min-h-0 min-w-0 flex-col">
       <div role="toolbar" aria-label="Mail actions" className="flex min-h-14 flex-none items-center gap-1.5 px-4 py-3">
-        {/* Archive leads, so it keeps its place with several mails picked and stays clear of the notice stack. */}
-        {card === null && selected < 2 ? null : <Button size="small" title="Archive (E)" onClick={onArchive}>Archive</Button>}
+        {/* Reply leads as the one primary action on an open mail; several picked mails can only be archived. */}
         {card === null ? null : (
           <>
-            <Button size="small" disabled={thread === null} title="Draft a reply (R)" onClick={onReply}>Reply</Button>
+            <Button variant="primary" size="small" disabled={thread === null} title="Draft a reply (R)" onClick={onReply}>Reply</Button>
             <Button size="small" disabled={thread === null} title="Add to chat (A)" onClick={onAdd}>Add to chat</Button>
           </>
         )}
+        {card === null && selected < 2 ? null : <Button size="small" title="Archive (E)" onClick={onArchive}>Archive</Button>}
       </div>
       {empty}
       {card === null ? null : (
