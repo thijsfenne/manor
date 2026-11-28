@@ -55,12 +55,16 @@ const GROUPS: { id: SessionOverviewSection; label: string; hint?: string; icon: 
   { id: 'archived', label: 'Archived', icon: Archive02Icon, tone: 'text-dim' },
 ]
 
+/** A fold's mark carries its colour only with rows, and Working only while one of them runs. */
+const lit = (id: SessionOverviewSection, rows: readonly SessionOverviewRow[]) =>
+  id === 'working' ? rows.some((row) => row.status === 'working') : rows.length > 0
+
 /**
  * A project thread's sessions (decided 2026-10-10, grouped 2026-10-11): the right pane
  * beside the thread, or the header toggle's popover where the window is too narrow to
  * split. Three folds with a count, Settled folded by default, so the thread can be read
- * without opening every session. Settled also holds a Session gone quiet without a result,
- * which reads Done and keeps its live row (2026-11-24). Waiting joins them only while a Session waits on
+ * without opening every session. Settled holds only settled Sessions; one gone quiet without
+ * a result stays under Working with the circle check (2026-11-28). Waiting joins them only while a Session waits on
  * background work it started (2026-11-18). A project with no Session yet shows one quiet line
  * instead of folds counting zero. Each row settles or unsettles in place. Archived sits
  * folded at the foot, only while it has rows: the sidebar's list leaves a thread's
@@ -93,7 +97,7 @@ export function ProjectSessionsOverview({ threadId, overview, agents, onOpen, on
               aria-expanded={open[id]}
               onClick={() => updateSessionOverviewUI(threadId, (current) => toggleSessionOverviewSection(current, id))}
             >
-              <Icon icon={icon} size={14} className={`flex-none ${rows.length === 0 ? 'text-dim' : tone}`} />
+              <Icon icon={icon} size={14} className={`flex-none ${lit(id, rows) ? tone : 'text-dim'}`} />
               {/* Sized on the spans: `[font:inherit]` on the button outranks a text-size utility there. */}
               <span className="min-w-0 truncate text-[12px] font-medium">{label}</span>
               <span className="flex-1 text-[12px] text-dim tabular-nums">{rows.length}</span>
@@ -121,10 +125,9 @@ export function ProjectSessionsOverview({ threadId, overview, agents, onOpen, on
                       entry, agents, selected: false, now, onArm: () => askDelete({ id: chat.id, title: chat.title }), onOpen,
                       onSetSettled, onSetArchived, openLabel: openLabel(row.title),
                     }
-                    // A quiet `done` Session sits in Settled unstamped, so it keeps its live row and Settle, never Unsettle (2026-11-24).
-                    return id === 'archived' || (id === 'settled' && row.status !== 'done')
+                    return id === 'archived' || id === 'settled'
                       ? <QuietRow key={row.key} {...shared} cardSide="left" mode={id} onHoldPeek={noHold} />
-                      : <LiveRow key={row.key} {...shared} motionClass="" detail={row.line} {...(id === 'working' ? { plan: row.chat.planProgress ?? null } : {})} />
+                      : <LiveRow key={row.key} {...shared} motionClass="" detail={row.line} {...(row.status === 'done' ? { done: true } : id === 'working' ? { plan: row.chat.planProgress ?? null } : {})} />
                   })}
                   {id !== 'settled' && id !== 'archived' ? null : (
                     <ShowMoreRow

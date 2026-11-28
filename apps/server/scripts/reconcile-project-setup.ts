@@ -34,8 +34,7 @@ const threads = new ProjectThreads({
   awaitingInput: () => ({}),
   isActiveTurn: () => false,
   acceptHandoff: async () => { throw new Error('No handoffs during setup') },
-  reopenSession: async () => undefined,
-  acceptInSession: async () => undefined,
+  acceptInSession: async () => false,
 })
 const plan = await threads.reconcileSetup(true)
 const refuse = (message: string): never => {

@@ -304,6 +304,8 @@ export interface OrchestratorOptions {
   reviewHops?: number
   /** A goal was stamped reached; a project thread may fold in the session's learnings. */
   onGoalReached?: (handoffId: string) => void
+  /** A chat's turn queue ran empty; `isIdle` says whether nothing else still runs there. */
+  onChatIdle?: (chatId: string) => void
   /**
    * Around every turn that is not a project thread's own: the start adopts hand edits,
    * the end undoes this turn's writes to a thread's files and reports them to the thread.
@@ -686,7 +688,7 @@ export class Orchestrator {
     const accepted = chat.acceptanceTail.then(() => command === undefined
       ? this.acceptUserMessage(chat, chatId, message, origin)
       : this.runChatCommand(chat, chatId, command))
-      .finally(() => { chat.inflight -= 1 })
+      .finally(() => this.release(chat))
     chat.acceptanceTail = accepted.catch(() => undefined)
     return accepted.then((receipt) => receipt?.finished)
   }
@@ -856,7 +858,7 @@ export class Orchestrator {
       const notice = await compose()
       return notice === undefined ? undefined
         : this.acceptUserMessage(chat, chatId, { text: '', instruction: notice.instruction, reactionTo: notice.reactionTo })
-    }).finally(() => { chat.inflight -= 1 })
+    }).finally(() => this.release(chat))
     chat.acceptanceTail = accepted.catch(() => undefined)
     const receipt = await accepted
     void receipt?.finished.catch(() => undefined)
@@ -884,11 +886,16 @@ export class Orchestrator {
   async forwardUserMessage(
     chatId: string,
     message: Required<Pick<MessageContent, 'text' | 'forwardedFrom'>> & Pick<MessageContent, 'images' | 'files'>,
+    /** Runs once the chat holds the message, so the chat reads busy while it prepares the room. */
+    prepare?: () => Promise<void>,
   ): Promise<{ finished: Promise<void> }> {
     const chat = this.runtimeFor(chatId)
     chat.inflight += 1
-    const accepted = chat.acceptanceTail.then(() => this.acceptUserMessage(chat, chatId, message))
-      .finally(() => { chat.inflight -= 1 })
+    const accepted = chat.acceptanceTail.then(async () => {
+      await prepare?.()
+      return this.acceptUserMessage(chat, chatId, message)
+    })
+      .finally(() => this.release(chat))
     chat.acceptanceTail = accepted.catch(() => undefined)
     const receipt = await accepted
     if (receipt === undefined) throw new Error('The Session did not take the message.')
@@ -1218,11 +1225,15 @@ export class Orchestrator {
 
   private enqueue<T>(chat: ChatRuntime, fn: () => Promise<T>): Promise<T> {
     chat.inflight += 1
-    const run = chat.queue.then(fn).finally(() => {
-      chat.inflight -= 1
-    })
+    const run = chat.queue.then(fn).finally(() => this.release(chat))
     chat.queue = run.catch(() => undefined)
     return run
+  }
+
+  /** Ends one reservation on the chat; the last one says the queue ran empty. */
+  private release(chat: ChatRuntime): void {
+    chat.inflight -= 1
+    if (chat.inflight === 0) this.options.onChatIdle?.(chat.chatId)
   }
 
   /**
@@ -1714,6 +1725,7 @@ export class Orchestrator {
     const existing = this.chats.get(chatId)
     if (existing !== undefined) return existing
     const created: ChatRuntime = {
+      chatId,
       queue: Promise.resolve(),
       appendTail: Promise.resolve(),
       acceptanceTail: Promise.resolve(),
@@ -1731,6 +1743,17 @@ export class Orchestrator {
     }
     this.chats.set(chatId, created)
     return created
+  }
+
+  /**
+   * Nothing runs or waits to run in this chat: no turn, queued message or wake, and no
+   * Manor child or live-session background work its turns started.
+   */
+  isIdle(chatId: string): boolean {
+    const chat = this.chats.get(chatId)
+    const quiet = chat === undefined ||
+      (chat.inflight === 0 && chat.active === undefined && chat.pendingWakes.size === 0 && !chat.wakeRunning)
+    return quiet && !this.subagents.runsUnder(chatId) && this.options.liveSessions?.busyWork().has(chatId) !== true
   }
 
 

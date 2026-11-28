@@ -311,6 +311,8 @@ export interface Store {
    * records when, which is the grace period `settleIdleChats` honours.
    */
   setChatSettled(chatId: string, settled: boolean): Promise<void>
+  /** When the chat was last picked back up after a settle; undefined for one never settled and reopened. */
+  chatReopenedAt(chatId: string): Promise<number | undefined>
   /**
    * Settles every unsettled *project* chat that has been quiet since `cutoff` and was
    * not picked back up after it, and answers with the ids it moved. The second half is

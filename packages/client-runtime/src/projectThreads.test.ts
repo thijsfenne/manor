@@ -104,7 +104,7 @@ describe('project thread selectors', () => {
     const handled = [
       // A no-change result Closed by the user is Confirm underneath.
       handoff('confirmed', { workChatId: 'confirmed', ...result, goalConfirmedAt: 4, goalCompletion: { status: 'complete', operation: 'none', repos: [] } }),
-      // A confirmed Session the user reopened and left idle reads `done`: Done in Settled, nothing owed (2026-11-24).
+      // A confirmed Session the user reopened and left idle reads `done`: Done under Working, nothing owed (2026-11-28).
       handoff('reopened', { workChatId: 'reopened', ...result, goalConfirmedAt: 4, unsettledAt: 5 }),
       // A no-change investigation ended a turn without a result.
       handoff('investigation', { workChatId: 'investigation' }),
@@ -113,7 +113,8 @@ describe('project thread selectors', () => {
     const chats = ['confirmed', 'reopened', 'investigation', 'closed'].map((id) => chat(id, id === 'closed' ? { settledAt: 6 } : {}))
     const quiet = workspace(handled, { chats: [chat('thread', { mode: 'single' }), ...chats] })
     expect(projectSessionOverview(quiet, 'thread').waiting).toEqual([])
-    expect(projectSessionOverview(quiet, 'thread').settled.filter((row) => row.status === 'done').map((row) => row.key).sort()).toEqual(['investigation', 'reopened'])
+    expect(projectSessionOverview(quiet, 'thread').working.filter((row) => row.status === 'done').map((row) => row.key).sort()).toEqual(['investigation', 'reopened'])
+    expect(projectThreads(quiet)[0]?.running).toBe(0)
     expect(projectThreads(quiet)[0]?.waiting).toBe(false)
     const withChats = (extra: Chat[], more: WorkHandoff[]) => workspace([...handled, ...more], { chats: [chat('thread', { mode: 'single' }), ...chats, ...extra] })
     // A proposal waits for Accept, a result for Confirm, a question for an answer, a refused commit for a retry.
@@ -156,10 +157,11 @@ describe('project thread selectors', () => {
     state = reduce(state, { type: 'turn_state', chatId: 'busy', turnId: 'turn_1', agentId: 'wren', state: 'running', startedAt: 7 })
     state = reduce(state, { type: 'turn_state', chatId: 'asking', turnId: 'turn_2', agentId: 'wren', state: 'running', startedAt: 2 })
     const overview = projectSessionOverview(state, 'thread')
-    // A result to confirm and a question mid-turn are the user's move; a quiet session reads Done in Settled.
+    // A result to confirm and a question mid-turn are the user's move; a quiet session never
+    // settled reads Done under Working, and Settled holds only the stamped one (2026-11-28).
     expect(overview.waiting.map((row) => [row.key, row.line])).toEqual([['session', 'Klaar met de knop'], ['asking', '']])
-    expect(overview.working.map((row) => row.key)).toEqual(['busy'])
-    expect(overview.settled.map((row) => [row.key, row.status])).toEqual([['idle', 'done'], ['quiet', 'settled']])
+    expect(overview.working.map((row) => [row.key, row.status])).toEqual([['busy', 'working'], ['idle', 'done']])
+    expect(overview.settled.map((row) => [row.key, row.status])).toEqual([['quiet', 'settled']])
     // Each row's marks come from its status, so the spinner and Waiting say what its card says.
     expect(overview.working[0]).toMatchObject({ running: true, waiting: false, unread: false })
     expect(overview.waiting.map((row) => [row.key, row.status, row.running, row.waiting])).toEqual([
@@ -172,12 +174,14 @@ describe('project thread selectors', () => {
     const handoffs = [handoff('a', { workChatId: 'a' }), handoff('b', { workChatId: 'b' })]
     const dot = (state: WorkspaceState) => sessionsDot(projectSessionOverview(state, 'thread'))
     const base = workspace(handoffs, { chats: [chat('thread', { mode: 'single' }), chat('a'), chat('b')] })
+    // Two quiet Sessions, read, sit under Working but run nothing.
+    expect(projectSessionOverview(base, 'thread').working).toHaveLength(2)
     expect(dot(base)).toBeNull()
     const running = reduce(base, { type: 'turn_state', chatId: 'a', turnId: 'turn_1', agentId: 'wren', state: 'running', startedAt: 2 })
     expect(dot(running)).toBe('working')
     // A turn that ends while the room is elsewhere is unread, and its Session is `done`.
     const finished = reduce(reduce(running, { type: 'turn_state', chatId: 'a', turnId: 'turn_1', agentId: 'wren', state: 'done', startedAt: 2 }), { type: 'turn_state', chatId: 'b', turnId: 'turn_2', agentId: 'wren', state: 'running', startedAt: 3 })
-    expect(projectSessionOverview(finished, 'thread').settled.find((row) => row.key === 'a')?.unread).toBe(true)
+    expect(projectSessionOverview(finished, 'thread').working.find((row) => row.key === 'a')?.unread).toBe(true)
     expect(dot(finished)).toBe('finished')
     const asking = workspace(handoffs, { chats: [chat('thread', { mode: 'single' }), chat('a'), chat('b')], awaitingInput: { b: ['request_1'] } })
     expect(dot(reduce(asking, { type: 'turn_state', chatId: 'a', turnId: 'turn_1', agentId: 'wren', state: 'running', startedAt: 2 }))).toBe('waiting')
@@ -199,22 +203,22 @@ describe('project thread selectors', () => {
     expect(overview.archiveKeepMs).toBeGreaterThan(0)
     const restored = projectSessionOverview(withChatArchived(state, 'b', false), 'thread')
     expect(restored.archived.map((row) => row.key)).toEqual(['c', 'a'])
-    expect(restored.settled.map((row) => [row.key, row.status])).toEqual([['b', 'done']])
+    expect(restored.working.map((row) => [row.key, row.status])).toEqual([['b', 'done']])
   })
 
   it('moves a session to Settled and back to its live group', () => {
     // The server settles the handoff with the chat; Unsettle reopens both at once.
     const stamped = withChatSettled(workspace([{ ...started, state: 'settled', result: 'Done.' }]), 'session', true, 10)
     expect(projectSessionOverview(stamped, 'thread').settled.map((row) => row.key)).toEqual(['session'])
-    // Unsettled and quiet, it reads Done and stays in the Settled fold, unstamped.
+    // Unsettled, it is live again: Done under Working until it is settled again.
     const reopened = withChatSettled(stamped, 'session', false, 11)
-    expect(projectSessionOverview(reopened, 'thread').settled.map((row) => [row.key, row.status])).toEqual([['session', 'done']])
+    expect(projectSessionOverview(reopened, 'thread')).toMatchObject({ settled: [], working: [{ key: 'session', status: 'done' }] })
     expect(reopened.workHandoffs[0]).toMatchObject({ state: 'active', result: null })
     const state = workspace([started])
-    expect(projectSessionOverview(state, 'thread').settled.map((row) => [row.key, row.status])).toEqual([['session', 'done']])
+    expect(projectSessionOverview(state, 'thread').working.map((row) => [row.key, row.status])).toEqual([['session', 'done']])
     const settled = withChatSettled(state, 'session', true, 10)
     expect(projectSessionOverview(settled, 'thread')).toMatchObject({ waiting: [], settled: [{ chat: { id: 'session' }, status: 'settled' }] })
-    expect(projectSessionOverview(withChatSettled(settled, 'session', false, 11), 'thread').settled.map((row) => [row.key, row.status])).toEqual([['session', 'done']])
+    expect(projectSessionOverview(withChatSettled(settled, 'session', false, 11), 'thread').working.map((row) => [row.key, row.status])).toEqual([['session', 'done']])
   })
 
   it('uses the current confirmation for web and phone after a new result round', () => {
@@ -225,7 +229,7 @@ describe('project thread selectors', () => {
     const reopened = { ...started, version: 2, goalConfirmations: [{ confirmedAt: 4, version: 1 }] }
     const active = workspace([reopened])
     expect(sitsSettled(active, active.chats.find((row) => row.id === 'session')!)).toBe(false)
-    expect(projectSessionOverview(active, 'thread').settled[0]?.status).toBe('done')
+    expect(projectSessionOverview(active, 'thread').working[0]?.status).toBe('done')
     expect(inbox(active).unsettled.map((row) => row.chat.id)).toContain('session')
     const working = reduce(active, { type: 'turn_state', chatId: 'session', turnId: 'follow-up', agentId: 'wren', state: 'running', startedAt: 5 })
     expect(projectSessionOverview(working, 'thread').working[0]?.status).toBe('working')
@@ -251,13 +255,13 @@ describe('project thread selectors', () => {
     expect(open.chats.find((entry) => entry.id === 'session')?.settledAt).toBeNull()
     expect([control(open), inSettled(open)]).toEqual([true, true])
 
-    // Unsettled after confirm: the control offers Settle again, while the quiet Session reads
-    // Done in the Settled fold (2026-11-24); a fresh snapshot keeps both.
+    // Unsettled after confirm: the control offers Settle again and the quiet Session reads
+    // Done under Working (2026-11-28); a fresh snapshot keeps both.
     const out = withChatSettled(open, 'session', false, 11)
-    expect([control(out), inSettled(out)]).toEqual([false, true])
-    expect(projectSessionOverview(out, 'thread').settled.map((row) => [row.key, row.status])).toEqual([['session', 'done']])
+    expect([control(out), inSettled(out)]).toEqual([false, false])
+    expect(projectSessionOverview(out, 'thread').working.map((row) => [row.key, row.status])).toEqual([['session', 'done']])
     const snapshot = workspace(out.workHandoffs)
-    expect([control(snapshot), inSettled(snapshot)]).toEqual([false, true])
+    expect([control(snapshot), inSettled(snapshot)]).toEqual([false, false])
 
     // Settling it again stamps it and drops the record, so a later unsettle works again.
     const again = withChatSettled(out, 'session', true, 12)
@@ -276,9 +280,9 @@ describe('project thread selectors', () => {
       chats: [chat('thread', { mode: 'single', lastMessageAt: 5 }), chat('session', { lastMessageAt: 9 }), chat('loose'), chat('quiet')],
     })
     const overview = projectSessionOverview(state, 'thread')
-    expect(overview.working).toEqual([])
+    expect(overview.working.map((row) => [row.key, row.status])).toEqual([['quiet', 'done']])
     expect(overview.background).toMatchObject([{ key: 'session', status: 'background', line: 'Waiting on background work', running: false }])
-    expect(overview.settled.map((row) => row.key)).toEqual(['quiet'])
+    expect(overview.settled).toEqual([])
   })
 
   it('offers the oldest session question until it is answered or its turn ends', () => {
@@ -379,13 +383,14 @@ describe('one status per Session, read by its card, its overview row and its pro
     expect(standing(asking, 'session')).toEqual({ group: 'waiting', status: 'waiting', running: false, waiting: true })
     expect(projectThreads(asking)[0]).toMatchObject({ running: 0, waiting: true })
 
-    // Stopped, or a turn that ended without a result, reads Done everywhere (2026-11-24): its
-    // card, its thread line and the Settled fold, and nothing counts it as the user's move.
+    // Stopped, or a turn that ended without a result, reads Done (2026-11-24): its card and
+    // its thread line; the overview keeps it under Working until it is settled (2026-11-28),
+    // and nothing counts it as the user's move or as running.
     const stopped = reduce(running, { type: 'turn_state', chatId: 'session', turnId: 'turn_1', agentId: 'wren', state: 'done' } as ServerMessage)
     expect(workCardStatus(card(stopped, 'h1'))?.text).toBe('Done')
     expect(threadWorkCard(card(stopped, 'h1'))).toMatchObject({ shape: 'done', status: { text: 'Done' } })
     expect(forwardedLine({ ...card(stopped, 'h1'), forwarded: { threadChatId: 'thread', phase: 'working' } })).toBe('Done in project thread Manor')
-    expect(standing(stopped, 'session')).toEqual({ group: 'settled', status: 'done', running: false, waiting: false })
+    expect(standing(stopped, 'session')).toEqual({ group: 'working', status: 'done', running: false, waiting: false })
     expect(projectThreads(stopped)[0]).toMatchObject({ running: 0, waiting: false })
     expect(sessionsDot(projectSessionOverview(stopped, 'thread'))).not.toBe('waiting')
     // Never stamped, so its settle control and the phone's list keep it live, with Settle.
@@ -520,7 +525,7 @@ describe('a Session card in its project thread', () => {
 
   it('changes shape from proposal to one line to done, and its word is the overview’s', () => {
     expect(view(handoff('h1', { acceptedAt: null }))).toEqual({ shape: 'proposal' })
-    // Accepted and quiet without a result: Done, as in the overview's Settled fold (2026-11-24).
+    // Accepted and quiet without a result: Done on its card; the overview lists it under Working (2026-11-28).
     expect(view(handoff('h1', { workChatId: 'session' }))).toEqual({ shape: 'done', summary: '', status: { tone: 'dim', text: 'Done' } })
     // Reopened after Confirm and quiet again: never Needs you; its line keeps the confirmed result's word.
     expect(view(handoff('h1', { workChatId: 'session', goalReachedAt: 3, goalReport: { result: 'Done.' }, goalConfirmedAt: 4, unsettledAt: 5 }))).toMatchObject({ shape: 'done', status: { text: 'Confirmed' } })

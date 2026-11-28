@@ -48,6 +48,8 @@ interface WorkRuntime {
   /** Runs `fn` in the chat's turn order, so Manor's own commit never overlaps a turn. */
   runExclusive<T>(chatId: string, fn: () => Promise<T>): Promise<T>
   runStoredUserMessage(chatId: string, event: Extract<ThreadEvent, { type: 'user_message' }>): Promise<void>
+  /** Nothing runs, waits to run or runs in the background in this chat. */
+  isIdle(chatId: string): boolean
 }
 
 export interface WorkOrigin {
@@ -76,6 +78,8 @@ interface WorkModuleOptions {
   writeCommitMessage?: WriteCommitMessage
   /** Models turned off in Settings, Models: a project thread may not propose one. */
   offModels?: () => readonly string[]
+  /** Open questions by chat, so a Session that asks is never settled under its question. */
+  awaitingInput?: () => Record<string, string[]>
 }
 
 const BLOCKED_POLL_MS = 30_000
@@ -1389,28 +1393,70 @@ export class WorkModule {
   }
 
   /**
+   * A Session settled before its latest turn gets its stamp back when that turn ends
+   * quietly: no result to confirm, no question and nothing it still waits on
+   * (2026-11-28). It runs when the chat's turn queue empties and once at startup. A
+   * Session never settled stays open, and an Unsettle with no turn since keeps the
+   * user's choice. The settle writes no outcome, so no turn runs for it, and it does not
+   * halt the chat: a message that arrives right after it still runs.
+   */
+  async resettleWhenQuiet(chatId: string): Promise<boolean> {
+    const quiet = () => this.quietAfterReopen(chatId)
+    if (!(await quiet())) return false
+    return this.settleWhen(chatId, true, quiet, undefined, true)
+  }
+
+  /** Runs the quiet re-settle over every open Session; startup's repair for turns that ended before it existed. */
+  async resettleQuietSessions(): Promise<void> {
+    for (const handoff of await this.options.store.listWorkHandoffs()) {
+      if (handoff.state === 'active' && handoff.workChatId !== null) await this.resettleWhenQuiet(handoff.workChatId)
+    }
+  }
+
+  private async quietAfterReopen(chatId: string): Promise<boolean> {
+    const { store, orchestrator } = this.options
+    if (!orchestrator.isIdle(chatId) || (this.options.awaitingInput?.()[chatId]?.length ?? 0) > 0) return false
+    const [room, handoff, reopenedAt] = await Promise.all([
+      store.getChat(chatId), store.workHandoffForTarget(chatId), store.chatReopenedAt(chatId),
+    ])
+    if (room === undefined || room.kind !== 'project' || room.settledAt !== null || room.archivedAt !== null || reopenedAt === undefined) return false
+    if (handoff === undefined || handoff.state !== 'active' || handoff.acceptedAt === null) return false
+    // A result to confirm, or a confirmed one whose commit or merge still needs the user, is not quiet.
+    if (handoff.goalReport !== undefined && handoff.goalReachedAt !== undefined && handoff.goalConfirmedAt === undefined) return false
+    const held = handoff.goalCompletion
+    if (handoff.goalConfirmedAt !== undefined && (held?.status === 'blocked' || held?.status === 'pending' || held?.merge?.stage === 'approve')) return false
+    const events = await store.loadEvents(chatId)
+    // A saved message still to run, such as one startup has yet to queue again, keeps it open.
+    if (events.some((event) => event.type === 'user_message' && (event.dispatchState === 'pending' || event.dispatchState === 'started'))) return false
+    // A turn that ended, or one the user stopped, since the Session was reopened; a stopped /compact has no turn.
+    return events.some((event) => event.ts > reopenedAt &&
+      (event.type === 'turn_result' || (event.type === 'system_note' && event.kind === 'aborted' && event.turnId !== undefined)))
+  }
+
+  /**
    * Settles (or unsettles) once its turn in the lifecycle queue comes and `when`, read
    * there, still holds; `landed` makes the store check the confirmed attempt in the same
    * write. True when the chat ends in the requested state.
    */
-  private async settleWhen(chatId: string, settled: boolean, when?: () => Promise<boolean>, landed?: LandedAttempt): Promise<boolean> {
+  private async settleWhen(chatId: string, settled: boolean, when?: () => Promise<boolean>, landed?: LandedAttempt, quiet = false): Promise<boolean> {
     const intent = { settled }
     this.lifecycleIntents.set(chatId, intent)
     try {
-      return await this.requestSettled(chatId, settled, when, landed)
+      return await this.requestSettled(chatId, settled, when, landed, quiet)
     } finally {
       if (this.lifecycleIntents.get(chatId) === intent) this.lifecycleIntents.delete(chatId)
     }
   }
 
-  private async requestSettled(chatId: string, settled: boolean, when?: () => Promise<boolean>, landed?: LandedAttempt): Promise<boolean> {
+  private async requestSettled(chatId: string, settled: boolean, when?: () => Promise<boolean>, landed?: LandedAttempt, quiet = false): Promise<boolean> {
     const key = (await this.options.store.workHandoffForTarget(chatId))?.id ?? chatId
-    const version = (this.lifecycleVersions.get(key) ?? 0) + 1
+    // A quiet stamp yields to the user's own request rather than superseding it.
+    const version = (this.lifecycleVersions.get(key) ?? 0) + (quiet ? 0 : 1)
     this.lifecycleVersions.set(key, version)
     return this.orderLifecycle(key, async () => {
       if (when !== undefined && !(await when())) return false
       try {
-        await this.transitionSettled(chatId, settled, version, false, landed)
+        await this.transitionSettled(chatId, settled, version, false, landed, quiet)
         // A newer request that superseded this one decides; report what the row now is.
         const room = await this.options.store.getChat(chatId)
         return room !== undefined && (room.settledAt !== null) === settled
@@ -1420,14 +1466,15 @@ export class WorkModule {
         const room = await this.options.store.getChat(chatId).catch(() => undefined)
         if (room !== undefined) {
           if (room.settledAt === null) this.options.orchestrator.resumeChat(chatId)
-          else this.options.orchestrator.stopChat(chatId)
+          // A quiet stamp never halts: a message admitted since it was written must still run.
+          else if (!quiet) this.options.orchestrator.stopChat(chatId)
         }
         throw error
       }
     })
   }
 
-  private async transitionSettled(chatId: string, settled: boolean, requestVersion: number, rejected = false, landed?: LandedAttempt): Promise<void> {
+  private async transitionSettled(chatId: string, settled: boolean, requestVersion: number, rejected = false, landed?: LandedAttempt, quiet = false): Promise<void> {
     const { store, orchestrator } = this.options
     const before = await store.getChat(chatId)
     if (before === undefined) throw new Error(`unknown chat ${chatId}`)
@@ -1480,8 +1527,10 @@ export class WorkModule {
         ? 'Rejected before work started.'
         : handoff.goalReport?.result
     if (superseded()) return
-    const writing = known === undefined && handoff.workChatId !== null && this.options.generateOutcome !== undefined
+    const writing = !quiet && known === undefined && handoff.workChatId !== null && this.options.generateOutcome !== undefined
     const outcome = known?.trim() || null
+    // Read in the same tick as the write: a message admitted since the quiet check keeps it open.
+    if (quiet && !orchestrator.isIdle(chatId)) return
     const saved = await store.transitionWorkLifecycle(chatId, handoff.id, {
       state: 'settled',
       result: outcome,
@@ -1489,13 +1538,13 @@ export class WorkModule {
     }, {
       type: 'system_note',
       kind: 'info',
-      text: writing ? `Session “${handoff.title}” settled.` : settledText(handoff.title, outcome),
+      text: writing || (quiet && outcome === null) ? `Session “${handoff.title}” settled.` : settledText(handoff.title, outcome),
       workHandoffId: handoff.id,
       workHandoffPhase: 'settled',
     }, landed)
     // New work withdrew the landed attempt after the queue's check; the Session stays open.
     if (saved.state !== 'settled') return
-    orchestrator.stopChat(chatId)
+    if (!quiet) orchestrator.stopChat(chatId)
     await this.broadcastReceipt(saved)
     await this.options.broadcastDirectory()
     if (writing) void this.fillOutcome(saved)

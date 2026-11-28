@@ -142,6 +142,7 @@ describe('WorkModule creation', () => {
     const module = new WorkModule({ store, agents: () => agents,
       orchestrator: {
         isActiveTurn: () => true,
+        isIdle: () => true,
         startStoredWorkHandoff: orchestrator.startStoredWorkHandoff.bind(orchestrator),
         discard: orchestrator.discard.bind(orchestrator),
         stopChat: orchestrator.stopChat.bind(orchestrator),

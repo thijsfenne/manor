@@ -23,6 +23,7 @@ export async function harness(kind: 'dm' | 'group' = 'dm', options: {
   /** Runs between reading a directory and delivering it, like the Git lookups do. */
   beforeDelivery?: () => Promise<void>
   writeCommitMessage?: (chatId: string, patch: string) => Promise<string | undefined>
+  awaitingInput?: () => Record<string, string[]>
 } = {}) {
   const agents = options.agents ?? [lead, smith]
   const store = createMemoryStore({ agents })
@@ -40,8 +41,11 @@ export async function harness(kind: 'dm' | 'group' = 'dm', options: {
   let directories = 0
   /** Each broadcast directory, as the settle stamp of every chat in it. */
   const directoryStates: Map<string, number | null>[] = []
+  /** Chats a test marks as still running something, so a quiet re-settle must wait. */
+  const busy = new Set<string>()
   const orchestrator = {
     isActiveTurn: () => options.active ?? true,
+    isIdle: (chatId: string) => !busy.has(chatId),
     startStoredWorkHandoff: async (chatId: string, text: string, origin: WorkOrigin) => {
       started.push({ chatId, text, origin })
       if (options.startError !== undefined) throw options.startError
@@ -68,9 +72,10 @@ export async function harness(kind: 'dm' | 'group' = 'dm', options: {
     ...(options.prepareCheckout === undefined ? {} : { prepareCheckout: options.prepareCheckout }),
     ...(options.outcome === undefined ? {} : { generateOutcome: options.outcome }),
     ...(options.writeCommitMessage === undefined ? {} : { writeCommitMessage: options.writeCommitMessage }),
+    ...(options.awaitingInput === undefined ? {} : { awaitingInput: options.awaitingInput }),
   })
   return {
-    module, store, source, projectId, started, discarded, stopped, resumed, sent, orchestrator,
+    module, store, source, projectId, started, discarded, stopped, resumed, sent, orchestrator, busy,
     directories: () => directories, directoryStates,
   }
 }

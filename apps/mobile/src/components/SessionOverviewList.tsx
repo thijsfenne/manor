@@ -28,7 +28,7 @@ const GROUPS: { id: SessionOverviewGroup; label: string; hint?: string; icon: Ic
  * A project thread's Sessions on the phone, grouped as the Mac's overview beside the
  * thread (2026-10-11), with the fold state they share. A tap opens the Session as its
  * own screen; Settled starts folded on every visit. A Session gone quiet without a result
- * sits in Settled as Done but keeps the live title, as on the Mac (2026-11-24).
+ * stays under Working with the circle check, as on the Mac (2026-11-28).
  */
 export function SessionOverviewList({ threadId, overview, agents, inset, onOpen, onRevealProposal }: {
   threadId: string
@@ -49,7 +49,8 @@ export function SessionOverviewList({ threadId, overview, agents, inset, onOpen,
   const shownSettled = overview.settled.slice(0, visibleSettled)
   const moreSettled = overview.settled.length - shownSettled.length
   const row = (entry: SessionOverviewRow, quiet: boolean, working = false) => {
-    const plan = working ? entry.chat?.planProgress : undefined
+    const done = entry.status === 'done'
+    const plan = working && !done ? entry.chat?.planProgress : undefined
     return (
       <Pressable
         key={entry.key}
@@ -68,6 +69,8 @@ export function SessionOverviewList({ threadId, overview, agents, inset, onOpen,
               <Text style={styles.planCount}>{plan.done}/{plan.total}</Text>
             </View>
           )}
+          {/* Gone quiet without a result: Done, with the Settled fold's check, until it is settled. */}
+          {done ? <HugeiconsIcon color={colors.dim} icon={CircleCheckIcon} size={16} strokeWidth={1.7} /> : null}
         </View>
         {/* The runtime mark ends the line, where the Mac's overview puts it. */}
         <View style={styles.lineRow}>
@@ -97,7 +100,7 @@ export function SessionOverviewList({ threadId, overview, agents, inset, onOpen,
             {({ pressed }) => (
               <>
                 <View style={[styles.foldFill, pressed && styles.foldFillPressed]} />
-                <HugeiconsIcon color={overview[id].length === 0 ? colors.dim : tone} icon={icon} size={16} strokeWidth={1.7} />
+                <HugeiconsIcon color={(id === 'working' ? overview[id].some((entry) => entry.status === 'working') : overview[id].length > 0) ? tone : colors.dim} icon={icon} size={16} strokeWidth={1.7} />
                 <Text numberOfLines={1} style={styles.foldLabel}>{label}</Text>
                 <Text style={styles.foldCount}>{overview[id].length}</Text>
                 <DisclosureChevron open={unfolded[id]}>
@@ -108,7 +111,7 @@ export function SessionOverviewList({ threadId, overview, agents, inset, onOpen,
           </Pressable>
           {!unfolded[id] ? null
             : overview[id].length === 0 ? (hint === undefined ? null : <Text style={styles.empty}>{hint}</Text>)
-            : (id === 'settled' ? shownSettled : overview[id]).map((entry) => row(entry, id === 'settled' && entry.status !== 'done', id === 'working'))}
+            : (id === 'settled' ? shownSettled : overview[id]).map((entry) => row(entry, id === 'settled', id === 'working'))}
           {id !== 'settled' || !unfolded[id] || moreSettled <= 0 ? null : (
             <Pressable
               accessibilityRole="button"

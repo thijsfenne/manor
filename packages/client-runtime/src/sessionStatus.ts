@@ -65,10 +65,10 @@ export function sessionStatus(handoff: WorkHandoff, chat: Chat | undefined, live
 }
 
 /**
- * The overview fold a status stands in; null for one no list shows. A quiet or reopened
- * `done` Session reads Done and sits in Settled beside the finished ones, since it owes
- * the user nothing (2026-11-24, not final). Settled here is the fold, not the stamp:
- * `sitsSettled` still reads `done` as live, so its row keeps Settle.
+ * The group a status reads as on a thread's card; null for one no list shows. A quiet or
+ * reopened `done` Session reads Done there, like the finished ones. The overview itself
+ * lists it under Working until it is settled (2026-11-28), and `sitsSettled` reads it as
+ * live, so its row keeps Settle.
  */
 export function sessionGroup(status: SessionStatus) {
   switch (status) {

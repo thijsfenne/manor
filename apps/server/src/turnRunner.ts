@@ -372,6 +372,7 @@ const blankTurn = (turnId: string, agentId: string) => ({
 }) satisfies Partial<ActiveTurn>
 
 export interface ChatRuntime {
+  readonly chatId: string
   /** Reveal an explicit browser request once, shared across personas and retries. */
   browserTargetMessageId?: string
   /** Serializes acceptance without waiting for execution or provider delivery. */

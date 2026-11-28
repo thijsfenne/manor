@@ -84,7 +84,7 @@ export function createSqliteStore(options: SqliteStoreOptions): Store & {
   /**
   * When each chat was last picked back up, mirroring the database's `unsettled_at`.
   * Kept beside the chat rather than on it, because the wire contract has no field
-  * for it: only the sweep reads it.
+  * for it: only the sweep and the quiet re-settle read it.
   */
   const unsettledAt = new SqliteRecords<number>(db, 'unsettledAt')
   const events = new SqliteTranscript(db)
@@ -666,6 +666,9 @@ export function createSqliteStore(options: SqliteStoreOptions): Store & {
         ...(settled ? { legacySessionAgentIds: undefined } : {}),
       })
       return undefined
+    },
+    chatReopenedAt(chatId) {
+      return unsettledAt.get(chatId)
     },
     settleIdleChats(cutoff) {
       const now = Date.now()
@@ -1611,5 +1614,5 @@ const READS = new Set<keyof SyncStore>([
   'workHandoffForTarget', 'loadRoster', 'listMcpServers', 'listSkills', 'loadSkillBundle', 'loadEvents', 'loadThread', 'loadDocument', 'documentIds',
   'listUnresolvedOutboundSubmissions', 'getOutboundThreadDecision', 'getChatSummary', 'getSessions',
   'loadChatOverrides', 'loadChatWorktrees', 'usageRuns', 'searchMessages', 'listRoutines', 'listRuns', 'getSubagentPolicy',
-  'getProfile', 'getHouseSettings', 'getProjectSetup', 'setupDone', 'loadNoteAges',
+  'getProfile', 'getHouseSettings', 'getProjectSetup', 'setupDone', 'loadNoteAges', 'chatReopenedAt',
 ])

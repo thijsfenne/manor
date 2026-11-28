@@ -542,8 +542,9 @@ const backgroundWorkOf = (state: Pick<WorkspaceShape, 'subagents' | 'backgroundW
 
 /**
  * The overview group a project session stands in. `waiting` reads Needs you, the user's
- * move; `background` reads Waiting, on work the Session started; `settled` holds the
- * finished ones, a quiet `done` Session included (2026-11-24).
+ * move; `working` also holds a quiet `done` Session, which has not ended until it is
+ * settled; `background` reads Waiting, on work the Session started; `settled` holds the
+ * settled and confirmed ones (2026-11-28).
  */
 export type SessionOverviewGroup = 'waiting' | 'working' | 'background' | 'settled'
 
@@ -583,9 +584,9 @@ export interface SessionOverview extends Record<SessionOverviewGroup, SessionOve
  * the user's move, even mid-turn. Working is a running turn. Waiting
  * (2026-11-18) is a turn that ended while work it started still runs (a Manor helper, or
  * a provider's helper or shell in its live session), whose end wakes it; the overview
- * shows that fold only while it has rows. Settled is the user's own stamp, a result they
- * confirmed, or a Session gone quiet without a result, which reads Done and keeps its
- * live row with Settle (2026-11-24). Sessions of the
+ * shows that fold only while it has rows. Settled is the stamp, the user's or Manor's
+ * quiet re-settle, or a result they confirmed. A Session gone quiet without a result and
+ * never settled stays under Working, read as Done (2026-11-28). Sessions of the
  * project that the thread did not start are ordinary sessions and stay in the sidebar list.
  */
 export function projectSessionOverview(
@@ -629,7 +630,7 @@ export function projectSessionOverview(
   })
   groups.archived.sort((a, b) => (b.chat?.archivedAt ?? 0) - (a.chat?.archivedAt ?? 0))
   for (const row of [...sessions, ...proposals].sort((a, b) => b.at - a.at)) {
-    const group = sessionGroup(row.status)
+    const group = row.status === 'done' ? 'working' : sessionGroup(row.status)
     if (group !== null) groups[group].push(row)
   }
   return groups
@@ -646,8 +647,8 @@ export type SessionsDot = 'waiting' | 'finished' | 'working'
  */
 export function sessionsDot(overview: SessionOverview): SessionsDot | null {
   if (overview.waiting.some((row) => needsUser(row.status))) return 'waiting'
-  if ([...overview.waiting, ...overview.settled].some((row) => row.unread)) return 'finished'
-  return overview.working.length > 0 ? 'working' : null
+  if ([...overview.waiting, ...overview.working, ...overview.settled].some((row) => row.unread && row.status !== 'working')) return 'finished'
+  return overview.working.some((row) => row.status === 'working') ? 'working' : null
 }
 
 /** A proposal's overview row, which leads to its card in the thread where Accept is. */
@@ -774,14 +775,13 @@ export function projectThreads(state: ListedState): ProjectThreadRow[] {
     if (chat === null || chat.archivedAt !== null) return []
     const activity = activityOf(state, chat.id)
     const overview = projectSessionOverview(state, chat.id)
-    // A quiet `done` Session sits in Settled but still dates the row, as it did under Needs you.
-    const open = [...overview.waiting, ...overview.working, ...overview.settled.filter((row) => row.status === 'done')].flatMap((row) => row.chat === null ? [] : [row.chat])
+    const open = [...overview.waiting, ...overview.working].flatMap((row) => row.chat === null ? [] : [row.chat])
     return [{
       project,
       chat,
       selected: selectedChatId(state) === chat.id,
       unread: activity.unread,
-      running: overview.working.length,
+      running: overview.working.filter((row) => row.status === 'working').length,
       // Only what the user can act on: a proposal, question, result to confirm or blocked commit.
       waiting: activity.awaitingInput.length > 0 || overview.waiting.some((row) => needsUser(row.status)),
       lastActivityAt: Math.max(chat.lastMessageAt, ...open.map((session) => session.lastMessageAt)),

@@ -4,6 +4,7 @@ import {
   ArchiveRestoreIcon,
   BubbleChatIcon,
   CheckmarkCircle02Icon,
+  CircleCheckIcon,
   Delete02Icon,
   SidebarRightIcon,
   Undo02Icon,
@@ -420,6 +421,8 @@ interface RowProps {
    * no tasks card yet, and the slot then says nothing; undefined for every other row.
    */
   plan?: PlanProgress | null
+  /** A Session that went quiet without a result: the circle check stands where the age would, until an unread answer shows its dot. */
+  done?: boolean
   /** The side a quiet row's hover card opens on; the sessions overview asks for the left. */
   cardSide?: 'left' | 'right'
   /** The fold for the subagents under a live row, on its second line. */
@@ -475,12 +478,14 @@ export function LiveRow({
   detail,
   openLabel,
   plan,
+  done = false,
   disclosure,
 }: RowProps) {
   const { chat, projectName, projectColor, unread, running, waiting } = entry
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null)
   const key = `chat:${chat.id}`
-  const standingWidth = plan !== undefined ? (plan === null ? 'w-0' : 'w-14') : waiting ? 'w-14' : running || unread ? 'w-4' : 'w-7'
+  const checked = done && !unread
+  const standingWidth = plan !== undefined ? (plan === null ? 'w-0' : 'w-14') : waiting ? 'w-14' : running || unread || checked ? 'w-4' : 'w-7'
   const grab = useSplitDragGrab()
   const canDrag = grab !== null && onOpenRight !== undefined && !occupied
 
@@ -527,7 +532,9 @@ export function LiveRow({
             className={`relative h-5 flex-none duration-150 ease-arrive ${standingWidth} group-hover/chat-row:w-7 group-focus-within/chat-row:w-7 [@media(hover:none)]:w-7 motion-safe:transition-[width]`}
           >
             <span className="pointer-events-none absolute inset-y-0 right-0 flex items-center justify-end text-right duration-150 ease-fade group-hover/chat-row:opacity-0 group-focus-within/chat-row:opacity-0 [@media(hover:none)]:opacity-0 motion-safe:transition-opacity">
-              {plan !== undefined ? (plan === null ? null : <PlanCount plan={plan} />) : (
+              {plan !== undefined ? (plan === null ? null : <PlanCount plan={plan} />) : checked ? (
+                <Icon className="block size-4 flex-none text-dim" icon={CircleCheckIcon} size={STATUS_MARK_SIZE} aria-label="Done" />
+              ) : (
                 <Standing
                   waiting={waiting}
                   unread={unread}

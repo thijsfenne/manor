@@ -135,10 +135,11 @@ export interface ProjectThreadsOptions {
   isActiveTurn: (chatId: string, agentId: string, turnId: string) => boolean
   /** Accepts the thread's own session card for a brief the user already accepted in a DM. */
   acceptHandoff: (handoffId: string, options: AcceptOptions & { task?: string }) => Promise<string>
-  /** The Unsettle the user clicks in a settled Session before they type there. */
-  reopenSession: (sessionChatId: string) => Promise<void>
-  /** Their message in the Session as if typed there, including active-turn steering; resolves once stored. */
-  acceptInSession: (sessionChatId: string, message: ForwardedMessage) => Promise<void>
+  /**
+   * Their message in the Session as if typed there, including active-turn steering; resolves
+   * once stored, with whether it first had to Unsettle the Session, as the user would.
+   */
+  acceptInSession: (sessionChatId: string, message: ForwardedMessage) => Promise<boolean>
 }
 
 /** The user's message as it goes on to a Session, with the pictures and text files they sent along. */
@@ -687,7 +688,6 @@ export class ProjectThreads {
     const delivered = (await this.options.store.loadEvents(sessionChatId)).some((event) =>
       event.type === 'user_message' && event.forwardedFrom?.threadChatId === threadChatId && event.forwardedFrom.eventId === given.id)
     if (!delivered) {
-      if (session.settledAt !== null) await this.options.reopenSession(sessionChatId)
       await this.options.acceptInSession(sessionChatId, {
         text: changedAnswerMessage(changed, answers, before),
         forwardedFrom: { threadChatId, eventId: given.id },
@@ -752,17 +752,12 @@ export class ProjectThreads {
         ...pickImages(source.images, chosen('images', source.images, input.images), input.message.trim()),
         files: chosen('files', source.files, input.files).map((index) => source.files![index]!),
       }
-      // What the user does themselves in a settled Session: Unsettle, then their message.
-      const reopened = message !== undefined && target.chat.settledAt !== null
-      if (reopened) await this.options.reopenSession(target.chat.id)
-      if (message !== undefined) {
-        await this.options.acceptInSession(target.chat.id, {
-          text: message.text,
-          forwardedFrom: { threadChatId, eventId: source.id },
-          ...(message.images === undefined ? {} : { images: message.images }),
-          ...(message.files.length === 0 ? {} : { files: message.files }),
-        })
-      }
+      const reopened = message !== undefined && await this.options.acceptInSession(target.chat.id, {
+        text: message.text,
+        forwardedFrom: { threadChatId, eventId: source.id },
+        ...(message.images === undefined ? {} : { images: message.images }),
+        ...(message.files.length === 0 ? {} : { files: message.files }),
+      })
       await this.append(threadChatId, {
         type: 'system_note',
         kind: 'info',

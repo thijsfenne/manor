@@ -44,6 +44,7 @@ async function harness(roster: readonly AgentConfig[] = agents) {
     agents: () => roster,
     orchestrator: {
       isActiveTurn: () => true,
+      isIdle: () => true,
       startStoredWorkHandoff: async (chatId, _text, origin) => { started.push({ chatId, origin }) },
       discard: () => undefined,
       stopChat: () => undefined,
@@ -82,10 +83,12 @@ async function harness(roster: readonly AgentConfig[] = agents) {
     awaitingInput: () => awaiting,
     isActiveTurn: (_chatId, _agentId, turnId) => !endedTurns.has(turnId),
     acceptHandoff: (id, options) => work.accept(id, options),
-    reopenSession: (chatId) => work.setSettled(chatId, false),
     acceptInSession: async (chatId, message) => {
+      const reopened = (await store.getChat(chatId))?.settledAt != null
+      if (reopened) await work.setSettled(chatId, false)
       queued.push({ chatId, message })
       await store.appendEvent(chatId, { type: 'user_message', text: message.text, mentions: [], forwardedFrom: message.forwardedFrom })
+      return reopened
     },
   }
   threads = new ProjectThreads(threadOptions)
@@ -2306,6 +2309,7 @@ describe('waiting thread wakes', () => {
       agents: () => agents,
       orchestrator: {
         isActiveTurn: () => true,
+        isIdle: () => true,
         startStoredWorkHandoff: async () => undefined,
         discard: () => undefined,
         stopChat: () => undefined,
@@ -2329,8 +2333,7 @@ describe('waiting thread wakes', () => {
       awaitingInput: () => awaiting,
       isActiveTurn: () => true,
       acceptHandoff: (id, options) => work.accept(id, options),
-      reopenSession: async () => undefined,
-      acceptInSession: async () => undefined,
+      acceptInSession: async () => false,
     })
     threads = boot()
     const thread = await threads.create(projectId)

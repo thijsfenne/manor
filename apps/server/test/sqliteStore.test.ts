@@ -729,6 +729,7 @@ function workModule(store: Store) {
   return { start, submit, run, module: new WorkModule({
     store, agents: () => [sage], broadcast: () => undefined, broadcastDirectory: async () => undefined,
     orchestrator: { isActiveTurn: () => true, startStoredWorkHandoff: start,
+    isIdle: () => true,
       discard: () => undefined, stopChat: () => undefined, resumeChat: () => undefined, submitUserMessage: submit,
       runStoredUserMessage: run, runExclusive: <T>(_chatId: string, fn: () => Promise<T>) => fn() },
   }) }
@@ -979,6 +980,7 @@ describe('durable Work proposals', () => {
     const module = new WorkModule({
       store, agents: () => [sage], broadcast, broadcastDirectory: async () => undefined,
       orchestrator: { isActiveTurn: () => true, startStoredWorkHandoff: async () => undefined,
+      isIdle: () => true,
         discard: () => undefined, stopChat: () => undefined, resumeChat: () => undefined,
         submitUserMessage: async () => undefined, runStoredUserMessage: run, runExclusive: <T>(_chatId: string, fn: () => Promise<T>) => fn() },
     })

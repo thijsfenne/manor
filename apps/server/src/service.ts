@@ -450,6 +450,9 @@ export class ManorService {
       ...(options.relayCap === undefined ? {} : { relayCap: options.relayCap }),
       ...(options.relayDepth === undefined ? {} : { relayDepth: options.relayDepth }),
       ...(options.memoryTarget === undefined ? {} : { memoryTarget: options.memoryTarget }),
+      onChatIdle: (chatId) => {
+        void this.workModule.resettleWhenQuiet(chatId).catch((error: unknown) => console.warn('[manor] could not settle a quiet Session again', error))
+      },
       onGoalReached: (handoffId) => {
         void this.projectThreads.goalReached(handoffId).catch((error: unknown) => console.warn('[manor] project thread could not take the learnings', error))
       },
@@ -483,6 +486,7 @@ export class ManorService {
       releaseWorktrees: (chatId) => this.projectModule.releaseMergedWorktrees(chatId),
       broadcastDirectory: () => this.projectModule.broadcast(),
       offModels: () => this.settings.disabledModels,
+      awaitingInput: () => options.awaitingInput?.() ?? {},
       ...(options.writeCommitMessage === undefined ? {} : { writeCommitMessage: options.writeCommitMessage }),
       ...(options.generateWorkOutcome === undefined ? {} : { generateOutcome: options.generateWorkOutcome }),
       projectThreads: {
@@ -515,12 +519,19 @@ export class ManorService {
       awaitingInput: () => options.awaitingInput?.() ?? {},
       isActiveTurn: (chatId, agentId, turnId) => this.orchestrator.isActiveTurn(chatId, agentId, turnId),
       acceptHandoff: (handoffId, accept) => this.workModule.accept(handoffId, accept),
-      reopenSession: (sessionChatId) => this.workModule.setSettled(sessionChatId, false),
       acceptInSession: async (sessionChatId, message) => {
         const startedAt = Date.now()
-        const { finished } = await this.orchestrator.forwardUserMessage(sessionChatId, message)
+        let reopened = false
+        // What the user does in a settled Session: Unsettle, then their message. Read while the
+        // chat holds the message, so a quiet re-settle cannot stamp it in between.
+        const { finished } = await this.orchestrator.forwardUserMessage(sessionChatId, message, async () => {
+          if ((await options.store.getChat(sessionChatId))?.settledAt == null) return
+          await this.workModule.setSettled(sessionChatId, false)
+          reopened = true
+        })
         // The done notice a message typed there gets, once its errand ends.
         void finished.then(() => this.chatModule.announceFinished(sessionChatId, startedAt), () => undefined)
+        return reopened
       },
     })
     this.agentNotes = new AgentNotesWriter({
@@ -869,6 +880,7 @@ export class ManorService {
 
   async recoverWorkCompletions(): Promise<void> {
     await this.workModule.reconcileCompletion()
+    await this.workModule.resettleQuietSessions()
   }
 
   closeAgentRelayTurn(turnId: string): void {
