@@ -4,6 +4,8 @@ What changed for someone who uses Manor, newest first. A version is a tag on `ma
 
 ## Unreleased
 
+## 0.4.0, 2026-11-28
+
 - An agent that proposes a Session, saves a routine or delivers a file now answers in the language you wrote in. Before, the reply after such a step sometimes came out in English.
 - When an agent ends its turn by saying what it will do next ("Now I'll run the tests") without doing it, Manor lets it carry on once by itself, in a direct message and in a Session, so you no longer have to type "continue". A small grey line marks where Manor continued. A question, a proposal or plan that waits on you, a finished report, or a step promised for later ends the turn as before.
 - In a direct message, the grey "Background task finished" line above an agent's answer after background work is gone, on the Mac, the web and the phone. Sessions keep it.
